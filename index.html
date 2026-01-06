@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lens Uploads</title>
+  <title>Lens Uploads (IN8 / IN9)</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 980px; margin: 40px auto; padding: 0 16px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
@@ -23,10 +23,11 @@
 <body>
   <h1>Lens Uploads</h1>
   <p class="muted">
-    Choose a format:
-    <span class="pill">IN8</span> = <b>LMS BIN, OPC </b> or
-    <span class="pill">IN9</span> = <b>Cost, OPC </b>.
-    </p>
+    Choose format:
+    <span class="pill">IN8</span> = <b>LMS BIN, (OPC or SKU)</b> or
+    <span class="pill">IN9</span> = <b>(Cost/Price), (OPC or SKU)</b>.
+    Output has <b>no headers</b>.
+  </p>
 
   <div class="card">
     <div class="row" style="margin-bottom: 12px;">
@@ -43,15 +44,29 @@
       </div>
     </div>
 
+    <!-- Identifier selector (OPC or SKU) -->
+    <div class="row" style="margin-bottom: 12px;">
+      <div class="radio">
+        <input type="radio" id="idOPC" name="identifier" value="OPC Code" checked />
+        <label for="idOPC">Use OPC Code</label>
+      </div>
+
+      <div class="radio">
+        <input type="radio" id="idSKU" name="identifier" value="SKU" />
+        <label for="idSKU">Use SKU</label>
+      </div>
+    </div>
+
+    <!-- Format selector (IN8 or IN9) -->
     <div class="row" style="margin-bottom: 12px;">
       <div class="radio">
         <input type="radio" id="fmtIN8" name="fmt" value="IN8" checked />
-        <label for="fmtIN8">IN8 (LMS BIN, OPC)</label>
+        <label for="fmtIN8">IN8 (LMS BIN + OPC/SKU)</label>
       </div>
 
       <div class="radio">
         <input type="radio" id="fmtIN9" name="fmt" value="IN9" />
-        <label for="fmtIN9">IN9 (Cost, OPC)</label>
+        <label for="fmtIN9">IN9 (Cost/Price + OPC/SKU)</label>
       </div>
 
       <label class="muted" style="margin-left:auto;">
@@ -84,8 +99,14 @@
     let workbook = null;
     let originalFileName = "output";
 
-    // Change this if your cost header name in Excel is different
-    const COST_HEADER = "UNIT CO";
+    // Cost header candidates (we will auto-detect in this order)
+    const COST_HEADER_CANDIDATES = [
+      "UNIT COST",
+      "COST",
+      "PRICE",
+      "UNIT PRICE",
+      "UNIT CO"   // legacy / truncated
+    ];
 
     function setStatus(msg, type = "") {
       statusEl.className = type ? type : "muted";
@@ -123,7 +144,7 @@
       return first.map(r => (r || []).map(v => (v ?? "")).join(" | ")).join("\n");
     }
 
-    // Find column index by header name (case-insensitive)
+    // Find column index by header name (case-insensitive) with fuzzy matching
     function findHeaderIndex(headerRow, desiredHeader) {
       const want = desiredHeader.toLowerCase().trim();
       const normalized = headerRow.map(h => (h ?? "").toString().trim());
@@ -133,11 +154,11 @@
       let idx = lower.indexOf(want);
       if (idx !== -1) return idx;
 
-      // starts-with (handles slight truncation)
+      // starts-with (handles truncation like "UNIT CO")
       idx = lower.findIndex(h => h.startsWith(want));
       if (idx !== -1) return idx;
 
-      // contains
+      // contains (last resort)
       idx = lower.findIndex(h => h.includes(want));
       if (idx !== -1) return idx;
 
@@ -172,30 +193,47 @@
       return el ? el.value : "IN8";
     }
 
-    // IN8: LMS BIN, OPC Code (no header)
-    function buildIN8(rows, idxLms, idxOpc) {
+    function getSelectedIdentifier() {
+      const el = document.querySelector('input[name="identifier"]:checked');
+      return el ? el.value : "OPC Code";
+    }
+
+    function buildIN8(rows, idxLms, idxId) {
       const out = [];
       for (let i = 1; i < rows.length; i++) {
         const r = rows[i] || [];
         const lms = (r[idxLms] ?? "").toString().trim();
-        const opc = (r[idxOpc] ?? "").toString().trim();
-        if (!lms && !opc) continue;
-        out.push([lms, opc].map(escapeCsvValue).join(","));
+        const idv = (r[idxId] ?? "").toString().trim();
+        if (!lms && !idv) continue;
+        out.push([lms, idv].map(escapeCsvValue).join(","));
       }
       return out.join("\n");
     }
 
-    // IN9: Cost, OPC Code (no header)
-    function buildIN9(rows, idxCost, idxOpc) {
+    function buildIN9(rows, idxCost, idxId) {
       const out = [];
       for (let i = 1; i < rows.length; i++) {
         const r = rows[i] || [];
         const cost = (r[idxCost] ?? "").toString().trim();
-        const opc  = (r[idxOpc] ?? "").toString().trim();
-        if (!cost && !opc) continue;
-        out.push([cost, opc].map(escapeCsvValue).join(","));
+        const idv  = (r[idxId] ?? "").toString().trim();
+        if (!cost && !idv) continue;
+        out.push([cost, idv].map(escapeCsvValue).join(","));
       }
       return out.join("\n");
+    }
+
+    function detectCostIndex(headerRow) {
+      for (const candidate of COST_HEADER_CANDIDATES) {
+        const idx = findHeaderIndex(headerRow, candidate);
+        if (idx !== -1) return { idx, headerUsed: candidate };
+      }
+      return { idx: -1, headerUsed: "" };
+    }
+
+    function listHeadersForError(headerRow) {
+      const found = headerRow.filter(Boolean);
+      if (!found.length) return "(no headers)";
+      return found.join(" | ");
     }
 
     fileInput.addEventListener("change", async (e) => {
@@ -235,7 +273,7 @@
         previewEl.textContent = previewFirstRows(ws);
 
         convertBtn.disabled = false;
-        setStatus(`Loaded "${file.name}". Choose IN8 or IN9 and convert.`, "ok");
+        setStatus(`Loaded "${file.name}". Choose OPC/SKU + IN8/IN9 and convert.`, "ok");
       } catch (err) {
         console.error(err);
         setStatus("Failed to read Excel file. Make sure it is a valid .xlsx.", "err");
@@ -265,10 +303,12 @@
         const headerRow = rows[0].map(h => (h ?? "").toString().trim());
 
         const fmt = getSelectedFormat();
+        const identifierHeader = getSelectedIdentifier(); // "OPC Code" or "SKU"
 
-        // Always need OPC
-        const idxOpc = findHeaderIndex(headerRow, "OPC Code");
-        if (idxOpc === -1) throw new Error(`Header "OPC Code" not found.`);
+        const idxId = findHeaderIndex(headerRow, identifierHeader);
+        if (idxId === -1) {
+          throw new Error(`Header "${identifierHeader}" not found. Found: ${listHeadersForError(headerRow)}`);
+        }
 
         const base = safeBaseName(originalFileName);
         const sheetPart = safeBaseName(sheetName);
@@ -278,14 +318,23 @@
 
         if (fmt === "IN8") {
           const idxLms = findHeaderIndex(headerRow, "LMS BIN");
-          if (idxLms === -1) throw new Error(`Header "LMS BIN" not found.`);
-          csv = buildIN8(rows, idxLms, idxOpc);
-          outName = `IN8_${base}_${sheetPart}.csv`;
+          if (idxLms === -1) {
+            throw new Error(`Header "LMS BIN" not found. Found: ${listHeadersForError(headerRow)}`);
+          }
+
+          csv = buildIN8(rows, idxLms, idxId);
+          outName = `IN8_${safeBaseName(identifierHeader)}_${base}_${sheetPart}.csv`;
         } else {
-          const idxCost = findHeaderIndex(headerRow, COST_HEADER);
-          if (idxCost === -1) throw new Error(`Header "${COST_HEADER}" not found. (This is your Cost column)`);
-          csv = buildIN9(rows, idxCost, idxOpc);
-          outName = `IN9_${base}_${sheetPart}.csv`;
+          const { idx: idxCost, headerUsed } = detectCostIndex(headerRow);
+          if (idxCost === -1) {
+            throw new Error(
+              `Cost header not found. Tried: ${COST_HEADER_CANDIDATES.join(", ")}. Found: ${listHeadersForError(headerRow)}`
+            );
+          }
+
+          csv = buildIN9(rows, idxCost, idxId);
+          // include which cost header matched (optional, but helpful)
+          outName = `IN9_${safeBaseName(identifierHeader)}_${base}_${sheetPart}.csv`;
         }
 
         if (!csv || csv.trim().length === 0) throw new Error("CSV output is empty.");
