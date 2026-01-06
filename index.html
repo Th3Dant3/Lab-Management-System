@@ -3,18 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LMS Tool</title>
+  <title>LMS Tool Page</title>
   <style>
     :root{
-      /* Zenni brand teal */
-      --zenni:#0f9ea8;
+      /* Page background (Zenni teal) */
+      --bg:#0f8f97;
 
-      --bg:#f6f7fb;
       --card:#ffffff;
       --text:#111827;
       --muted:#6b7280;
       --border:#e5e7eb;
-      --shadow: 0 10px 25px rgba(0,0,0,.06);
+      --shadow: 0 10px 25px rgba(0,0,0,.10);
       --radius:16px;
       --primary:#2563eb;
       --primaryHover:#1d4ed8;
@@ -26,242 +25,105 @@
       --warnText:#9a3412;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
-
     * { box-sizing: border-box; }
-
-    /* ✅ FULL PAGE background to Zenni */
     body{
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       margin:0;
-      background: var(--zenni);
+      background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
     }
+    .wrap{ max-width: 980px; margin: 40px auto; padding: 0 16px 60px; }
 
-    /* ✅ Give the page some breathing room */
-    .wrap{
-      max-width: 980px;
-      margin: 40px auto;
-      padding: 0 16px 60px;
+    /* BLACK HEADER SECTION */
+    .zenniHeader{
+      background:#0b0f19;
+      border-radius: 18px;
+      padding: 22px 24px;
+      margin-bottom: 22px;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 12px 30px rgba(0,0,0,.35);
     }
-
-    /* Header */
     .headerBar{
       display:flex; align-items:center; justify-content:space-between;
       gap:16px;
-      margin-bottom: 18px;
     }
-
-  /* Header becomes BLACK */
-.zenniHeader{
-  background: #0b0f19;                 /* deep black/charcoal */
-  padding: 22px 24px;
-  border-radius: 18px;
-  margin-bottom: 22px;
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow: 0 12px 30px rgba(0,0,0,.35);
-}
-
-/* Text contrast on black */
-.zenniHeader .title{
-  color:#ffffff;
-}
-.zenniHeader .subtitle{
-  color: rgba(255,255,255,0.90);
-}
-.zenniHeader .hint{
-  color: rgba(255,255,255,0.75);
-}
-
-/* Pills look clean on black */
-.zenniHeader .pill{
-  background: rgba(255,255,255,0.14);
-  color:#ffffff;
-  border-color: rgba(255,255,255,0.18);
-}
-
-
-    .title{
-      font-size: 34px;
-      letter-spacing: -0.5px;
-      margin: 0 0 6px;
-      font-weight: 800;
-      color: #fff;
-    }
-
-    .subtitle{
-      margin:0;
-      color: rgba(255,255,255,0.92);
-      line-height:1.4;
-    }
-
+    .title{ font-size: 34px; letter-spacing: -0.5px; margin: 0 0 6px; font-weight: 800; color:#fff; }
+    .subtitle{ margin:0; color: rgba(255,255,255,0.90); line-height:1.4; }
     .pill{
-      display:inline-block;
-      padding: 2px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.18);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-      border: 1px solid rgba(255,255,255,0.35);
-      vertical-align: middle;
-      margin: 0 4px;
+      display:inline-block; padding: 2px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.14); color: #fff; font-size: 12px; font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.18); vertical-align: middle; margin: 0 4px;
     }
+    .hint{ font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 6px; }
 
-    .hint{
-      font-size: 13px;
-      color: rgba(255,255,255,0.82);
-      margin-top: 6px;
-    }
-
+    /* Bigger logo */
     .logo{
-      height: 90px;
+      height: 80px;
       width: auto;
       object-fit: contain;
-      filter: drop-shadow(0 8px 16px rgba(0,0,0,.25));
+      margin-left: 12px;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,.6));
     }
 
-    /* Main card stays white */
     .card{
-      background: var(--card);
-      border: 1px solid rgba(255,255,255,0.45);
-      border-radius: var(--radius);
-      box-shadow: 0 12px 30px rgba(0,0,0,.18);
-      padding: 18px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px;
     }
-
-    .grid{
-      display:grid;
-      grid-template-columns: 1fr 320px;
-      gap: 14px;
-    }
-
+    .grid{ display:grid; grid-template-columns: 1fr 320px; gap: 14px; }
     @media (max-width: 860px){
       .grid{ grid-template-columns: 1fr; }
-      .logo{ height: 40px; }
-      .zenniHeader{ padding: 16px 16px; }
+      .logo{ height: 56px; }
+      .zenniHeader{ padding: 18px 18px; }
     }
-
     .field label{
-      display:block;
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 6px;
-      font-weight: 700;
+      display:block; font-size: 13px; color: var(--muted);
+      margin-bottom: 6px; font-weight: 700;
     }
-
     input[type="file"], select{
-      width:100%;
-      padding: 12px 12px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      background: #fff;
-      font-size: 14px;
+      width:100%; padding: 12px 12px; border: 1px solid var(--border);
+      border-radius: 12px; background: #fff; font-size: 14px;
     }
-
     .groupTitle{
-      margin: 14px 0 8px;
-      font-size: 13px;
-      color: var(--muted);
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .06em;
+      margin: 14px 0 8px; font-size: 13px; color: var(--muted);
+      font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
     }
-
-    .seg{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
+    .seg{ display:flex; gap: 10px; flex-wrap: wrap; }
     .seg label{
-      display:flex;
-      align-items:center;
-      gap: 8px;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      cursor:pointer;
-      user-select:none;
-      background:#fff;
-      font-size: 14px;
-      font-weight: 600;
+      display:flex; align-items:center; gap: 8px; padding: 10px 12px;
+      border: 1px solid var(--border); border-radius: 999px; cursor:pointer;
+      user-select:none; background:#fff; font-size: 14px; font-weight: 600;
     }
-
-    .actions{
-      display:flex;
-      gap: 10px;
-      align-items:center;
-      margin-top: 14px;
-      flex-wrap: wrap;
-    }
-
+    .actions{ display:flex; gap: 10px; align-items:center; margin-top: 14px; flex-wrap: wrap; }
     button{
-      border: none;
-      border-radius: 12px;
-      padding: 12px 14px;
-      font-weight: 800;
-      cursor: pointer;
-      font-size: 14px;
+      border: none; border-radius: 12px; padding: 12px 14px;
+      font-weight: 800; cursor: pointer; font-size: 14px;
     }
     button:disabled{ opacity: .55; cursor: not-allowed; }
-
     .btnPrimary{ background: var(--primary); color: #fff; }
     .btnPrimary:hover{ background: var(--primaryHover); }
-
-    .btnGhost{
-      background: #f3f4f6;
-      color: #111827;
-      border: 1px solid var(--border);
-    }
-
+    .btnGhost{ background: #f3f4f6; color: #111827; border: 1px solid var(--border); }
     .status{
-      margin-top: 12px;
-      padding: 12px 12px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      display:none;
-      font-size: 14px;
-      font-weight: 650;
-      white-space: pre-wrap;
+      margin-top: 12px; padding: 12px 12px; border-radius: 14px;
+      border: 1px solid var(--border); display:none; font-size: 14px;
+      font-weight: 650; white-space: pre-wrap;
     }
     .status.ok{ display:block; background: var(--successBg); color: var(--successText); border-color: #a7f3d0; }
     .status.err{ display:block; background: var(--errorBg); color: var(--errorText); border-color: #fecaca; }
     .status.warn{ display:block; background: var(--warnBg); color: var(--warnText); border-color: #fed7aa; }
 
     .smallRow{
-      display:flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 10px;
+      display:flex; gap: 12px; flex-wrap: wrap; align-items: center;
+      justify-content: space-between; margin-top: 10px;
     }
-
     .previewTitle{ margin: 8px 0 8px; font-size: 16px; font-weight: 900; }
-
-    .monoSmall{
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--muted);
-    }
-
+    .monoSmall{ font-family: var(--mono); font-size: 12px; color: var(--muted); }
     .previewBox{
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: #0b1220;
-      color: #d1d5db;
-      padding: 12px;
-      overflow: auto;
-      min-height: 140px;
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.45;
-      white-space: pre;
+      border: 1px solid var(--border); border-radius: 14px;
+      background: #0b1220; color: #d1d5db; padding: 12px;
+      overflow: auto; min-height: 140px; font-family: var(--mono);
+      font-size: 12px; line-height: 1.45; white-space: pre;
     }
-
     .tabs{ display:flex; gap:8px; align-items:center; }
-
     .tab{
       border:1px solid var(--border);
       background:#fff;
@@ -272,7 +134,6 @@
       font-size:12px;
       cursor:pointer;
     }
-
     .tab.active{
       background:#eef2ff;
       border-color:#e0e7ff;
@@ -280,27 +141,29 @@
     }
   </style>
 </head>
-
 <body>
   <div class="wrap">
-    <header class="headerBar zenniHeader">
-      <div>
-        <h1 class="title">Lens Uploads</h1>
-        <p class="subtitle">
-          <span class="pill">IN8</span> LMS BIN + OPC/SKU
-          or
-          <span class="pill">IN9</span> Cost/Price + OPC/SKU.
-        </p>
-        
-      </div>
-      <img src="assets/zenni-logo.png" alt="Zenni Optical" class="logo" />
+    <header class="zenniHeader">
+      <div class="headerBar">
+        <div>
+          <h1 class="title">Lens Uploads</h1>
+          <p class="subtitle">
+            <span class="pill">IN8</span> LMS BIN + (OPC or SKU)
+            or
+            <span class="pill">IN9</span> Cost/Price + (OPC or SKU)
+          </p>
+          
+        </div>
 
+        <!-- LOGO PATH UPDATED -->
+        <img src="assets/zenni-logo.png" alt="Zenni Optical" class="logo" />
+      </div>
     </header>
 
     <div class="card">
       <div class="grid">
         <div class="field">
-          <label for="fileInput">Upload Excel (.xlsx / .xlsm)</label>
+          <label for="fileInput">Upload Excel</label>
           <input id="fileInput" type="file" accept=".xlsx,.xlsm" />
         </div>
         <div class="field">
@@ -313,8 +176,8 @@
 
       <div class="groupTitle">Format</div>
       <div class="seg">
-        <label><input type="radio" name="fmt" value="IN8" checked> IN8 (LMS BIN + OPC + SKU)</label>
-        <label><input type="radio" name="fmt" value="IN9"> IN9 (Cost/Price + OPC + SKU)</label>
+        <label><input type="radio" name="fmt" value="IN8" checked> IN8 (LMS BIN + OPC/SKU)</label>
+        <label><input type="radio" name="fmt" value="IN9"> IN9 (Cost/Price + OPC/SKU)</label>
       </div>
 
       <div class="actions">
@@ -365,6 +228,7 @@
       let lastCsv = "";
       let lastOutName = "";
 
+      // Cost headers (auto-detect)
       const COST_HEADER_CANDIDATES = ["UNIT COST","COST","PRICE","UNIT PRICE","UNIT CO"];
 
       function setStatus(msg, type) {
@@ -473,6 +337,12 @@
           : "(sheet is empty)";
       }
 
+      /* ✅ UPDATED: works if sheet has OPC OR SKU (does NOT require both)
+         - If both exist, it prefers OPC.
+         - Output is 2 columns:
+             IN8 -> LMS BIN, (OPC or SKU)
+             IN9 -> COST, (OPC or SKU)
+      */
       function generateCsvOnly() {
         if (!workbook) throw new Error("Upload an Excel file first.");
 
@@ -485,11 +355,17 @@
         const headerRow = rows[0].map(h => (h ?? "").toString().trim());
         const fmt = getSelected("fmt", "IN8");
 
+        // Identifier: OPC OR SKU
         const idxOpc = findHeaderIndex(headerRow, "OPC Code");
         const idxSku = findHeaderIndex(headerRow, "SKU");
 
-        if (idxOpc === -1) throw new Error('Header "OPC Code" not found.');
-        if (idxSku === -1) throw new Error('Header "SKU" not found.');
+        if (idxOpc === -1 && idxSku === -1) {
+          throw new Error('Need either "OPC Code" or "SKU" in the header row.');
+        }
+
+        // Prefer OPC if available, else use SKU
+        const idxId = (idxOpc !== -1) ? idxOpc : idxSku;
+        const idLabel = (idxOpc !== -1) ? "OPC" : "SKU";
 
         const base = safeBaseName(originalFileName);
         const sheetPart = safeBaseName(sheetName);
@@ -505,29 +381,31 @@
           for (let i = 1; i < rows.length; i++) {
             const r = rows[i] || [];
             const lms = (r[idxLms] ?? "").toString().trim();
-            const opc = (r[idxOpc] ?? "").toString().trim();
-            const sku = (r[idxSku] ?? "").toString().trim();
-            if (!lms && !opc && !sku) continue;
-            out.push([lms, opc, sku].map(escapeCsvValue).join(","));
+            const id  = (r[idxId]  ?? "").toString().trim();
+            if (!lms && !id) continue;
+            out.push([lms, id].map(escapeCsvValue).join(","));
           }
+
           csv = out.join("\n");
-          outName = `IN8_OPC_SKU_${base}_${sheetPart}.csv`;
+          outName = `IN8_${idLabel}_${base}_${sheetPart}.csv`;
 
         } else {
           const idxCost = detectCostIndex(headerRow);
-          if (idxCost === -1) throw new Error("Cost header not found (UNIT COST / COST / PRICE / UNIT PRICE).");
+          if (idxCost === -1) {
+            throw new Error('Cost header not found (UNIT COST / COST / PRICE / UNIT PRICE / UNIT CO).');
+          }
 
           const out = [];
           for (let i = 1; i < rows.length; i++) {
             const r = rows[i] || [];
             const cost = (r[idxCost] ?? "").toString().trim();
-            const opc  = (r[idxOpc]  ?? "").toString().trim();
-            const sku  = (r[idxSku]  ?? "").toString().trim();
-            if (!cost && !opc && !sku) continue;
-            out.push([cost, opc, sku].map(escapeCsvValue).join(","));
+            const id   = (r[idxId]   ?? "").toString().trim();
+            if (!cost && !id) continue;
+            out.push([cost, id].map(escapeCsvValue).join(","));
           }
+
           csv = out.join("\n");
-          outName = `IN9_COST_OPC_SKU_${base}_${sheetPart}.csv`;
+          outName = `IN9_${idLabel}_${base}_${sheetPart}.csv`;
         }
 
         if (!csv.trim()) throw new Error("CSV output is empty.");
@@ -562,6 +440,7 @@
         }
       }
 
+      // Hide logo if missing
       const logoImg = document.querySelector(".logo");
       if (logoImg) logoImg.addEventListener("error", () => { logoImg.style.display = "none"; });
 
@@ -624,6 +503,7 @@
           setActiveTab("excel");
           setStatus(`Loaded "${file.name}". Excel preview shown. Select IN8/IN9 to build CSV preview.`, "ok");
 
+          // Prime CSV preview
           refreshConvertedPreview(false);
 
         } catch (err) {
@@ -663,4 +543,3 @@
   </script>
 </body>
 </html>
-
