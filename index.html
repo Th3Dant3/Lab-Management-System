@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lens Uploads</title>
+  <title>Lens Uploads (IN8 / IN9)</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 980px; margin: 40px auto; padding: 0 16px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
@@ -11,6 +11,7 @@
     label { font-weight: 600; }
     input, select, button { padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
     button { cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
     .muted { color: #666; font-size: 0.95rem; }
     .ok { color: #0a7a0a; }
     .err { color: #b00020; }
@@ -18,21 +19,22 @@
     .pill { padding: 4px 10px; border-radius: 999px; background: #f1f1f1; font-size: 0.9rem; }
     .radio { display: inline-flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid #ccc; border-radius: 10px; }
     .radio label { font-weight: 500; }
+    .statusBox { margin: 10px 0 0; }
   </style>
 </head>
 <body>
   <h1>Lens Uploads</h1>
   <p class="muted">
     Choose format:
-    <span class="pill">IN8</span> = <b>LMS BIN, OPC/SKU </b> or
-    <span class="pill">IN9</span> = <b>Cost/Price, OPC/SKU </b>.
+    <span class="pill">IN8</span> = <b>LMS BIN, OPC/SKU</b> or
+    <span class="pill">IN9</span> = <b>Cost/Price, OPC/SKU</b>.
     </p>
 
   <div class="card">
     <div class="row" style="margin-bottom: 12px;">
       <div style="flex: 1 1 340px;">
-        <label for="fileInput">Upload .xlsx</label><br />
-        <input id="fileInput" type="file" accept=".xlsx" />
+        <label for="fileInput">Upload .xlsx / .xlsm</label><br />
+        <input id="fileInput" type="file" accept=".xlsx,.xlsm" />
       </div>
 
       <div style="flex: 1 1 280px;">
@@ -43,7 +45,7 @@
       </div>
     </div>
 
-    <!-- Identifier selector (OPC or SKU) -->
+    <!-- OPC vs SKU -->
     <div class="row" style="margin-bottom: 12px;">
       <div class="radio">
         <input type="radio" id="idOPC" name="identifier" value="OPC Code" checked />
@@ -52,11 +54,11 @@
 
       <div class="radio">
         <input type="radio" id="idSKU" name="identifier" value="SKU" />
-        <label for="idSKU">Sku Format</label>
+        <label for="idSKU">SKU Format</label>
       </div>
     </div>
 
-    <!-- Format selector (IN8 or IN9) -->
+    <!-- IN8 vs IN9 -->
     <div class="row" style="margin-bottom: 12px;">
       <div class="radio">
         <input type="radio" id="fmtIN8" name="fmt" value="IN8" checked />
@@ -69,11 +71,11 @@
       </div>
     </div>
 
-    <div class="row" style="margin-bottom: 12px;">
+    <div class="row" style="margin-bottom: 8px;">
       <button id="convertBtn" disabled>Convert & Download</button>
     </div>
 
-    <div id="status" class="muted"></div>
+    <div id="status" class="statusBox muted"></div>
 
     <h3 style="margin-top:16px;">Preview (first 12 rows)</h3>
     <pre id="preview">(no data yet)</pre>
@@ -83,89 +85,268 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <script>
-    const fileInput = document.getElementById("fileInput");
-    const sheetSelect = document.getElementById("sheetSelect");
-    const convertBtn = document.getElementById("convertBtn");
-    const statusEl = document.getElementById("status");
-    const previewEl = document.getElementById("preview");
+    window.addEventListener("DOMContentLoaded", () => {
+      const fileInput = document.getElementById("fileInput");
+      const sheetSelect = document.getElementById("sheetSelect");
+      const convertBtn = document.getElementById("convertBtn");
+      const statusEl = document.getElementById("status");
+      const previewEl = document.getElementById("preview");
 
-    let workbook = null;
-    let originalFileName = "output";
+      let workbook = null;
+      let originalFileName = "output";
 
-    // Cost header candidates (auto-detect in this order)
-    const COST_HEADER_CANDIDATES = [
-      "UNIT COST",
-      "COST",
-      "PRICE",
-      "UNIT PRICE",
-      "UNIT CO"   // legacy / truncated
-    ];
+      // Cost header candidates (auto-detect)
+      const COST_HEADER_CANDIDATES = [
+        "UNIT COST",
+        "COST",
+        "PRICE",
+        "UNIT PRICE",
+        "UNIT CO"
+      ];
 
-    function setStatus(msg, type = "") {
-      statusEl.className = type ? type : "muted";
-      statusEl.textContent = msg;
-    }
+      function setStatus(msg, type = "") {
+        statusEl.className = "statusBox " + (type ? type : "muted");
+        statusEl.textContent = msg;
+      }
 
-    function safeBaseName(name) {
-      const base = (name || "output").replace(/\.[^/.]+$/, "");
-      return base.replace(/[^\w\-]+/g, "_");
-    }
+      // If XLSX failed to load (CDN blocked), show it immediately
+      if (typeof XLSX === "undefined") {
+        setStatus(
+          "XLSX library did not load (CDN blocked). Try a different network or allow jsdelivr.net in your firewall/adblock.",
+          "err"
+        );
+        return;
+      }
 
-    function updateSheetDropdown(wb) {
-      sheetSelect.innerHTML = "";
-      wb.SheetNames.forEach((s, idx) => {
-        const opt = document.createElement("option");
-        opt.value = s;
-        opt.textContent = `${idx + 1}. ${s}`;
-        sheetSelect.appendChild(opt);
+      function safeBaseName(name) {
+        const base = (name || "output").replace(/\.[^/.]+$/, "");
+        return base.replace(/[^\w\-]+/g, "_");
+      }
+
+      function updateSheetDropdown(wb) {
+        sheetSelect.innerHTML = "";
+        wb.SheetNames.forEach((s, idx) => {
+          const opt = document.createElement("option");
+          opt.value = s;
+          opt.textContent = `${idx + 1}. ${s}`;
+          sheetSelect.appendChild(opt);
+        });
+        sheetSelect.disabled = false;
+        sheetSelect.selectedIndex = 0;
+      }
+
+      function escapeCsvValue(value) {
+        value = (value ?? "").toString();
+        const mustQuote = value.includes(",") || value.includes('"') || value.includes("\n") || value.includes("\r");
+        value = value.replace(/"/g, '""');
+        return mustQuote ? `"${value}"` : value;
+      }
+
+      function previewFirstRows(ws) {
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "", blankrows: false });
+        const first = rows.slice(0, 12);
+        if (!first.length) return "(sheet is empty)";
+        return first.map(r => (r || []).map(v => (v ?? "")).join(" | ")).join("\n");
+      }
+
+      function findHeaderIndex(headerRow, desiredHeader) {
+        const want = desiredHeader.toLowerCase().trim();
+        const normalized = headerRow.map(h => (h ?? "").toString().trim());
+        const lower = normalized.map(h => h.toLowerCase());
+
+        let idx = lower.indexOf(want);
+        if (idx !== -1) return idx;
+
+        idx = lower.findIndex(h => h.startsWith(want));
+        if (idx !== -1) return idx;
+
+        idx = lower.findIndex(h => h.includes(want));
+        if (idx !== -1) return idx;
+
+        return -1;
+      }
+
+      function readRows(ws) {
+        return XLSX.utils.sheet_to_json(ws, {
+          header: 1,
+          raw: false,
+          defval: "",
+          blankrows: false
+        });
+      }
+
+      function downloadTextFile(text, filename) {
+        const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        URL.revokeObjectURL(url);
+      }
+
+      function getSelectedFormat() {
+        const el = document.querySelector('input[name="fmt"]:checked');
+        return el ? el.value : "IN8";
+      }
+
+      function getSelectedIdentifier() {
+        const el = document.querySelector('input[name="identifier"]:checked');
+        return el ? el.value : "OPC Code";
+      }
+
+      function buildIN8(rows, idxLms, idxId) {
+        const out = [];
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const lms = (r[idxLms] ?? "").toString().trim();
+          const idv = (r[idxId] ?? "").toString().trim();
+          if (!lms && !idv) continue;
+          out.push([lms, idv].map(escapeCsvValue).join(","));
+        }
+        return out.join("\n");
+      }
+
+      function buildIN9(rows, idxCost, idxId) {
+        const out = [];
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const cost = (r[idxCost] ?? "").toString().trim();
+          const idv  = (r[idxId] ?? "").toString().trim();
+          if (!cost && !idv) continue;
+          out.push([cost, idv].map(escapeCsvValue).join(","));
+        }
+        return out.join("\n");
+      }
+
+      function detectCostIndex(headerRow) {
+        for (const candidate of COST_HEADER_CANDIDATES) {
+          const idx = findHeaderIndex(headerRow, candidate);
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      }
+
+      function listHeaders(headerRow) {
+        const found = headerRow.filter(Boolean);
+        return found.length ? found.join(" | ") : "(no headers)";
+      }
+
+      // --- Handlers ---
+
+      fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files?.[0];
+        workbook = null;
+
+        convertBtn.disabled = true;
+        sheetSelect.disabled = true;
+        sheetSelect.innerHTML = `<option value="">(Upload a file first)</option>`;
+        previewEl.textContent = "(no data yet)";
+
+        if (!file) {
+          setStatus("No file selected.");
+          return;
+        }
+
+        const lower = file.name.toLowerCase();
+        if (!(lower.endsWith(".xlsx") || lower.endsWith(".xlsm"))) {
+          setStatus("Please upload a .xlsx or .xlsm file.", "err");
+          return;
+        }
+
+        originalFileName = file.name;
+        setStatus("Reading file…");
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          workbook = XLSX.read(arrayBuffer, { type: "array" });
+
+          if (!workbook.SheetNames?.length) {
+            setStatus("No sheets found in workbook.", "err");
+            return;
+          }
+
+          updateSheetDropdown(workbook);
+
+          const ws = workbook.Sheets[workbook.SheetNames[0]];
+          previewEl.textContent = previewFirstRows(ws);
+
+          convertBtn.disabled = false;
+          setStatus(`Loaded "${file.name}". Select a sheet and convert.`, "ok");
+        } catch (err) {
+          console.error(err);
+          setStatus("Failed to read the Excel file. (Check console for details)", "err");
+        }
       });
-      sheetSelect.disabled = false;
-      sheetSelect.selectedIndex = 0;
-    }
 
-    function escapeCsvValue(value) {
-      value = (value ?? "").toString();
-      const mustQuote = value.includes(",") || value.includes('"') || value.includes("\n") || value.includes("\r");
-      value = value.replace(/"/g, '""');
-      return mustQuote ? `"${value}"` : value;
-    }
-
-    function previewFirstRows(ws) {
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "", blankrows: false });
-      const first = rows.slice(0, 12);
-      if (!first.length) return "(sheet is empty)";
-      return first.map(r => (r || []).map(v => (v ?? "")).join(" | ")).join("\n");
-    }
-
-    // Find column index by header name (case-insensitive) with fuzzy matching
-    function findHeaderIndex(headerRow, desiredHeader) {
-      const want = desiredHeader.toLowerCase().trim();
-      const normalized = headerRow.map(h => (h ?? "").toString().trim());
-      const lower = normalized.map(h => h.toLowerCase());
-
-      // exact
-      let idx = lower.indexOf(want);
-      if (idx !== -1) return idx;
-
-      // starts-with (handles truncation like "UNIT CO")
-      idx = lower.findIndex(h => h.startsWith(want));
-      if (idx !== -1) return idx;
-
-      // contains (last resort)
-      idx = lower.findIndex(h => h.includes(want));
-      if (idx !== -1) return idx;
-
-      return -1;
-    }
-
-    function readRows(ws) {
-      return XLSX.utils.sheet_to_json(ws, {
-        header: 1,
-        raw: false,
-        defval: "",
-        blankrows: false
+      sheetSelect.addEventListener("change", () => {
+        if (!workbook) return;
+        const sheetName = sheetSelect.value;
+        const ws = workbook.Sheets[sheetName];
+        previewEl.textContent = previewFirstRows(ws);
       });
-    }
 
-    function downloadTextFile(text, filename) {
-      const blob = new Blob([text], {
+      convertBtn.addEventListener("click", () => {
+        if (!workbook) {
+          setStatus("Upload an Excel file first.", "err");
+          return;
+        }
+
+        const sheetName = sheetSelect.value || workbook.SheetNames[0];
+        const ws = workbook.Sheets[sheetName];
+
+        try {
+          const rows = readRows(ws);
+          if (!rows.length) throw new Error("Sheet has no rows.");
+
+          const headerRow = rows[0].map(h => (h ?? "").toString().trim());
+
+          const fmt = getSelectedFormat();
+          const identifierHeader = getSelectedIdentifier(); // "OPC Code" or "SKU"
+
+          const idxId = findHeaderIndex(headerRow, identifierHeader);
+          if (idxId === -1) {
+            throw new Error(`Header "${identifierHeader}" not found. Found: ${listHeaders(headerRow)}`);
+          }
+
+          const base = safeBaseName(originalFileName);
+          const sheetPart = safeBaseName(sheetName);
+
+          let csv = "";
+          let outName = "";
+
+          if (fmt === "IN8") {
+            const idxLms = findHeaderIndex(headerRow, "LMS BIN");
+            if (idxLms === -1) {
+              throw new Error(`Header "LMS BIN" not found. Found: ${listHeaders(headerRow)}`);
+            }
+            csv = buildIN8(rows, idxLms, idxId);
+            outName = `IN8_${safeBaseName(identifierHeader)}_${base}_${sheetPart}.csv`;
+          } else {
+            const idxCost = detectCostIndex(headerRow);
+            if (idxCost === -1) {
+              throw new Error(`Cost header not found. Tried: ${COST_HEADER_CANDIDATES.join(", ")}. Found: ${listHeaders(headerRow)}`);
+            }
+            csv = buildIN9(rows, idxCost, idxId);
+            outName = `IN9_${safeBaseName(identifierHeader)}_${base}_${sheetPart}.csv`;
+          }
+
+          if (!csv.trim()) throw new Error("CSV output is empty.");
+
+          downloadTextFile(csv, outName);
+          setStatus(`Downloaded ${outName}`, "ok");
+        } catch (err) {
+          console.error(err);
+          setStatus(err.message || "Convert failed.", "err");
+        }
+      });
+
+      setStatus("Ready. Upload a file to begin.");
+    });
+  </script>
+</body>
+</html>
