@@ -6,87 +6,99 @@
   <title>Investigative Hold Tracker</title>
 
   <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* === STATE COLORS === */
+    .state-green { background:#065f46 !important; }
+    .state-yellow { background:#92400e !important; }
+    .state-red { background:#7f1d1d !important; }
+
+    .state-text-green { color:#16a34a; }
+    .state-text-yellow { color:#f59e0b; }
+    .state-text-red { color:#ef4444; }
+
+    .pulse {
+      animation: pulse .6s ease-in-out;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .badge {
+      display:inline-block;
+      padding:4px 10px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12px;
+      margin-left:10px;
+    }
+  </style>
 </head>
 
 <body>
-  <div class="wrap">
+<div class="wrap">
 
-    <!-- Header -->
-    <header class="header">
-      <div class="brand">
-        <h1>Investigative Hold Tracker</h1>
-        <p>Live operational visibility</p>
+  <!-- HEADER (STATE DRIVEN) -->
+  <header id="stateHeader" class="header">
+    <div class="brand">
+      <h1>Investigative Hold Tracker</h1>
+      <p id="stateBanner">Loading state…</p>
+    </div>
+    <img src="zenni-logo.png" class="logo" alt="Zenni" />
+  </header>
+
+  <!-- PRIMARY COUNTERS -->
+  <section class="card grid">
+
+    <div>
+      <label>ACTIVE INVESTIGATIVE HOLDS</label>
+      <div id="activeCount" style="font-size:52px;font-weight:900;">
+        —
       </div>
-
-      <img
-        src="zenni-logo.png"
-        class="logo"
-        alt="Zenni"
-        onerror="this.style.display='none'"
-      />
-    </header>
-
-    <!-- Counters -->
-    <section class="card grid">
-
-      <!-- Active (Pending) -->
-      <div>
-        <label>Active Investigative Holds</label>
-        <div
-          id="activeCount"
-          style="font-size:44px;font-weight:900;margin-top:6px;"
-        >
-          —
-        </div>
-      </div>
-
-      <!-- Evaluated -->
-      <div>
-        <label>Evaluated</label>
-        <div
-          id="evaluatedCount"
-          style="font-size:44px;font-weight:900;margin-top:6px;"
-        >
-          —
-        </div>
-      </div>
-
-    </section>
-
-    <!-- Last Updated -->
-    <div
-      id="lastUpdated"
-      style="font-size:12px;color:var(--muted);margin:8px 0 0 6px;"
-    ></div>
-
-    <!-- Breakdown Table -->
-    <section class="card">
-      <label>Hold Breakdown (Sent Back To)</label>
-
-      <div style="overflow-x:auto;">
-        <table width="100%" cellspacing="0">
-          <thead>
-            <tr>
-              <th align="left">Sent Back To</th>
-              <th align="left">Count</th>
-            </tr>
-          </thead>
-          <tbody id="holdTable">
-            <tr>
-              <td colspan="2">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- Navigation -->
-    <div class="actions">
-      <a href="index.html" class="btnGhost">← Back to Dashboard</a>
     </div>
 
+    <div>
+      <label>COMPLETION</label>
+      <div id="completionPct" style="font-size:36px;font-weight:800;">
+        —
+      </div>
+      <div style="font-size:13px;color:var(--muted);">
+        Evaluated: <span id="evaluatedCount">—</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- TIME CONTEXT -->
+  <div id="lastUpdated"
+       style="font-size:12px;color:var(--muted);margin:6px 0 0 6px;">
   </div>
 
-  <script src="page3.js"></script>
+  <!-- BREAKDOWN -->
+  <section class="card">
+    <label>HOLD BREAKDOWN (CLICK TO ACT)</label>
+
+    <table width="100%">
+      <thead>
+        <tr>
+          <th align="left">Sent Back To</th>
+          <th align="left">Count</th>
+        </tr>
+      </thead>
+      <tbody id="holdTable">
+        <tr><td colspan="2">Loading…</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="actions">
+    <a href="index.html" class="btnGhost">← Back to Dashboard</a>
+  </div>
+
+</div>
+
+<script src="page3.js"></script>
 </body>
 </html>
