@@ -22,7 +22,15 @@ async function loadHoldData() {
     const evaluated = Number(data.evaluated || 0);
     const total = active + evaluated;
 
-    const pct = total === 0 ? 100 : Math.round((evaluated / total) * 100);
+    /* ===== COMPLETION (TRUTHFUL) ===== */
+    let pct;
+    if (total === 0) {
+      pct = 100;
+    } else if (active > 0) {
+      pct = Math.min(99, Math.floor((evaluated / total) * 100));
+    } else {
+      pct = 100;
+    }
 
     /* ===== STATE LOGIC ===== */
     let state, stateText, stateClass, textClass;
@@ -49,13 +57,20 @@ async function loadHoldData() {
     banner.innerHTML = `${state}
       <span class="badge ${textClass}">${active} Active</span>`;
 
+    if (state === "ATTENTION") {
+      header.classList.add("attention-pulse");
+    } else {
+      header.classList.remove("attention-pulse");
+    }
+
+    /* ===== COUNTERS ===== */
     activeEl.textContent = active;
     evalEl.textContent = evaluated;
     pctEl.textContent = `${pct}%`;
 
     if (lastActive !== null && active !== lastActive) {
-      activeEl.classList.add("pulse");
-      setTimeout(() => activeEl.classList.remove("pulse"), 600);
+      activeEl.style.transform = "scale(1.1)";
+      setTimeout(() => activeEl.style.transform = "scale(1)", 300);
     }
 
     lastActive = active;
@@ -79,15 +94,21 @@ async function loadHoldData() {
       return;
     }
 
-    entries.forEach(([dest, count]) => {
+    entries.forEach(([dest, count], idx) => {
       const tr = document.createElement("tr");
+
+      if (idx === 0 && active > 0) {
+        tr.classList.add("breakdown-hot");
+      }
+
       tr.style.cursor = "pointer";
       tr.innerHTML = `
         <td>${dest}</td>
         <td>${count}</td>
       `;
+
       tr.onclick = () =>
-        alert(`Drill-down: ${dest}\n(Next step: RX modal)`);
+        alert(`Drill-down: ${dest}\n(Next: RX modal)`);
 
       tableEl.appendChild(tr);
     });
