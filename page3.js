@@ -1,90 +1,99 @@
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbzb9LNa7_5dfr7lfFf_MCkHVamM3T5Sw7iByx58WKgWCGvvl6ysZZyIsEBWppuCL3A/exec";
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbzb9LNa7_5dfr7lfFf_MCkHVamM3T5Sw7iByx58WKgWCGvvl6ysZZyIsEBWppuCL3A/exec";
 
-const REFRESH_MS = 15000;
-let lastActive = null;
 
-async function loadHoldData() {
-  const activeEl = document.getElementById("activeCount");
-  const evalEl   = document.getElementById("evaluatedCount");
-  const pctEl    = document.getElementById("completionPct");
-  const tableEl  = document.getElementById("holdTable");
-  const banner   = document.getElementById("stateBanner");
-  const header   = document.getElementById("stateHeader");
-  const timeEl   = document.getElementById("lastUpdated");
+let dashboardData = null;
 
-  try {
-    const res = await fetch(API_URL, { cache: "no-store" });
+function animateValue(el, start, end){
+  let cur = start;
+  const step = Math.max(1, Math.floor((end - start) / 30));
+  const timer = setInterval(() => {
+    cur += step;
+    if(cur >= end){
+      cur = end;
+      clearInterval(timer);
+    }
+    el.textContent = cur;
+  }, 16);
+}
+
+async function loadDashboard(){
+  try{
+    const res = await fetch(ENDPOINT);
     const data = await res.json();
+    dashboardData = data;
 
-    const active = Number(data.active || 0);
-    const evaluated = Number(data.evaluated || 0);
+    const active = data.active || 0;
+    const evaluated = data.evaluated || 0;
     const total = active + evaluated;
+    const completion = total ? Math.round((evaluated / total) * 100) : 0;
 
-    /* ===== COMPLETION (BULLETPROOF) ===== */
-    let pct;
-    if (total === 0) {
-      pct = 100;
-    } else if (active > 0) {
-      pct = Math.min(99, Math.floor((evaluated / total) * 100));
-    } else {
-      pct = 100;
-    }
+    animateValue(document.getElementById("active"),0,active);
+    animateValue(document.getElementById("evaluated"),0,evaluated);
+    document.getElementById("completion").textContent = `${completion}%`;
 
-    pctEl.textContent = `${pct}%`;
-    activeEl.textContent = active;
-    evalEl.textContent = evaluated;
+    document.getElementById("updated").textContent =
+      `Last updated: ${new Date(data.updatedAt).toLocaleString()}`;
 
-    /* ===== STATE ===== */
-    let stateClass, bannerText;
+    document.getElementById("source").textContent =
+      `Source: Tracker Count sheet • Rows scanned: ${data.rows || "?"}`;
 
-    if (active === 0) {
-      stateClass = "state-green";
-      bannerText = "ALL CLEAR";
-      header.classList.remove("attention-pulse");
-    } else {
-      stateClass = "state-yellow";
-      bannerText = "ATTENTION";
-      header.classList.add("attention-pulse");
-    }
-
-    header.className = `header ${stateClass}`;
-    banner.innerHTML = `${bannerText} <span class="badge">${active} Active</span>`;
-
-    /* ===== TIME ===== */
-    if (data.updatedAt) {
-      timeEl.textContent =
-        "Last updated: " +
-        new Date(data.updatedAt).toLocaleString();
-    }
-
-    /* ===== BREAKDOWN ===== */
-    tableEl.innerHTML = "";
-
-    const entries = Object.entries(data.bySentBack || {})
-      .sort((a,b) => b[1] - a[1]);
-
-    entries.forEach(([dest, count], idx) => {
-      const tr = document.createElement("tr");
-      if (idx === 0 && active > 0) tr.classList.add("breakdown-hot");
-
-      tr.innerHTML = `
-        <td>${dest}</td>
-        <td>${count}</td>
-      `;
-      tableEl.appendChild(tr);
-    });
-
-    lastActive = active;
-
-  } catch (err) {
+    renderBreakdown(data.bySentBack || {});
+  }
+  catch(err){
     console.error(err);
-    pctEl.textContent = "—";
-    activeEl.textContent = "0";
-    evalEl.textContent = "0";
-    tableEl.innerHTML = `<tr><td colspan="2">Data unavailable</td></tr>`;
+    document.getElementById("breakdownBody").innerHTML =
+      `<tr><td colspan="2">Failed to load data</td></tr>`;
   }
 }
 
-loadHoldData();
-setInterval(loadHoldData, REFRESH_MS);
+function renderBreakdown(breakdown){
+  const body = document.getElementById("breakdownBody");
+  body.innerHTML = "";
+
+  const entries = Object.entries(breakdown);
+  if(!entries.length){
+    body.innerHTML = `<tr><td colspan="2">No data</td></tr>`;
+    return;
+  }
+
+  entries.sort((a,b)=>b[1]-a[1]).forEach(([bucket,count])=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${bucket}</td><td>${count}</td>`;
+
+    tr.addEventListener("click",()=>{
+      document
+        .querySelectorAll("#breakdownBody tr")
+        .forEach(r=>r.classList.remove("active"));
+
+      tr.classList.add("active");
+      showDetail(bucket,count);
+    });
+
+    body.appendChild(tr);
+  });
+}
+
+function showDetail(bucket,count){
+  const panel = document.getElementById("detailPanel");
+  panel.style.display = "block";
+
+  const total = (dashboardData.active || 0) + (dashboardData.evaluated || 0);
+  const pct = total ? ((count / total) * 100).toFixed(1) : "0";
+
+  document.getElementById("detailTitle").textContent = bucket;
+  document.getElementById("detailCount").textContent =
+    `Jobs routed here: ${count}`;
+  document.getElementById("detailPercent").textContent =
+    `Impact share: ${pct}% of workload`;
+
+  const last =
+    dashboardData.lastChangeByBucket?.[bucket] ||
+    dashboardData.updatedAt ||
+    null;
+
+  document.getElementById("detailUpdated").textContent =
+    `Last signal received: ${last ? new Date(last).toLocaleString() : "Unknown"}`;
+}
+
+loadDashboard();
+setInterval(loadDashboard, 30000);

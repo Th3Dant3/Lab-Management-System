@@ -1,107 +1,268 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Investigative Hold Tracker</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Investigative Hold Tracker</title>
 
-  <link rel="stylesheet" href="style.css" />
+<style>
+:root{
+  --bg:#020617;
+  --border:rgba(255,255,255,.08);
+  --text:#e5e7eb;
+  --muted:#94a3b8;
 
-  <style>
-    /* ===== STATE COLORS ===== */
-    .state-green { background:#065f46 !important; }
-    .state-yellow { background:#92400e !important; }
-    .state-red { background:#7f1d1d !important; }
+  --danger:#ef4444;
+  --success:#22c55e;
+  --warn:#f59e0b;
+  --accent:#38bdf8;
 
-    .state-text-green { color:#16a34a; }
-    .state-text-yellow { color:#f59e0b; }
-    .state-text-red { color:#ef4444; }
+  --radius:16px;
+  --shadow:0 20px 40px rgba(0,0,0,.45);
+}
 
-    /* ===== ATTENTION PULSE ===== */
-    .attention-pulse {
-      animation: attentionPulse 1.8s ease-in-out infinite;
-    }
-    @keyframes attentionPulse {
-      0%   { box-shadow: 0 0 0 rgba(0,0,0,0); }
-      50%  { box-shadow: 0 0 18px rgba(245,158,11,.45); }
-      100% { box-shadow: 0 0 0 rgba(0,0,0,0); }
-    }
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:radial-gradient(ellipse at top,#020617 0%,#000 100%);
+  color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+}
 
-    /* ===== BREAKDOWN PRIORITY ===== */
-    .breakdown-hot {
-      font-weight: 900;
-      background: rgba(239,68,68,.08);
-    }
+.wrap{
+  max-width:1280px;
+  margin:36px auto;
+  padding:0 18px 60px;
+}
 
-    .badge {
-      display:inline-block;
-      padding:4px 10px;
-      border-radius:999px;
-      font-weight:900;
-      font-size:12px;
-      margin-left:10px;
-    }
-  </style>
+/* HEADER */
+.header{
+  padding:22px;
+  border-radius:18px;
+  border:1px solid var(--border);
+  background:linear-gradient(135deg,#020617,#020617);
+  box-shadow:var(--shadow);
+}
+.header h1{
+  margin:0;
+  font-size:32px;
+  font-weight:900;
+}
+.header p{
+  margin:6px 0 0;
+  color:var(--muted);
+  font-size:14px;
+}
+
+/* SECTION RAIL */
+.sectionRail{
+  margin:28px 0 10px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.sectionRail::before,
+.sectionRail::after{
+  content:"";
+  height:1px;
+  flex:1;
+  background:linear-gradient(
+    to right,
+    transparent,
+    rgba(56,189,248,.45),
+    transparent
+  );
+}
+.sectionRail span{
+  font-size:12px;
+  letter-spacing:.18em;
+  font-weight:900;
+  color:#7dd3fc;
+}
+
+/* SUMMARY */
+.summary{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:14px;
+}
+@media(max-width:900px){
+  .summary{grid-template-columns:1fr}
+}
+
+.metric{
+  position:relative;
+  padding:18px;
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  background:linear-gradient(180deg,#020617,#020617);
+  overflow:hidden;
+}
+.metric::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(120deg,transparent,rgba(255,255,255,.06),transparent);
+  transform:translateX(-100%);
+  animation:scan 6s infinite;
+}
+@keyframes scan{
+  0%{transform:translateX(-100%)}
+  50%{transform:translateX(100%)}
+  100%{transform:translateX(100%)}
+}
+.metric label{
+  font-size:12px;
+  letter-spacing:.14em;
+  font-weight:800;
+  color:var(--muted);
+}
+.metric .value{
+  margin-top:8px;
+  font-size:42px;
+  font-weight:900;
+}
+.metric.danger .value{color:var(--danger)}
+.metric.success .value{color:var(--success)}
+.metric.warn .value{color:var(--warn)}
+
+.metaRow{
+  display:flex;
+  justify-content:space-between;
+  font-size:12px;
+  color:var(--muted);
+  margin:10px 4px 0;
+}
+
+/* TABLE */
+.card{
+  margin-top:22px;
+  padding:18px;
+  border-radius:18px;
+  border:1px solid var(--border);
+  background:linear-gradient(180deg,#020617,#020617);
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+}
+th,td{
+  padding:12px 10px;
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+}
+th{
+  text-align:left;
+  color:#cbd5f5;
+  font-weight:800;
+}
+tbody tr{
+  cursor:pointer;
+  transition:background .15s ease;
+}
+tbody tr:hover{
+  background:rgba(255,255,255,.04);
+}
+tbody tr.active{
+  background:rgba(56,189,248,.08);
+  box-shadow:inset 0 0 0 1px rgba(56,189,248,.25);
+}
+
+/* DETAIL PANEL */
+.detail{
+  display:none;
+  margin-top:18px;
+  padding:18px;
+  border-radius:18px;
+  border:1px solid var(--border);
+  background:linear-gradient(180deg,#020617,#020617);
+  animation:fadeIn .25s ease-out;
+}
+@keyframes fadeIn{
+  from{opacity:0; transform:translateY(6px)}
+  to{opacity:1; transform:none}
+}
+.detail h2{
+  margin:0 0 10px;
+  font-size:22px;
+}
+.detail .line{
+  font-size:14px;
+  color:var(--muted);
+  margin-bottom:6px;
+}
+
+/* BACK */
+.back{
+  margin-top:18px;
+}
+.back a{
+  color:#fff;
+  text-decoration:none;
+  border:1px solid var(--border);
+  padding:10px 14px;
+  border-radius:12px;
+  display:inline-block;
+}
+</style>
 </head>
 
 <body>
 <div class="wrap">
 
-  <!-- HEADER (STATE DRIVEN) -->
-  <header id="stateHeader" class="header">
-    <div class="brand">
-      <h1>Investigative Hold Tracker</h1>
-      <p id="stateBanner">Loading state…</p>
-    </div>
-    <img src="zenni-logo.png" class="logo" alt="Zenni" />
+  <header class="header">
+    <h1>Investigative Hold Tracker</h1>
+    <p>Live LMS Operational View</p>
   </header>
 
-  <!-- PRIMARY COUNTERS -->
-  <section class="card grid">
+  <div class="sectionRail"><span>SUMMARY</span></div>
 
-    <div>
-      <label>ACTIVE INVESTIGATIVE HOLDS</label>
-      <div id="activeCount" style="font-size:52px;font-weight:900;">
-        —
-      </div>
+  <section class="summary">
+    <div class="metric danger">
+      <label>ACTIVE HOLDS</label>
+      <div class="value" id="active">—</div>
     </div>
-
-    <div>
+    <div class="metric success">
+      <label>EVALUATED</label>
+      <div class="value" id="evaluated">—</div>
+    </div>
+    <div class="metric warn">
       <label>COMPLETION</label>
-      <div id="completionPct" style="font-size:36px;font-weight:800;">
-        —
-      </div>
-      <div style="font-size:13px;color:var(--muted);">
-        Evaluated: <span id="evaluatedCount">—</span>
-      </div>
+      <div class="value" id="completion">—</div>
     </div>
-
   </section>
 
-  <!-- TIME CONTEXT -->
-  <div id="lastUpdated"
-       style="font-size:12px;color:var(--muted);margin:6px 0 0 6px;">
+  <div class="metaRow">
+    <span id="updated">Last updated: —</span>
+    <span id="source">Source: —</span>
   </div>
 
-  <!-- BREAKDOWN -->
-  <section class="card">
-    <label>HOLD BREAKDOWN (CLICK TO ACT)</label>
+  <div class="sectionRail"><span>HOLD BREAKDOWN</span></div>
 
-    <table width="100%">
+  <section class="card">
+    <table>
       <thead>
         <tr>
-          <th align="left">Sent Back To</th>
-          <th align="left">Count</th>
+          <th>Sent Back To</th>
+          <th>Count</th>
         </tr>
       </thead>
-      <tbody id="holdTable">
+      <tbody id="breakdownBody">
         <tr><td colspan="2">Loading…</td></tr>
       </tbody>
     </table>
   </section>
 
-  <div class="actions">
-    <a href="index.html" class="btnGhost">← Back to Dashboard</a>
+  <section id="detailPanel" class="detail">
+    <h2 id="detailTitle"></h2>
+    <div class="line" id="detailCount"></div>
+    <div class="line" id="detailPercent"></div>
+    <div class="line" id="detailUpdated"></div>
+  </section>
+
+  <div class="back">
+    <a href="index.html">← Back to Dashboard</a>
   </div>
 
 </div>
