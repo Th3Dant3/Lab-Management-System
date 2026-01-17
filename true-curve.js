@@ -1,127 +1,155 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbzuUpwsa2VTGjxeSP3wVV-x2Z4yMkGH_eYS86VpFH0CzC2Ii5S5U2ag-S5d89RZ8oHJ/exec";
+/* =====================================================
+   TRUE CURVE / POWER ISSUES — JS
+   ===================================================== */
 
-let allRows = [];
-let view = "production";
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbzuUpwsa2VTGjxeSP3wVV-x2Z4yMkGH_eYS86VpFH0CzC2Ii5S5U2ag-S5d89RZ8oHJ/exec";
 
+let selectedYear = "2026";
+let currentView = "prod";
+let groupMode = "none";
+
+/* INIT */
 document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("btnProd").onclick = () => switchView("production");
-  document.getElementById("btnTest").onclick = () => switchView("test");
+  wireTabs();
   loadData();
 });
 
+/* =====================================================
+   TAB WIRING
+   ===================================================== */
+
+function wireTabs() {
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      const group = tab.dataset.group;
+      const view = tab.dataset.view;
+      const year = tab.dataset.year;
+
+      if (group) groupMode = group;
+      if (view) currentView = view;
+      if (year) selectedYear = year;
+
+      document
+        .querySelectorAll(`.tab[data-${group ? "group" : view ? "view" : "year"}]`)
+        .forEach(t => t.classList.remove("active"));
+
+      tab.classList.add("active");
+      loadData();
+    });
+  });
+}
+
+/* =====================================================
+   LOAD DATA
+   ===================================================== */
+
 async function loadData() {
-  const res = await fetch(API_URL);
-  const data = await res.json();
-  allRows = data.rows || [];
-  updateKPIs();
-  render();
+  const tbody = document.getElementById("tc-body");
+  tbody.innerHTML = `<tr><td colspan="6" class="empty">Loading…</td></tr>`;
+
+  try {
+    const res = await fetch(`${API_URL}?year=${selectedYear}`, { cache: "no-store" });
+    const json = await res.json();
+
+    if (json.error) {
+      console.error(json.error);
+      tbody.innerHTML =
+        `<tr><td colspan="6" class="empty">API error</td></tr>`;
+      return;
+    }
+
+    let rows = json.rows || [];
+
+    // FILTER PROD / TEST
+    rows = rows.filter(r =>
+      currentView === "prod"
+        ? r.status !== "TEST" && r.status !== "Cancel"
+        : r.status === "TEST" || r.status === "Cancel"
+    );
+
+    renderTable(rows);
+
+  } catch (err) {
+    console.error(err);
+    tbody.innerHTML =
+      `<tr><td colspan="6" class="empty">Failed to load data</td></tr>`;
+  }
 }
 
-/* ---------------- KPIs ---------------- */
+/* =====================================================
+   RENDER TABLE
+   ===================================================== */
 
-function updateKPIs() {
-  set("kpiTotal", allRows.length);
-  set("kpiTest", allRows.filter(r => r.status === "TEST").length);
-  set("kpiCancel", allRows.filter(r => r.status === "Cancel").length);
-  set("kpiAdjusted", allRows.filter(hasAdj).length);
-  set("kpiActive", allRows.filter(r =>
-    r.status !== "Shipped" &&
-    r.status !== "TEST" &&
-    r.status !== "Cancel"
-  ).length);
-  set("kpiEscalated", allRows.filter(isEsc).length);
-}
+function renderTable(rows) {
+  const tbody = document.getElementById("tc-body");
+  tbody.innerHTML = "";
 
-function set(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = val;
-}
+  if (!rows.length) {
+    tbody.innerHTML =
+      `<tr><td colspan="6" class="empty">No data available</td></tr>`;
+    return;
+  }
 
-/* ---------------- RENDER ---------------- */
+  // FLAT LIST
+  if (groupMode === "none") {
+    rows
+      .sort((a, b) => (b.breakage || 0) - (a.breakage || 0))
+      .forEach(r => tbody.appendChild(makeRow(r)));
+    return;
+  }
 
-function render() {
-  const body = document.getElementById("tableBody");
-  body.innerHTML = "";
-
-  const rows = view === "production"
-    ? allRows.filter(r => r.status !== "TEST" && r.status !== "Cancel")
-    : allRows.filter(r => r.status === "TEST" || r.status === "Cancel");
-
+  // GROUP BY MATERIAL
   const groups = {};
   rows.forEach(r => {
-    const key = r.material || "Unknown";
-    groups[key] ??= [];
+    const key = (r.material || "Unknown").trim();
+    if (!groups[key]) groups[key] = [];
     groups[key].push(r);
   });
 
   Object.entries(groups)
     .sort((a, b) => b[1].length - a[1].length)
-    .forEach(([material, list]) => {
-      const gid = "g_" + material.replace(/[^a-z0-9]/gi, "_");
+    .forEach(([label, items]) => {
+      let open = false;
 
-      // GROUP HEADER
-      body.insertAdjacentHTML("beforeend", `
-        <tr class="group-row" data-group="${gid}">
-          <td colspan="6">
-            <span class="arrow">▶</span> ${material} (${list.length})
-          </td>
-        </tr>
-      `);
+      const header = document.createElement("tr");
+      header.className = "group-row";
+      header.innerHTML =
+        `<td colspan="6">▶ ${label} (${items.length})</td>`;
 
-      // CHILD ROWS
-      list.forEach(r => {
-        body.insertAdjacentHTML("beforeend", `
-          <tr class="child-row ${gid}" data-parent="${gid}" style="display:none">
-            <td>${r.rx}</td>
-            <td>${r.sku}</td>
-            <td>${r.material}</td>
-            <td>${r.status}</td>
-            <td>${r.breakage ?? ""}</td>
-            <td>${formatAdj(r)}</td>
-          </tr>
-        `);
-      });
+      tbody.appendChild(header);
+
+      const children = items
+        .sort((a, b) => (b.breakage || 0) - (a.breakage || 0))
+        .map(r => {
+          const tr = makeRow(r);
+          tr.style.display = "none";
+          tbody.appendChild(tr);
+          return tr;
+        });
+
+      header.onclick = () => {
+        open = !open;
+        children.forEach(tr => tr.style.display = open ? "" : "none");
+        header.firstChild.textContent =
+          `${open ? "▼" : "▶"} ${label} (${items.length})`;
+      };
     });
 }
 
-/* ---------------- CLICK TO EXPAND ---------------- */
+/* =====================================================
+   ROW BUILDER
+   ===================================================== */
 
-document.addEventListener("click", (e) => {
-  const header = e.target.closest("tr.group-row");
-  if (!header) return;
-
-  const gid = header.dataset.group;
-  const children = document.querySelectorAll(`tr.child-row[data-parent="${gid}"]`);
-  const arrow = header.querySelector(".arrow");
-
-  const isOpen = children[0]?.style.display === "table-row";
-
-  children.forEach(r => {
-    r.style.display = isOpen ? "none" : "table-row";
-  });
-
-  if (arrow) arrow.textContent = isOpen ? "▶" : "▼";
-});
-
-/* ---------------- VIEW SWITCH ---------------- */
-
-function switchView(v) {
-  view = v;
-  document.getElementById("btnProd").classList.toggle("active", v === "production");
-  document.getElementById("btnTest").classList.toggle("active", v === "test");
-  render();
-}
-
-/* ---------------- HELPERS ---------------- */
-
-function formatAdj(r) {
-  return [r.adj1, r.adj2, r.adj3, r.adj4].filter(Boolean).join(" → ") || "No Change";
-}
-
-function hasAdj(r) {
-  return r.adj1 || r.adj2 || r.adj3 || r.adj4;
-}
-
-function isEsc(r) {
-  return formatAdj(r).toLowerCase().includes("send");
+function makeRow(r) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td>${r.rx}</td>
+    <td>${r.sku || ""}</td>
+    <td>${r.material || ""}</td>
+    <td>${r.status || ""}</td>
+    <td>${r.breakage ?? ""}</td>
+    <td>${[r.adj1, r.adj2, r.adj3, r.adj4].filter(Boolean).join(" | ")}</td>
+  `;
+  return tr;
 }
