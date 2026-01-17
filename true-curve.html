@@ -5,28 +5,26 @@
   <title>True Curve / Power Issues</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- FORCE DARK THEME (prevents Safari white flash) -->
-  <meta name="color-scheme" content="dark">
-
-  <!-- PAGE-SPECIFIC CSS (THIS IS CRITICAL) -->
-  <link rel="stylesheet" href="./style-true-curve.css" />
+  <!-- ✅ IMPORTANT: correct CSS file -->
+  <link rel="stylesheet" href="style-true-curve.css" />
 </head>
 
 <body>
-
-  <!-- ANIMATED BACKGROUND -->
+  <!-- animated background -->
   <div class="animated-bg"></div>
 
   <div class="wrap">
 
     <!-- HEADER -->
     <header class="header">
-      <h1>True Curve / Power Issues</h1>
-      <div class="sub">RX Power & Adjustment Tracking</div>
+      <div>
+        <h1>True Curve / Power Issues</h1>
+        <div class="sub">RX Power & Adjustment Tracking</div>
+      </div>
     </header>
 
-    <!-- YEAR SELECT -->
-    <div class="year-row">
+    <!-- YEAR SELECTOR -->
+    <div class="year-selector">
       <button class="year-btn active" data-year="2025">2025</button>
       <button class="year-btn" data-year="2026">2026</button>
     </div>
@@ -41,14 +39,14 @@
       <div class="metric"><span>Cancel</span><strong id="m-cancel">0</strong></div>
     </section>
 
-    <!-- VIEW MODES -->
+    <!-- VIEW TABS -->
     <div class="tabs">
       <button class="tab active" data-view="prod">Production Jobs</button>
       <button class="tab" data-view="test">TEST / Cancel</button>
     </div>
 
-    <!-- GROUP MODES -->
-    <div class="tabs secondary">
+    <!-- GROUP TABS -->
+    <div class="group-tabs">
       <button class="tab active" data-group="none">Flat List</button>
       <button class="tab" data-group="sku">By Lens SKU</button>
       <button class="tab" data-group="material">By Material</button>
@@ -68,19 +66,16 @@
           </tr>
         </thead>
         <tbody id="table-body">
-          <tr>
-            <td colspan="6" class="loading">Loading…</td>
-          </tr>
+          <tr><td colspan="6" class="empty">Loading…</td></tr>
         </tbody>
       </table>
     </div>
 
-    <!-- BACK -->
     <a class="back" href="index.html">← Back</a>
 
   </div>
 
-  <!-- SCRIPT -->
-  <script src="./true-curve.js"></script>
+  <!-- ✅ IMPORTANT: correct JS file -->
+  <script src="true-curve.js"></script>
 </body>
 </html>
