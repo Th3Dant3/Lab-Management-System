@@ -2,39 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Investigation Hold Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
   <link rel="stylesheet" href="style-page3.css" />
 </head>
 
 <body>
   <div class="animated-bg"></div>
 
-  <div class="wrap fade-in">
+  <main class="wrap">
 
-    <header class="header">
+    <!-- HEADER -->
+    <section class="header">
       <div>
         <h1>Investigation Hold Tracker</h1>
-        <p class="sub">Operational Control Surface</p>
+        <div class="sub">Operational Control Surface</div>
       </div>
-    </header>
+    </section>
 
     <!-- KPI CARDS -->
-    <section class="kpis">
-      <div class="kpi"><label>Active Holds</label><span id="activeHolds">0</span></div>
-      <div class="kpi"><label>Evaluated</label><span id="evaluatedCount">0</span></div>
-      <div class="kpi"><label>Coverage</label><span id="coveragePct">0%</span></div>
-      <div class="kpi"><label>Last Updated</label><small id="lastUpdated">—</small></div>
+    <section class="cards">
+      <div class="card">
+        <h2>Active Holds</h2>
+        <div class="metric" id="activeHolds">—</div>
+      </div>
+
+      <div class="card">
+        <h2>Evaluated</h2>
+        <div class="metric" id="evaluatedCount">—</div>
+      </div>
+
+      <div class="card">
+        <h2>Coverage</h2>
+        <div class="metric" id="coveragePct">—</div>
+      </div>
+
+      <div class="card">
+        <h2>Last Updated</h2>
+        <div class="small" id="lastUpdated">—</div>
+      </div>
     </section>
 
     <!-- REASONS -->
-    <section class="card">
+    <section class="card full">
       <h2>Reasons</h2>
-      <div id="reasonBars" class="bars"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Reason</th>
+            <th>Count</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody id="reasonTable"></tbody>
+      </table>
     </section>
 
-    <!-- SENT BACK -->
-    <section class="card">
+    <!-- SENT BACK TO -->
+    <section class="card full">
       <h2>Sent Back To</h2>
       <table>
         <thead>
@@ -50,8 +76,10 @@
     </section>
 
     <a class="back" href="index.html">← Back</a>
-  </div>
 
+  </main>
+
+  <!-- JS MUST LOAD LAST -->
   <script src="page3.js"></script>
 </body>
 </html>
