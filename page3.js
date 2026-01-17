@@ -1,43 +1,103 @@
-const API_URL = "YOUR_API_URL_HERE";
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbzb9LNa7_5dfr7lfFf_MCkHVamM3T5Sw7iByx58WKgWCGvvl6ysZZyIsEBWppuCL3A/exec";
 
-fetch(API_URL)
-  .then(r => r.json())
-  .then(d => {
-    activeHolds.textContent = d.active;
-    evaluatedCount.textContent = d.evaluated;
-    coveragePct.textContent =
-      d.total ? ((d.evaluated / d.total) * 100).toFixed(1) + "%" : "0%";
-    lastUpdated.textContent = new Date(d.updatedAt).toLocaleString();
+async function loadInvestigation() {
+  try {
+    const res = await fetch(API_URL, { cache: "no-store" });
+    const data = await res.json();
 
-    // Reasons Bars
-    const total = Object.values(d.byReason || {}).reduce((a,b)=>a+b,0);
-    const container = document.getElementById("reasonBars");
-    container.innerHTML = "";
+    if (data.error) {
+      console.error(data.error);
+      return;
+    }
 
-    Object.entries(d.byReason || {}).forEach(([reason,count])=>{
-      const pct = ((count/total)*100).toFixed(1);
-      container.innerHTML += `
-        <div class="bar">
-          <div class="bar-head">
-            <span>${reason}</span>
-            <span>${count} (${pct}%)</span>
-          </div>
-          <div class="track">
-            <div class="fill" style="width:${pct}%"></div>
-          </div>
-        </div>`;
-    });
+    // ======================
+    // KPIs
+    // ======================
+    document.getElementById("activeHolds").textContent = data.active ?? 0;
+    document.getElementById("evaluatedCount").textContent = data.evaluated ?? 0;
 
-    // Sent Back
-    const sb = document.getElementById("sentBackTable");
-    sb.innerHTML = "";
-    Object.entries(d.bySentBack || {}).forEach(([k,v])=>{
-      sb.innerHTML += `
-        <tr>
-          <td>${k}</td>
-          <td>${v.count}</td>
-          <td>${((v.count/d.evaluated)*100).toFixed(1)}%</td>
-          <td>${v.lastAddedDate ? new Date(v.lastAddedDate).toLocaleDateString() : "—"}</td>
-        </tr>`;
-    });
-  });
+    const coverage =
+      data.total > 0
+        ? ((data.evaluated / data.total) * 100).toFixed(1)
+        : "0.0";
+
+    document.getElementById("coveragePct").textContent = `${coverage}%`;
+
+    document.getElementById("lastUpdated").textContent =
+      "Last updated: " + new Date(data.updatedAt).toLocaleString();
+
+    // ======================
+    // REASONS
+    // ======================
+    const reasonBody = document.querySelector("#reasonTable tbody");
+    reasonBody.innerHTML = "";
+
+    const reasons = data.byReason || {};
+    const totalEvaluated = data.evaluated || 0;
+
+    if (Object.keys(reasons).length === 0) {
+      reasonBody.innerHTML =
+        `<tr><td colspan="3" class="empty">No reason data available</td></tr>`;
+    } else {
+      Object.entries(reasons)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([reason, count]) => {
+          const pct =
+            totalEvaluated > 0
+              ? ((count / totalEvaluated) * 100).toFixed(1)
+              : "0.0";
+
+          reasonBody.insertAdjacentHTML(
+            "beforeend",
+            `<tr>
+              <td>${reason}</td>
+              <td>${count}</td>
+              <td>${pct}%</td>
+            </tr>`
+          );
+        });
+    }
+
+    // ======================
+    // SENT BACK TO
+    // ======================
+    const sentBody = document.querySelector("#sentBackTable tbody");
+    sentBody.innerHTML = "";
+
+    const sentBack = data.bySentBack || {};
+
+    if (Object.keys(sentBack).length === 0) {
+      sentBody.innerHTML =
+        `<tr><td colspan="4" class="empty">No investigative data available</td></tr>`;
+    } else {
+      Object.entries(sentBack)
+        .sort((a, b) => b[1].count - a[1].count)
+        .forEach(([dept, obj]) => {
+          const pct =
+            totalEvaluated > 0
+              ? ((obj.count / totalEvaluated) * 100).toFixed(1)
+              : "0.0";
+
+          const oldest = obj.lastAddedDate
+            ? new Date(obj.lastAddedDate).toLocaleDateString()
+            : "—";
+
+          sentBody.insertAdjacentHTML(
+            "beforeend",
+            `<tr>
+              <td>${dept}</td>
+              <td>${obj.count}</td>
+              <td>${pct}%</td>
+              <td>${oldest}</td>
+            </tr>`
+          );
+        });
+    }
+
+  } catch (err) {
+    console.error("Investigation load failed", err);
+  }
+}
+
+loadInvestigation();
