@@ -3,95 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <title>Investigation Hold Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Shared LMS / Zenni styles -->
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="style-page3.css" />
 </head>
 
 <body>
-
-  <!-- REQUIRED for animated background -->
   <div class="animated-bg"></div>
 
-  <div class="wrap">
+  <div class="wrap fade-in">
 
-    <!-- HEADER -->
-    <div class="header">
+    <header class="header">
       <div>
-        <h2>Investigation Hold Tracker</h2>
-        <div class="muted">Operational Control Surface</div>
+        <h1>Investigation Hold Tracker</h1>
+        <p class="sub">Operational Control Surface</p>
       </div>
-    </div>
+    </header>
 
-    <!-- STATE BAR -->
-    <div id="stateBar" class="state-bar"></div>
+    <!-- KPI CARDS -->
+    <section class="kpis">
+      <div class="kpi"><label>Active Holds</label><span id="activeHolds">0</span></div>
+      <div class="kpi"><label>Evaluated</label><span id="evaluatedCount">0</span></div>
+      <div class="kpi"><label>Coverage</label><span id="coveragePct">0%</span></div>
+      <div class="kpi"><label>Last Updated</label><small id="lastUpdated">—</small></div>
+    </section>
 
-    <!-- KPI ROW -->
-    <div class="kpis">
-      <div class="kpi">
-        <label>ACTIVE HOLDS</label>
-        <div id="activeHolds" class="value">0</div>
-      </div>
+    <!-- REASONS -->
+    <section class="card">
+      <h2>Reasons</h2>
+      <div id="reasonBars" class="bars"></div>
+    </section>
 
-      <div class="kpi">
-        <label>EVALUATED</label>
-        <div id="evaluatedCount" class="value">0</div>
-      </div>
+    <!-- SENT BACK -->
+    <section class="card">
+      <h2>Sent Back To</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Department</th>
+            <th>Count</th>
+            <th>%</th>
+            <th>Oldest</th>
+          </tr>
+        </thead>
+        <tbody id="sentBackTable"></tbody>
+      </table>
+    </section>
 
-      <div class="kpi">
-        <label>COVERAGE</label>
-        <div id="coveragePct" class="value">0%</div>
-      </div>
-
-      <div class="kpi">
-        <label>LAST UPDATED</label>
-        <small id="lastUpdated">—</small>
-      </div>
-    </div>
-
-    <!-- SIDE BY SIDE PANELS -->
-    <div class="dual-grid">
-
-      <!-- LEFT: REASONS -->
-      <div class="card">
-        <label>REASONS</label>
-
-        <!-- JS WILL POPULATE THIS -->
-        <div id="reasonList">
-          <div class="empty">Loading…</div>
-        </div>
-      </div>
-
-      <!-- RIGHT: SENT BACK TO -->
-      <div class="card">
-        <label>SENT BACK TO</label>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Department</th>
-              <th>Count</th>
-              <th>Impact %</th>
-              <th>Oldest</th>
-            </tr>
-          </thead>
-          <tbody id="sentBackTable">
-            <tr>
-              <td colspan="4" class="empty">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-    </div>
-
-    <!-- BACK -->
     <a class="back" href="index.html">← Back</a>
-
   </div>
 
-  <!-- DATA LOGIC -->
   <script src="page3.js"></script>
 </body>
 </html>
