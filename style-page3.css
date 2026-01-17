@@ -1,0 +1,120 @@
+/* =====================================================
+   INVESTIGATION HOLD TRACKER
+   ===================================================== */
+
+:root{
+  --bg:#020617;
+  --panel:#0b1220;
+  --border:#1f2937;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+  --blue:#38bdf8;
+}
+
+*{ box-sizing:border-box; }
+
+body{
+  margin:0;
+  font-family:ui-sans-serif,system-ui;
+  background:#020617;
+  color:var(--text);
+}
+
+.animated-bg{
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  background:
+    radial-gradient(circle at 20% 30%, #0f2a44, transparent 40%),
+    radial-gradient(circle at 80% 70%, #0a1f3d, transparent 45%),
+    linear-gradient(180deg,#020617,#020617);
+  animation: drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes drift{
+  from{background-position:0% 0%,100% 100%,center;}
+  to{background-position:20% 30%,80% 70%,center;}
+}
+
+.wrap{
+  max-width:1200px;
+  margin:auto;
+  padding:26px;
+}
+
+/* header */
+.header{
+  background:linear-gradient(180deg,var(--panel),var(--bg));
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:24px;
+  margin-bottom:20px;
+}
+
+/* KPIs */
+.kpis{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;
+  margin-bottom:18px;
+}
+
+.kpi{
+  background:linear-gradient(180deg,var(--panel),var(--bg));
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:16px;
+}
+
+.kpi span{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.kpi strong{
+  display:block;
+  font-size:28px;
+  margin-top:6px;
+}
+
+/* cards */
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--bg));
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+  margin-bottom:16px;
+}
+
+/* reason bars */
+.reason{
+  margin-bottom:12px;
+}
+
+.reason-label{
+  display:flex;
+  justify-content:space-between;
+  font-size:13px;
+  margin-bottom:6px;
+}
+
+.bar{
+  height:8px;
+  background:#020617;
+  border-radius:6px;
+  overflow:hidden;
+}
+
+.bar-fill{
+  height:100%;
+  background:linear-gradient(90deg,#38bdf8,#0ea5e9);
+}
+
+/* back */
+.back{
+  display:inline-block;
+  margin-top:16px;
+  color:#93c5fd;
+  font-weight:700;
+  text-decoration:none;
+}
