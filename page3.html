@@ -2,9 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Investigation Hold Tracker</title>
-
   <link rel="stylesheet" href="style-page3.css" />
 </head>
 
@@ -14,72 +12,51 @@
   <main class="wrap">
 
     <!-- HEADER -->
-    <section class="header">
-      <div>
-        <h1>Investigation Hold Tracker</h1>
-        <div class="sub">Operational Control Surface</div>
-      </div>
-    </section>
+    <div class="header">
+      <h1>Investigation Hold Tracker</h1>
+      <p>Operational Control Surface</p>
+    </div>
 
-    <!-- KPI CARDS -->
-    <section class="cards">
-      <div class="card">
-        <h2>Active Holds</h2>
-        <div class="metric" id="activeHolds">—</div>
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat">
+        <h3>Active Holds</h3>
+        <div id="activeHolds" class="value">—</div>
       </div>
+      <div class="stat">
+        <h3>Evaluated</h3>
+        <div id="evaluatedCount" class="value">—</div>
+      </div>
+      <div class="stat">
+        <h3>Coverage</h3>
+        <div id="coveragePct" class="value">—</div>
+      </div>
+      <div class="stat">
+        <h3>Last Updated</h3>
+        <div id="lastUpdated" class="value">—</div>
+      </div>
+    </div>
 
-      <div class="card">
-        <h2>Evaluated</h2>
-        <div class="metric" id="evaluatedCount">—</div>
-      </div>
-
-      <div class="card">
-        <h2>Coverage</h2>
-        <div class="metric" id="coveragePct">—</div>
-      </div>
-
-      <div class="card">
-        <h2>Last Updated</h2>
-        <div class="small" id="lastUpdated">—</div>
-      </div>
-    </section>
+    <!-- TABS -->
+    <div class="tabs">
+      <button id="tabReasons" class="tab active">Reasons</button>
+      <button id="tabSentBack" class="tab">Sent Back To</button>
+    </div>
 
     <!-- REASONS -->
-    <section class="card full">
-      <h2>Reasons</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Reason</th>
-            <th>Count</th>
-            <th>%</th>
-          </tr>
-        </thead>
-        <tbody id="reasonTable"></tbody>
-      </table>
+    <section id="reasonsView">
+      <div id="reasonBubbles"></div>
     </section>
 
-    <!-- SENT BACK TO -->
-    <section class="card full">
-      <h2>Sent Back To</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Department</th>
-            <th>Count</th>
-            <th>%</th>
-            <th>Oldest</th>
-          </tr>
-        </thead>
-        <tbody id="sentBackTable"></tbody>
-      </table>
+    <!-- SENT BACK -->
+    <section id="sentBackView" style="display:none">
+      <div id="sentBackBubbles"></div>
     </section>
 
     <a class="back" href="index.html">← Back</a>
 
   </main>
 
-  <!-- JS MUST LOAD LAST -->
   <script src="page3.js"></script>
 </body>
 </html>

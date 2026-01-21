@@ -2,7 +2,7 @@
    LMS OPERATIONAL CONTROL CENTER — INDEX.JS
    ===================================================== */
 
-const REFRESH_INTERVAL = 120000; // 2 minutes
+const REFRESH_INTERVAL = 60000; // 2 minutes
 
 document.addEventListener("DOMContentLoaded", () => {
   wireNavigation();
@@ -23,11 +23,11 @@ function wireNavigation() {
 
   Object.entries(nav).forEach(([id, target]) => {
     const btn = document.getElementById(id);
-    if (btn) {
-      btn.addEventListener("click", () => {
-        window.location.href = target;
-      });
-    }
+    if (!btn) return;
+
+    btn.addEventListener("click", () => {
+      window.location.href = target;
+    });
   });
 }
 

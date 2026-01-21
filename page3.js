@@ -1,164 +1,79 @@
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbzb9LNa7_5dfr7lfFf_MCkHVamM3T5Sw7iByx58WKgWCGvvl6ysZZyIsEBWppuCL3A/exec";
+document.addEventListener("DOMContentLoaded", () => {
 
-const REFRESH_INTERVAL = 60000; // 1 minute
-let refreshTimer = null;
+  const API_URL =
+    "https://script.google.com/macros/s/AKfycbzb9LNa7_5dfr7lfFf_MCkHVamM3T5Sw7iByx58WKgWCGvvl6ysZZyIsEBWppuCL3A/exec";
 
-/* ==============================
-   INIT
-   ============================== */
-loadInvestigation();
-startAutoRefresh();
-handleVisibility();
+  const REFRESH_MS = 30000;
 
-/* ==============================
-   FLASH ANIMATION
-   ============================== */
-function flashRefresh(){
-  const el = document.createElement("div");
-  el.className = "refresh-flash";
-  document.body.appendChild(el);
-  setTimeout(()=>el.remove(),400);
-}
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  };
 
-/* ==============================
-   AUTO REFRESH
-   ============================== */
-function startAutoRefresh(){
-  stopAutoRefresh();
-  refreshTimer = setInterval(async ()=>{
-    flashRefresh();
-    await loadInvestigation();
-  }, REFRESH_INTERVAL);
-}
-
-function stopAutoRefresh(){
-  if(refreshTimer) clearInterval(refreshTimer);
-}
-
-function handleVisibility(){
-  document.addEventListener("visibilitychange",()=>{
-    document.hidden ? stopAutoRefresh() : startAutoRefresh();
-  });
-}
-
-/* ==============================
-   MAIN LOAD
-   ============================== */
-async function loadInvestigation(){
-  try{
-    const res = await fetch(API_URL,{cache:"no-store"});
-    const data = await res.json();
-
-    updateKPIs(data);
-
-    renderReasons(normalizeReasons(data.byReason));
-    renderSentBack(normalizeSentBack(data.bySentBack));
-
-  }catch(err){
-    console.error("Investigation load failed",err);
-  }
-}
-
-/* ==============================
-   KPI LOGIC
-   ============================== */
-function updateKPIs(data){
-  const active = Number(data.active || 0);
-  const evaluated = Number(data.evaluated || 0);
-  const total = Number(data.total || 0);
-
-  const coverage = total
-    ? ((evaluated / total) * 100).toFixed(1)
-    : "0.0";
-
-  document.getElementById("activeHolds").textContent = active;
-  document.getElementById("evaluatedCount").textContent = evaluated;
-  document.getElementById("coveragePct").textContent = `${coverage}%`;
-
-  document.getElementById("lastUpdated").textContent =
-    `Last updated: ${new Date(data.updatedAt || Date.now()).toLocaleTimeString()}`;
-}
-
-/* ==============================
-   NORMALIZERS
-   ============================== */
-function normalizeReasons(obj){
-  if(!obj || typeof obj!=="object") return [];
-  return Object.entries(obj).map(([reason,count])=>({
-    reason,
-    count:Number(count)
-  }));
-}
-
-function normalizeSentBack(obj){
-  if(!obj || typeof obj!=="object") return [];
-  return Object.entries(obj).map(([dept,info])=>({
-    department:dept,
-    count:Number(info.count || 0),
-    oldest: info.lastAddedDate
-      ? new Date(info.lastAddedDate).toLocaleString()
-      : "—"
-  }));
-}
-
-/* ==============================
-   RENDER: REASONS
-   ============================== */
-function renderReasons(rows){
-  const el = document.getElementById("reasonTable");
-  el.innerHTML = "";
-
-  if(!rows.length){
-    el.innerHTML = `<div class="empty">No reason data</div>`;
-    return;
+  function load() {
+    fetch(API_URL)
+      .then(r => r.json())
+      .then(d => render(d))
+      .catch(() => fail());
   }
 
-  const total = rows.reduce((s,r)=>s+r.count,0);
+  function render(d) {
+    set("activeHolds", d.active);
+    set("evaluatedCount", d.evaluated);
+    set("coveragePct", (d.coverage * 100).toFixed(1) + "%");
+    set("lastUpdated", d.lastUpdated);
 
-  rows.sort((a,b)=>b.count-a.count).forEach(r=>{
-    const pct=((r.count/total)*100).toFixed(1);
-    el.insertAdjacentHTML("beforeend",`
-      <div class="impact-row">
-        <div class="impact-head">
-          <strong>${r.reason}</strong>
-          <span>${r.count} (${pct}%)</span>
-        </div>
-        <div class="impact-bar">
-          <div class="impact-fill" style="--w:${pct}%"></div>
-        </div>
-      </div>
-    `);
-  });
-}
-
-/* ==============================
-   RENDER: SENT BACK
-   ============================== */
-function renderSentBack(rows){
-  const el = document.getElementById("sentBackTable");
-  el.innerHTML = "";
-
-  if(!rows.length){
-    el.innerHTML = `<div class="empty">No data</div>`;
-    return;
+    renderBubbles("reasonBubbles", d.reasons, d.total);
+    renderBubbles("sentBackBubbles", d.sentBack, d.total, true);
   }
 
-  const total = rows.reduce((s,r)=>s+r.count,0);
+  function renderBubbles(targetId, data, total, nested = false) {
+    const wrap = document.getElementById(targetId);
+    if (!wrap || !data) return;
 
-  rows.sort((a,b)=>b.count-a.count).forEach(r=>{
-    const pct=((r.count/total)*100).toFixed(1);
-    el.insertAdjacentHTML("beforeend",`
-      <div class="impact-row">
-        <div class="impact-head">
-          <strong>${r.department}</strong>
-          <span>${r.count} (${pct}%)</span>
+    wrap.innerHTML = "";
+
+    const entries = Object.entries(data)
+      .map(([k, v]) => nested ? [k, v.count] : [k, v])
+      .sort((a, b) => b[1] - a[1]);
+
+    entries.forEach(([label, count]) => {
+      const pct = (count / total) * 100;
+
+      wrap.innerHTML += `
+        <div class="pill">
+          <div class="pill-left">
+            <div class="pill-title">${label}</div>
+            <div class="pill-bar">
+              <div class="pill-fill" style="width:${pct}%"></div>
+            </div>
+            <div class="pill-pct">${pct.toFixed(1)}%</div>
+          </div>
+          <div class="pill-count">${count}</div>
         </div>
-        <div class="impact-bar">
-          <div class="impact-fill" style="--w:${pct}%"></div>
-        </div>
-        <div class="impact-meta">Oldest: ${r.oldest}</div>
-      </div>
-    `);
-  });
-}
+      `;
+    });
+  }
+
+  function fail() {
+    ["activeHolds","evaluatedCount","coveragePct","lastUpdated"]
+      .forEach(id => set(id, "ERR"));
+  }
+
+  // TAB SWITCH
+  document.getElementById("tabReasons").onclick = () => switchTab("reasons");
+  document.getElementById("tabSentBack").onclick = () => switchTab("sent");
+
+  function switchTab(tab) {
+    document.getElementById("reasonsView").style.display =
+      tab === "reasons" ? "block" : "none";
+    document.getElementById("sentBackView").style.display =
+      tab === "sent" ? "block" : "none";
+
+    document.getElementById("tabReasons").classList.toggle("active", tab === "reasons");
+    document.getElementById("tabSentBack").classList.toggle("active", tab === "sent");
+  }
+
+  load();
+  setInterval(load, REFRESH_MS);
+});

@@ -1,146 +1,123 @@
-:root{
-  --bg:#020617;
-  --panel:#0b1220;
-  --border:#1f2937;
-  --text:#e5e7eb;
-  --muted:#9ca3af;
-  --blue:#38bdf8;
+:root {
+  --bg: radial-gradient(circle at top, #0b1730, #020617);
+  --card: rgba(15,23,42,0.85);
+  --border: rgba(56,189,248,0.35);
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
 }
 
-*{box-sizing:border-box}
+* { box-sizing: border-box; }
 
-body{
-  margin:0;
-  font-family:system-ui;
-  color:var(--text);
-  background:var(--bg);
+body {
+  margin: 0;
+  font-family: system-ui;
+  background: var(--bg);
+  color: var(--text);
 }
 
-/* animated background */
-.animated-bg{
-  position:fixed;
-  inset:0;
-  z-index:-1;
-  background:
-    radial-gradient(circle at 20% 30%, #0f2a44, transparent 45%),
-    radial-gradient(circle at 80% 70%, #0a1f3d, transparent 45%);
-  animation: drift 18s ease-in-out infinite alternate;
+.wrap {
+  max-width: 1200px;
+  margin: auto;
+  padding: 32px;
 }
 
-@keyframes drift{
-  from{background-position:0% 0%,100% 100%}
-  to{background-position:20% 30%,80% 70%}
+/* HEADER */
+.header {
+  background: var(--card);
+  padding: 28px;
+  border-radius: 24px;
+  margin-bottom: 24px;
 }
 
-.wrap{
-  max-width:1200px;
-  margin:auto;
-  padding:22px;
+/* STATS */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.header{
-  background:linear-gradient(180deg,var(--panel),var(--bg));
-  border:1px solid var(--border);
-  border-radius:18px;
-  padding:22px;
-  margin-bottom:22px;
+.stat {
+  background: linear-gradient(160deg,#0f1f36,#020617);
+  border-radius: 22px;
+  padding: 20px;
+  border: 1px solid var(--border);
 }
 
-.sub{color:var(--muted)}
-
-.cards{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-  gap:14px;
-  margin-bottom:22px;
+/* TABS */
+.tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
-.card{
-  background:linear-gradient(180deg,var(--panel),var(--bg));
-  border:1px solid var(--border);
-  border-radius:18px;
-  padding:18px;
+.tab {
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(2,6,23,0.8);
+  color: var(--muted);
+  cursor: pointer;
 }
 
-.metric{
-  font-size:26px;
-  font-weight:700;
+.tab.active {
+  background: linear-gradient(180deg,#38bdf8,#0ea5e9);
+  color: #020617;
+  font-weight: 700;
+  box-shadow: 0 0 20px rgba(56,189,248,0.8);
 }
 
-.small{
-  font-size:12px;
-  color:var(--muted);
+/* PILLS */
+.pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(160deg,#0b1730,#020617);
+  border-radius: 999px;
+  padding: 16px 22px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
 }
 
-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:13px;
+.pill-left { flex: 1; margin-right: 16px; }
+
+.pill-title { font-weight: 600; margin-bottom: 6px; }
+
+.pill-bar {
+  height: 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 999px;
+  overflow: hidden;
 }
 
-th,td{
-  padding:10px;
-  border-bottom:1px solid var(--border);
+.pill-fill {
+  height: 100%;
+  background: linear-gradient(90deg,#38bdf8,#0ea5e9);
 }
 
-th{
-  color:#93c5fd;
-  text-align:left;
+.pill-pct {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
 }
 
-/* impact rows */
-.impact-row{
-  margin-bottom:12px;
+.pill-count {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(180deg,#38bdf8,#0ea5e9);
+  color: #020617;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.impact-head{
-  display:flex;
-  justify-content:space-between;
-  font-size:13px;
-}
-
-.impact-bar{
-  height:8px;
-  background:#020617;
-  border-radius:999px;
-  overflow:hidden;
-}
-
-.impact-fill{
-  height:100%;
-  width:var(--w);
-  background:linear-gradient(90deg,#38bdf8,#0ea5e9);
-}
-
-.impact-meta{
-  font-size:11px;
-  color:var(--muted);
-  margin-top:4px;
-}
-
-.back{
-  display:inline-block;
-  margin-top:14px;
-  color:#93c5fd;
-  text-decoration:none;
-  font-weight:600;
-}
-
-/* ===============================
-   AUTO-REFRESH FLASH ANIMATION
-   =============================== */
-
-.refresh-flash{
-  position:fixed;
-  inset:0;
-  background:rgba(255,255,255,.08);
-  pointer-events:none;
-  z-index:999;
-  animation:refreshFlash .35s ease-out;
-}
-
-@keyframes refreshFlash{
-  from{opacity:0}
-  30%{opacity:1}
-  to{opacity:0}
+/* BACK */
+.back {
+  display: inline-block;
+  margin-top: 20px;
+  color: var(--accent);
+  text-decoration: none;
 }
