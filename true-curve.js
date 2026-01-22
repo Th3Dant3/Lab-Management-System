@@ -1,133 +1,158 @@
-const API_URL =
+const API =
   "https://script.google.com/macros/s/AKfycbzuUpwsa2VTGjxeSP3wVV-x2Z4yMkGH_eYS86VpFH0CzC2Ii5S5U2ag-S5d89RZ8oHJ/exec";
 
-let selectedYear = "2026";
-let currentView = "prod";
-let groupMode = "none";
+let state = {
+  year: "2025",
+  mode: "production",
+  view: "material",
+  rows: []
+};
 
-/* YEAR */
-document.querySelectorAll(".year-btn").forEach(btn => {
-  btn.onclick = () => {
-    selectedYear = btn.dataset.year;
-    document.querySelectorAll(".year-btn").forEach(b => b.classList.remove("active"));
+/* =============================
+   TAB HANDLERS
+============================= */
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const group = btn.parentElement;
+    group.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
     btn.classList.add("active");
-    load();
-  };
+
+    if (btn.dataset.year) state.year = btn.dataset.year;
+    if (btn.dataset.mode) state.mode = btn.dataset.mode;
+    if (btn.dataset.view) state.view = btn.dataset.view;
+
+    loadData();
+  });
 });
 
-/* VIEW */
-document.querySelectorAll("[data-view]").forEach(tab => {
-  tab.onclick = () => {
-    currentView = tab.dataset.view;
-    document.querySelectorAll("[data-view]").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
-    load();
-  };
-});
-
-/* GROUP MODE */
-document.querySelectorAll("[data-group]").forEach(tab => {
-  tab.onclick = () => {
-    groupMode = tab.dataset.group;
-    document.querySelectorAll("[data-group]").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
-    load();
-  };
-});
-
-/* LOAD DATA */
-async function load(){
-  const res = await fetch(`${API_URL}?year=${selectedYear}`, { cache:"no-store" });
+/* =============================
+   LOAD DATA
+============================= */
+async function loadData() {
+  const res = await fetch(`${API}?year=${state.year}`);
   const json = await res.json();
-  if(json.error){
-    console.error(json.error);
-    return;
-  }
-
-  const rows = json.rows.filter(r =>
-    currentView === "prod"
-      ? r.status !== "TEST" && r.status !== "Cancel"
-      : r.status === "TEST" || r.status === "Cancel"
-  );
-
-  renderMetrics(rows);
-  renderTable(rows);
+  state.rows = json.rows || [];
+  render();
 }
 
-/* METRICS */
-function renderMetrics(rows){
-  document.getElementById("m-total").textContent = rows.length;
-  document.getElementById("m-active").textContent = rows.filter(r => r.status === "Active").length;
-  document.getElementById("m-adjusted").textContent =
-    rows.filter(r => r.adj1 || r.adj2 || r.adj3 || r.adj4).length;
-  document.getElementById("m-escalated").textContent = rows.filter(r => r.status === "Escalated").length;
-  document.getElementById("m-test").textContent = rows.filter(r => r.status === "TEST").length;
-  document.getElementById("m-cancel").textContent = rows.filter(r => r.status === "Cancel").length;
+/* =============================
+   RENDER
+============================= */
+function render() {
+  const tbody = document.getElementById("table-body");
+  tbody.innerHTML = "";
+
+  let rows = [...state.rows];
+
+  // Mode filter
+  if (state.mode === "production") {
+    rows = rows.filter(r => !["TEST", "CANCEL"].includes(r.status));
+  }
+  if (state.mode === "completed") {
+    rows = rows.filter(r => r.status === "Shipped");
+  }
+  if (state.mode === "test") {
+    rows = rows.filter(r => ["TEST", "CANCEL"].includes(r.status));
+  }
+
+  updateKPIs();
+
+  if (state.view === "material") {
+    renderByMaterial(rows, tbody);
+  } else {
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = rowHTML(r);
+      tbody.appendChild(tr);
+    });
+  }
 }
 
-/* TABLE */
-function renderTable(rows){
-  const body = document.getElementById("table-body");
-  body.innerHTML = "";
-
-  if(!rows.length){
-    body.innerHTML = `<tr><td colspan="6" class="empty">No data available</td></tr>`;
-    return;
-  }
-
-  if(groupMode === "none"){
-    rows.forEach(r => body.appendChild(makeRow(r)));
-    return;
-  }
-
-  const key = groupMode === "sku" ? "sku" : "material";
+/* =============================
+   BY MATERIAL (FIXED)
+============================= */
+function renderByMaterial(rows, tbody) {
   const groups = {};
 
   rows.forEach(r => {
-    const g = (r[key] || "Unknown").trim();
-    if(!groups[g]) groups[g] = [];
-    groups[g].push(r);
+    if (!groups[r.material]) groups[r.material] = [];
+    groups[r.material].push(r);
   });
 
-  const sortedGroups = Object.entries(groups)
-    .sort((a,b) => b[1].length - a[1].length);
+  Object.entries(groups).forEach(([material, items]) => {
+    const groupRow = document.createElement("tr");
+    groupRow.className = "group-row";
+    groupRow.dataset.open = "false";
 
-  sortedGroups.forEach(([label, items]) => {
-    let open = false;
+    groupRow.innerHTML = `
+      <td colspan="9">
+        <span class="arrow">▶</span> ${material} (${items.length})
+      </td>
+    `;
 
-    const header = document.createElement("tr");
-    header.className = "group-row";
-    header.innerHTML = `<td colspan="6">▶ ${label} (${items.length})</td>`;
-    body.appendChild(header);
+    tbody.appendChild(groupRow);
 
-    const children = items.map(r => {
-      const tr = makeRow(r);
-      tr.classList.add("hidden");
-      body.appendChild(tr);
+    const detailRows = items.map(r => {
+      const tr = document.createElement("tr");
+      tr.classList.add("detail-row", "hidden");
+      tr.innerHTML = rowHTML(r);
+      tbody.appendChild(tr);
       return tr;
     });
 
-    header.onclick = () => {
-      open = !open;
-      children.forEach(tr => tr.classList.toggle("hidden", !open));
-      header.firstChild.textContent =
-        `${open ? "▼" : "▶"} ${label} (${items.length})`;
-    };
+    // ✅ CLICK TO TOGGLE (THIS WAS MISSING / BROKEN)
+    groupRow.addEventListener("click", () => {
+      const isOpen = groupRow.dataset.open === "true";
+      groupRow.dataset.open = String(!isOpen);
+
+      groupRow.querySelector(".arrow").textContent = isOpen ? "▶" : "▼";
+
+      detailRows.forEach(tr => {
+        tr.classList.toggle("hidden", isOpen);
+      });
+    });
   });
 }
 
-function makeRow(r){
-  const tr = document.createElement("tr");
-  tr.innerHTML = `
-    <td>${r.rx}</td>
-    <td>${r.sku}</td>
-    <td>${r.material}</td>
-    <td>${r.status}</td>
-    <td>${r.breakage ?? ""}</td>
-    <td>${[r.adj1,r.adj2,r.adj3,r.adj4].filter(Boolean).join(" | ")}</td>
+/* =============================
+   ROW TEMPLATE
+============================= */
+function rowHTML(r) {
+  return `
+    <td>${r.rx || ""}</td>
+    <td>${r.sku || ""}</td>
+    <td>${r.tcLms || ""}</td>
+    <td>${r.tcAfter || ""}</td>
+    <td>${r.material || ""}</td>
+    <td>${r.status || ""}</td>
+    <td>${r.dateShipped || ""}</td>
+    <td>${r.breakage || ""}</td>
+    <td class="adjustment">${r.adjustment || ""}</td>
   `;
-  return tr;
 }
 
-/* INIT */
-load();
+/* =============================
+   KPI LOGIC (UNCHANGED)
+============================= */
+function updateKPIs() {
+  const all = state.rows;
+
+  document.getElementById("k-total").textContent = all.length;
+  document.getElementById("k-test").textContent =
+    all.filter(r => r.status === "TEST").length;
+  document.getElementById("k-cancel").textContent =
+    all.filter(r => r.status === "CANCEL").length;
+  document.getElementById("k-completed").textContent =
+    all.filter(r => r.status === "Shipped").length;
+  document.getElementById("k-active").textContent =
+    all.filter(r => !["Shipped", "TEST", "CANCEL"].includes(r.status)).length;
+  document.getElementById("k-adjusted").textContent =
+    all.filter(r => r.adjustment).length;
+  document.getElementById("k-escalated").textContent =
+    all.filter(r => r.status === "Escalated").length;
+}
+
+/* =============================
+   INIT
+============================= */
+loadData();

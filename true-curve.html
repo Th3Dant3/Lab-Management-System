@@ -4,78 +4,73 @@
   <meta charset="UTF-8" />
   <title>True Curve / Power Issues</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- ✅ IMPORTANT: correct CSS file -->
   <link rel="stylesheet" href="style-true-curve.css" />
 </head>
 
 <body>
-  <!-- animated background -->
-  <div class="animated-bg"></div>
+<div class="animated-bg"></div>
 
-  <div class="wrap">
+<div class="container">
 
-    <!-- HEADER -->
-    <header class="header">
-      <div>
-        <h1>True Curve / Power Issues</h1>
-        <div class="sub">RX Power & Adjustment Tracking</div>
-      </div>
-    </header>
+  <header class="header">
+    <h1>True Curve / Power Issues</h1>
+    <div class="sub">RX Power & Adjustment Tracking</div>
+  </header>
 
-    <!-- YEAR SELECTOR -->
-    <div class="year-selector">
-      <button class="year-btn active" data-year="2025">2025</button>
-      <button class="year-btn" data-year="2026">2026</button>
-    </div>
-
-    <!-- METRICS -->
-    <section class="metrics">
-      <div class="metric"><span>Total RX</span><strong id="m-total">0</strong></div>
-      <div class="metric"><span>Active</span><strong id="m-active">0</strong></div>
-      <div class="metric"><span>Adjusted</span><strong id="m-adjusted">0</strong></div>
-      <div class="metric"><span>Escalated</span><strong id="m-escalated">0</strong></div>
-      <div class="metric"><span>Test</span><strong id="m-test">0</strong></div>
-      <div class="metric"><span>Cancel</span><strong id="m-cancel">0</strong></div>
-    </section>
-
-    <!-- VIEW TABS -->
-    <div class="tabs">
-      <button class="tab active" data-view="prod">Production Jobs</button>
-      <button class="tab" data-view="test">TEST / Cancel</button>
-    </div>
-
-    <!-- GROUP TABS -->
-    <div class="group-tabs">
-      <button class="tab active" data-group="none">Flat List</button>
-      <button class="tab" data-group="sku">By Lens SKU</button>
-      <button class="tab" data-group="material">By Material</button>
-    </div>
-
-    <!-- TABLE -->
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>RX</th>
-            <th>Lens SKU</th>
-            <th>Material</th>
-            <th>Status</th>
-            <th>Breakage #</th>
-            <th>Adjustments</th>
-          </tr>
-        </thead>
-        <tbody id="table-body">
-          <tr><td colspan="6" class="empty">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <a class="back" href="index.html">← Back</a>
-
+  <!-- YEAR -->
+  <div class="tabs">
+    <button class="tab active" data-year="2026">2026</button>
+    <button class="tab" data-year="2025">2025</button>
   </div>
 
-  <!-- ✅ IMPORTANT: correct JS file -->
-  <script src="true-curve.js"></script>
+  <!-- KPI -->
+  <section class="metrics">
+    <div class="metric"><span>Total RX</span><strong id="k-total">0</strong></div>
+    <div class="metric"><span>Active</span><strong id="k-active">0</strong></div>
+    <div class="metric"><span>Completed</span><strong id="k-completed">0</strong></div>
+    <div class="metric"><span>Adjusted</span><strong id="k-adjusted">0</strong></div>
+    <div class="metric"><span>Escalated</span><strong id="k-escalated">0</strong></div>
+    <div class="metric"><span>Test</span><strong id="k-test">0</strong></div>
+    <div class="metric"><span>Cancel</span><strong id="k-cancel">0</strong></div>
+  </section>
+
+  <!-- JOB TYPE -->
+  <div class="tabs">
+    <button class="tab active" data-mode="production">Production Jobs</button>
+    <button class="tab" data-mode="completed">Completed</button>
+    <button class="tab" data-mode="test">TEST / Cancel</button>
+  </div>
+
+  <!-- VIEW -->
+  <div class="tabs small">
+    <button class="tab active" data-view="material">By Material</button>
+    <button class="tab" data-view="flat">Flat List</button>
+  </div>
+
+  <!-- TABLE -->
+  <table>
+    <thead>
+      <tr>
+        <th>RX</th>
+        <th>Lens SKU</th>
+        <th>LMS TC</th>
+        <th>After Gen/HC TC</th>
+        <th>Material</th>
+        <th>Status</th>
+        <th>Date Shipped</th>
+        <th>Breakage #</th>
+        <th>Adjustment</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td colspan="9">Loading…</td></tr>
+    </tbody>
+  </table>
+
+  <a class="back" href="index.html">← Back</a>
+
+</div>
+
+<script src="true-curve.js"></script>
 </body>
 </html>
