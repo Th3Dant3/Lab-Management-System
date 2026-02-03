@@ -11,46 +11,122 @@ body {
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 1300px;
   margin: auto;
-  padding: 40px;
+  padding: 36px 40px 50px;
 }
 
+/* Header */
 .header {
   background: rgba(0,0,0,0.35);
   border-radius: 20px;
-  padding: 30px;
-  margin-bottom: 40px;
+  padding: 26px 30px;
+  margin-bottom: 24px;
 }
 
+.header h1 {
+  margin: 0 0 6px 0;
+}
+
+.header p {
+  margin: 0;
+  opacity: 0.85;
+}
+
+/* Executive Status Strip */
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 34px;
+}
+
+.status-item {
+  background: rgba(0,0,0,0.45);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.status-item .label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin-bottom: 6px;
+}
+
+.status-item .value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.value.ok { color: #6ee7b7; }
+.value.warn { color: #fbbf24; }
+.value.bad { color: #f87171; }
+
+/* Sections */
+.section {
+  margin-bottom: 42px;
+}
+
+.section-title {
+  margin: 0 0 18px 6px;
+  font-size: 18px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* Cards */
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
-  gap: 30px;
+  gap: 28px;
+}
+
+.cards.two-col {
+  grid-template-columns: repeat(auto-fit, minmax(420px,1fr));
 }
 
 .card {
-  background: rgba(0,0,0,0.4);
-  border-radius: 20px;
-  padding: 25px;
+  background: rgba(0,0,0,0.42);
+  border-radius: 22px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-.card.highlight {
-  border: 1px solid #4fbaff;
-  box-shadow: 0 0 30px rgba(79,186,255,0.3);
-}
-
-.card h2 {
+.card h3 {
   margin-top: 0;
 }
 
 .card p {
   margin: 8px 0;
+  opacity: 0.9;
 }
 
+.card .sub {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* Emphasis Cards */
+.card.primary {
+  border: 1px solid #4fbaff;
+  box-shadow: 0 0 32px rgba(79,186,255,0.35);
+}
+
+.card.highlight {
+  border: 1px solid #60a5fa;
+  box-shadow: 0 0 26px rgba(96,165,250,0.3);
+}
+
+/* Buttons */
 .card button {
-  margin-top: 15px;
-  padding: 10px 18px;
+  align-self: flex-start;
+  margin-top: 18px;
+  padding: 10px 20px;
   border-radius: 999px;
   border: none;
   background: #4fbaff;
@@ -59,20 +135,27 @@ body {
   font-weight: 600;
 }
 
+.card button:hover {
+  filter: brightness(1.1);
+}
+
 .card button:disabled {
   background: #333;
   color: #777;
   cursor: not-allowed;
 }
 
-.btn-row {
-  display: flex;
-  gap: 10px;
+/* Footer */
+footer {
+  margin-top: 50px;
+  text-align: center;
+  opacity: 0.55;
+  font-size: 13px;
 }
 
-footer {
-  margin-top: 40px;
-  text-align: center;
-  opacity: 0.6;
-  font-size: 13px;
+/* Responsive */
+@media (max-width: 720px) {
+  .cards.two-col {
+    grid-template-columns: 1fr;
+  }
 }

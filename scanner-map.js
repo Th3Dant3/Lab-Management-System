@@ -1,12 +1,36 @@
 /* =====================================================
-   SCANNER MAP – FULL FINAL JS (LOCKED & COMPLETE)
+   SCANNER MAP – FULL FINAL JS (LOCKED & EXTENDED)
    ===================================================== */
 
 const app = document.getElementById("app");
 const selectedIssues = new Set();
 
 /* ===============================
-   DATA
+   🔹 NEW: LOCAL STORAGE (ADD ONLY)
+   =============================== */
+
+const SCANNER_STORAGE_KEY = "lms_scanner_attention";
+
+function saveScannerState() {
+  localStorage.setItem(
+    SCANNER_STORAGE_KEY,
+    JSON.stringify([...selectedIssues])
+  );
+}
+
+function loadScannerState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SCANNER_STORAGE_KEY));
+    if (Array.isArray(saved)) {
+      saved.forEach(k => selectedIssues.add(k));
+    }
+  } catch (e) {
+    console.warn("Scanner state restore failed", e);
+  }
+}
+
+/* ===============================
+   DATA (UNCHANGED)
    =============================== */
 
 const data = {
@@ -111,7 +135,7 @@ const data = {
 };
 
 /* ===============================
-   CARD + SELECTION
+   CARD + SELECTION (UNCHANGED + SAVE)
    =============================== */
 
 function card(item) {
@@ -131,13 +155,15 @@ function card(item) {
     el.classList.contains("selected")
       ? selectedIssues.add(key)
       : selectedIssues.delete(key);
+
+    saveScannerState(); // 🔹 NEW (non-breaking)
   };
 
   return el;
 }
 
 /* ===============================
-   LAYOUT HELPERS
+   LAYOUT HELPERS (UNCHANGED)
    =============================== */
 
 function evenOddGrid(items) {
@@ -170,7 +196,7 @@ function simpleGrid(items) {
 }
 
 /* ===============================
-   SECTION BUILDER
+   SECTION BUILDER (UNCHANGED)
    =============================== */
 
 function section(title) {
@@ -193,7 +219,7 @@ function section(title) {
 }
 
 /* ===============================
-   RENDER
+   RENDER (UNCHANGED)
    =============================== */
 
 const surf = section("Surface Unbox");
@@ -233,7 +259,27 @@ const arOut = section("AR Outside");
 app.appendChild(arOut.s);
 
 /* ===============================
-   ACTION BUTTONS
+   🔹 NEW: RESTORE SELECTIONS AFTER RENDER
+   =============================== */
+
+loadScannerState();
+
+document.querySelectorAll(".card").forEach(cardEl => {
+  const title = cardEl.querySelector(".card-title")?.textContent;
+  const iface = cardEl.querySelector(".card-interface")?.textContent;
+  const port = cardEl.querySelector(".card-port")?.textContent;
+
+  if (!title || !iface || !port) return;
+
+  const key = `${title} – ${iface.replace("Interface ", "")} – ${port}`;
+
+  if (selectedIssues.has(key)) {
+    cardEl.classList.add("selected");
+  }
+});
+
+/* ===============================
+   ACTION BUTTONS (UNCHANGED)
    =============================== */
 
 const controls = document.createElement("div");

@@ -8,57 +8,96 @@
 <body>
 
 <div class="container">
+
+  <!-- Header -->
   <header class="header">
-    <h1>LMS Operational Control Center</h1>
-    <p>Zenni Optical Manufacturing Lab<br>Environment: Zenni</p>
+    <h1>Lab Management System</h1>
+    <p>Zenni Optical USA Manufacturing Lab<br>Environment: Zenni USA</p>
   </header>
 
-  <section class="cards">
-
-    <!-- Investigative Hold Tracker -->
-    <div class="card highlight">
-      <h2>Investigative Hold Tracker</h2>
-      <p>Active <span id="active">—</span></p>
-      <p>Completed <span id="completed">—</span></p>
-      <p>Coverage <span id="coverage">—</span></p>
-
-      <button onclick="openPage('page3.html')">
-        View Inventigation Hold
-      </button>
+  <!-- Executive Status Strip -->
+  <section class="status-strip">
+    <div class="status-item">
+      <span class="label">Investigation Hold Status</span>
+      <span id="labStatus" class="value ok">Normal</span>
     </div>
-
-    <!-- True Curve -->
-    <div class="card">
-      <h2>True Curve / Power Issues</h2>      
-      <div class="btn-row">       
-      <button onclick="openPage('true-curve.html')">
-		 View True Curve & Power Issues </button>
-      </div>
+    <div class="status-item">
+      <span class="label">Active Holds</span>
+      <span id="active" class="value">—</span>
     </div>
-
-    <!-- Lens Uploads -->
-    <div class="card">
-      <h2>Lens Uploads</h2>
-      <p>In8 & In9 Format</p>
-      <h3 id="lensCount">0</h3>
-      <button onclick="openPage('in8-in9.html')">Open Tool</button>
+    <div class="status-item">
+      <span class="label">Coverage</span>
+      <span id="coverage" class="value">—</span>
     </div>
-	
-	<!-- Scanner Map -->
-<div class="card">
-  <h2>Scanner Map</h2>
-  <p>Finish · Surface · AR</p>
-  <button onclick="openPage('scanner-map.html')">
-    Open Scanner Map
-  </button>
+    <div class="status-item">
+      <span class="label">Scanner Health</span>
+      <span id="scannerHealth" class="value ok">Online</span>
+    </div>
+    <div class="status-item">
+      <span class="label">Last Update</span>
+      <span id="lastUpdate" class="value">—</span>
+    </div>
+  </section>
+
+  <!-- Critical Operations -->
+  <section class="section">
+    <h2 class="section-title">Critical Operations</h2>
+    <div class="cards two-col">
+
+<!-- Scanner Map -->
+<div class="card primary">
+  <h3>Scanner Map</h3>
+  <p>Live scanner activity by port</p>
+  <p class="sub">Finish · Surface · AR</p>
+
+  <!-- 🔹 Dynamic scanner attention list (added) -->
+  <div id="scannerDetail" class="scanner-detail"></div>
+
+  <button onclick="openPage('scanner-map.html')">Open Scanner Map</button>
 </div>
 
 
+      <!-- Investigative Hold Tracker -->
+      <div class="card highlight">
+        <h3>Investigative Hold Tracker</h3>
+        <p>Active <strong><span id="activeHolds">—</span></strong></p>
+        <p>Completed <strong><span id="completed">—</span></strong></p>
+        <p>Coverage <strong><span id="coverageDetail">—</span></strong></p>
+        <button onclick="openPage('page3.html')">View Investigation Hold</button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Quality & Engineering -->
+  <section class="section">
+    <h2 class="section-title">Quality & Engineering</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>True Curve / Power Issues</h3>
+        <p>Engineering exceptions & trends</p>
+        <button onclick="openPage('true-curve.html')">View True Curve & Power Issues</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tools -->
+  <section class="section">
+    <h2 class="section-title">Tools</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Lens Uploads</h3>
+        <p>In8 & In9 Format</p>
+        <h4 id="lensCount">0</h4>
+        <button onclick="openPage('in8-in9.html')">Open Tool</button>
+      </div>
+    </div>
   </section>
 
   <footer>
     LMS Tooling · Internal Use Only
   </footer>
+
 </div>
 
 <script src="index.js"></script>
