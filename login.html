@@ -1,35 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>LMS Dashboard Login</title>
-  <link rel="stylesheet" href="style-index.css" />
-</head>
-
 <body>
-  <div class="login-container">
-    <h2>LMS Dashboard Login</h2>
+  <div class="login-wrapper">
+    <div class="login-container">
+      <h2>LMS Dashboard Login</h2>
+	  <link rel="stylesheet" href="login.css">
 
-    <input
-      id="username"
-      type="text"
-      placeholder="Username"
-      autocomplete="username"
-    />
 
-    <input
-      id="password"
-      type="password"
-      placeholder="Password"
-      autocomplete="current-password"
-    />
+      <input id="username" placeholder="Username">
+      <input id="password" type="password" placeholder="Password">
 
-    <button onclick="login()">Login</button>
+      <button onclick="login()">Login</button>
 
-    <!-- IMPORTANT: ID MUST BE "message" -->
-    <p id="message" class="login-message"></p>
+      <p id="message" class="login-message"></p>
+    </div>
   </div>
 
   <script src="login.js"></script>
 </body>
-</html>
