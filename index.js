@@ -32,42 +32,43 @@ function loadDashboard() {
       const active = Number(data.active ?? 0);
       const completed = Number(data.completed ?? 0);
 
-      /* -------------------------------
-         SAFE COVERAGE HANDLING
-         ------------------------------- */
-      let rawCoverage = data.coverage;
-      if (typeof rawCoverage === "string") {
-        rawCoverage = rawCoverage.replace("%", "");
+      /* ===============================
+         🔹 FIXED COVERAGE HANDLING
+         =============================== */
+
+      let coveragePct = 0;
+
+      if (data.coverage !== undefined && data.coverage !== null) {
+        if (typeof data.coverage === "string") {
+          coveragePct = Number(data.coverage.replace("%", ""));
+        } else if (typeof data.coverage === "number") {
+          // If backend sends 0–1 ratio
+          coveragePct = data.coverage <= 1
+            ? Math.round(data.coverage * 100)
+            : Math.round(data.coverage);
+        }
       }
 
-      let coveragePct = Math.floor(Number(rawCoverage) || 0);
+      // Safety clamp
+      coveragePct = Math.max(0, Math.min(100, coveragePct));
 
-      // ✅ FIX: If no active holds, coverage must be 100%
-      if (active === 0) {
-        coveragePct = 100;
-      }
+      /* ===============================
+         DASHBOARD UI UPDATES
+         =============================== */
 
-      /* -------------------------------
-         EXECUTIVE STRIP
-         ------------------------------- */
+      // Executive strip
       setText("active", active);
       setText("coverage", coveragePct + "%");
 
-      /* -------------------------------
-         DETAIL CARD
-         ------------------------------- */
+      // Detail cards
       setText("activeHolds", active);
       setText("completed", completed);
       setText("coverageDetail", coveragePct + "%");
 
-      /* -------------------------------
-         STATUS LOGIC
-         ------------------------------- */
+      // Status logic
       updateLabStatus(active, coveragePct);
 
-      /* -------------------------------
-         LAST UPDATE
-         ------------------------------- */
+      // Timestamp
       setText("lastUpdate", data.lastUpdated || "N/A");
     })
     .catch(err => {
@@ -75,6 +76,7 @@ function loadDashboard() {
       showErrorState();
     });
 }
+
 
 /* ===============================
    🔹 SCANNER MAP INTEGRATION
