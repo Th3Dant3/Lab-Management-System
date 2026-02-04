@@ -1,3 +1,6 @@
+/* =====================================================
+   GLOBAL RESET & BASE
+   ===================================================== */
 * {
   box-sizing: border-box;
   font-family: system-ui, -apple-system, Segoe UI, sans-serif;
@@ -10,20 +13,29 @@ body {
   color: #fff;
 }
 
+/* 🔒 HARD PAGE LOCK (NO FLICKER) */
+body.lms-hidden {
+  visibility: hidden;
+}
+
+/* =====================================================
+   LAYOUT
+   ===================================================== */
 .container {
   max-width: 1300px;
   margin: auto;
   padding: 36px 40px 50px;
 }
 
-/* Header */
+/* =====================================================
+   HEADER
+   ===================================================== */
 .header {
-  background: rgba(0,0,0,0.35);
+  background: rgba(0, 0, 0, 0.35);
   border-radius: 20px;
   padding: 26px 30px;
   margin-bottom: 24px;
   position: relative;
-  
 }
 
 .header h1 {
@@ -35,7 +47,27 @@ body {
   opacity: 0.85;
 }
 
-/* Executive Status Strip */
+/* Logout button */
+.logout-btn {
+  position: absolute;
+  top: 24px;
+  right: 30px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* =====================================================
+   EXECUTIVE STATUS STRIP
+   ===================================================== */
 .status-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -44,7 +76,7 @@ body {
 }
 
 .status-item {
-  background: rgba(0,0,0,0.45);
+  background: rgba(0, 0, 0, 0.45);
   border-radius: 14px;
   padding: 14px 16px;
 }
@@ -63,11 +95,22 @@ body {
   font-weight: 700;
 }
 
-.value.ok { color: #6ee7b7; }
-.value.warn { color: #fbbf24; }
-.value.bad { color: #f87171; }
+/* Status colors */
+.value.ok {
+  color: #6ee7b7;
+}
 
-/* Sections */
+.value.warn {
+  color: #fbbf24;
+}
+
+.value.bad {
+  color: #f87171;
+}
+
+/* =====================================================
+   SECTIONS
+   ===================================================== */
 .section {
   margin-bottom: 42px;
 }
@@ -79,19 +122,21 @@ body {
   opacity: 0.9;
 }
 
-/* Cards */
+/* =====================================================
+   CARDS
+   ===================================================== */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 28px;
 }
 
 .cards.two-col {
-  grid-template-columns: repeat(auto-fit, minmax(420px,1fr));
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
 }
 
 .card {
-  background: rgba(0,0,0,0.42);
+  background: rgba(0, 0, 0, 0.42);
   border-radius: 22px;
   padding: 26px;
   display: flex;
@@ -113,18 +158,20 @@ body {
   opacity: 0.7;
 }
 
-/* Emphasis Cards */
+/* Emphasis cards */
 .card.primary {
   border: 1px solid #4fbaff;
-  box-shadow: 0 0 32px rgba(79,186,255,0.35);
+  box-shadow: 0 0 32px rgba(79, 186, 255, 0.35);
 }
 
 .card.highlight {
   border: 1px solid #60a5fa;
-  box-shadow: 0 0 26px rgba(96,165,250,0.3);
+  box-shadow: 0 0 26px rgba(96, 165, 250, 0.3);
 }
 
-/* Buttons */
+/* =====================================================
+   BUTTONS
+   ===================================================== */
 .card button {
   align-self: flex-start;
   margin-top: 18px;
@@ -147,42 +194,9 @@ body {
   cursor: not-allowed;
 }
 
-/* Footer */
-footer {
-  margin-top: 50px;
-  text-align: center;
-  opacity: 0.55;
-  font-size: 13px;
-}
-
-.logout-btn {
-  position: absolute;
-  top: 24px;
-  right: 30px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: none;
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.logout-btn:hover {
-  background: rgba(255,255,255,0.25);
-}
-
-
-/* Responsive */
-@media (max-width: 720px) {
-  .cards.two-col {
-    grid-template-columns: 1fr;
-  }
-}
-/* ===============================
-   Scanner Attention Detail (NEW)
-   =============================== */
-
+/* =====================================================
+   SCANNER ATTENTION DETAIL
+   ===================================================== */
 .scanner-detail {
   margin: 12px 0 6px;
   padding: 10px 14px;
@@ -206,4 +220,36 @@ footer {
 
 .scanner-detail li {
   margin: 2px 0;
+}
+
+/* =====================================================
+   FOOTER
+   ===================================================== */
+footer {
+  margin-top: 50px;
+  text-align: center;
+  opacity: 0.55;
+  font-size: 13px;
+}
+
+/* =====================================================
+   🔐 VISIBILITY GATE (USERNAME-BASED)
+   Hide until JS explicitly allows
+   ===================================================== */
+[data-gated] {
+  display: none;
+}
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+@media (max-width: 720px) {
+  .cards.two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .logout-btn {
+    top: 18px;
+    right: 20px;
+  }
 }

@@ -5,8 +5,11 @@
   <title>LMS Operational Control Center</title>
   <link rel="stylesheet" href="style-index.css" />
 </head>
-<body>
 
+<!-- 🔒 BODY STARTS LOCKED (NO FLICKER) -->
+<body class="lms-hidden">
+
+<!-- 🔐 AUTH GATE (early, safe) -->
 <script>
   if (sessionStorage.getItem("lms_logged_in") !== "true") {
     window.location.href = "login.html";
@@ -19,7 +22,7 @@
   <header class="header">
     <h1>Lab Management System</h1>
     <p>Zenni Optical USA Manufacturing Lab<br>Environment: Zenni USA</p>
-	<button class="logout-btn" onclick="logout()">Logout</button>
+    <button class="logout-btn" onclick="logout()">Logout</button>
   </header>
 
   <!-- Executive Status Strip -->
@@ -51,26 +54,37 @@
     <h2 class="section-title">Critical Operations</h2>
     <div class="cards two-col">
 
-<!-- Scanner Map -->
-<div class="card primary">
-  <h3>Scanner Map</h3>
-  <p>Live scanner activity by port</p>
-  <p class="sub">Finish · Surface · AR</p>
+      <!-- Scanner Map -->
+      <div
+        id="scanner-card"
+        class="card primary"
+        data-gated
+      >
+        <h3>Scanner Map</h3>
+        <p>Live scanner activity by port</p>
+        <p class="sub">Finish · Surface · AR</p>
 
-  <!-- 🔹 Dynamic scanner attention list (added) -->
-  <div id="scannerDetail" class="scanner-detail"></div>
+        <!-- 🔹 Dynamic scanner attention list -->
+        <div id="scannerDetail" class="scanner-detail"></div>
 
-  <button onclick="openPage('scanner-map.html')">Open Scanner Map</button>
-</div>
-
+        <button onclick="openPage('scanner-map.html')">
+          Open Scanner Map
+        </button>
+      </div>
 
       <!-- Investigative Hold Tracker -->
-      <div class="card highlight">
+      <div
+        id="investigation-card"
+        class="card highlight"
+        data-gated
+      >
         <h3>Investigative Hold Tracker</h3>
         <p>Active <strong><span id="activeHolds">—</span></strong></p>
         <p>Completed <strong><span id="completed">—</span></strong></p>
         <p>Coverage <strong><span id="coverageDetail">—</span></strong></p>
-        <button onclick="openPage('page3.html')">View Investigation Hold</button>
+        <button onclick="openPage('page3.html')">
+          View Investigation Hold
+        </button>
       </div>
 
     </div>
@@ -80,11 +94,19 @@
   <section class="section">
     <h2 class="section-title">Quality & Engineering</h2>
     <div class="cards">
-      <div class="card">
+
+      <div
+        id="truecurve-card"
+        class="card"
+        data-gated
+      >
         <h3>True Curve / Power Issues</h3>
         <p>Engineering exceptions & trends</p>
-        <button onclick="openPage('true-curve.html')">View True Curve & Power Issues</button>
+        <button onclick="openPage('true-curve.html')">
+          View True Curve & Power Issues
+        </button>
       </div>
+
     </div>
   </section>
 
@@ -92,12 +114,20 @@
   <section class="section">
     <h2 class="section-title">Tools</h2>
     <div class="cards">
-      <div class="card">
+
+      <div
+        id="tools-card"
+        class="card"
+        data-gated
+      >
         <h3>Lens Uploads</h3>
         <p>In8 & In9 Format</p>
         <h4 id="lensCount">0</h4>
-        <button onclick="openPage('in8-in9.html')">Open Tool</button>
+        <button onclick="openPage('in8-in9.html')">
+          Open Tool
+        </button>
       </div>
+
     </div>
   </section>
 
@@ -107,6 +137,8 @@
 
 </div>
 
+<!-- MAIN SCRIPT -->
 <script src="index.js"></script>
+
 </body>
 </html>
