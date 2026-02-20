@@ -193,7 +193,10 @@ function buildDetaperFlowTrend(data) {
       datasets: [{
         label: "Avg Detaper → Coater (mins)",
         data: data.hourly.map(h => h.avgDetaperToCoater || 0),
-        borderColor: "#5ad1a3",
+        borderColor: data.hourly.map(h => h.flowColor),
+pointBackgroundColor: data.hourly.map(h => h.flowColor),
+pointBorderColor: data.hourly.map(h => h.flowColor),
+
         borderWidth: 3,
         tension: 0.35,
         fill: false,
@@ -418,56 +421,113 @@ function buildFlowChart(data) {
 
   const hours = filteredHours.map(h => h.hour);
 
-  // ===============================
-  // AVERAGE MODE
-  // ===============================
-  if (currentFlowMode === "average") {
+ // ===============================
+// AVERAGE MODE (Bucket Colored)
+// ===============================
+if (currentFlowMode === "average") {
 
-    flowChart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: hours,
-        datasets: [{
-          label: "Avg Detaper → Coater (mins)",
-          data: filteredHours.map(h => h.avgDetaperToCoater || 0),
-          borderColor: "#00ff88",
-          backgroundColor: "rgba(0,255,136,0.15)",
+  const todayData = [];
+  const yesterdayData = [];
+  const twoPlusData = [];
+
+  filteredHours.forEach(h => {
+
+    const avg = h.avgDetaperToCoater || 0;
+
+    if (h.bucketBreakdown.sameDay > 0) {
+      todayData.push(avg);
+      yesterdayData.push(null);
+      twoPlusData.push(null);
+    }
+    else if (h.bucketBreakdown.oneDay > 0) {
+      todayData.push(null);
+      yesterdayData.push(avg);
+      twoPlusData.push(null);
+    }
+    else if (h.bucketBreakdown.twoPlus > 0) {
+      todayData.push(null);
+      yesterdayData.push(null);
+      twoPlusData.push(avg);
+    }
+    else {
+      todayData.push(null);
+      yesterdayData.push(null);
+      twoPlusData.push(null);
+    }
+  });
+
+  flowChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: hours,
+      datasets: [
+
+        {
+          label: "Today (Flow)",
+          data: todayData,
+          borderColor: "#32ff7e",
+          backgroundColor: "rgba(50,255,126,0.15)",
           borderWidth: 3,
           tension: 0.35,
           fill: true,
-          pointRadius: 6
-        }]
+          spanGaps: true
+        },
+
+        {
+          label: "Yesterday (Flow)",
+          data: yesterdayData,
+          borderColor: "#ffd32a",
+          backgroundColor: "rgba(255,211,42,0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          spanGaps: true
+        },
+
+        {
+          label: "2+ Days (Flow)",
+          data: twoPlusData,
+          borderColor: "#ff3f34",
+          backgroundColor: "rgba(255,63,52,0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          spanGaps: true
+        }
+
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: "#E6F1FF" } },
+        title: {
+          display: true,
+          text: "Average Detaper → Coater Time",
+          color: "#E6F1FF"
+        }
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { labels: { color: "#E6F1FF" } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#4da3ff" },
           title: {
             display: true,
-            text: "Average Detaper → Coater Time",
-            color: "#E6F1FF"
+            text: "Minutes",
+            color: "#4da3ff"
           }
         },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: { color: "#00ff88" },
-            title: {
-              display: true,
-              text: "Minutes",
-              color: "#00ff88"
-            }
-          },
-          x: {
-            ticks: { color: "rgba(255,255,255,0.6)" }
-          }
+        x: {
+          ticks: { color: "rgba(255,255,255,0.6)" }
         }
       }
-    });
+    }
+  });
 
-    return;
-  }
+  return;
+}
+
 
   // ===============================
   // INDIVIDUAL MODE (Severity Colors)
