@@ -186,31 +186,59 @@ function buildDetaperFlowTrend(data) {
 
   const hours = data.hourly.map(h => h.hour);
 
+  const todayData = [];
+  const yesterdayData = [];
+  const twoPlusData = [];
+
+  data.hourly.forEach(h => {
+
+    todayData.push(h.avgSameDay > 0 ? h.avgSameDay : null);
+    yesterdayData.push(h.avgOneDay > 0 ? h.avgOneDay : null);
+    twoPlusData.push(h.avgTwoPlus > 0 ? h.avgTwoPlus : null);
+
+  });
+
   trendChart = new Chart(ctx, {
     type: "line",
     data: {
       labels: hours,
-      datasets: [{
-        label: "Avg Detaper → Coater (mins)",
-        data: data.hourly.map(h => h.avgDetaperToCoater || 0),
-        borderColor: data.hourly.map(h => h.flowColor),
-pointBackgroundColor: data.hourly.map(h => h.flowColor),
-pointBorderColor: data.hourly.map(h => h.flowColor),
+      datasets: [
 
-        borderWidth: 3,
-        tension: 0.35,
-        fill: false,
-        pointRadius: 4
-      }]
+        {
+          label: "Today (Flow)",
+          data: todayData,
+          borderColor: "#32ff7e",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: false
+        },
+
+        {
+          label: "Yesterday (Flow)",
+          data: yesterdayData,
+          borderColor: "#ffd32a",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: false
+        },
+
+        {
+          label: "2+ Days (Flow)",
+          data: twoPlusData,
+          borderColor: "#ff3f34",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: false
+        }
+
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
 
       plugins: {
-        legend: {
-          labels: { color: "#E6F1FF" }
-        },
+        legend: { labels: { color: "#E6F1FF" } },
         title: {
           display: true,
           text: "Process Flow Time (Detaper → Coater)",
@@ -226,12 +254,12 @@ pointBorderColor: data.hourly.map(h => h.flowColor),
         },
         y: {
           beginAtZero: true,
-          ticks: { color: "#5ad1a3" },
+          ticks: { color: "#4da3ff" },
           grid: { color: "rgba(255,255,255,0.05)" },
           title: {
             display: true,
-            text: "Average Hours",
-            color: "#5ad1a3"
+            text: "Minutes",
+            color: "#4da3ff"
           }
         }
       }
@@ -421,8 +449,8 @@ function buildFlowChart(data) {
 
   const hours = filteredHours.map(h => h.hour);
 
- // ===============================
-// AVERAGE MODE (Bucket Colored)
+// ===============================
+// AVERAGE MODE (PER BUCKET)
 // ===============================
 if (currentFlowMode === "average") {
 
@@ -432,28 +460,11 @@ if (currentFlowMode === "average") {
 
   filteredHours.forEach(h => {
 
-    const avg = h.avgDetaperToCoater || 0;
+    // Each bucket now has its own average from backend
+    todayData.push(h.avgSameDay > 0 ? h.avgSameDay : null);
+    yesterdayData.push(h.avgOneDay > 0 ? h.avgOneDay : null);
+    twoPlusData.push(h.avgTwoPlus > 0 ? h.avgTwoPlus : null);
 
-    if (h.bucketBreakdown.sameDay > 0) {
-      todayData.push(avg);
-      yesterdayData.push(null);
-      twoPlusData.push(null);
-    }
-    else if (h.bucketBreakdown.oneDay > 0) {
-      todayData.push(null);
-      yesterdayData.push(avg);
-      twoPlusData.push(null);
-    }
-    else if (h.bucketBreakdown.twoPlus > 0) {
-      todayData.push(null);
-      yesterdayData.push(null);
-      twoPlusData.push(avg);
-    }
-    else {
-      todayData.push(null);
-      yesterdayData.push(null);
-      twoPlusData.push(null);
-    }
   });
 
   flowChart = new Chart(ctx, {
