@@ -1,14 +1,14 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbw0fRQkxOZsFH_V_zFerZ1ZnnHmRUcxLO9BZ9CmmZZv0N8itstkr45EHZD74q6C1PBB/exec";
 
-
+console.log("Coating JS loaded");
 /* =====================================================
-   DASHBOARD VARIABLES
+   DASHBOARD VARIABLES Global
    ===================================================== */
 
 let trendChart = null;
 let reasonChart = null;
 let machineChart = null;
-let flowChart = null;              // 👈 ADD THIS
+let flowChart = null;              
 
 let dashboardProcessed = null;
 let dashboardMachine = null;
@@ -17,6 +17,9 @@ let dashboardData = null;
 let trendsLoaded = false;
 let currentMode = "processed";
 let currentFlowMode = "average";
+
+let currentShift = null;
+let currentDate = null;  // 👈 ADD THIS LINE
 
 
 
@@ -54,10 +57,18 @@ async function loadDashboard() {
 
   const startTime = performance.now();
 
-  const [processedRes, machineRes] = await Promise.all([
-    fetch(`${API_URL}?mode=processed`),
-    fetch(`${API_URL}?mode=machine`)
-  ]);
+  const shiftParam = currentShift
+  ? `&shift=${encodeURIComponent(currentShift)}`
+  : "";
+
+const dateParam = currentDate
+  ? `&date=${encodeURIComponent(currentDate)}`
+  : "";
+
+const [processedRes, machineRes] = await Promise.all([
+  fetch(`${API_URL}?mode=processed${shiftParam}${dateParam}`),
+  fetch(`${API_URL}?mode=machine${shiftParam}${dateParam}`)
+]);
 
   dashboardProcessed = await processedRes.json();
   dashboardMachine = await machineRes.json();
@@ -92,6 +103,44 @@ setText("totalBreakage", totalBreakage);
   setText("lateLenses", summary.lateLenses);
 
   buildHourlyTable(dashboardData.hourly || []);
+
+// 🔥 FORCE CHART REFRESH ON DATA CHANGE
+if (trendChart) {
+  trendChart.destroy();
+  trendChart = null;
+}
+
+if (reasonChart) {
+  reasonChart.destroy();
+  reasonChart = null;
+}
+
+if (machineChart) {
+  machineChart.destroy();
+  machineChart = null;
+}
+
+if (flowChart) {
+  flowChart.destroy();
+  flowChart = null;
+}
+
+// Rebuild active tab automatically
+const activeTab = document.querySelector(".tab.active");
+
+if (activeTab) {
+  const tabId = activeTab.getAttribute("onclick") || "";
+
+  if (tabId.includes("trends")) {
+    buildTrendCharts();
+  } 
+  else if (tabId.includes("reasons")) {
+    buildReasonChart(dashboardData);
+  } 
+  else if (tabId.includes("machines")) {
+    buildMachineChart(dashboardData);
+  }
+}
 
   const endTime = performance.now();
   console.log("Load time (ms):", Math.round(endTime - startTime));
@@ -129,8 +178,33 @@ function setText(id, value) {
 
 }
 
+// =====================================================
+// DATE FILTER
+// =====================================================
+function applyDateFilter() {
+
+  const dateInput = document.getElementById("historyDate").value;
+
+  if (!dateInput) {
+    currentDate = null;
+  } else {
+    const d = new Date(dateInput);
+    currentDate = (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+  }
+
+  loadDashboard();
+}
 
 
+// 👇 ADD THIS RIGHT HERE
+function resetToToday() {
+  currentDate = null;
+  document.getElementById("historyDate").value = "";
+  loadDashboard();
+}
+
+
+// Keep this at the bottom
 loadDashboard();
 
 /* =====================================================
@@ -809,10 +883,49 @@ function buildHourlyTable(hourly) {
 
     const tr = document.createElement("tr");
 
+    // 🔍 PRIMARY DRIVER LOGIC
+    let primaryDriverHTML = "-";
+
+    if ((row.totalBroken || 0) > 0 && row.machines) {
+
+      let topMachine = null;
+      let topMachineTotal = 0;
+
+      Object.entries(row.machines).forEach(([machine, stats]) => {
+        if ((stats.total || 0) > topMachineTotal) {
+          topMachine = machine;
+          topMachineTotal = stats.total || 0;
+        }
+      });
+
+      if (topMachine && row.machines[topMachine]) {
+
+        let topReason = null;
+        let topReasonTotal = 0;
+
+        const reasons = row.machines[topMachine].reasons || {};
+
+        Object.entries(reasons).forEach(([reason, rStats]) => {
+          if ((rStats.total || 0) > topReasonTotal) {
+            topReason = reason;
+            topReasonTotal = rStats.total || 0;
+          }
+        });
+
+        primaryDriverHTML = `
+          <div class="primary-driver">
+            <div class="driver-machine">${topMachine}</div>
+            <div class="driver-reason">${topReason || ""}</div>
+          </div>
+        `;
+      }
+    }
+
     tr.innerHTML = `
       <td>${row.hour}</td>
       <td>${row.totalBroken || 0}</td>
       <td>${row.coatingJobs || 0}</td>
+      <td>${primaryDriverHTML}</td>
     `;
 
     tr.addEventListener("click", () => {
@@ -871,7 +984,7 @@ function showHourDetails(hourData) {
 
   modalBody.innerHTML = `
     <h2>${hourData.hour}</h2>
-    <h3>Total Broken: ${hourData.totalBroken || 0}</h3>
+    <h3>Total Lenses Broken: ${hourData.totalBroken || 0}</h3>
     ${machineHTML || "<p>No data</p>"}
   `;
 
@@ -957,13 +1070,163 @@ function buildMachineChart(data) {
   );
 }
 
-// 🔄 AUTO REFRESH EVERY 5 MINUTES
+// 🔄 AUTO REFRESH EVERY 5 MINUTES (ONLY FOR TODAY VIEW)
 setInterval(() => {
-  console.log("Auto refreshing dashboard...");
-  loadDashboard();
+
+  if (currentDate === null) {
+    console.log("Auto refreshing dashboard (Today view)...");
+    loadDashboard();
+  } else {
+    console.log("Auto refresh skipped (History mode active)");
+  }
+
 }, 5 * 60 * 1000);
 
+
+// =====================================================
+// FILTER LISTENERS (SHIFT + DATE + REFRESH)
+// =====================================================
+document.addEventListener("DOMContentLoaded", () => {
+
+  // ---------- SHIFT FILTER ----------
+  const shiftSelect = document.getElementById("shiftSelect");
+
+  if (shiftSelect) {
+    shiftSelect.addEventListener("change", function () {
+
+      const selectedValue = this.value;
+
+      currentShift = selectedValue === "All" ? null : selectedValue;
+
+      console.log("Shift changed to:", currentShift);
+      loadDashboard();
+    });
+  }
+
+
+  // ---------- DATE FILTER ----------
+  const dateInput = document.getElementById("historyDate");
+
+  if (dateInput) {
+    dateInput.addEventListener("change", function () {
+
+  if (!this.value) {
+    currentDate = null;
+  } else {
+    const parts = this.value.split("-"); 
+    // value = "2026-02-02"
+
+    currentDate =
+      parseInt(parts[1]) + "/" +
+      parseInt(parts[2]) + "/" +
+      parts[0];
+  }
+
+  console.log("Date changed to:", currentDate);
+  loadDashboard();
+});
+  }
+
+
+  // ---------- REFRESH BUTTON ----------
+  const refreshBtn = document.getElementById("historyRefreshBtn");
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", refreshHistory);
+  }
+
+});
+  
+  // =====================================================
+// MANUAL HISTORY REFRESH (BYPASS CACHE)
+// =====================================================
+function refreshHistory() {
+
+  if (!currentDate) {
+    console.log("No historical date selected.");
+    return;
+  }
+
+  console.log("Manual history refresh triggered");
+
+  const cacheBreaker = `&t=${new Date().getTime()}`;
+
+  const shiftParam = currentShift
+    ? `&shift=${encodeURIComponent(currentShift)}`
+    : "";
+
+  const dateParam = `&date=${encodeURIComponent(currentDate)}`;
+
+  Promise.all([
+    fetch(`${API_URL}?mode=processed${shiftParam}${dateParam}${cacheBreaker}`),
+    fetch(`${API_URL}?mode=machine${shiftParam}${dateParam}${cacheBreaker}`)
+  ])
+  .then(async ([processedRes, machineRes]) => {
+
+    dashboardProcessed = await processedRes.json();
+    dashboardMachine = await machineRes.json();
+    dashboardData = dashboardProcessed;
+
+    buildHourlyTable(dashboardData.hourly || []);
+    rebuildAllCharts();
+
+  })
+  .catch(err => console.error("History refresh error:", err));
+}
+
+// =====================================================
+// FORCE REBUILD ALL CHARTS
+// =====================================================
+function rebuildAllCharts() {
+
+  // Destroy existing charts safely
+  if (trendChart) {
+    trendChart.destroy();
+    trendChart = null;
+  }
+
+  if (reasonChart) {
+    reasonChart.destroy();
+    reasonChart = null;
+  }
+
+  if (machineChart) {
+    machineChart.destroy();
+    machineChart = null;
+  }
+
+  if (flowChart) {
+    flowChart.destroy();
+    flowChart = null;
+  }
+
+  // Rebuild currently visible tab
+  const activeTab = document.querySelector(".tab.active");
+
+  if (!activeTab) return;
+
+  const tabText = activeTab.textContent.toLowerCase();
+
+  if (tabText.includes("trend")) {
+    buildTrendCharts();
+  } 
+  else if (tabText.includes("reason")) {
+    buildReasonChart(dashboardData);
+  } 
+  else if (tabText.includes("machine")) {
+    buildMachineChart(dashboardData);
+  }
+
+  // Always rebuild flow if that tab exists
+  if (document.getElementById("flowChart")) {
+    buildFlowChart(dashboardProcessed);
+  }
+}
+
+
+// =====================================================
+// NAVIGATION
+// =====================================================
 function goBack() {
   window.location.href = "index.html";
-
 }

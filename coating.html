@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>LMS Breakage Dashboard</title>
+  <title>Coating Tracker Tool</title>
   <link rel="stylesheet" href="coating.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -11,17 +11,54 @@
 
 <div class="container">
 
+  <!-- ================= TOP NAV ================= -->
   <div class="top-nav">
     <button class="back-btn" onclick="goBack()">← Back to Dashboard</button>
   </div>
 
-  <h1>Coating Report</h1>
+  <h1>Coating Tracker</h1>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('overview', this)">Overview</button>
-    <button class="tab" onclick="showTab('trends', this)">Trends</button>
-    <button class="tab" onclick="showTab('reasons', this)">Top Reasons</button>
-    <button class="tab" onclick="showTab('machines', this)">Machine Analysis</button>
+  <!-- ================= FILTERS ================= -->
+  <div class="filters-bar">
+
+    <!-- Shift Filter -->
+    <div class="shift-filter">
+      <label for="shiftSelect">Shift:</label>
+      <select id="shiftSelect">
+        <option value="All">All Shifts</option>
+        <option value="Weekday Shift">Weekday Shift</option>
+        <option value="Weekend Shift">Weekend Shift</option>
+      </select>
+    </div>
+
+    <!-- Date Filter -->
+    <div class="date-filter">
+      <label for="historyDate">Date:</label>
+      <input type="date" id="historyDate" />
+	  <<button id="historyRefreshBtn">Refresh</button>
+    </div>
+
+  </div>
+
+  <!-- ================= MAIN NAV TABS ================= -->
+  <div class="tabs main-tabs">
+
+    <button class="tab active" onclick="showTab('overview', this)">
+      Overview
+    </button>
+
+    <button class="tab" onclick="showTab('trends', this)">
+      Trends
+    </button>
+
+    <button class="tab" onclick="showTab('reasons', this)">
+      Top Reasons
+    </button>
+
+    <button class="tab" onclick="showTab('machines', this)">
+      Machine Analysis
+    </button>
+
   </div>
 
   <!-- ================= OVERVIEW ================= -->
@@ -73,8 +110,9 @@
       <thead>
         <tr>
           <th>Hour</th>
-          <th>Total Broken</th>
-          <th>Jobs</th>
+          <th>Total Lenses Broken</th>
+          <th>Coating Jobs</th>
+          <th>Primary Driver</th>
         </tr>
       </thead>
       <tbody id="hourlyBody"></tbody>
@@ -83,53 +121,49 @@
   </div>
 
   <!-- ================= TRENDS ================= -->
-<div id="trends" class="tab-content">
+  <div id="trends" class="tab-content">
 
-  <!-- ================= BREAKAGE TREND ================= -->
-  <h2 style="margin-top:0;">Breakage Trend</h2>
+    <h2 style="margin-top:0;">Breakage Trend</h2>
 
-  <div style="text-align:center; margin-bottom:20px;">
-    <button id="processedBtn"
-            class="mode-btn active"
-            onclick="switchTrend('processed')">
-      Breakage Processed
-    </button>
+    <div style="text-align:center; margin-bottom:20px;">
+      <button id="processedBtn"
+              class="mode-btn active"
+              onclick="switchTrend('processed')">
+        Breakage Processed
+      </button>
 
-    <button id="machineBtn"
-            class="mode-btn"
-            onclick="switchTrend('machine')">
-      Machine Scan
-    </button>
+      <button id="machineBtn"
+              class="mode-btn"
+              onclick="switchTrend('machine')">
+        Machine Scan
+      </button>
+    </div>
+
+    <div class="trend-card" style="height:450px; margin-bottom:40px;">
+      <canvas id="trendChart"></canvas>
+    </div>
+
+    <h2>Detaper → Coater Flow Analysis</h2>
+
+    <div style="text-align:center; margin-bottom:20px;">
+      <button id="avgFlowBtn"
+              class="mode-btn active"
+              onclick="switchFlowMode('average')">
+        Average Flow
+      </button>
+
+      <button id="individualFlowBtn"
+              class="mode-btn"
+              onclick="switchFlowMode('individual')">
+        Individual RX
+      </button>
+    </div>
+
+    <div class="trend-card" style="height:500px;">
+      <canvas id="flowChart"></canvas>
+    </div>
+
   </div>
-
-  <div class="trend-card" style="height:450px; margin-bottom:40px;">
-    <canvas id="trendChart"></canvas>
-  </div>
-
-
-
-  <!-- ================= FLOW ANALYSIS ================= -->
-  <h2>Detaper → Coater Flow Analysis</h2>
-
-  <div style="text-align:center; margin-bottom:20px;">
-    <button id="avgFlowBtn"
-            class="mode-btn active"
-            onclick="switchFlowMode('average')">
-      Average Flow
-    </button>
-
-    <button id="individualFlowBtn"
-            class="mode-btn"
-            onclick="switchFlowMode('individual')">
-      Individual RX
-    </button>
-  </div>
-
-  <div class="trend-card" style="height:500px;">
-    <canvas id="flowChart"></canvas>
-  </div>
-
-</div>
 
   <!-- ================= REASONS ================= -->
   <div id="reasons" class="tab-content">
@@ -156,5 +190,6 @@
 </div>
 
 <script src="coating.js"></script>
+
 </body>
 </html>

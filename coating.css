@@ -230,3 +230,133 @@ tr:hover {
 .back-btn:hover {
   background: #1f55c7;
 }
+
+/* ===== SHIFT FILTER ===== */
+.shift-filter {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 25px;
+}
+
+.shift-filter label {
+  font-size: 13px;
+  color: #8ea6c9;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 500;
+}
+
+.shift-filter select {
+  background: #18263f;
+  border: 1px solid rgba(255,255,255,0.05);
+  color: #e6edf7;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.shift-filter select:hover {
+  background: #223356;
+}
+
+.shift-filter select:focus {
+  outline: none;
+  border-color: #2f6fed;
+}
+/* =====================================================
+   PRIMARY DRIVER COLUMN (HOURLY TABLE)
+   ===================================================== */
+
+/* Left-align only the 4th column (Primary Driver) */
+table th:nth-child(4),
+table td:nth-child(4) {
+  text-align: left;
+  padding-left: 20px;
+}
+
+/* Primary Driver stacked layout */
+.primary-driver {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(77,163,255,0.08);
+}
+
+.driver-machine {
+  font-weight: 600;
+  color: #4da3ff;
+  font-size: 13px;
+}
+
+.driver-reason {
+  font-size: 12px;
+  color: #8ea6c9;
+  margin-top: 2px;
+}
+
+/* Subtle dash when no driver */
+.primary-driver:empty::after {
+  content: "-";
+  color: #6f84a3;
+}
+/* ===== TABLE HEADER ENHANCEMENT ===== */
+th {
+  background: #223356;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+/* Subtle row separation */
+tbody tr:not(:last-child) {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.shift-filter,
+.date-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shift-filter label,
+.date-filter label {
+  font-size: 14px;
+  color: #9fb6d9;
+}
+
+.shift-filter select,
+.date-filter input {
+  padding: 6px 10px;
+  background: #1e2f4d;
+  border: 1px solid #2d4470;
+  border-radius: 6px;
+  color: white;
+}
+
+.date-filter button {
+  padding: 6px 12px;
+  background: #2d4470;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.date-filter button:hover {
+  background: #3c5a91;
+}
