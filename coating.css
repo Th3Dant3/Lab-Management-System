@@ -360,3 +360,11 @@ tbody tr:not(:last-child) {
 .date-filter button:hover {
   background: #3c5a91;
 }
+
+.report-date-indicator {
+  width: 100%;
+  margin-top: 10px;
+  font-size: 14px;
+  color: #8fb3ff;
+  font-weight: 500;
+}

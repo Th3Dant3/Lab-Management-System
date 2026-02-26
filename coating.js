@@ -74,6 +74,8 @@ const [processedRes, machineRes] = await Promise.all([
   dashboardMachine = await machineRes.json();
 
   dashboardData = dashboardProcessed;
+  // 👇 ADD THIS LINE RIGHT HERE
+  updateReportDateDisplay(dashboardProcessed);  
 
   const summary = dashboardData.summary || {};
 
@@ -176,6 +178,22 @@ function setText(id, value) {
 
   requestAnimationFrame(animate);
 
+}
+
+function updateReportDateDisplay(data) {
+
+  const el = document.getElementById("activeReportDate");
+  if (!el) return;
+
+  if (data?.summary?.reportDate) {
+    el.innerHTML =
+      `<span style="opacity:.6">Viewing Report Date:</span>
+       <strong>${data.summary.reportDate}</strong>`;
+  } else {
+    el.innerHTML =
+      `<span style="opacity:.6">Viewing Report Date:</span>
+       <strong>Today (Live)</strong>`;
+  }
 }
 
 // =====================================================
@@ -1166,6 +1184,7 @@ function refreshHistory() {
     dashboardProcessed = await processedRes.json();
     dashboardMachine = await machineRes.json();
     dashboardData = dashboardProcessed;
+	updateReportDateDisplay(dashboardProcessed);
 
     buildHourlyTable(dashboardData.hourly || []);
     rebuildAllCharts();
