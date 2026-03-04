@@ -39,7 +39,7 @@
     </div>
 	<!-- ✅ ADD THIS RIGHT HERE -->
   <div id="activeReportDate" class="report-date-indicator">
-    Viewing Report Date: --
+    <!-- Viewing Report Date: -- -->
   </div>
 
   </div>
@@ -147,25 +147,33 @@
       <canvas id="trendChart"></canvas>
     </div>
 
-    <h2>Detaper → Coater Flow Analysis</h2>
+   <h2>Detaper → Coater Flow Analysis</h2>
 
-    <div style="text-align:center; margin-bottom:20px;">
-      <button id="avgFlowBtn"
-              class="mode-btn active"
-              onclick="switchFlowMode('average')">
-        Average Flow
-      </button>
+<div style="text-align:center; margin-bottom:20px;">
 
-      <button id="individualFlowBtn"
-              class="mode-btn"
-              onclick="switchFlowMode('individual')">
-        Individual RX
-      </button>
-    </div>
+  <button id="avgFlowBtn"
+          class="mode-btn active"
+          onclick="switchFlowMode('average')">
+    Overall Avg
+  </button>
 
-    <div class="trend-card" style="height:500px;">
-      <canvas id="flowChart"></canvas>
-    </div>
+  <button id="machineFlowBtn"
+          class="mode-btn"
+          onclick="switchFlowMode('machine')">
+    By Machine
+  </button>
+
+  <button id="individualFlowBtn"
+          class="mode-btn"
+          onclick="switchFlowMode('individual')">
+    Individual RX
+  </button>
+
+</div>
+
+<div class="trend-card" style="height:450px; margin-bottom:40px;">
+  <canvas id="flowChart"></canvas>
+</div>
 
   </div>
 
