@@ -300,9 +300,9 @@ function buildDetaperFlowTrend(data) {
 
   data.hourly.forEach(h => {
 
-    todayData.push(h.avgSameDay > 0 ? h.avgSameDay : null);
-    yesterdayData.push(h.avgOneDay > 0 ? h.avgOneDay : null);
-    twoPlusData.push(h.avgTwoPlus > 0 ? h.avgTwoPlus : null);
+    todayData.push(h.avgSameDay || 0);
+yesterdayData.push(h.avgOneDay || 0);
+twoPlusData.push(h.avgTwoPlus || 0);
 
   });
 
@@ -426,13 +426,14 @@ allReasons.forEach(reason => {
     });
 
     return total;
+
   });
 
   datasets.push({
     label: reason,
     data: reasonTotals,
-    borderColor: BREAKAGE_COLOR_MAP[reason] || "#888888",
-    backgroundColor: BREAKAGE_COLOR_MAP[reason] || "#888888",
+    borderColor: colors[colorIndex % colors.length],
+    backgroundColor: colors[colorIndex % colors.length],
     borderWidth: 3,
     tension: 0.35,
     fill: false,
@@ -440,7 +441,11 @@ allReasons.forEach(reason => {
     yAxisID: "yBroken"
   });
 
+  colorIndex++;
+
 });
+
+
 
   // 🟢 Add Coating Jobs (right axis)
   datasets.push({
@@ -561,12 +566,12 @@ function buildFlowChart(data) {
   // =========================
   // SANITIZER (Spike Control)
   // =========================
-  function sanitize(value) {
-    if (!value || value <= 0) return null;
-    const num = Number(value);
-    if (num > 300) return null; // ignore extreme outliers
-    return num;
-  }
+ function sanitize(value) {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  if (num > 500) return null;
+  return num;
+}
 
   // =========================
   // MACHINE MODE
