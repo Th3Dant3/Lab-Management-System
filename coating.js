@@ -545,7 +545,11 @@ function buildFlowChart(data) {
   if (flowChart) flowChart.destroy();
 
   // FILTER HOURS 6AM–8PM
-  const filteredHours = data.hourly.filter(h => {
+  const sortedHourly = [...data.hourly].sort((a,b)=>{
+  return new Date("1/1/2000 " + a.hour) - new Date("1/1/2000 " + b.hour);
+});
+
+const filteredHours = sortedHourly.filter(h => {
 
   if (!h.hour) return false;
 
@@ -719,60 +723,48 @@ function buildFlowChart(data) {
 
     return;
   }
-
- // =========================
+  
+  
+// =========================
 // INDIVIDUAL MODE
 // =========================
-const datasets = [];
+
+const points = [];
 
 filteredHours.forEach(hourObj => {
 
-  if (!hourObj.flowPoints || hourObj.flowPoints.length === 0) return;
+  Object.entries(hourObj.machines || {}).forEach(([machine, mData]) => {
 
-  hourObj.flowPoints.forEach(p => {
-
-    const flowValue = sanitize(p.flow);
+    const flowValue = sanitize(mData.avgFlowAll);
     if (flowValue === null) return;
 
-    datasets.push({
-      label: p.machine || "",
-      data: [{
-        x: hourObj.hour,
-        y: flowValue,
-        rx: p.rx,
-        machine: p.machine,
-        reason: p.reason,
-        flow: flowValue
-      }],
-      backgroundColor: getFlowColor(flowValue),
-      borderColor: getFlowColor(flowValue),
-      pointRadius: 8,
-      pointHoverRadius: 11
+    points.push({
+      x: hourObj.hour,
+      y: flowValue,
+      machine: machine,
+      rx: null
     });
 
   });
 
 });
 
-// Prevent empty chart
-if (datasets.length === 0) {
-
-  flowChart = new Chart(ctx, {
-    type: "scatter",
-    data: { datasets: [] },
-    options: getFlowOptions("No RX Flow Data Available")
-  });
-
-  return;
-}
-
 flowChart = new Chart(ctx, {
   type: "scatter",
-  data: { labels: hours, datasets },
-  options: getFlowOptions("Individual RX Flow Points")
+  data: {
+    datasets: [{
+      label: "Machine Flow",
+      data: points,
+      pointRadius: 8,
+      pointHoverRadius: 11,
+      backgroundColor: points.map(p => getFlowColor(p.y)),
+      borderColor: points.map(p => getFlowColor(p.y))
+    }]
+  },
+  options: getFlowOptions("Machine Flow Scatter (Detaper → Coater)")
 });
 
-}
+} 
 
 
 
@@ -783,13 +775,43 @@ flowChart = new Chart(ctx, {
 function getFlowOptions(titleText) {
 
   return {
+
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { mode: "index", intersect: false },
+
+    interaction: { mode: "nearest", intersect: true },
+
+    // =============================================
+    // CLICK HANDLER (OPEN MODAL)
+    // =============================================
+    onClick: function(evt, elements, chart) {
+
+      if (!elements.length) return;
+
+      const element = elements[0];
+      const datasetIndex = element.datasetIndex;
+      const index = element.index;
+
+      const dataset = chart.data.datasets[datasetIndex];
+      const point = dataset.data[index];
+
+      if (!point) return;
+
+      showFlowDetails({
+        rx: point.rx || "Machine Flow",
+        machine: point.machine || "Unknown",
+        reason: point.reason || "N/A",
+        flow: point.y,
+        x: point.x
+      });
+
+    },
 
     plugins: {
 
-      legend: { labels: { color: "#E6F1FF" } },
+      legend: {
+        labels: { color: "#E6F1FF" }
+      },
 
       title: {
         display: true,
@@ -807,7 +829,7 @@ function getFlowOptions(titleText) {
             if (!raw) return "";
 
             // =============================
-            // INDIVIDUAL RX TOOLTIP
+            // RX TOOLTIP
             // =============================
             if (raw.rx) {
 
@@ -823,11 +845,30 @@ function getFlowOptions(titleText) {
 
               lines.push(`Flow Time: ${raw.y} mins`);
 
+              if (raw.x)
+                lines.push(`Hour: ${raw.x}`);
+
               return lines;
             }
 
             // =============================
-            // MACHINE / AVERAGE TOOLTIP
+            // MACHINE SCATTER TOOLTIP
+            // =============================
+            if (raw.machine) {
+
+              const lines = [];
+
+              lines.push(`Machine: ${raw.machine}`);
+              lines.push(`Flow Time: ${raw.y} mins`);
+
+              if (raw.x)
+                lines.push(`Hour: ${raw.x}`);
+
+              return lines;
+            }
+
+            // =============================
+            // MACHINE / AVERAGE MODE
             // =============================
 
             const value = raw?.y ?? raw;
@@ -847,7 +888,9 @@ function getFlowOptions(titleText) {
 
     scales: {
 
+      // FIXES 0.0 0.1 AXIS PROBLEM
       x: {
+        type: "category",
         ticks: { color: "rgba(255,255,255,0.6)" },
         grid: { color: "rgba(255,255,255,0.05)" }
       },
@@ -867,6 +910,7 @@ function getFlowOptions(titleText) {
     }
 
   };
+
 }
 
 // =============================================
@@ -896,7 +940,7 @@ function showFlowDetails(point) {
     <h2>RX ${point.rx}</h2>
     <div style="margin-top:15px; padding:20px; background:#243b63; border-radius:10px;">
       <p><strong>Machine:</strong> ${point.machine}</p>
-      <p><strong>Breakage Reason:</strong> ${point.reason}</p>
+      <p><strong>Breakage Reason:</strong> ${point.reason || "None"}</p>
       <p><strong>Flow Time:</strong> ${formatted}</p>
       <p><strong>Hour:</strong> ${point.x}</p>
     </div>
