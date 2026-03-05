@@ -720,42 +720,65 @@ function buildFlowChart(data) {
     return;
   }
 
-  // =========================
-  // INDIVIDUAL MODE
-  // =========================
-  const datasets = [];
+ // =========================
+// INDIVIDUAL MODE
+// =========================
+const datasets = [];
 
-  filteredHours.forEach(hourObj => {
+filteredHours.forEach(hourObj => {
 
-    (hourObj.flowPoints || []).forEach(p => {
+  if (!hourObj.flowPoints || hourObj.flowPoints.length === 0) return;
 
-      datasets.push({
-        label: "",
-        data: [{
-          x: hourObj.hour,
-          y: sanitize(p.flow),
-          rx: p.rx,
-          machine: p.machine,
-          reason: p.reason,
-          flow: p.flow
-        }],
-        backgroundColor: getFlowColor(p.flow),
-        borderColor: getFlowColor(p.flow),
-        pointRadius: 8,
-        pointHoverRadius: 11
-      });
+  hourObj.flowPoints.forEach(p => {
 
+    const flowValue = sanitize(p.flow);
+    if (flowValue === null) return;
+
+    datasets.push({
+      label: p.machine || "",
+      data: [{
+        x: hourObj.hour,
+        y: flowValue,
+        rx: p.rx,
+        machine: p.machine,
+        reason: p.reason,
+        flow: flowValue
+      }],
+      backgroundColor: getFlowColor(flowValue),
+      borderColor: getFlowColor(flowValue),
+      pointRadius: 8,
+      pointHoverRadius: 11
     });
 
   });
 
+});
+
+// Prevent empty chart
+if (datasets.length === 0) {
+
   flowChart = new Chart(ctx, {
     type: "scatter",
-    data: { labels: hours, datasets },
-    options: getFlowOptions("Individual RX Flow Points")
+    data: { datasets: [] },
+    options: getFlowOptions("No RX Flow Data Available")
   });
+
+  return;
 }
 
+flowChart = new Chart(ctx, {
+  type: "scatter",
+  data: { labels: hours, datasets },
+  options: getFlowOptions("Individual RX Flow Points")
+});
+
+}
+
+
+
+// =====================================================
+// FLOW CHART OPTIONS
+// =====================================================
 
 function getFlowOptions(titleText) {
 
@@ -765,6 +788,7 @@ function getFlowOptions(titleText) {
     interaction: { mode: "index", intersect: false },
 
     plugins: {
+
       legend: { labels: { color: "#E6F1FF" } },
 
       title: {
@@ -776,8 +800,36 @@ function getFlowOptions(titleText) {
 
       tooltip: {
         callbacks: {
+
           label: function(context) {
+
             const raw = context.raw;
+            if (!raw) return "";
+
+            // =============================
+            // INDIVIDUAL RX TOOLTIP
+            // =============================
+            if (raw.rx) {
+
+              const lines = [];
+
+              lines.push(`RX: ${raw.rx}`);
+
+              if (raw.machine)
+                lines.push(`Machine: ${raw.machine}`);
+
+              if (raw.reason)
+                lines.push(`Breakage: ${raw.reason}`);
+
+              lines.push(`Flow Time: ${raw.y} mins`);
+
+              return lines;
+            }
+
+            // =============================
+            // MACHINE / AVERAGE TOOLTIP
+            // =============================
+
             const value = raw?.y ?? raw;
             const count = raw?.count ?? null;
 
@@ -787,11 +839,14 @@ function getFlowOptions(titleText) {
 
             return `${context.dataset.label}: ${value} mins`;
           }
+
         }
       }
+
     },
 
     scales: {
+
       x: {
         ticks: { color: "rgba(255,255,255,0.6)" },
         grid: { color: "rgba(255,255,255,0.05)" }
@@ -799,7 +854,7 @@ function getFlowOptions(titleText) {
 
       y: {
         beginAtZero: true,
-        suggestedMax: 60, // 🔥 prevents giant 300 stretch
+        suggestedMax: 60,
         ticks: { color: "#4da3ff" },
         grid: { color: "rgba(255,255,255,0.05)" },
         title: {
@@ -808,7 +863,9 @@ function getFlowOptions(titleText) {
           color: "#4da3ff"
         }
       }
+
     }
+
   };
 }
 
@@ -1023,19 +1080,27 @@ function buildReasonChart(data) {
   if (reasonChart) reasonChart.destroy();
 
   const entries = Object.entries(data.topReasons)
-    .sort((a, b) => b[1] - a[1]);
+    .map(([reason, stats]) => ({
+      reason,
+      total: stats.total || 0
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6); // limit to top reasons
+
+  // Calculate total breakage for %
+  const totalBreakage = entries.reduce((sum, r) => sum + r.total, 0);
 
   reasonChart = new Chart(
     document.getElementById("reasonChart"),
     {
       type: "bar",
       data: {
-        labels: entries.map(e => e[0]),
+        labels: entries.map(e => e.reason),
         datasets: [{
           label: "Total Breakage",
-          data: entries.map(e => e[1]),
-          backgroundColor: entries.map((e, i) =>
-            ["#4da3ff", "#9b7bff", "#ff9f43", "#00ff88"][i % 4]
+          data: entries.map(e => e.total),
+          backgroundColor: entries.map(e =>
+            BREAKAGE_COLOR_MAP[e.reason] || "#4da3ff"
           ),
           borderRadius: 8
         }]
@@ -1044,7 +1109,44 @@ function buildReasonChart(data) {
         indexAxis: "y",
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } }
+
+        plugins: {
+
+          legend: { display: false },
+
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+
+                const value = context.raw;
+                const percent = totalBreakage
+                  ? ((value / totalBreakage) * 100).toFixed(1)
+                  : 0;
+
+                return `${value} lenses (${percent}%)`;
+              }
+            }
+          }
+        },
+
+        scales: {
+          x: {
+            ticks: {
+              color: "rgba(255,255,255,0.6)"
+            },
+            grid: {
+              color: "rgba(255,255,255,0.05)"
+            }
+          },
+          y: {
+            ticks: {
+              color: "#E6F1FF"
+            },
+            grid: {
+              color: "rgba(255,255,255,0.05)"
+            }
+          }
+        }
       }
     }
   );
@@ -1061,30 +1163,167 @@ function buildMachineChart(data) {
   if (machineChart) machineChart.destroy();
 
   const entries = Object.entries(data.machineTotals)
-    .sort((a, b) => b[1] - a[1]);
+    .map(([machine, stats]) => {
+
+      const jobs = stats.jobs || 0;
+      const broken = stats.breakLenses || 0;
+
+      const percent = jobs > 0 ? (broken / jobs) * 100 : 0;
+
+      return {
+        machine,
+        jobs,
+        broken,
+        percent
+      };
+
+    })
+    .sort((a,b)=>b.percent-a.percent);
+
+
+  function getMachineColor(p){
+
+    if(p > 12) return "#ff3b3b";   // red
+    if(p > 6)  return "#ffcc00";   // yellow
+    return "#32ff7e";              // green
+
+  }
+
 
   machineChart = new Chart(
     document.getElementById("machineChart"),
     {
+
       type: "bar",
+
       data: {
-        labels: entries.map(e => e[0]),
-        datasets: [{
-          label: "Total Breakage",
-          data: entries.map(e => e[1]),
-          backgroundColor: entries.map((e, i) =>
-            ["#4da3ff", "#9b7bff", "#ff9f43", "#00ff88", "#5ad1a3"][i % 5]
-          ),
-          borderRadius: 10
-        }]
+
+        labels: entries.map(e=>e.machine),
+
+        datasets: [
+
+          {
+            label: "Breakage %",
+            data: entries.map(e=>e.percent),
+            backgroundColor: entries.map(e=>getMachineColor(e.percent)),
+            borderRadius: 10
+          },
+
+          {
+            label: "Total Jobs",
+            data: entries.map(e=>e.jobs),
+            backgroundColor: "#5c8df6",
+            borderRadius: 10
+          }
+
+        ]
       },
+
       options: {
+
         responsive: true,
-        maintainAspectRatio: false
+        maintainAspectRatio: false,
+
+        plugins: {
+
+          legend: {
+            labels: { color:"#E6F1FF" }
+          },
+
+          tooltip:{
+  callbacks:{
+
+    label:function(context){
+
+      const i = context.dataIndex;
+      const e = entries[i];
+
+      if(context.dataset.label==="Breakage %"){
+        return `${e.percent.toFixed(2)}% (${e.broken} broken)`;
       }
+
+      return `Total Jobs: ${e.jobs}`;
+    },
+
+    afterBody:function(context){
+
+      const i = context[0].dataIndex;
+      const e = entries[i];
+      const machine = e.machine;
+
+      const lines = [];
+
+      // Workflow %
+      const totalBroken = entries.reduce((s,m)=>s+m.broken,0);
+
+      if(totalBroken > 0){
+
+        const workflow = ((e.broken / totalBroken) * 100).toFixed(1);
+
+        lines.push("");
+        lines.push(`Workflow Impact: ${workflow}%`);
+      }
+
+      // Machine reasons
+      if(data.machineReasons && data.machineReasons[machine]){
+
+        const reasons = data.machineReasons[machine];
+
+        const total = Object.values(reasons)
+          .reduce((a,b)=>a+b,0);
+
+        lines.push("");
+        lines.push("Top Reasons");
+
+        Object.entries(reasons)
+          .sort((a,b)=>b[1]-a[1])
+          .slice(0,3)
+          .forEach(([r,count])=>{
+
+            const pct = ((count/total)*100).toFixed(1);
+
+            lines.push(`${r} – ${count} (${pct}%)`);
+
+          });
+
+      }
+
+      return lines;
+
+    }
+
+  }
+}
+
+        },
+
+        scales: {
+
+          x: {
+            ticks: { color:"rgba(255,255,255,0.6)" },
+            grid: { color:"rgba(255,255,255,0.05)" }
+          },
+
+          y: {
+            beginAtZero:true,
+            ticks:{ color:"#E6F1FF" },
+            grid:{ color:"rgba(255,255,255,0.05)" },
+            title:{
+              display:true,
+              text:"Breakage %",
+              color:"#E6F1FF"
+            }
+          }
+
+        }
+
+      }
+
     }
   );
+
 }
+
 
 // 🔄 AUTO REFRESH EVERY 5 MINUTES (ONLY FOR TODAY VIEW)
 setInterval(() => {
