@@ -131,28 +131,28 @@ async function loadDashboard() {
 
   const summary = dashboardData.summary || {};
 
-  /* ===============================
-   SUMMARY CARDS (CORRECT MAPPING)
+/* ===============================
+   SUMMARY CARDS (FIXED)
 ================================ */
 
-// TOTAL JOBS
-setText("totalJobs", summary.totalJobs || 0);
+// TOTAL JOBS (use coatingJobs if available)
+setText("totalJobs", summary.totalJobs ?? summary.coatingJobs ?? 0);
 
 // TOTAL BREAKAGE (RX COUNT)
-setText("totalBreakage", summary.totalBreakRX || 0);
+setText("totalBreakage", summary.totalBreakRX ?? 0);
 
 // TOTAL LENSES BROKEN
-setText("totalLenses", summary.totalBreakLenses || 0);
+setText("totalLenses", summary.totalBreakLenses ?? 0);
 
 // RX BREAKAGE %
 setText(
   "rxBreakage",
-  summary.breakPercent
+  summary.breakPercent !== undefined
     ? summary.breakPercent + "%"
     : "0%"
 );
 
-// BREAKAGE AVG TIME (HRS)
+// BREAKAGE AVG TIME
 setText(
   "avgTime",
   summary.avgBreakTimeHours
@@ -161,7 +161,7 @@ setText(
 );
 
 // PEAK HOUR
-setText("peakHour", summary.peakHour || "-");
+setText("peakHour", summary.peakHour ?? "-");
 
   /* ===============================
      HOURLY TABLE
