@@ -163,6 +163,19 @@ setText(
 // PEAK HOUR
 setText("peakHour", summary.peakHour ?? "-");
 
+/* ===============================
+   FLOW HEALTH SUMMARY
+================================ */
+
+if (summary.flowHealth) {
+
+  setText("flowHealthy", summary.flowHealth.healthy || 0);
+  setText("flowWatch", summary.flowHealth.watch || 0);
+  setText("flowDelayed", summary.flowHealth.delayed || 0);
+
+}
+
+
   /* ===============================
      HOURLY TABLE
   ================================ */

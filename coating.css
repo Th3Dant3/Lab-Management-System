@@ -368,3 +368,30 @@ tbody tr:not(:last-child) {
   color: #8fb3ff;
   font-weight: 500;
 }
+/* FLOW HEALTH COLORS */
+
+#flowHealthy{
+  color:#2ecc71;
+  font-weight:700;
+}
+
+#flowWatch{
+  color:#f1c40f;
+  font-weight:700;
+}
+
+#flowDelayed{
+  color:#e74c3c;
+  font-weight:700;
+}
+.card:has(#flowHealthy){
+  border-left:4px solid #2ecc71;
+}
+
+.card:has(#flowWatch){
+  border-left:4px solid #f1c40f;
+}
+
+.card:has(#flowDelayed){
+  border-left:4px solid #e74c3c;
+}
