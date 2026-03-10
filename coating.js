@@ -175,6 +175,18 @@ if (summary.flowHealth) {
 
 }
 
+/* ===============================
+   BREAKAGE AGING SUMMARY
+================================ */
+
+if (summary.aging) {
+
+  setText("sameDayBreakage", summary.aging.sameDay || 0);
+  setText("yesterdayBreakage", summary.aging.oneDay || 0);
+  setText("twoPlusBreakage", summary.aging.twoPlus || 0);
+
+}
+
 
   /* ===============================
      HOURLY TABLE

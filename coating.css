@@ -395,3 +395,30 @@ tbody tr:not(:last-child) {
 .card:has(#flowDelayed){
   border-left:4px solid #e74c3c;
 }
+/* BREAKAGE AGE COLORS */
+
+.card.aging.today h2{
+  color:#32ff7e;
+}
+
+.card.aging.yesterday h2{
+  color:#ffcc00;
+}
+
+.card.aging.late h2{
+  color:#ff3b3b;
+}
+
+/* subtle indicator bar */
+
+.card.aging.today{
+  border-left:4px solid #32ff7e;
+}
+
+.card.aging.yesterday{
+  border-left:4px solid #ffcc00;
+}
+
+.card.aging.late{
+  border-left:4px solid #ff3b3b;
+}
