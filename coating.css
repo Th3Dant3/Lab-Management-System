@@ -10,9 +10,10 @@ body{
 }
 
 .container{
-  max-width:1400px;
+  width:100%;
+  max-width:1900px;
   margin:auto;
-  padding:20px 30px;
+  padding:20px 40px;
 }
 
 
@@ -66,9 +67,8 @@ h1{
 
 .summary{
   display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(220px,260px));
+  grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
   gap:16px;
-  justify-content:flex-start;
 }
 
 /* ===== KPI CARD ===== */
