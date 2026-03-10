@@ -41,22 +41,18 @@ const BREAKAGE_COLOR_MAP = {
 /* =====================================================
    REPORT DATE DISPLAY (RESTORED - SAFE)
 ===================================================== */
-function updateReportDateDisplay(data) {
+function updateReportDateDisplay(data){
 
   const el = document.getElementById("activeReportDate");
-  if (!el) return;
+  if(!el) return;
 
-  if (data && data.summary && data.summary.reportDate) {
-    el.innerHTML =
-      `<span style="opacity:.6">Viewing Report Date:</span>
-       <strong>${data.summary.reportDate}</strong>`;
+  if(currentDate === null){
+    el.innerHTML = "Viewing Report Date: <strong>Today (Live)</strong>";
   } else {
-    el.innerHTML =
-      `<span style="opacity:.6">Viewing Report Date:</span>
-       <strong>Today (Live)</strong>`;
+    el.innerHTML = "Viewing Report Date: <strong>" + currentDate + "</strong>";
   }
-}
 
+}
 
 /* =====================================================
    SAFE TEXT SETTER (RESTORED)

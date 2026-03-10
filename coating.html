@@ -17,29 +17,35 @@
   </div>
 
   <h1>Coating Tracker</h1>
+  
+  <!-- LIVE STATUS -->
+  <div class="live-indicator">
+      ● Live Dashboard • Auto refresh every 5 minutes
+  </div>
 
   <!-- ================= FILTERS ================= -->
-  <div class="filters-bar">
+ <div class="filters-bar">
 
-    <!-- Shift Filter -->
-    <div class="shift-filter">
-      <label for="shiftSelect">Shift:</label>
-      <select id="shiftSelect">
-        <option value="All">All Shifts</option>
-        <option value="Weekday Shift">Weekday Shift</option>
-        <option value="Weekend Shift">Weekend Shift</option>
-      </select>
-    </div>
+  <!-- Shift Filter -->
+  <div class="shift-filter">
+    <label for="shiftSelect">Shift:</label>
+    <select id="shiftSelect">
+      <option value="All">All Shifts</option>
+      <option value="Weekday Shift">Weekday Shift</option>
+      <option value="Weekend Shift">Weekend Shift</option>
+    </select>
+  </div>
 
-    <!-- Date Filter -->
-    <div class="date-filter">
-      <label for="historyDate">Date:</label>
-      <input type="date" id="historyDate" />
-	  <button id="historyRefreshBtn">Refresh</button>
-    </div>
-	<!-- ✅ ADD THIS RIGHT HERE -->
-  <div id="activeReportDate" class="report-date-indicator">
-    <!-- Viewing Report Date: -- -->
+  <!-- Date Filter -->
+  <div class="date-filter">
+    <label for="historyDate">Date:</label>
+    <input type="date" id="historyDate" />
+    <button id="historyRefreshBtn">Refresh</button>
+</div>
+
+<!-- REPORT DATE DISPLAY -->
+<div id="activeReportDate" class="report-date-indicator"></div>
+
   </div>
 
   </div>
