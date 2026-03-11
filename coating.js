@@ -679,72 +679,109 @@ const filteredHours = sortedHourly.filter(h => {
   return;
 }
 
-  // =========================
-  // AVERAGE MODE
-  // =========================
-  if (currentFlowMode === "average") {
+// =========================
+// AVERAGE MODE
+// =========================
+if (currentFlowMode === "average") {
 
-    const allFlow = filteredHours.map(h => ({
-      x: h.hour,
-      y: sanitize(h.avgFlowAll),
-      count: h.flowAllCount || 0
-    }));
+const healthyFlow = filteredHours.map(h => ({
+  x: h.hour,
+  y: sanitize(h.flowHealthy),
+  count: h.flowHealthy || 0
+}));
 
-    const brokenFlow = filteredHours.map(h => ({
-      x: h.hour,
-      y: sanitize(h.avgFlowBroken),
-      count: h.flowBrokenCount || 0
-    }));
+const watchFlow = filteredHours.map(h => ({
+  x: h.hour,
+  y: sanitize(h.flowWatch),
+  count: h.flowWatch || 0
+}));
 
-    const postDelay = filteredHours.map(h => ({
-      x: h.hour,
-      y: sanitize(h.avgPostCoatDelay),
-      count: h.postCoatCount || 0
-    }));
+const delayedFlow = filteredHours.map(h => ({
+  x: h.hour,
+  y: sanitize(h.flowDelayed),
+  count: h.flowDelayed || 0
+}));
 
-    flowChart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: hours,
-        datasets: [
-          {
-            label: "All Jobs Avg Flow",
-            data: allFlow,
-            borderColor: "#32ff7e",
-            backgroundColor: "rgba(50,255,126,0.15)",
-            borderWidth: 3,
-            tension: 0.35,
-            fill: true,
-            spanGaps: true
-          },
-          {
-            label: "Broken Jobs Avg Flow",
-            data: brokenFlow,
-            borderColor: "#ffd32a",
-            backgroundColor: "rgba(255,211,42,0.15)",
-            borderWidth: 3,
-            tension: 0.35,
-            fill: true,
-            spanGaps: true
-          },
-          {
-            label: "Coater → Break Delay",
-            data: postDelay,
-            borderColor: "#ff3f34",
-            backgroundColor: "rgba(255,63,52,0.15)",
-            borderWidth: 3,
-            tension: 0.35,
-            fill: true,
-            spanGaps: true
-          }
-        ]
-      },
-      options: getFlowOptions("Detaper → Coater Flow Analysis")
-    });
+  const brokenFlow = filteredHours.map(h => ({
+    x: h.hour,
+    y: sanitize(h.avgFlowBroken),
+    count: h.flowBrokenCount || 0
+  }));
 
-    return;
-  }
-  
+  const postDelay = filteredHours.map(h => ({
+    x: h.hour,
+    y: sanitize(h.avgPostCoatDelay),
+    count: h.postCoatCount || 0
+  }));
+
+  flowChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: hours,
+      datasets: [
+
+        {
+          label: "Workflow Healthy",
+          data: healthyFlow,
+          borderColor: "#32ff7e",
+          backgroundColor: "rgba(50,255,126,0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          spanGaps: true
+        },
+
+        {
+          label: "Workflow Watch",
+          data: watchFlow,
+          borderColor: "#ffd32a",
+          backgroundColor: "rgba(255,211,42,0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          spanGaps: true
+        },
+
+        {
+          label: "Workflow Delayed",
+          data: delayedFlow,
+          borderColor: "#ff3f34",
+          backgroundColor: "rgba(255,63,52,0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          spanGaps: true
+        },
+
+        {
+          label: "Broken Jobs Avg Flow",
+          data: brokenFlow,
+          borderColor: "#9b7bff",
+          backgroundColor: "rgba(155,123,255,0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          spanGaps: true
+        },
+
+        {
+          label: "Coater → Break Delay",
+          data: postDelay,
+          borderColor: "#ff6b6b",
+          backgroundColor: "rgba(255,107,107,0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: true,
+          spanGaps: true
+        }
+
+      ]
+    },
+    options: getFlowOptions("Detaper → Coater Flow Analysis")
+  });
+
+  return;
+}
   
 // =========================
 // INDIVIDUAL MODE
