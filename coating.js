@@ -38,6 +38,12 @@ const BREAKAGE_COLOR_MAP = {
 };
 
 
+function formatMachineLabel(machine) {
+  if (!machine) return "";
+
+  return machine.replace(/^AR41-/, "44R1-");
+}
+
 /* =====================================================
    REPORT DATE DISPLAY (RESTORED - SAFE)
 ===================================================== */
@@ -168,6 +174,7 @@ if (summary.flowHealth) {
   setText("flowHealthy", summary.flowHealth.healthy || 0);
   setText("flowWatch", summary.flowHealth.watch || 0);
   setText("flowDelayed", summary.flowHealth.delayed || 0);
+  setText("flowOvernight", summary.flowHealth.overnight || 0);
 
 }
 
@@ -620,7 +627,7 @@ const filteredHours = sortedHourly.filter(h => {
     }));
 
     return {
-      label: machine,
+      label: formatMachineLabel(machine),
       data: dataPoints,
       borderWidth: 3,
       tension: 0.35,
@@ -684,23 +691,72 @@ const filteredHours = sortedHourly.filter(h => {
 // =========================
 if (currentFlowMode === "average") {
 
-const healthyFlow = filteredHours.map(h => ({
-  x: h.hour,
-  y: sanitize(h.flowHealthy),
-  count: h.flowHealthy || 0
-}));
+const healthyFlow = filteredHours.map(h => {
 
-const watchFlow = filteredHours.map(h => ({
-  x: h.hour,
-  y: sanitize(h.flowWatch),
-  count: h.flowWatch || 0
-}));
+  const healthy = (h.flowPoints || []).filter(p => p.flow <= 15);
 
-const delayedFlow = filteredHours.map(h => ({
-  x: h.hour,
-  y: sanitize(h.flowDelayed),
-  count: h.flowDelayed || 0
-}));
+  const minutes = healthy.length
+    ? Math.round(healthy.reduce((a,b)=>a+b.flow,0) / healthy.length)
+    : 0;
+
+  return {
+    x: h.hour,
+    y: minutes,
+    jobs: healthy.length
+  };
+
+});
+
+const watchFlow = filteredHours.map(h => {
+
+  const watch = (h.flowPoints || [])
+    .filter(p => p.flow > 15 && p.flow <= 30);
+
+  const minutes = watch.length
+    ? Math.round(watch.reduce((a,b)=>a+b.flow,0) / watch.length)
+    : 0;
+
+  return {
+    x: h.hour,
+    y: minutes,
+    jobs: watch.length
+  };
+
+});;
+
+const delayedFlow = filteredHours.map(h => {
+
+  const delayed = (h.flowPoints || [])
+    .filter(p => p.flow > 30 && p.flow <= 360);
+
+  const minutes = delayed.length
+    ? Math.round(delayed.reduce((a,b)=>a+b.flow,0) / delayed.length)
+    : 0;
+
+  return {
+    x: h.hour,
+    y: minutes,
+    jobs: delayed.length
+  };
+
+});
+
+const overnightFlow = filteredHours.map(h => {
+
+  const overnight = (h.flowPoints || [])
+    .filter(p => p.flow > 360);
+
+  const minutes = overnight.length
+    ? Math.round(overnight.reduce((a,b)=>a+b.flow,0) / overnight.length)
+    : 0;
+
+  return {
+    x: h.hour,
+    y: minutes,
+    jobs: overnight.length
+  };
+
+});
 
   const brokenFlow = filteredHours.map(h => ({
     x: h.hour,
@@ -718,64 +774,75 @@ const delayedFlow = filteredHours.map(h => ({
     type: "line",
     data: {
       labels: hours,
-      datasets: [
+    datasets: [
 
-        {
-          label: "Workflow Healthy",
-          data: healthyFlow,
-          borderColor: "#32ff7e",
-          backgroundColor: "rgba(50,255,126,0.15)",
-          borderWidth: 3,
-          tension: 0.35,
-          fill: true,
-          spanGaps: true
-        },
+{
+  label: "Workflow Healthy",
+  data: healthyFlow,
+  borderColor: "#32ff7e",
+  backgroundColor: "rgba(50,255,126,0.15)",
+  borderWidth: 3,
+  tension: 0.35,
+  fill: true,
+  spanGaps: true
+},
 
-        {
-          label: "Workflow Watch",
-          data: watchFlow,
-          borderColor: "#ffd32a",
-          backgroundColor: "rgba(255,211,42,0.15)",
-          borderWidth: 3,
-          tension: 0.35,
-          fill: true,
-          spanGaps: true
-        },
+{
+  label: "Workflow Watch",
+  data: watchFlow,
+  borderColor: "#ffd32a",
+  backgroundColor: "rgba(255,211,42,0.15)",
+  borderWidth: 3,
+  tension: 0.35,
+  fill: true,
+  spanGaps: true
+},
 
-        {
-          label: "Workflow Delayed",
-          data: delayedFlow,
-          borderColor: "#ff3f34",
-          backgroundColor: "rgba(255,63,52,0.15)",
-          borderWidth: 3,
-          tension: 0.35,
-          fill: true,
-          spanGaps: true
-        },
+{
+  label: "Workflow Delayed",
+  data: delayedFlow,
+  borderColor: "#ff3f34",
+  backgroundColor: "rgba(255,63,52,0.15)",
+  borderWidth: 3,
+  tension: 0.35,
+  fill: true,
+  spanGaps: true
+},
 
-        {
-          label: "Broken Jobs Avg Flow",
-          data: brokenFlow,
-          borderColor: "#9b7bff",
-          backgroundColor: "rgba(155,123,255,0.15)",
-          borderWidth: 3,
-          tension: 0.35,
-          fill: true,
-          spanGaps: true
-        },
+{
+  label: "Overnight Carryover",
+  data: overnightFlow,
+  borderColor: "#00a8ff",
+  backgroundColor: "rgba(0,168,255,0.15)",
+  borderWidth: 3,
+  tension: 0.35,
+  fill: true,
+  spanGaps: true
+},
 
-        {
-          label: "Coater → Break Delay",
-          data: postDelay,
-          borderColor: "#ff6b6b",
-          backgroundColor: "rgba(255,107,107,0.15)",
-          borderWidth: 3,
-          tension: 0.35,
-          fill: true,
-          spanGaps: true
-        }
+{
+  label: "Broken Jobs Avg Flow",
+  data: brokenFlow,
+  borderColor: "#9b7bff",
+  backgroundColor: "rgba(155,123,255,0.15)",
+  borderWidth: 3,
+  tension: 0.35,
+  fill: true,
+  spanGaps: true
+},
 
-      ]
+{
+  label: "Coater → Break Delay",
+  data: postDelay,
+  borderColor: "#ff6b6b",
+  backgroundColor: "rgba(255,107,107,0.15)",
+  borderWidth: 3,
+  tension: 0.35,
+  fill: true,
+  spanGaps: true
+}
+
+]
     },
     options: getFlowOptions("Detaper → Coater Flow Analysis")
   });
@@ -930,11 +997,11 @@ function getFlowOptions(titleText) {
             // =============================
 
             const value = raw?.y ?? raw;
-            const count = raw?.count ?? null;
+            const jobs = raw?.jobs ?? raw?.count ?? null;
 
-            if (count !== null) {
-              return `${context.dataset.label}: ${value} mins (${count} jobs)`;
-            }
+if (jobs !== null) {
+  return `${context.dataset.label}: ${value} mins (${jobs} jobs)`;
+}
 
             return `${context.dataset.label}: ${value} mins`;
           }
@@ -1126,6 +1193,8 @@ function showHourDetails(hourData) {
 
   Object.entries(hourData.machines || {}).forEach(([machine, stats]) => {
 
+  const displayMachine = formatMachineLabel(machine);
+
     let reasonHTML = "";
 
     const reasonsObj = stats.reasons || {};
@@ -1137,9 +1206,9 @@ function showHourDetails(hourData) {
           • <strong>${reason}</strong> — ${rStats.total || 0}
           <br>
           <span style="font-size:12px; opacity:.7;">
-            Today: ${rStats.sameDay || 0} |
-            Yesterday: ${rStats.oneDay || 0} |
-            2+ Late: ${rStats.twoPlus || 0}
+            Same Day Brkg: ${rStats.sameDay || 0} |
+            Previous Day Brkg: ${rStats.oneDay || 0} |
+            2+ Days Brkg: ${rStats.twoPlus || 0}
           </span>
         </div>
       `;
@@ -1147,11 +1216,12 @@ function showHourDetails(hourData) {
 
     machineHTML += `
       <div style="margin-bottom:16px; padding:14px; background:#243b63; border-radius:8px;">
-        <strong>${machine}</strong><br>
-        Total: ${stats.total || 0}<br>
-        Today: ${stats.sameDay || 0}<br>
-        Yesterday: ${stats.oneDay || 0}<br>
-        2+ Late: ${stats.twoPlus || 0}
+        <strong>${displayMachine}</strong><br>
+        Jobs Ran: ${stats.jobs || 0}<br>
+        Total Brkg: ${stats.total || 0}<br>
+        Same Day Brkg: ${stats.sameDay || 0}<br>
+        Previous Day Brkg: ${stats.oneDay || 0}<br>
+        2+ Days Brkg: ${stats.twoPlus || 0}
         ${reasonHTML}
       </div>
     `;
@@ -1274,6 +1344,7 @@ function buildMachineChart(data) {
 
       return {
         machine,
+		displayMachine: formatMachineLabel(machine),
         jobs,
         broken,
         percent
@@ -1300,7 +1371,7 @@ function buildMachineChart(data) {
 
       data: {
 
-        labels: entries.map(e=>e.machine),
+        labels: entries.map(e=>e.displayMachine),
 
         datasets: [
 

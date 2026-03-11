@@ -46,7 +46,6 @@
 <!-- REPORT DATE DISPLAY -->
 <div id="activeReportDate" class="report-date-indicator"></div>
 
-  </div>
 
   </div>
 
@@ -78,20 +77,15 @@
   <div class="summary">
 
     <div class="card">
-      <h3>Total Jobs</h3>
+      <h3>Total Coating Jobs</h3>
       <h2 id="totalJobs"></h2>
     </div>
 
     <div class="card">
-      <h3>RX Breakage %</h3>
+      <h3>Coating Brkg %</h3>
       <h2 id="rxBreakage"></h2>
     </div>
-
-    <div class="card same">
-      <h3>Total Breakage</h3>
-      <h2 id="totalBreakage"></h2>
-    </div>
-
+   
     <div class="card">
       <h3>Total Lenses Broken</h3>
       <h2 id="totalLenses"></h2>
@@ -113,17 +107,17 @@
 
   <!-- BREAKAGE AGING -->
   <div class="card aging today">
-    <h3>Same Day Brkg</h3>
+    <h3>Same Day Lens Brkg</h3>
     <h2 id="sameDayBreakage"></h2>
   </div>
 
   <div class="card aging yesterday">
-    <h3>Previous Day Brkg</h3>
+    <h3>Previous Day Lens Brkg</h3>
     <h2 id="yesterdayBreakage"></h2>
   </div>
 
   <div class="card aging late">
-    <h3>Late Breakage</h3>
+    <h3>Over 2+ Days Lens Brkg</h3>
     <h2 id="twoPlusBreakage"></h2>
   </div>
 
@@ -131,20 +125,27 @@
 
 <div class="summary">
 
-  <div class="card">
+  <div class="card flowHealthy">
     <h3>Workflow Healthy</h3>
     <h2 id="flowHealthy"></h2>
   </div>
 
-  <div class="card">
+  <div class="card flowWatch">
     <h3>Workflow Watch</h3>
     <h2 id="flowWatch"></h2>
   </div>
 
-  <div class="card">
+  <div class="card flowDelayed">
     <h3>Workflow Delayed</h3>
     <h2 id="flowDelayed"></h2>
   </div>
+  
+  <div class="card overnight">
+    <h3>Overnight Carryover</h3>
+    <h2 id="flowOvernight"></h2>
+  </div>
+
+ 
 
 </div>
 
