@@ -834,8 +834,8 @@ const overnightFlow = filteredHours.map(h => {
 {
   label: "Coater → Break Delay",
   data: postDelay,
-  borderColor: "#ff6b6b",
-  backgroundColor: "rgba(255,107,107,0.15)",
+  borderColor: "#ff9f40",
+  backgroundColor: "rgba(255,159,64,0.15)",
   borderWidth: 3,
   tension: 0.35,
   fill: true,
@@ -1659,3 +1659,4 @@ function rebuildAllCharts() {
 function goBack() {
   window.location.href = "index.html";
 }
+
