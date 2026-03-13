@@ -14,16 +14,15 @@
   <!-- PAGE TITLE -->
   <div class="page-title">Scanner Map</div>
 
-
-
-  <!-- APP ROOT (THIS WAS MISSING) -->
+  <!-- APP ROOT -->
   <div id="app"></div>
 
-  <!-- DATA -->
-  <script src="scanner-data.js"></script>
-
   <!-- LOGIC -->
-  <script src="scanner-map.js"></script>
+  <script>
+  const script = document.createElement("script");
+  script.src = "scanner-map.js?v=" + Date.now();
+  document.body.appendChild(script);
+</script>
 
 </body>
 </html>
