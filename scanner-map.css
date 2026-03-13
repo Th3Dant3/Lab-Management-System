@@ -197,3 +197,10 @@ button:last-child:hover {
   font-size: 13px;
   opacity: 0.85;
 }
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 20px;
+  text-align: center;
+}
