@@ -14,11 +14,15 @@ function load(){
 
 const date=document.getElementById("dateFilter").value;
 
-let url=API_URL;
+let url = API_URL;
 
 if(date){
-url+="?date="+date;
+url += "?date=" + date;
+}else{
+url += "?date=all";
 }
+
+console.log("API Request:",url);
 
 fetch(url)
 .then(r=>r.json())
