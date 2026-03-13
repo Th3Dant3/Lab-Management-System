@@ -18,16 +18,33 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function render(d) {
+
+    // TOP CARDS
     set("activeHolds", d.active);
     set("evaluatedCount", d.evaluated);
-    set("coveragePct", (d.coverage * 100).toFixed(1) + "%");
+    set("coveragePct", d.coverage + "%");
     set("lastUpdated", d.lastUpdated);
 
+    // NEW METRICS
+    set(
+      "avgInvestigation",
+      d.avgInvestigationDays +
+      " Days (" +
+      d.avgInvestigationHours +
+      " Hours)"
+    );
+
+    set("todayInvestigations", d.todayInvestigations);
+    set("oldestInvestigation", d.oldestInvestigation);
+    set("latestInvestigation", d.latestInvestigation);
+
+    // BUBBLES
     renderBubbles("reasonBubbles", d.reasons, d.total);
     renderBubbles("sentBackBubbles", d.sentBack, d.total, true);
   }
 
   function renderBubbles(targetId, data, total, nested = false) {
+
     const wrap = document.getElementById(targetId);
     if (!wrap || !data) return;
 
@@ -38,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .sort((a, b) => b[1] - a[1]);
 
     entries.forEach(([label, count]) => {
+
       const pct = (count / total) * 100;
 
       wrap.innerHTML += `
@@ -56,8 +74,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function fail() {
-    ["activeHolds","evaluatedCount","coveragePct","lastUpdated"]
-      .forEach(id => set(id, "ERR"));
+    [
+      "activeHolds",
+      "evaluatedCount",
+      "coveragePct",
+      "lastUpdated"
+    ].forEach(id => set(id, "ERR"));
   }
 
   // TAB SWITCH
@@ -65,8 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("tabSentBack").onclick = () => switchTab("sent");
 
   function switchTab(tab) {
+
     document.getElementById("reasonsView").style.display =
       tab === "reasons" ? "block" : "none";
+
     document.getElementById("sentBackView").style.display =
       tab === "sent" ? "block" : "none";
 
@@ -76,4 +100,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
   load();
   setInterval(load, REFRESH_MS);
+
 });
