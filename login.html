@@ -1,18 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="UTF-8">
+<title>LMS Dashboard Login</title>
+
+<link rel="stylesheet" href="login.css">
+
+<script>
+console.time("LOGIN_PAGE_LOAD");
+window.addEventListener("load", () => {
+  console.timeEnd("LOGIN_PAGE_LOAD");
+});
+</script>
+
+</head>
+
 <body>
-  <div class="login-wrapper">
-    <div class="login-container">
-      <h2>LMS Dashboard Login</h2>
-	  <link rel="stylesheet" href="login.css">
 
+<div class="login-wrapper">
 
-      <input id="username" placeholder="Username">
-      <input id="password" type="password" placeholder="Password">
+  <div class="login-container">
 
-      <button onclick="login()">Login</button>
+    <h2>LMS Dashboard Login</h2>
 
-      <p id="message" class="login-message"></p>
-    </div>
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
+
+    <button onclick="login()">Login</button>
+
+    <p id="message" class="login-message"></p>
+
   </div>
 
-  <script src="login.js"></script>
+</div>
+
+<script src="login.js"></script>
+
 </body>
+</html>

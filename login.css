@@ -1,5 +1,14 @@
+/* =================================
+   LMS LOGIN PAGE
+   ================================= */
+
+* {
+  box-sizing: border-box;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+}
+
 /* ===============================
-   LOGIN PAGE
+   BACKGROUND
    =============================== */
 
 .login-wrapper {
@@ -7,54 +16,165 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at top left, #123a63, #020b1f);
+
+  background:
+    radial-gradient(circle at 20% 20%, #1e4e8c, transparent 40%),
+    radial-gradient(circle at 80% 80%, #0b1f42, transparent 40%),
+    linear-gradient(135deg, #020b1f, #051a38);
+
+  animation: bgMove 14s ease-in-out infinite alternate;
 }
+
+@keyframes bgMove {
+  0% { background-position: 0% 0%, 100% 100%, 0% 0%; }
+  100% { background-position: 20% 20%, 80% 80%, 0% 0%; }
+}
+
+/* ===============================
+   LOGIN PANEL
+   =============================== */
 
 .login-container {
+
   width: 100%;
   max-width: 380px;
-  background: rgba(0,0,0,0.45);
-  padding: 32px 28px;
-  border-radius: 20px;
-  box-shadow: 0 0 40px rgba(0,0,0,0.6);
+
+  padding: 38px 32px;
+
+  border-radius: 18px;
+
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+
+  border: 1px solid rgba(255,255,255,0.08);
+
+  box-shadow:
+    0 20px 50px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+
   text-align: center;
+
+  transition: transform .2s ease;
 }
+
+.login-container:hover {
+  transform: translateY(-3px);
+}
+
+/* ===============================
+   TITLE
+   =============================== */
 
 .login-container h2 {
-  margin-bottom: 22px;
+  margin-bottom: 26px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  color: #e6f2ff;
 }
 
+/* ===============================
+   INPUTS
+   =============================== */
+
 .login-container input {
+
   width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 14px;
+  padding: 13px 14px;
+
+  margin-bottom: 16px;
+
   border-radius: 10px;
-  border: none;
-  background: rgba(255,255,255,0.12);
-  color: #fff;
+  border: 1px solid rgba(255,255,255,0.08);
+
+  background: rgba(255,255,255,0.05);
+
+  color: #ffffff;
   font-size: 14px;
+
+  transition: all .2s ease;
 }
 
 .login-container input::placeholder {
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.5);
 }
 
+.login-container input:focus {
+
+  outline: none;
+
+  border: 1px solid #4fbaff;
+
+  background: rgba(255,255,255,0.08);
+
+  box-shadow: 0 0 0 2px rgba(79,186,255,0.2);
+}
+
+/* ===============================
+   BUTTON
+   =============================== */
+
 .login-container button {
+
   width: 100%;
-  padding: 12px;
+  padding: 13px;
+
   border-radius: 999px;
   border: none;
-  background: #4fbaff;
-  color: #000;
+
+  background: linear-gradient(135deg,#4fbaff,#3aa1ff);
+
+  color: #001b36;
+
   font-weight: 600;
+  font-size: 14px;
+
   cursor: pointer;
+
+  transition: all .2s ease;
 }
 
 .login-container button:hover {
-  filter: brightness(1.1);
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 6px 18px rgba(79,186,255,0.35);
+
 }
 
+.login-container button:active {
+
+  transform: translateY(0px);
+  box-shadow: none;
+
+}
+
+/* ===============================
+   MESSAGE
+   =============================== */
+
 .login-message {
+
   margin-top: 14px;
+
   font-size: 13px;
+
+  min-height: 18px;
+
+  color: #f87171;
+}
+
+/* ===============================
+   MOBILE
+   =============================== */
+
+@media (max-width: 480px) {
+
+  .login-container {
+
+    margin: 20px;
+    padding: 28px;
+
+  }
+
 }

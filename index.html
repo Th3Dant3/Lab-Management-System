@@ -1,20 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <title>LMS Operational Control Center</title>
-  <link rel="stylesheet" href="style-index.css" />
+
+<meta charset="UTF-8">
+<title>LMS Operational Control Center</title>
+
+<!-- 🔐 AUTH CHECK BEFORE PAGE LOAD -->
+<script>
+if (sessionStorage.getItem("lms_logged_in") !== "true") {
+  window.location.replace("login.html");
+}
+</script>
+
+<!-- ⚡ PAGE LOAD PERFORMANCE TIMER -->
+<script>
+console.time("INDEX_LOAD");
+
+window.addEventListener("load", () => {
+  console.timeEnd("INDEX_LOAD");
+});
+</script>
+
+<!-- 🚀 PRELOAD CSS -->
+<link rel="preload" href="style-index.css" as="style">
+<link rel="stylesheet" href="style-index.css">
+
 </head>
 
-<!-- 🔒 BODY STARTS LOCKED (NO FLICKER) -->
 <body class="lms-hidden">
-
-<!-- 🔐 AUTH GATE (early, safe) -->
-<script>
-  if (sessionStorage.getItem("lms_logged_in") !== "true") {
-    window.location.href = "login.html";
-  }
-</script>
 
 <div class="container">
 
@@ -27,6 +41,7 @@
 
   <!-- Executive Status Strip -->
   <section class="status-strip">
+
     <div class="status-item">
       <span class="label">Investigation Hold Status</span>
       <span id="labStatus" class="value ok">Normal</span>
@@ -47,17 +62,19 @@
       <span id="scannerHealth" class="value ok">Online</span>
     </div>
 
-    <!-- 🔹 LAST JOB COMPLETED -->
+    <!-- Last Job Completed -->
     <div class="status-item">
       <span class="label">Last Job Completed</span>
       <span id="lastUpdate" class="value">—</span>
       <span id="lastSince" class="sub">—</span>
     </div>
+
   </section>
 
   <!-- Critical Operations -->
   <section class="section">
     <h2 class="section-title">Critical Operations</h2>
+
     <div class="cards two-col">
 
       <!-- Scanner Map -->
@@ -66,16 +83,18 @@
         class="card primary"
         data-gated
       >
+
         <h3>Scanner Map</h3>
+
         <p>Live scanner activity by port</p>
         <p class="sub">Finish · Surface · AR</p>
 
-        <!-- 🔹 Dynamic scanner attention list -->
         <div id="scannerDetail" class="scanner-detail"></div>
 
         <button onclick="openPage('scanner-map.html')">
           Open Scanner Map
         </button>
+
       </div>
 
       <!-- Investigative Hold Tracker -->
@@ -84,13 +103,19 @@
         class="card highlight"
         data-gated
       >
+
         <h3>Investigative Hold Tracker</h3>
+
         <p>Active <strong><span id="activeHolds">—</span></strong></p>
+
         <p>Completed <strong><span id="completed">—</span></strong></p>
+
         <p>Coverage <strong><span id="coverageDetail">—</span></strong></p>
+
         <button onclick="openPage('page3.html')">
           View Investigation Hold
         </button>
+
       </div>
 
     </div>
@@ -98,7 +123,9 @@
 
   <!-- Quality & Engineering -->
   <section class="section">
+
     <h2 class="section-title">Quality & Engineering</h2>
+
     <div class="cards">
 
       <div
@@ -106,19 +133,26 @@
         class="card"
         data-gated
       >
+
         <h3>True Curve / Power Issues</h3>
+
         <p>Engineering exceptions & trends</p>
+
         <button onclick="openPage('true-curve.html')">
           View True Curve & Power Issues
         </button>
+
       </div>
 
     </div>
+
   </section>
 
   <!-- Tools -->
   <section class="section">
+
     <h2 class="section-title">Tools</h2>
+
     <div class="cards">
 
       <!-- LMS Lens Uploads -->
@@ -127,29 +161,40 @@
         class="card"
         data-gated
       >
+
         <h3>LMS Lens Uploads</h3>
+
         <p>In8 & In9 Format</p>
+
         <h4 id="lensCount">0</h4>
+
         <button onclick="openPage('in8-in9.html')">
           Open Tool
         </button>
+
       </div>
 
-      <!-- Coating Breakage Research Tool -->
+      <!-- Coating Breakage Research -->
       <div
         id="coating-card"
         class="card"
         data-gated
       >
+
         <h3>Coating Breakage Research</h3>
+
         <p>Tool Research For Coating Breakage</p>
+
         <p class="sub">54R · 44R</p>
+
         <button onclick="openPage('coating.html')">
           Open Coating Tool
         </button>
+
       </div>
 
     </div>
+
   </section>
 
   <footer>
@@ -158,8 +203,8 @@
 
 </div>
 
-<!-- MAIN SCRIPT -->
-<script src="index.js"></script>
+<!-- 🚀 NON-BLOCKING SCRIPT -->
+<script defer src="index.js"></script>
 
 </body>
 </html>
