@@ -1,69 +1,137 @@
+/* =====================================================
+   BASE
+===================================================== */
+
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
   background: radial-gradient(circle at top left, #0b1a33, #020617);
   color: #fff;
 }
 
+/* =====================================================
+   APP CONTAINER
+===================================================== */
+
 #app {
-  padding: 20px;
-  padding-bottom: 80px;
+  padding: 28px;
+  padding-bottom: 90px;
+  max-width: 1400px;
+  margin: auto;
 }
+
+/* =====================================================
+   HEADERS
+===================================================== */
 
 .section-header,
 .line-header {
-  font-weight: bold;
-  margin: 15px 0;
+  font-weight: 600;
+  font-size: 16px;
+  margin: 22px 0 14px;
   cursor: pointer;
+  opacity: 0.9;
+  letter-spacing: 0.02em;
 }
+
+.section-header:hover,
+.line-header:hover {
+  opacity: 1;
+}
+
+/* =====================================================
+   GRID LAYOUT
+===================================================== */
 
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 24px;
 }
+
+/* =====================================================
+   SCANNER CARDS
+===================================================== */
 
 .card {
   background: linear-gradient(145deg, #0c1b33, #020814);
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 14px;
+  padding: 14px;
   border-left: 5px solid transparent;
   cursor: pointer;
-  transition: 0.2s;
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
 }
-
-.card.mi { border-left-color: #facc15; }
-.card.si1 { border-left-color: #ec4899; }
-.card.si2 { border-left-color: #93c5fd; }
-.card.si3 { border-left-color: #4ade80; }
 
 .card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.45);
 }
+
+/* =====================================================
+   MACHINE COLORS
+===================================================== */
+
+.card.mi {
+  border-left-color: #facc15;
+}
+
+.card.si1 {
+  border-left-color: #ec4899;
+}
+
+.card.si2 {
+  border-left-color: #93c5fd;
+}
+
+.card.si3 {
+  border-left-color: #4ade80;
+}
+
+/* =====================================================
+   SELECTED STATE
+===================================================== */
 
 .card.selected {
   border: 2px solid #ef4444;
   background: linear-gradient(145deg, #3b0a0a, #1f0404);
+  box-shadow: 0 0 14px rgba(239,68,68,0.45);
 }
+
+/* =====================================================
+   FOOTER CONTROL BAR
+===================================================== */
 
 .footer {
   position: fixed;
   bottom: 0;
+  left: 0;
   width: 100%;
-  background: #020617;
+
+  background: rgba(2,6,23,0.95);
+  backdrop-filter: blur(8px);
+
   display: flex;
   justify-content: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+
+  padding: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
 
+/* =====================================================
+   BUTTONS
+===================================================== */
+
 button {
-  padding: 10px 16px;
-  border-radius: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
   border: none;
   cursor: pointer;
-  font-weight: bold;
+  font-weight: 600;
+  font-size: 14px;
+  transition: 0.15s ease;
 }
 
 button:first-child {
@@ -71,7 +139,61 @@ button:first-child {
   color: #fff;
 }
 
+button:first-child:hover {
+  filter: brightness(1.1);
+}
+
 button:last-child {
   background: #2563eb;
   color: #fff;
+}
+
+button:last-child:hover {
+  filter: brightness(1.1);
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 700px) {
+
+  #app {
+    padding: 16px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+}
+
+@media (max-width: 480px) {
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+.sub-header {
+  font-weight: 600;
+  margin: 12px 0 10px;
+  opacity: 0.85;
+}
+
+.line-content,
+.section-content {
+  margin-bottom: 10px;
+}
+
+.card-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.card-interface,
+.card-port {
+  font-size: 13px;
+  opacity: 0.85;
 }

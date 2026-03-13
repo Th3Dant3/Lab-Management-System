@@ -1,15 +1,15 @@
 /* =====================================================
-   SCANNER MAP – FULL FINAL JS (LOCKED & EXTENDED)
+   SCANNER MAP – IMPROVED FINAL JS
    ===================================================== */
 
 const app = document.getElementById("app");
 const selectedIssues = new Set();
 
-/* ===============================
-   🔹 NEW: LOCAL STORAGE (ADD ONLY)
-   =============================== */
-
 const SCANNER_STORAGE_KEY = "lms_scanner_attention";
+
+/* ===============================
+   LOCAL STORAGE
+   =============================== */
 
 function saveScannerState() {
   localStorage.setItem(
@@ -29,8 +29,11 @@ function loadScannerState() {
   }
 }
 
+/* Load saved selections first */
+loadScannerState();
+
 /* ===============================
-   DATA (UNCHANGED)
+   DATA
    =============================== */
 
 const data = {
@@ -135,42 +138,63 @@ const data = {
 };
 
 /* ===============================
-   CARD + SELECTION (UNCHANGED + SAVE)
+   HELPERS
+   =============================== */
+
+function createTextBlock(text, className = "") {
+  const el = document.createElement("div");
+  if (className) el.className = className;
+  el.textContent = text;
+  return el;
+}
+
+function getIssueKey(item) {
+  return `${item.name} – ${item.label} – Port ${item.port}`;
+}
+
+/* ===============================
+   CARD + SELECTION
    =============================== */
 
 function card(item) {
   const el = document.createElement("div");
+  const key = getIssueKey(item);
+
   el.className = `card ${item.iface}`;
+  if (selectedIssues.has(key)) {
+    el.classList.add("selected");
+  }
 
-  const key = `${item.name} – ${item.label} – Port ${item.port}`;
+  el.appendChild(createTextBlock(item.name, "card-title"));
+  el.appendChild(createTextBlock(`Interface ${item.label}`, "card-interface"));
+  el.appendChild(createTextBlock(`Port ${item.port}`, "card-port"));
 
-  el.innerHTML = `
-    <div class="card-title">${item.name}</div>
-    <div class="card-interface">Interface ${item.label}</div>
-    <div class="card-port">Port ${item.port}</div>
-  `;
+  el.addEventListener("click", () => {
+    const isSelected = el.classList.toggle("selected");
 
-  el.onclick = () => {
-    el.classList.toggle("selected");
-    el.classList.contains("selected")
-      ? selectedIssues.add(key)
-      : selectedIssues.delete(key);
+    if (isSelected) {
+      selectedIssues.add(key);
+    } else {
+      selectedIssues.delete(key);
+    }
 
-    saveScannerState(); // 🔹 NEW (non-breaking)
-  };
+    saveScannerState();
+  });
 
   return el;
 }
 
 /* ===============================
-   LAYOUT HELPERS (UNCHANGED)
+   LAYOUT HELPERS
    =============================== */
 
 function evenOddGrid(items) {
-  const even = [], odd = [];
-  items.forEach(i => {
-    const n = parseInt(i.name.replace(/\D/g,""));
-    (n % 2 === 0 ? even : odd).push(i);
+  const even = [];
+  const odd = [];
+
+  items.forEach(item => {
+    const n = parseInt(item.name.replace(/\D/g, ""), 10);
+    (n % 2 === 0 ? even : odd).push(item);
   });
 
   const wrap = document.createElement("div");
@@ -178,26 +202,24 @@ function evenOddGrid(items) {
 
   const top = document.createElement("div");
   top.className = "grid";
-  even.forEach(i => top.appendChild(card(i)));
+  even.forEach(item => top.appendChild(card(item)));
 
   const bottom = document.createElement("div");
   bottom.className = "grid";
-  odd.forEach(i => bottom.appendChild(card(i)));
+  odd.forEach(item => bottom.appendChild(card(item)));
 
-  wrap.append(top, bottom);
+  wrap.appendChild(top);
+  wrap.appendChild(bottom);
+
   return wrap;
 }
 
 function simpleGrid(items) {
   const g = document.createElement("div");
   g.className = "grid";
-  items.forEach(i => g.appendChild(card(i)));
+  items.forEach(item => g.appendChild(card(item)));
   return g;
 }
-
-/* ===============================
-   SECTION BUILDER (UNCHANGED)
-   =============================== */
 
 function section(title) {
   const s = document.createElement("section");
@@ -206,20 +228,45 @@ function section(title) {
 
   h.className = "section-header";
   h.textContent = `▼ ${title}`;
+
   c.className = "section-content";
 
-  h.onclick = () => {
+  h.addEventListener("click", () => {
     const open = c.style.display !== "none";
     c.style.display = open ? "none" : "block";
     h.textContent = open ? `▶ ${title}` : `▼ ${title}`;
-  };
+  });
 
-  s.append(h, c);
+  s.appendChild(h);
+  s.appendChild(c);
+
   return { s, c };
 }
 
+function createLineSection(title) {
+  const wrap = document.createElement("div");
+  const h = document.createElement("div");
+  const c = document.createElement("div");
+
+  h.className = "line-header";
+  h.textContent = `▼ ${title}`;
+
+  c.className = "line-content";
+
+  h.addEventListener("click", () => {
+    const open = c.style.display !== "none";
+    c.style.display = open ? "none" : "block";
+    h.textContent = open ? `▶ ${title}` : `▼ ${title}`;
+  });
+
+  wrap.appendChild(h);
+  wrap.appendChild(c);
+
+  return { wrap, c };
+}
+
 /* ===============================
-   RENDER (UNCHANGED)
+   RENDER
    =============================== */
 
 const surf = section("Surface Unbox");
@@ -228,19 +275,26 @@ app.appendChild(surf.s);
 
 const fin = section("Finish Department");
 
-Object.entries(data.finish).forEach(([line, g]) => {
-  const lh = document.createElement("div");
-  lh.className = "line-header";
-  lh.textContent = `▼ ${line}`;
+Object.entries(data.finish).forEach(([line, groups]) => {
+  const lineSection = createLineSection(line);
 
-  const lc = document.createElement("div");
+  lineSection.c.appendChild(createTextBlock("Mounting", "sub-header"));
+  lineSection.c.appendChild(evenOddGrid(groups.mounting));
 
-  lc.append("Mounting", evenOddGrid(g.mounting));
-  lc.append("Final Inspection", evenOddGrid(g.finalInspection));
-  if (g.finishUnbox) lc.append("Finish Unbox", simpleGrid(g.finishUnbox));
-  if (g.handstone) lc.append("Handstone", simpleGrid(g.handstone));
+  lineSection.c.appendChild(createTextBlock("Final Inspection", "sub-header"));
+  lineSection.c.appendChild(evenOddGrid(groups.finalInspection));
 
-  fin.c.append(lh, lc);
+  if (groups.finishUnbox) {
+    lineSection.c.appendChild(createTextBlock("Finish Unbox", "sub-header"));
+    lineSection.c.appendChild(simpleGrid(groups.finishUnbox));
+  }
+
+  if (groups.handstone) {
+    lineSection.c.appendChild(createTextBlock("Handstone", "sub-header"));
+    lineSection.c.appendChild(simpleGrid(groups.handstone));
+  }
+
+  fin.c.appendChild(lineSection.wrap);
 });
 
 app.appendChild(fin.s);
@@ -250,55 +304,44 @@ arIn.c.appendChild(simpleGrid(data.arInside));
 app.appendChild(arIn.s);
 
 const arOut = section("AR Outside");
-["groupA","groupB"].forEach((g,i)=>{
-  const h=document.createElement("div");
-  h.className="sub-header";
-  h.textContent=i===0?"Basket Group A":"Basket Group B";
-  arOut.c.append(h, simpleGrid(data.arOutside[g]));
+
+["groupA", "groupB"].forEach((groupKey, index) => {
+  const title = index === 0 ? "Basket Group A" : "Basket Group B";
+  arOut.c.appendChild(createTextBlock(title, "sub-header"));
+  arOut.c.appendChild(simpleGrid(data.arOutside[groupKey]));
 });
+
 app.appendChild(arOut.s);
 
 /* ===============================
-   🔹 NEW: RESTORE SELECTIONS AFTER RENDER
+   ACTION BUTTONS
    =============================== */
 
-loadScannerState();
-
-document.querySelectorAll(".card").forEach(cardEl => {
-  const title = cardEl.querySelector(".card-title")?.textContent;
-  const iface = cardEl.querySelector(".card-interface")?.textContent;
-  const port = cardEl.querySelector(".card-port")?.textContent;
-
-  if (!title || !iface || !port) return;
-
-  const key = `${title} – ${iface.replace("Interface ", "")} – ${port}`;
-
-  if (selectedIssues.has(key)) {
-    cardEl.classList.add("selected");
-  }
-});
-
-/* ===============================
-   ACTION BUTTONS (UNCHANGED)
-   =============================== */
-
-const controls = document.createElement("div");
-controls.className = "controls";
+const footer = document.createElement("div");
+footer.className = "footer";
 
 const sendBtn = document.createElement("button");
 sendBtn.textContent = "Send Gmail Troubleshoot Report";
-sendBtn.onclick = () => {
-  if (!selectedIssues.size) return alert("Select at least one station.");
+sendBtn.addEventListener("click", () => {
+  if (!selectedIssues.size) {
+    alert("Select at least one station.");
+    return;
+  }
+
   const body = [...selectedIssues].join("\n");
+
   window.open(
     `https://mail.google.com/mail/?view=cm&fs=1&su=Scanner Troubleshooting&body=${encodeURIComponent(body)}`,
     "_blank"
   );
-};
+});
 
 const backBtn = document.createElement("button");
 backBtn.textContent = "Back";
-backBtn.onclick = () => window.location.href = "index.html";
+backBtn.addEventListener("click", () => {
+  window.location.href = "index.html";
+});
 
-controls.append(sendBtn, backBtn);
-document.body.appendChild(controls);
+footer.appendChild(sendBtn);
+footer.appendChild(backBtn);
+document.body.appendChild(footer);
