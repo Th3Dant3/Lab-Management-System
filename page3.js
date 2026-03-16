@@ -5,10 +5,18 @@ const API_URL =
 
 const REFRESH_MS = 30000;
 
+/***********************
+ HELPER
+***********************/
+
 function set(id,value){
 const el=document.getElementById(id);
 if(el) el.textContent=value;
 }
+
+/***********************
+ LOAD DATA
+***********************/
 
 function load(){
 
@@ -31,6 +39,10 @@ fetch(url)
 
 }
 
+/***********************
+ RENDER DASHBOARD
+***********************/
+
 function render(d){
 
 set("activeHolds",d.active);
@@ -43,7 +55,12 @@ set(
 d.avgInvestigationDays+" Days ("+d.avgInvestigationHours+" Hours)"
 );
 
-set("todayInvestigations",d.todayInvestigations);
+/* NEW METRICS */
+
+set("receivedToday",d.receivedToday);
+set("evaluatedToday",d.evaluatedToday);
+
+/* EXISTING */
 
 set("oldestInvestigation",d.oldestInvestigation);
 set("latestInvestigation",d.latestInvestigation);
@@ -52,6 +69,10 @@ renderBubbles("reasonBubbles",d.reasons,d.total);
 renderBubbles("sentBackBubbles",d.sentBack,d.total,true);
 
 }
+
+/***********************
+ BUBBLE RENDER
+***********************/
 
 function renderBubbles(target,data,total,nested=false){
 
@@ -95,13 +116,27 @@ wrap.innerHTML+=`
 
 }
 
+/***********************
+ FAIL SAFE
+***********************/
+
 function fail(){
 
-["activeHolds","evaluatedCount","coveragePct","lastUpdated"]
+[
+"activeHolds",
+"evaluatedCount",
+"coveragePct",
+"lastUpdated",
+"receivedToday",
+"evaluatedToday"
+]
 .forEach(id=>set(id,"ERR"));
 
 }
 
+/***********************
+ TABS
+***********************/
 
 document.getElementById("tabReasons").onclick=()=>{
 switchTab("reasons");
@@ -110,7 +145,6 @@ switchTab("reasons");
 document.getElementById("tabSentBack").onclick=()=>{
 switchTab("sent");
 };
-
 
 function switchTab(tab){
 
@@ -128,10 +162,16 @@ document.getElementById("tabSentBack")
 
 }
 
+/***********************
+ DATE FILTER
+***********************/
 
 document.getElementById("dateFilter")
 .addEventListener("change",load);
 
+/***********************
+ QUICK BUTTONS
+***********************/
 
 document.getElementById("btnToday").onclick=()=>{
 
@@ -165,8 +205,15 @@ load();
 
 };
 
+/***********************
+ INITIAL LOAD
+***********************/
 
 load();
+
+/***********************
+ AUTO REFRESH
+***********************/
 
 setInterval(load,REFRESH_MS);
 

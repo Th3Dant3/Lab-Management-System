@@ -19,18 +19,31 @@ box-sizing:border-box;
 }
 
 body{
+
 margin:0;
-font-family:system-ui;
+
+font-family:system-ui,-apple-system,Segoe UI,Roboto;
+
 background:var(--bg);
+
 color:var(--text);
+
+min-height:100vh;
+
 }
 
 .wrap{
+
 max-width:1200px;
+
 margin:auto;
+
 padding:32px;
+
 }
 
+
+/* HEADER */
 
 .header{
 
@@ -44,18 +57,28 @@ margin-bottom:24px;
 
 border:1px solid var(--border);
 
+backdrop-filter:blur(10px);
+
 }
 
 .header h1{
+
 margin:0;
+
 font-size:28px;
+
 }
 
 .header p{
+
 margin:6px 0 0 0;
+
 color:var(--muted);
+
 }
 
+
+/* FILTER BAR */
 
 .filters{
 
@@ -66,6 +89,10 @@ justify-content:space-between;
 align-items:center;
 
 margin-bottom:20px;
+
+flex-wrap:wrap;
+
+gap:10px;
 
 }
 
@@ -99,20 +126,26 @@ border-radius:8px;
 
 cursor:pointer;
 
+transition:0.2s;
+
 }
 
 .quick-buttons button:hover{
 
 background:rgba(56,189,248,0.2);
 
+transform:translateY(-1px);
+
 }
 
+
+/* STATS GRID */
 
 .stats{
 
 display:grid;
 
-grid-template-columns:repeat(4,1fr);
+grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
 
 gap:16px;
 
@@ -129,6 +162,16 @@ border-radius:22px;
 padding:20px;
 
 border:1px solid var(--border);
+
+transition:0.25s;
+
+}
+
+.stat:hover{
+
+transform:translateY(-3px);
+
+box-shadow:0 0 20px rgba(56,189,248,0.35);
 
 }
 
@@ -150,8 +193,12 @@ font-weight:700;
 
 color:var(--accent);
 
+text-shadow:0 0 10px rgba(56,189,248,0.6);
+
 }
 
+
+/* TABS */
 
 .tabs{
 
@@ -160,6 +207,8 @@ display:flex;
 gap:12px;
 
 margin-bottom:18px;
+
+flex-wrap:wrap;
 
 }
 
@@ -177,6 +226,8 @@ color:var(--muted);
 
 cursor:pointer;
 
+transition:0.2s;
+
 }
 
 .tab.active{
@@ -191,6 +242,14 @@ box-shadow:0 0 20px rgba(56,189,248,0.8);
 
 }
 
+.tab:hover{
+
+background:rgba(56,189,248,0.15);
+
+}
+
+
+/* PILL CONTAINERS */
 
 .pill{
 
@@ -210,16 +269,32 @@ margin-bottom:14px;
 
 border:1px solid var(--border);
 
+transition:0.2s;
+
+}
+
+.pill:hover{
+
+transform:translateX(3px);
+
+box-shadow:0 0 10px rgba(56,189,248,0.25);
+
 }
 
 .pill-left{
+
 flex:1;
+
 margin-right:16px;
+
 }
 
 .pill-title{
+
 font-weight:600;
+
 margin-bottom:6px;
+
 }
 
 .pill-bar{
@@ -239,6 +314,8 @@ overflow:hidden;
 height:100%;
 
 background:linear-gradient(90deg,#38bdf8,#0ea5e9);
+
+transition:width 0.4s ease;
 
 }
 
@@ -272,7 +349,12 @@ align-items:center;
 
 justify-content:center;
 
+font-size:16px;
+
 }
+
+
+/* BACK BUTTON */
 
 .back{
 
@@ -283,5 +365,50 @@ margin-top:20px;
 color:var(--accent);
 
 text-decoration:none;
+
+font-weight:600;
+
+}
+
+.back:hover{
+
+text-decoration:underline;
+
+}
+
+
+/* RESPONSIVE */
+
+@media (max-width:900px){
+
+.wrap{
+
+padding:20px;
+
+}
+
+.header h1{
+
+font-size:24px;
+
+}
+
+}
+
+@media (max-width:600px){
+
+.filters{
+
+flex-direction:column;
+
+align-items:flex-start;
+
+}
+
+.quick-buttons{
+
+margin-top:6px;
+
+}
 
 }
