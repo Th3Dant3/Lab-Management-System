@@ -991,7 +991,21 @@ function getFlowOptions(titleText) {
         font: { size: 16 }
       },
 
+      // =====================================================
+      // 🔥 UPDATED TOOLTIP (BIGGER + CLEAN + SAME LOGIC)
+      // =====================================================
       tooltip: {
+
+        bodyFont: { size: 14 },
+        titleFont: { size: 15 },
+
+        padding: 12,
+        cornerRadius: 6,
+
+        backgroundColor: "rgba(15, 25, 45, 0.95)",
+        borderColor: "#4da3ff",
+        borderWidth: 1,
+
         callbacks: {
 
           label: function(context) {
@@ -1045,9 +1059,9 @@ function getFlowOptions(titleText) {
             const value = raw?.y ?? raw;
             const jobs = raw?.jobs ?? raw?.count ?? null;
 
-if (jobs !== null) {
-  return `${context.dataset.label}: ${value} mins (${jobs} jobs)`;
-}
+            if (jobs !== null) {
+              return `${context.dataset.label}: ${value} mins (${jobs} jobs)`;
+            }
 
             return `${context.dataset.label}: ${value} mins`;
           }

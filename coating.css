@@ -90,18 +90,18 @@ input[type="date"] {
 /* LIVE BUTTON */
 
 .live-btn {
-  background: #00ff9d;
-  color: #001b2e;
-  font-weight: 700;
-  border: none;
+  background: #1f2f4a;
+  border: 2px solid #32ff7e;
+  color: #32ff7e;
   padding: 8px 14px;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: 0.2s;
+  font-weight: 600;
 }
 
 .live-btn:hover {
-  background: #00cc7a;
+  background: #32ff7e;
+  color: #0b1a2e;
 }
 
 .report-date-indicator {
