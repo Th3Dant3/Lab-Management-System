@@ -152,11 +152,30 @@ function renderDashboard(data) {
     label = `${oldest} min`;
   }
 
+ /* ===============================
+   NO ACTIVE CLEAN STATE
+=============================== */
+if (active === 0) {
+
+  setText("lastUpdate", "No Active Jobs");
+
+  if (sinceEl) {
+    sinceEl.textContent = "All clear";
+  }
+
+  if (lastValEl) {
+    lastValEl.classList.remove("ok", "warn", "bad");
+  }
+
+} else {
+
   setText("lastUpdate", label);
 
   if (sinceEl) {
     sinceEl.textContent = `${stuck} stuck job${stuck === 1 ? "" : "s"}`;
   }
+
+}
 
   /* 🔹 Smart color logic (REAL OPS) */
   if (lastValEl) {
@@ -180,7 +199,11 @@ function renderDashboard(data) {
   setText("activeHolds", active);
   setText("completed", completed);
   setText("coverage", coveragePct + "%");
+  if (active === 0) {
+  setText("coverageDetail", "Complete");
+} else {
   setText("coverageDetail", coveragePct + "%");
+}
 
   updateLabStatus(active, coveragePct);
 
