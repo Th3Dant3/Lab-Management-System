@@ -111,7 +111,7 @@ function renderDashboard(data) {
   const active = Number(data.active ?? 0);
   const completed = Number(data.completed ?? 0);
 
-  let coverageRaw = Number(data.coverage ?? 0);
+  let coverageRaw = parseFloat(data.coverage) || 0;
 
   let coveragePct =
     coverageRaw <= 1
@@ -129,31 +129,19 @@ function renderDashboard(data) {
 
   lastValEl.classList.remove("ok", "warn", "bad");
 
-  if (lastCompletedStr !== "N/A") {
+if (lastCompletedStr !== "N/A") {
 
-    const now = new Date();
-    const parsed = new Date(now.toDateString() + " " + lastCompletedStr);
+  // Show actual date only
+  sinceEl.textContent = "Last completed date";
 
-    if (!isNaN(parsed)) {
+  lastValEl.classList.add("ok");
 
-      const diffMs = now - parsed;
-      const diffMin = Math.floor(diffMs / 60000);
+} else {
 
-      sinceEl.textContent =
-        diffMin < 1 ? "just now" : `${diffMin} min ago`;
+  sinceEl.textContent = "No completions yet";
+  lastValEl.classList.add("warn");
 
-      if (diffMin < 5) lastValEl.classList.add("ok");
-      else if (diffMin < 15) lastValEl.classList.add("warn");
-      else lastValEl.classList.add("bad");
-
-    }
-
-  } else {
-
-    sinceEl.textContent = "No completions yet";
-    lastValEl.classList.add("warn");
-
-  }
+}
 
   setText("active", active);
   setText("activeHolds", active);
