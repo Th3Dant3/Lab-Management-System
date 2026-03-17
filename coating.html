@@ -19,33 +19,26 @@
   <h1>Coating Tracker</h1>
   
   <!-- LIVE STATUS -->
-  <div class="live-indicator">
+  <div class="live-indicator" id="liveIndicator">
       ● Live Dashboard • Auto refresh every 5 minutes
   </div>
 
   <!-- ================= FILTERS ================= -->
- <div class="filters-bar">
+  <div class="filters-bar">
 
-  <!-- Shift Filter -->
-  <div class="shift-filter">
-    <label for="shiftSelect">Shift:</label>
-    <select id="shiftSelect">
-      <option value="All">All Shifts</option>
-      <option value="Weekday Shift">Weekday Shift</option>
-      <option value="Weekend Shift">Weekend Shift</option>
-    </select>
-  </div>
+    <!-- Date Filter ONLY -->
+    <div class="date-filter">
+      <label for="historyDate">Date:</label>
+      <input type="date" id="historyDate" />
+    </div>
 
-  <!-- Date Filter -->
-  <div class="date-filter">
-    <label for="historyDate">Date:</label>
-    <input type="date" id="historyDate" />
-    <button id="historyRefreshBtn">Refresh</button>
-</div>
+    <!-- LIVE MODE BUTTON -->
+    <div>
+      <button id="liveBtn" class="live-btn">🔴 Live Mode</button>
+    </div>
 
-<!-- REPORT DATE DISPLAY -->
-<div id="activeReportDate" class="report-date-indicator"></div>
-
+    <!-- REPORT DATE DISPLAY -->
+    <div id="activeReportDate" class="report-date-indicator"></div>
 
   </div>
 
@@ -105,7 +98,6 @@
     <h2 id="avgTime"></h2>
   </div>
 
-  <!-- BREAKAGE AGING -->
   <div class="card aging today">
     <h3>Same Day Lens Brkg</h3>
     <h2 id="sameDayBreakage"></h2>
@@ -145,8 +137,6 @@
     <h2 id="flowOvernight"></h2>
   </div>
 
- 
-
 </div>
 
   <h2>Hourly Breakdown</h2>
@@ -170,47 +160,11 @@
 
     <h2 style="margin-top:0;">Breakage Trend</h2>
 
-    <div style="text-align:center; margin-bottom:20px;">
-      <button id="processedBtn"
-              class="mode-btn active"
-              onclick="switchTrend('processed')">
-        Breakage Processed
-      </button>
-
-      <button id="machineBtn"
-              class="mode-btn"
-              onclick="switchTrend('machine')">
-        Machine Scan
-      </button>
-    </div>
-
     <div class="trend-card" style="height:450px; margin-bottom:40px;">
       <canvas id="trendChart"></canvas>
     </div>
 
    <h2>Detaper → Coater Flow Analysis</h2>
-
-<div style="text-align:center; margin-bottom:20px;">
-
-  <button id="avgFlowBtn"
-          class="mode-btn active"
-          onclick="switchFlowMode('average')">
-    Overall Avg
-  </button>
-
-  <button id="machineFlowBtn"
-          class="mode-btn"
-          onclick="switchFlowMode('machine')">
-    By Machine
-  </button>
-
-  <button id="individualFlowBtn"
-          class="mode-btn"
-          onclick="switchFlowMode('individual')">
-    Individual RX
-  </button>
-
-</div>
 
 <div class="trend-card" style="height:450px; margin-bottom:40px;">
   <canvas id="flowChart"></canvas>

@@ -1,6 +1,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbxGEYOoJviGPzBSIX_Kh5X5ZAOAHFSyw9AO6ID-buDr1A82ERaPsauF3cSvSINr8VvT/exec";
 
 console.log("Coating JS loaded");
+
 /* =====================================================
    DASHBOARD VARIABLES Global
    ===================================================== */
@@ -8,7 +9,7 @@ console.log("Coating JS loaded");
 let trendChart = null;
 let reasonChart = null;
 let machineChart = null;
-let flowChart = null;              
+let flowChart = null;
 
 let dashboardProcessed = null;
 let dashboardMachine = null;
@@ -18,53 +19,46 @@ let trendsLoaded = false;
 let currentMode = "processed";
 let currentFlowMode = "average";
 
-let currentShift = null;
-let currentDate = null;  // 👈 ADD THIS LINE
+let currentDate = null;
+let isLiveMode = true;
 
-// =====================================================
-// GLOBAL BREAKAGE COLOR MAP (FIXED COLORS)
-// =====================================================
+/* =====================================================
+   GLOBAL BREAKAGE COLOR MAP (FIXED COLORS)
+   ===================================================== */
 
 const BREAKAGE_COLOR_MAP = {
-
-  "S-HC Contamination": "#FF4D4D",       // Red
-  "S-HC Pit": "#9b7bff",                 // Purple
-  "S-HC Run": "#ff9f43",                 // Orange
-  "S-HC Wagon Wheel": "#4da3ff",         // Blue
-  "S-HC Suction Cup Marks": "#00d4ff",   // Cyan
+  "S-HC Contamination": "#FF4D4D",
+  "S-HC Pit": "#9b7bff",
+  "S-HC Run": "#ff9f43",
+  "S-HC Wagon Wheel": "#4da3ff",
+  "S-HC Suction Cup Marks": "#00d4ff",
   "S-HC HC Suction Cup Marks": "#00d4ff",
-
   // Add future reasons here to lock colors permanently
 };
 
-
 function formatMachineLabel(machine) {
   if (!machine) return "";
-
   return machine.replace(/^AR41-/, "44R1-");
 }
 
 /* =====================================================
-   REPORT DATE DISPLAY (RESTORED - SAFE)
-===================================================== */
-function updateReportDateDisplay(data){
-
+   REPORT DATE DISPLAY
+   ===================================================== */
+function updateReportDateDisplay(data) {
   const el = document.getElementById("activeReportDate");
-  if(!el) return;
+  if (!el) return;
 
-  if(currentDate === null){
+  if (isLiveMode || currentDate === null) {
     el.innerHTML = "Viewing Report Date: <strong>Today (Live)</strong>";
   } else {
     el.innerHTML = "Viewing Report Date: <strong>" + currentDate + "</strong>";
   }
-
 }
 
 /* =====================================================
-   SAFE TEXT SETTER (RESTORED)
-===================================================== */
+   SAFE TEXT SETTER
+   ===================================================== */
 function setText(id, value) {
-
   const el = document.getElementById(id);
   if (!el) return;
 
@@ -76,12 +70,10 @@ function setText(id, value) {
   el.textContent = value;
 }
 
-
 /* =====================================================
    TAB SWITCH
-===================================================== */
+   ===================================================== */
 function showTab(tabId, button) {
-
   document.querySelectorAll(".tab-content")
     .forEach(t => t.classList.remove("active"));
 
@@ -91,8 +83,9 @@ function showTab(tabId, button) {
   document.getElementById(tabId).classList.add("active");
   button.classList.add("active");
 
-  if (tabId === "trends" && !trendsLoaded) {
+  if (tabId === "trends" && !trendChart) {
     buildTrendCharts();
+    buildFlowChart(dashboardProcessed);
   }
 
   if (tabId === "reasons" && !reasonChart) {
@@ -106,180 +99,158 @@ function showTab(tabId, button) {
 
 /* =====================================================
    LOAD DASHBOARD
-===================================================== */
+   ===================================================== */
 async function loadDashboard() {
-
   const startTime = performance.now();
 
-  const shiftParam = currentShift
-    ? `&shift=${encodeURIComponent(currentShift)}`
-    : "";
+  try {
+    const dateParam = currentDate
+      ? `&date=${encodeURIComponent(currentDate)}`
+      : "";
 
-  const dateParam = currentDate
-    ? `&date=${encodeURIComponent(currentDate)}`
-    : "";
+    const [processedRes, machineRes] = await Promise.all([
+      fetch(`${API_URL}?mode=processed${dateParam}`),
+      fetch(`${API_URL}?mode=machine${dateParam}`)
+    ]);
 
-  const [processedRes, machineRes] = await Promise.all([
-    fetch(`${API_URL}?mode=processed${shiftParam}${dateParam}`),
-    fetch(`${API_URL}?mode=machine${shiftParam}${dateParam}`)
-  ]);
+    dashboardProcessed = await processedRes.json();
+    dashboardMachine = await machineRes.json();
 
-  dashboardProcessed = await processedRes.json();
-  dashboardMachine = await machineRes.json();
+    dashboardData = dashboardProcessed;
 
-  dashboardData = dashboardProcessed;
+    updateReportDateDisplay(dashboardProcessed);
 
-  updateReportDateDisplay(dashboardProcessed);
+    const summary = dashboardData.summary || {};
 
-  const summary = dashboardData.summary || {};
+    /* ===============================
+       SUMMARY CARDS
+    ================================ */
 
-/* ===============================
-   SUMMARY CARDS (FIXED)
-================================ */
+    setText("totalJobs", summary.totalJobs ?? summary.coatingJobs ?? 0);
+    setText("totalBreakage", summary.totalBreakRX ?? 0);
+    setText("totalLenses", summary.totalBreakLenses ?? 0);
 
-// TOTAL JOBS (use coatingJobs if available)
-setText("totalJobs", summary.totalJobs ?? summary.coatingJobs ?? 0);
+    setText(
+      "rxBreakage",
+      summary.breakPercent !== undefined
+        ? summary.breakPercent + "%"
+        : "0%"
+    );
 
-// TOTAL BREAKAGE (RX COUNT)
-setText("totalBreakage", summary.totalBreakRX ?? 0);
+    setText(
+      "avgTime",
+      summary.avgBreakTimeHours
+        ? summary.avgBreakTimeHours + " hrs"
+        : "-"
+    );
 
-// TOTAL LENSES BROKEN
-setText("totalLenses", summary.totalBreakLenses ?? 0);
+    setText("peakHour", summary.peakHour ?? "-");
 
-// RX BREAKAGE %
-setText(
-  "rxBreakage",
-  summary.breakPercent !== undefined
-    ? summary.breakPercent + "%"
-    : "0%"
-);
-
-// BREAKAGE AVG TIME
-setText(
-  "avgTime",
-  summary.avgBreakTimeHours
-    ? summary.avgBreakTimeHours + " hrs"
-    : "-"
-);
-
-// PEAK HOUR
-setText("peakHour", summary.peakHour ?? "-");
-
-/* ===============================
-   FLOW HEALTH SUMMARY
-================================ */
-
-if (summary.flowHealth) {
-
-  setText("flowHealthy", summary.flowHealth.healthy || 0);
-  setText("flowWatch", summary.flowHealth.watch || 0);
-  setText("flowDelayed", summary.flowHealth.delayed || 0);
-  setText("flowOvernight", summary.flowHealth.overnight || 0);
-
-}
-
-/* ===============================
-   BREAKAGE AGING SUMMARY
-================================ */
-
-if (summary.aging) {
-
-  setText("sameDayBreakage", summary.aging.sameDay || 0);
-  setText("yesterdayBreakage", summary.aging.oneDay || 0);
-  setText("twoPlusBreakage", summary.aging.twoPlus || 0);
-
-}
-
-
-  /* ===============================
-     HOURLY TABLE
-  ================================ */
-
-  buildHourlyTable(dashboardData.hourly || []);
-
-  /* ===============================
-     FORCE CHART REFRESH
-  ================================ */
-
-  if (trendChart) {
-    trendChart.destroy();
-    trendChart = null;
-  }
-
-  if (reasonChart) {
-    reasonChart.destroy();
-    reasonChart = null;
-  }
-
-  if (machineChart) {
-    machineChart.destroy();
-    machineChart = null;
-  }
-
-  if (flowChart) {
-    flowChart.destroy();
-    flowChart = null;
-  }
-
-  const activeTab = document.querySelector(".tab.active");
-
-  if (activeTab) {
-    const tabId = activeTab.getAttribute("onclick") || "";
-
-    if (tabId.includes("trends")) {
-      buildTrendCharts();
-    } 
-    else if (tabId.includes("reasons")) {
-      buildReasonChart(dashboardData);
-    } 
-    else if (tabId.includes("machines")) {
-      buildMachineChart(dashboardData);
+    /* ===============================
+       FLOW HEALTH SUMMARY
+    ================================ */
+    if (summary.flowHealth) {
+      setText("flowHealthy", summary.flowHealth.healthy || 0);
+      setText("flowWatch", summary.flowHealth.watch || 0);
+      setText("flowDelayed", summary.flowHealth.delayed || 0);
+      setText("flowOvernight", summary.flowHealth.overnight || 0);
     }
+
+    /* ===============================
+       BREAKAGE AGING SUMMARY
+    ================================ */
+    if (summary.aging) {
+      setText("sameDayBreakage", summary.aging.sameDay || 0);
+      setText("yesterdayBreakage", summary.aging.oneDay || 0);
+      setText("twoPlusBreakage", summary.aging.twoPlus || 0);
+    }
+
+    /* ===============================
+       HOURLY TABLE
+    ================================ */
+    buildHourlyTable(dashboardData.hourly || []);
+
+    /* ===============================
+       FORCE CHART REFRESH
+    ================================ */
+    if (trendChart) {
+      trendChart.destroy();
+      trendChart = null;
+    }
+
+    if (reasonChart) {
+      reasonChart.destroy();
+      reasonChart = null;
+    }
+
+    if (machineChart) {
+      machineChart.destroy();
+      machineChart = null;
+    }
+
+    if (flowChart) {
+      flowChart.destroy();
+      flowChart = null;
+    }
+
+    /* ===============================
+       AUTO BUILD CHARTS
+       no click needed anymore
+    ================================ */
+    trendsLoaded = true;
+    buildTrendChart(dashboardProcessed);
+    buildReasonChart(dashboardProcessed);
+    buildMachineChart(dashboardProcessed);
+    buildFlowChart(dashboardProcessed);
+
+    const endTime = performance.now();
+    console.log("Load time (ms):", Math.round(endTime - startTime));
+  } catch (err) {
+    console.error("loadDashboard error:", err);
   }
-
-  const endTime = performance.now();
-  console.log("Load time (ms):", Math.round(endTime - startTime));
 }
-// =====================================================
-// DATE FILTER
-// =====================================================
-function applyDateFilter() {
 
+/* =====================================================
+   DATE FILTER
+   ===================================================== */
+function applyDateFilter() {
   const dateInput = document.getElementById("historyDate").value;
 
   if (!dateInput) {
     currentDate = null;
+    isLiveMode = true;
   } else {
     const d = new Date(dateInput);
     currentDate = (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+    isLiveMode = false;
   }
 
   loadDashboard();
 }
 
-
-// 👇 ADD THIS RIGHT HERE
 function resetToToday() {
   currentDate = null;
-  document.getElementById("historyDate").value = "";
+  isLiveMode = true;
+
+  const dateEl = document.getElementById("historyDate");
+  if (dateEl) dateEl.value = "";
+
   loadDashboard();
 }
-
 
 // Keep this at the bottom
 loadDashboard();
 
 /* =====================================================
    TREND CHART SYSTEM
-===================================================== */
+   ===================================================== */
 
 function buildTrendCharts() {
   trendsLoaded = true;
-  buildTrendChart(dashboardProcessed);
+  buildTrendChart(currentMode === "machine" ? dashboardMachine : dashboardProcessed);
 }
 
 function switchTrend(mode) {
-
   currentMode = mode;
 
   let data;
@@ -287,15 +258,12 @@ function switchTrend(mode) {
   if (mode === "processed") {
     data = dashboardProcessed;
     buildTrendChart(data);
-  } 
-  else if (mode === "machine") {
+  } else if (mode === "machine") {
     data = dashboardMachine;
     buildTrendChart(data);
-  } 
- else if (mode === "flow") {
-  data = dashboardProcessed; 
-  buildDetaperFlowTrend(data);
-
+  } else if (mode === "flow") {
+    data = dashboardProcessed;
+    buildDetaperFlowTrend(data);
   }
 
   document.querySelectorAll(".mode-btn")
@@ -303,16 +271,13 @@ function switchTrend(mode) {
 
   const activeBtn = document.getElementById(mode + "Btn");
   if (activeBtn) activeBtn.classList.add("active");
-
 }
-
 
 /* =====================================================
    FLOW CHART (DETAPER → COATER)
-===================================================== */
+   ===================================================== */
 
 function buildDetaperFlowTrend(data) {
-
   const canvas = document.getElementById("trendChart");
   if (!canvas || !data || !data.hourly) return;
 
@@ -327,11 +292,9 @@ function buildDetaperFlowTrend(data) {
   const twoPlusData = [];
 
   data.hourly.forEach(h => {
-
     todayData.push(h.avgSameDay || 0);
-yesterdayData.push(h.avgOneDay || 0);
-twoPlusData.push(h.avgTwoPlus || 0);
-
+    yesterdayData.push(h.avgOneDay || 0);
+    twoPlusData.push(h.avgTwoPlus || 0);
   });
 
   trendChart = new Chart(ctx, {
@@ -339,7 +302,6 @@ twoPlusData.push(h.avgTwoPlus || 0);
     data: {
       labels: hours,
       datasets: [
-
         {
           label: "Today (Flow)",
           data: todayData,
@@ -348,7 +310,6 @@ twoPlusData.push(h.avgTwoPlus || 0);
           tension: 0.35,
           fill: false
         },
-
         {
           label: "Yesterday (Flow)",
           data: yesterdayData,
@@ -357,7 +318,6 @@ twoPlusData.push(h.avgTwoPlus || 0);
           tension: 0.35,
           fill: false
         },
-
         {
           label: "2+ Days (Flow)",
           data: twoPlusData,
@@ -366,7 +326,6 @@ twoPlusData.push(h.avgTwoPlus || 0);
           tension: 0.35,
           fill: false
         }
-
       ]
     },
     options: {
@@ -374,28 +333,40 @@ twoPlusData.push(h.avgTwoPlus || 0);
       maintainAspectRatio: false,
 
       plugins: {
-        legend: { labels: { color: "#E6F1FF" } },
+        legend: {
+          labels: {
+            color: "#E6F1FF",
+            font: { size: 14 }
+          }
+        },
         title: {
           display: true,
           text: "Process Flow Time (Detaper → Coater)",
           color: "#E6F1FF",
-          font: { size: 16 }
+          font: { size: 18 }
         }
       },
 
       scales: {
         x: {
-          ticks: { color: "rgba(255,255,255,0.6)" },
+          ticks: {
+            color: "rgba(255,255,255,0.75)",
+            font: { size: 13 }
+          },
           grid: { color: "rgba(255,255,255,0.05)" }
         },
         y: {
           beginAtZero: true,
-          ticks: { color: "#4da3ff" },
+          ticks: {
+            color: "#4da3ff",
+            font: { size: 13 }
+          },
           grid: { color: "rgba(255,255,255,0.05)" },
           title: {
             display: true,
             text: "Minutes",
-            color: "#4da3ff"
+            color: "#4da3ff",
+            font: { size: 14 }
           }
         }
       }
@@ -403,9 +374,7 @@ twoPlusData.push(h.avgTwoPlus || 0);
   });
 }
 
-
 function buildTrendChart(data) {
-
   const canvas = document.getElementById("trendChart");
   if (!canvas || !data || !data.hourly) return;
 
@@ -422,7 +391,6 @@ function buildTrendChart(data) {
   const datasets = [];
   const allReasons = new Set();
 
-  // 🔍 Collect unique reasons from machines only
   sortedHourly.forEach(hour => {
     Object.values(hour.machines || {}).forEach(machine => {
       Object.keys(machine.reasons || {}).forEach(reason => {
@@ -443,39 +411,32 @@ function buildTrendChart(data) {
 
   let colorIndex = 0;
 
-allReasons.forEach(reason => {
+  allReasons.forEach(reason => {
+    const reasonTotals = sortedHourly.map(hour => {
+      let total = 0;
 
-  const reasonTotals = sortedHourly.map(hour => {
+      Object.values(hour.machines || {}).forEach(machine => {
+        total += machine.reasons?.[reason]?.total || 0;
+      });
 
-    let total = 0;
-
-    Object.values(hour.machines || {}).forEach(machine => {
-      total += machine.reasons?.[reason]?.total || 0;
+      return total;
     });
 
-    return total;
+    datasets.push({
+      label: reason,
+      data: reasonTotals,
+      borderColor: colors[colorIndex % colors.length],
+      backgroundColor: colors[colorIndex % colors.length],
+      borderWidth: 3,
+      tension: 0.35,
+      fill: false,
+      pointRadius: 4,
+      yAxisID: "yBroken"
+    });
 
+    colorIndex++;
   });
 
-  datasets.push({
-    label: reason,
-    data: reasonTotals,
-    borderColor: colors[colorIndex % colors.length],
-    backgroundColor: colors[colorIndex % colors.length],
-    borderWidth: 3,
-    tension: 0.35,
-    fill: false,
-    pointRadius: 4,
-    yAxisID: "yBroken"
-  });
-
-  colorIndex++;
-
-});
-
-
-
-  // 🟢 Add Coating Jobs (right axis)
   datasets.push({
     label: "Total Coating Jobs",
     data: sortedHourly.map(h => h.coatingJobs || 0),
@@ -495,36 +456,56 @@ allReasons.forEach(reason => {
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { labels: { color: "#E6F1FF" } },
+        legend: {
+          labels: {
+            color: "#E6F1FF",
+            font: { size: 14 }
+          }
+        },
         title: {
           display: true,
           text: "Breakage Processed by Reason",
           color: "#E6F1FF",
-          font: { size: 16 }
+          font: { size: 18 }
         }
       },
       scales: {
+        x: {
+          ticks: {
+            color: "rgba(255,255,255,0.75)",
+            font: { size: 13 }
+          },
+          grid: { color: "rgba(255,255,255,0.05)" }
+        },
         yBroken: {
           type: "linear",
           position: "left",
           beginAtZero: true,
-          ticks: { color: "#ff4d4d" },
+          ticks: {
+            color: "#ff4d4d",
+            font: { size: 13 }
+          },
           title: {
             display: true,
             text: "Breakage Count",
-            color: "#ff4d4d"
+            color: "#ff4d4d",
+            font: { size: 14 }
           }
         },
         yJobs: {
           type: "linear",
           position: "right",
           beginAtZero: true,
-          ticks: { color: "#00ff88" },
+          ticks: {
+            color: "#00ff88",
+            font: { size: 13 }
+          },
           grid: { drawOnChartArea: false },
           title: {
             display: true,
             text: "Coating Jobs",
-            color: "#00ff88"
+            color: "#00ff88",
+            font: { size: 14 }
           }
         }
       }
@@ -533,18 +514,16 @@ allReasons.forEach(reason => {
 }
 
 function getFlowColor(minutes) {
-  if (minutes <= 15) return "#00ff88";   // Green
-  if (minutes <= 30) return "#ffcc00";   // Yellow
-  return "#ff3b3b";                      // Red
+  if (minutes <= 15) return "#00ff88";
+  if (minutes <= 30) return "#ffcc00";
+  return "#ff3b3b";
 }
-
 
 /* =====================================================
    FLOW CHART SYSTEM (Detaper → Coater)
-===================================================== */
+   ===================================================== */
 
 function switchFlowMode(mode) {
-
   currentFlowMode = mode;
 
   document.querySelectorAll("#avgFlowBtn, #machineFlowBtn, #individualFlowBtn")
@@ -562,9 +541,7 @@ function switchFlowMode(mode) {
   buildFlowChart(dashboardProcessed);
 }
 
-
 function buildFlowChart(data) {
-
   const canvas = document.getElementById("flowChart");
   if (!canvas || !data || !data.hourly) return;
 
@@ -572,345 +549,320 @@ function buildFlowChart(data) {
 
   if (flowChart) flowChart.destroy();
 
-  // FILTER HOURS 6AM–8PM
-  const sortedHourly = [...data.hourly].sort((a,b)=>{
-  return new Date("1/1/2000 " + a.hour) - new Date("1/1/2000 " + b.hour);
-});
+  const sortedHourly = [...data.hourly].sort((a, b) => {
+    return new Date("1/1/2000 " + a.hour) - new Date("1/1/2000 " + b.hour);
+  });
 
-const filteredHours = sortedHourly.filter(h => {
+  const filteredHours = sortedHourly.filter(h => {
+    if (!h.hour) return false;
 
-  if (!h.hour) return false;
+    const hourParts = h.hour.split(":");
+    let hourNum = parseInt(hourParts[0], 10);
 
-  const hourParts = h.hour.split(":");
-  let hourNum = parseInt(hourParts[0]);
+    const isPM = h.hour.includes("PM");
+    const isAM = h.hour.includes("AM");
 
-  const isPM = h.hour.includes("PM");
-  const isAM = h.hour.includes("AM");
+    if (isPM && hourNum !== 12) hourNum += 12;
+    if (isAM && hourNum === 12) hourNum = 0;
 
-  if (isPM && hourNum !== 12) hourNum += 12;
-  if (isAM && hourNum === 12) hourNum = 0;
-
-  return hourNum >= 6 && hourNum <= 20;
-});
+    return hourNum >= 6 && hourNum <= 20;
+  });
 
   const hours = filteredHours.map(h => h.hour);
 
-  // =========================
-  // SANITIZER (Spike Control)
-  // =========================
- function sanitize(value) {
-  if (value === null || value === undefined) return null;
-  const num = Number(value);
-  if (num > 500) return null;
-  return num;
-}
+  function sanitize(value) {
+    if (value === null || value === undefined) return null;
+    const num = Number(value);
+    if (num > 500) return null;
+    return num;
+  }
 
-  // =========================
-  // MACHINE MODE
-  // =========================
+  /* =========================
+     MACHINE MODE
+  ========================= */
   if (currentFlowMode === "machine") {
+    const machineSet = new Set();
 
-  const machineSet = new Set();
+    filteredHours.forEach(h => {
+      Object.keys(h.machines || {}).forEach(m => machineSet.add(m));
+    });
 
-  filteredHours.forEach(h => {
-    Object.keys(h.machines || {}).forEach(m => machineSet.add(m));
-  });
+    const machines = Array.from(machineSet);
 
-  const machines = Array.from(machineSet);
+    const datasets = machines.map(machine => {
+      const dataPoints = filteredHours.map(h => ({
+        x: h.hour,
+        y: sanitize(h.machines?.[machine]?.avgFlowAll),
+        count: h.machines?.[machine]?.flowAllCount || 0
+      }));
 
-  const datasets = machines.map(machine => {
+      return {
+        label: formatMachineLabel(machine),
+        data: dataPoints,
+        borderWidth: 3,
+        tension: 0.35,
+        fill: false,
+        spanGaps: true
+      };
+    });
 
-    const dataPoints = filteredHours.map(h => ({
-      x: h.hour,
-      y: sanitize(h.machines?.[machine]?.avgFlowAll),
-      count: h.machines?.[machine]?.flowAllCount || 0
-    }));
+    flowChart = new Chart(ctx, {
+      type: "line",
+      data: { labels: hours, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
 
-    return {
-      label: formatMachineLabel(machine),
-      data: dataPoints,
-      borderWidth: 3,
-      tension: 0.35,
-      fill: false,
-      spanGaps: true
-    };
-  });
-
-  flowChart = new Chart(ctx, {
-    type: "line",
-    data: { labels: hours, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-
-      plugins: {
-        legend: { labels: { color: "#E6F1FF" } },
-        title: {
-          display: true,
-          text: "Machine Average Flow (Detaper → Coater)",
-          color: "#E6F1FF"
+        plugins: {
+          legend: {
+            labels: {
+              color: "#E6F1FF",
+              font: { size: 14 }
+            }
+          },
+          title: {
+            display: true,
+            text: "Machine Average Flow (Detaper → Coater)",
+            color: "#E6F1FF",
+            font: { size: 18 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                const raw = context.raw;
+                const value = raw?.y ?? raw;
+                const count = raw?.count ?? 0;
+                return `${context.dataset.label}: ${value} mins (${count} jobs)`;
+              }
+            }
+          }
         },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              const raw = context.raw;
-              const value = raw?.y ?? raw;
-              const count = raw?.count ?? 0;
-              return `${context.dataset.label}: ${value} mins (${count} jobs)`;
+
+        scales: {
+          x: {
+            ticks: {
+              color: "rgba(255,255,255,0.75)",
+              font: { size: 13 }
+            },
+            grid: { color: "rgba(255,255,255,0.05)" }
+          },
+          y: {
+            beginAtZero: true,
+            suggestedMax: 60,
+            ticks: {
+              color: "#4da3ff",
+              font: { size: 13 }
+            },
+            grid: { color: "rgba(255,255,255,0.05)" },
+            title: {
+              display: true,
+              text: "Minutes",
+              color: "#4da3ff",
+              font: { size: 14 }
             }
           }
         }
-      },
-
-      scales: {
-        x: {
-          ticks: { color: "rgba(255,255,255,0.6)" },
-          grid: { color: "rgba(255,255,255,0.05)" }
-        },
-        y: {
-          beginAtZero: true,
-          suggestedMax: 60,
-          ticks: { color: "#4da3ff" },
-          grid: { color: "rgba(255,255,255,0.05)" },
-          title: {
-            display: true,
-            text: "Minutes",
-            color: "#4da3ff"
-          }
-        }
       }
-    }
-  });
-
-  return;
-}
-
-// =========================
-// AVERAGE MODE
-// =========================
-if (currentFlowMode === "average") {
-
-const healthyFlow = filteredHours.map(h => {
-
-  const healthy = (h.flowPoints || []).filter(p => p.flow <= 15);
-
-  const minutes = healthy.length
-    ? Math.round(healthy.reduce((a,b)=>a+b.flow,0) / healthy.length)
-    : 0;
-
-  return {
-    x: h.hour,
-    y: minutes,
-    jobs: healthy.length
-  };
-
-});
-
-const watchFlow = filteredHours.map(h => {
-
-  const watch = (h.flowPoints || [])
-    .filter(p => p.flow > 15 && p.flow <= 30);
-
-  const minutes = watch.length
-    ? Math.round(watch.reduce((a,b)=>a+b.flow,0) / watch.length)
-    : 0;
-
-  return {
-    x: h.hour,
-    y: minutes,
-    jobs: watch.length
-  };
-
-});;
-
-const delayedFlow = filteredHours.map(h => {
-
-  const delayed = (h.flowPoints || [])
-    .filter(p => p.flow > 30 && p.flow <= 360);
-
-  const minutes = delayed.length
-    ? Math.round(delayed.reduce((a,b)=>a+b.flow,0) / delayed.length)
-    : 0;
-
-  return {
-    x: h.hour,
-    y: minutes,
-    jobs: delayed.length
-  };
-
-});
-
-const overnightFlow = filteredHours.map(h => {
-
-  const overnight = (h.flowPoints || [])
-    .filter(p => p.flow > 360);
-
-  const minutes = overnight.length
-    ? Math.round(overnight.reduce((a,b)=>a+b.flow,0) / overnight.length)
-    : 0;
-
-  return {
-    x: h.hour,
-    y: minutes,
-    jobs: overnight.length
-  };
-
-});
-
-  const brokenFlow = filteredHours.map(h => ({
-    x: h.hour,
-    y: sanitize(h.avgFlowBroken),
-    count: h.flowBrokenCount || 0
-  }));
-
-  const postDelay = filteredHours.map(h => ({
-    x: h.hour,
-    y: sanitize(h.avgPostCoatDelay),
-    count: h.postCoatCount || 0
-  }));
-
-  flowChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: hours,
-    datasets: [
-
-{
-  label: "Workflow Healthy",
-  data: healthyFlow,
-  borderColor: "#32ff7e",
-  backgroundColor: "rgba(50,255,126,0.15)",
-  borderWidth: 3,
-  tension: 0.35,
-  fill: true,
-  spanGaps: true
-},
-
-{
-  label: "Workflow Watch",
-  data: watchFlow,
-  borderColor: "#ffd32a",
-  backgroundColor: "rgba(255,211,42,0.15)",
-  borderWidth: 3,
-  tension: 0.35,
-  fill: true,
-  spanGaps: true
-},
-
-{
-  label: "Workflow Delayed",
-  data: delayedFlow,
-  borderColor: "#ff3f34",
-  backgroundColor: "rgba(255,63,52,0.15)",
-  borderWidth: 3,
-  tension: 0.35,
-  fill: true,
-  spanGaps: true
-},
-
-{
-  label: "Overnight Carryover",
-  data: overnightFlow,
-  borderColor: "#00a8ff",
-  backgroundColor: "rgba(0,168,255,0.15)",
-  borderWidth: 3,
-  tension: 0.35,
-  fill: true,
-  spanGaps: true
-},
-
-{
-  label: "Broken Jobs Avg Flow",
-  data: brokenFlow,
-  borderColor: "#9b7bff",
-  backgroundColor: "rgba(155,123,255,0.15)",
-  borderWidth: 3,
-  tension: 0.35,
-  fill: true,
-  spanGaps: true
-},
-
-{
-  label: "Coater → Break Delay",
-  data: postDelay,
-  borderColor: "#ff9f40",
-  backgroundColor: "rgba(255,159,64,0.15)",
-  borderWidth: 3,
-  tension: 0.35,
-  fill: true,
-  spanGaps: true
-}
-
-]
-    },
-    options: getFlowOptions("Detaper → Coater Flow Analysis")
-  });
-
-  return;
-}
-  
-// =========================
-// INDIVIDUAL MODE
-// =========================
-
-const points = [];
-
-filteredHours.forEach(hourObj => {
-
-  Object.entries(hourObj.machines || {}).forEach(([machine, mData]) => {
-
-    const flowValue = sanitize(mData.avgFlowAll);
-    if (flowValue === null) return;
-
-    points.push({
-      x: hourObj.hour,
-      y: flowValue,
-      machine: machine,
-      rx: null
     });
 
+    return;
+  }
+
+  /* =========================
+     AVERAGE MODE
+  ========================= */
+  if (currentFlowMode === "average") {
+    const healthyFlow = filteredHours.map(h => {
+      const healthy = (h.flowPoints || []).filter(p => p.flow <= 15);
+
+      const minutes = healthy.length
+        ? Math.round(healthy.reduce((a, b) => a + b.flow, 0) / healthy.length)
+        : 0;
+
+      return {
+        x: h.hour,
+        y: minutes,
+        jobs: healthy.length
+      };
+    });
+
+    const watchFlow = filteredHours.map(h => {
+      const watch = (h.flowPoints || [])
+        .filter(p => p.flow > 15 && p.flow <= 30);
+
+      const minutes = watch.length
+        ? Math.round(watch.reduce((a, b) => a + b.flow, 0) / watch.length)
+        : 0;
+
+      return {
+        x: h.hour,
+        y: minutes,
+        jobs: watch.length
+      };
+    });
+
+    const delayedFlow = filteredHours.map(h => {
+      const delayed = (h.flowPoints || [])
+        .filter(p => p.flow > 30 && p.flow <= 360);
+
+      const minutes = delayed.length
+        ? Math.round(delayed.reduce((a, b) => a + b.flow, 0) / delayed.length)
+        : 0;
+
+      return {
+        x: h.hour,
+        y: minutes,
+        jobs: delayed.length
+      };
+    });
+
+    const overnightFlow = filteredHours.map(h => {
+      const overnight = (h.flowPoints || [])
+        .filter(p => p.flow > 360);
+
+      const minutes = overnight.length
+        ? Math.round(overnight.reduce((a, b) => a + b.flow, 0) / overnight.length)
+        : 0;
+
+      return {
+        x: h.hour,
+        y: minutes,
+        jobs: overnight.length
+      };
+    });
+
+    const brokenFlow = filteredHours.map(h => ({
+      x: h.hour,
+      y: sanitize(h.avgFlowBroken),
+      count: h.flowBrokenCount || 0
+    }));
+
+    const postDelay = filteredHours.map(h => ({
+      x: h.hour,
+      y: sanitize(h.avgPostCoatDelay),
+      count: h.postCoatCount || 0
+    }));
+
+    flowChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: hours,
+        datasets: [
+          {
+            label: "Workflow Healthy",
+            data: healthyFlow,
+            borderColor: "#32ff7e",
+            backgroundColor: "rgba(50,255,126,0.15)",
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            spanGaps: true
+          },
+          {
+            label: "Workflow Watch",
+            data: watchFlow,
+            borderColor: "#ffd32a",
+            backgroundColor: "rgba(255,211,42,0.15)",
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            spanGaps: true
+          },
+          {
+            label: "Workflow Delayed",
+            data: delayedFlow,
+            borderColor: "#ff3f34",
+            backgroundColor: "rgba(255,63,52,0.15)",
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            spanGaps: true
+          },
+          {
+            label: "Overnight Carryover",
+            data: overnightFlow,
+            borderColor: "#00a8ff",
+            backgroundColor: "rgba(0,168,255,0.15)",
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            spanGaps: true
+          },
+          {
+            label: "Broken Jobs Avg Flow",
+            data: brokenFlow,
+            borderColor: "#9b7bff",
+            backgroundColor: "rgba(155,123,255,0.15)",
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            spanGaps: true
+          },
+          {
+            label: "Coater → Break Delay",
+            data: postDelay,
+            borderColor: "#ff6b6b",
+            backgroundColor: "rgba(255,107,107,0.15)",
+            borderWidth: 3,
+            tension: 0.35,
+            fill: true,
+            spanGaps: true
+          }
+        ]
+      },
+      options: getFlowOptions("Detaper → Coater Flow Analysis")
+    });
+
+    return;
+  }
+
+  /* =========================
+     INDIVIDUAL MODE
+  ========================= */
+  const points = [];
+
+  filteredHours.forEach(hourObj => {
+    Object.entries(hourObj.machines || {}).forEach(([machine, mData]) => {
+      const flowValue = sanitize(mData.avgFlowAll);
+      if (flowValue === null) return;
+
+      points.push({
+        x: hourObj.hour,
+        y: flowValue,
+        machine: machine,
+        rx: null
+      });
+    });
   });
 
-});
+  flowChart = new Chart(ctx, {
+    type: "scatter",
+    data: {
+      datasets: [{
+        label: "Machine Flow",
+        data: points,
+        pointRadius: 8,
+        pointHoverRadius: 11,
+        backgroundColor: points.map(p => getFlowColor(p.y)),
+        borderColor: points.map(p => getFlowColor(p.y))
+      }]
+    },
+    options: getFlowOptions("Machine Flow Scatter (Detaper → Coater)")
+  });
+}
 
-flowChart = new Chart(ctx, {
-  type: "scatter",
-  data: {
-    datasets: [{
-      label: "Machine Flow",
-      data: points,
-      pointRadius: 8,
-      pointHoverRadius: 11,
-      backgroundColor: points.map(p => getFlowColor(p.y)),
-      borderColor: points.map(p => getFlowColor(p.y))
-    }]
-  },
-  options: getFlowOptions("Machine Flow Scatter (Detaper → Coater)")
-});
-
-} 
-
-
-
-// =====================================================
-// FLOW CHART OPTIONS
-// =====================================================
+/* =====================================================
+   FLOW CHART OPTIONS
+   ===================================================== */
 
 function getFlowOptions(titleText) {
-
   return {
-
     responsive: true,
     maintainAspectRatio: false,
-
     interaction: { mode: "nearest", intersect: true },
 
-    // =============================================
-    // CLICK HANDLER (OPEN MODAL)
-    // =============================================
-    onClick: function(evt, elements, chart) {
-
+    onClick: function (evt, elements, chart) {
       if (!elements.length) return;
 
       const element = elements[0];
@@ -929,120 +881,99 @@ function getFlowOptions(titleText) {
         flow: point.y,
         x: point.x
       });
-
     },
 
     plugins: {
-
       legend: {
-        labels: { color: "#E6F1FF" }
+        labels: {
+          color: "#E6F1FF",
+          font: { size: 14 }
+        }
       },
 
       title: {
         display: true,
         text: titleText,
         color: "#E6F1FF",
-        font: { size: 16 }
+        font: { size: 18 }
       },
 
       tooltip: {
         callbacks: {
-
-          label: function(context) {
-
+          label: function (context) {
             const raw = context.raw;
             if (!raw) return "";
 
-            // =============================
-            // RX TOOLTIP
-            // =============================
             if (raw.rx) {
-
               const lines = [];
-
               lines.push(`RX: ${raw.rx}`);
 
-              if (raw.machine)
-                lines.push(`Machine: ${raw.machine}`);
-
-              if (raw.reason)
-                lines.push(`Breakage: ${raw.reason}`);
+              if (raw.machine) lines.push(`Machine: ${raw.machine}`);
+              if (raw.reason) lines.push(`Breakage: ${raw.reason}`);
 
               lines.push(`Flow Time: ${raw.y} mins`);
 
-              if (raw.x)
-                lines.push(`Hour: ${raw.x}`);
+              if (raw.x) lines.push(`Hour: ${raw.x}`);
 
               return lines;
             }
 
-            // =============================
-            // MACHINE SCATTER TOOLTIP
-            // =============================
             if (raw.machine) {
-
               const lines = [];
-
               lines.push(`Machine: ${raw.machine}`);
               lines.push(`Flow Time: ${raw.y} mins`);
 
-              if (raw.x)
-                lines.push(`Hour: ${raw.x}`);
+              if (raw.x) lines.push(`Hour: ${raw.x}`);
 
               return lines;
             }
-
-            // =============================
-            // MACHINE / AVERAGE MODE
-            // =============================
 
             const value = raw?.y ?? raw;
             const jobs = raw?.jobs ?? raw?.count ?? null;
 
-if (jobs !== null) {
-  return `${context.dataset.label}: ${value} mins (${jobs} jobs)`;
-}
+            if (jobs !== null) {
+              return `${context.dataset.label}: ${value} mins (${jobs} jobs)`;
+            }
 
             return `${context.dataset.label}: ${value} mins`;
           }
-
         }
       }
-
     },
 
     scales: {
-
-      // FIXES 0.0 0.1 AXIS PROBLEM
       x: {
         type: "category",
-        ticks: { color: "rgba(255,255,255,0.6)" },
+        ticks: {
+          color: "rgba(255,255,255,0.75)",
+          font: { size: 13 }
+        },
         grid: { color: "rgba(255,255,255,0.05)" }
       },
 
       y: {
         beginAtZero: true,
         suggestedMax: 60,
-        ticks: { color: "#4da3ff" },
+        ticks: {
+          color: "#4da3ff",
+          font: { size: 13 }
+        },
         grid: { color: "rgba(255,255,255,0.05)" },
         title: {
           display: true,
           text: "Minutes",
-          color: "#4da3ff"
+          color: "#4da3ff",
+          font: { size: 14 }
         }
       }
-
     }
-
   };
-
 }
 
-// =============================================
-// FLOW MODAL DETAIL (INDIVIDUAL)
-// =============================================
+/* =============================================
+   FLOW MODAL DETAIL (INDIVIDUAL)
+   ============================================= */
 function showFlowDetails(point) {
-
   const modal = document.getElementById("chartModal");
   const modalBody = document.getElementById("modalBody");
 
@@ -1074,19 +1005,16 @@ function showFlowDetails(point) {
   modal.classList.add("active");
 }
 
-
-// =============================================
-// FLOW MODAL DETAIL (HOUR CLICK)
-// =============================================
+/* =============================================
+   FLOW MODAL DETAIL (HOUR CLICK)
+   ============================================= */
 function showFlowHourDetails(hourData) {
-
   const modal = document.getElementById("chartModal");
   const modalBody = document.getElementById("modalBody");
 
   let html = "";
 
   (hourData.flowPoints || []).forEach(p => {
-
     const color = getFlowColor(p.flow);
 
     html += `
@@ -1107,14 +1035,10 @@ function showFlowHourDetails(hourData) {
   modal.classList.add("active");
 }
 
-
-
-
 /* =====================================================
    HOURLY TABLE
-===================================================== */
+   ===================================================== */
 function buildHourlyTable(hourly) {
-
   const tbody = document.getElementById("hourlyBody");
   if (!tbody) return;
   if (!Array.isArray(hourly)) return;
@@ -1122,14 +1046,11 @@ function buildHourlyTable(hourly) {
   tbody.innerHTML = "";
 
   hourly.forEach(row => {
-
     const tr = document.createElement("tr");
 
-    // 🔍 PRIMARY DRIVER LOGIC
     let primaryDriverHTML = "-";
 
     if ((row.totalBroken || 0) > 0 && row.machines) {
-
       let topMachine = null;
       let topMachineTotal = 0;
 
@@ -1141,7 +1062,6 @@ function buildHourlyTable(hourly) {
       });
 
       if (topMachine && row.machines[topMachine]) {
-
         let topReason = null;
         let topReasonTotal = 0;
 
@@ -1156,7 +1076,7 @@ function buildHourlyTable(hourly) {
 
         primaryDriverHTML = `
           <div class="primary-driver">
-            <div class="driver-machine">${topMachine}</div>
+            <div class="driver-machine">${formatMachineLabel(topMachine)}</div>
             <div class="driver-reason">${topReason || ""}</div>
           </div>
         `;
@@ -1178,12 +1098,10 @@ function buildHourlyTable(hourly) {
   });
 }
 
-
 /* =====================================================
-   MODAL DETAILS (RESTORED)
-===================================================== */
+   MODAL DETAILS
+   ===================================================== */
 function showHourDetails(hourData) {
-
   const modal = document.getElementById("chartModal");
   const modalBody = document.getElementById("modalBody");
 
@@ -1192,15 +1110,12 @@ function showHourDetails(hourData) {
   let machineHTML = "";
 
   Object.entries(hourData.machines || {}).forEach(([machine, stats]) => {
-
-  const displayMachine = formatMachineLabel(machine);
-
+    const displayMachine = formatMachineLabel(machine);
     let reasonHTML = "";
 
     const reasonsObj = stats.reasons || {};
 
     Object.entries(reasonsObj).forEach(([reason, rStats]) => {
-
       reasonHTML += `
         <div style="margin-top:8px; padding-left:12px;">
           • <strong>${reason}</strong> — ${rStats.total || 0}
@@ -1236,7 +1151,6 @@ function showHourDetails(hourData) {
   modal.classList.add("active");
 }
 
-
 function closeModal() {
   const modal = document.getElementById("chartModal");
   if (modal) modal.classList.remove("active");
@@ -1244,9 +1158,8 @@ function closeModal() {
 
 /* =====================================================
    REASON CHART
-===================================================== */
+   ===================================================== */
 function buildReasonChart(data) {
-
   if (!data || !data.topReasons) return;
 
   if (reasonChart) reasonChart.destroy();
@@ -1257,9 +1170,8 @@ function buildReasonChart(data) {
       total: stats.total || 0
     }))
     .sort((a, b) => b.total - a.total)
-    .slice(0, 6); // limit to top reasons
+    .slice(0, 6);
 
-  // Calculate total breakage for %
   const totalBreakage = entries.reduce((sum, r) => sum + r.total, 0);
 
   reasonChart = new Chart(
@@ -1283,13 +1195,16 @@ function buildReasonChart(data) {
         maintainAspectRatio: false,
 
         plugins: {
-
           legend: { display: false },
-
+          title: {
+            display: true,
+            text: "Top Breakage Reasons",
+            color: "#E6F1FF",
+            font: { size: 18 }
+          },
           tooltip: {
             callbacks: {
-              label: function(context) {
-
+              label: function (context) {
                 const value = context.raw;
                 const percent = totalBreakage
                   ? ((value / totalBreakage) * 100).toFixed(1)
@@ -1304,19 +1219,17 @@ function buildReasonChart(data) {
         scales: {
           x: {
             ticks: {
-              color: "rgba(255,255,255,0.6)"
+              color: "rgba(255,255,255,0.75)",
+              font: { size: 13 }
             },
-            grid: {
-              color: "rgba(255,255,255,0.05)"
-            }
+            grid: { color: "rgba(255,255,255,0.05)" }
           },
           y: {
             ticks: {
-              color: "#E6F1FF"
+              color: "#E6F1FF",
+              font: { size: 13 }
             },
-            grid: {
-              color: "rgba(255,255,255,0.05)"
-            }
+            grid: { color: "rgba(255,255,255,0.05)" }
           }
         }
       }
@@ -1324,291 +1237,215 @@ function buildReasonChart(data) {
   );
 }
 
-
 /* =====================================================
    MACHINE CHART
-===================================================== */
+   ===================================================== */
 function buildMachineChart(data) {
-
   if (!data || !data.machineTotals) return;
 
   if (machineChart) machineChart.destroy();
 
   const entries = Object.entries(data.machineTotals)
     .map(([machine, stats]) => {
-
       const jobs = stats.jobs || 0;
       const broken = stats.breakLenses || 0;
-
       const percent = jobs > 0 ? (broken / jobs) * 100 : 0;
 
       return {
         machine,
-		displayMachine: formatMachineLabel(machine),
+        displayMachine: formatMachineLabel(machine),
         jobs,
         broken,
         percent
       };
-
     })
-    .sort((a,b)=>b.percent-a.percent);
+    .sort((a, b) => b.percent - a.percent);
 
-
-  function getMachineColor(p){
-
-    if(p > 12) return "#ff3b3b";   // red
-    if(p > 6)  return "#ffcc00";   // yellow
-    return "#32ff7e";              // green
-
+  function getMachineColor(p) {
+    if (p > 12) return "#ff3b3b";
+    if (p > 6) return "#ffcc00";
+    return "#32ff7e";
   }
-
 
   machineChart = new Chart(
     document.getElementById("machineChart"),
     {
-
       type: "bar",
 
       data: {
-
-        labels: entries.map(e=>e.displayMachine),
-
+        labels: entries.map(e => e.displayMachine),
         datasets: [
-
           {
             label: "Breakage %",
-            data: entries.map(e=>e.percent),
-            backgroundColor: entries.map(e=>getMachineColor(e.percent)),
+            data: entries.map(e => e.percent),
+            backgroundColor: entries.map(e => getMachineColor(e.percent)),
             borderRadius: 10
           },
-
           {
             label: "Total Jobs",
-            data: entries.map(e=>e.jobs),
+            data: entries.map(e => e.jobs),
             backgroundColor: "#5c8df6",
             borderRadius: 10
           }
-
         ]
       },
 
       options: {
-
         responsive: true,
         maintainAspectRatio: false,
 
         plugins: {
-
           legend: {
-            labels: { color:"#E6F1FF" }
+            labels: {
+              color: "#E6F1FF",
+              font: { size: 14 }
+            }
           },
+          title: {
+            display: true,
+            text: "Machine Analysis",
+            color: "#E6F1FF",
+            font: { size: 18 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                const i = context.dataIndex;
+                const e = entries[i];
 
-          tooltip:{
-  callbacks:{
+                if (context.dataset.label === "Breakage %") {
+                  return `${e.percent.toFixed(2)}% (${e.broken} broken)`;
+                }
 
-    label:function(context){
+                return `Total Jobs: ${e.jobs}`;
+              },
 
-      const i = context.dataIndex;
-      const e = entries[i];
+              afterBody: function (context) {
+                const i = context[0].dataIndex;
+                const e = entries[i];
+                const machine = e.machine;
 
-      if(context.dataset.label==="Breakage %"){
-        return `${e.percent.toFixed(2)}% (${e.broken} broken)`;
-      }
+                const lines = [];
 
-      return `Total Jobs: ${e.jobs}`;
-    },
+                const totalBroken = entries.reduce((s, m) => s + m.broken, 0);
 
-    afterBody:function(context){
+                if (totalBroken > 0) {
+                  const workflow = ((e.broken / totalBroken) * 100).toFixed(1);
+                  lines.push("");
+                  lines.push(`Workflow Impact: ${workflow}%`);
+                }
 
-      const i = context[0].dataIndex;
-      const e = entries[i];
-      const machine = e.machine;
+                if (data.machineReasons && data.machineReasons[machine]) {
+                  const reasons = data.machineReasons[machine];
 
-      const lines = [];
+                  const total = Object.values(reasons)
+                    .reduce((a, b) => a + b, 0);
 
-      // Workflow %
-      const totalBroken = entries.reduce((s,m)=>s+m.broken,0);
+                  lines.push("");
+                  lines.push("Top Reasons");
 
-      if(totalBroken > 0){
+                  Object.entries(reasons)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .forEach(([r, count]) => {
+                      const pct = total > 0 ? ((count / total) * 100).toFixed(1) : "0.0";
+                      lines.push(`${r} – ${count} (${pct}%)`);
+                    });
+                }
 
-        const workflow = ((e.broken / totalBroken) * 100).toFixed(1);
-
-        lines.push("");
-        lines.push(`Workflow Impact: ${workflow}%`);
-      }
-
-      // Machine reasons
-      if(data.machineReasons && data.machineReasons[machine]){
-
-        const reasons = data.machineReasons[machine];
-
-        const total = Object.values(reasons)
-          .reduce((a,b)=>a+b,0);
-
-        lines.push("");
-        lines.push("Top Reasons");
-
-        Object.entries(reasons)
-          .sort((a,b)=>b[1]-a[1])
-          .slice(0,3)
-          .forEach(([r,count])=>{
-
-            const pct = ((count/total)*100).toFixed(1);
-
-            lines.push(`${r} – ${count} (${pct}%)`);
-
-          });
-
-      }
-
-      return lines;
-
-    }
-
-  }
-}
-
+                return lines;
+              }
+            }
+          }
         },
 
         scales: {
-
           x: {
-            ticks: { color:"rgba(255,255,255,0.6)" },
-            grid: { color:"rgba(255,255,255,0.05)" }
+            ticks: {
+              color: "rgba(255,255,255,0.75)",
+              font: { size: 13 }
+            },
+            grid: { color: "rgba(255,255,255,0.05)" }
           },
 
           y: {
-            beginAtZero:true,
-            ticks:{ color:"#E6F1FF" },
-            grid:{ color:"rgba(255,255,255,0.05)" },
-            title:{
-              display:true,
-              text:"Breakage %",
-              color:"#E6F1FF"
+            beginAtZero: true,
+            ticks: {
+              color: "#E6F1FF",
+              font: { size: 13 }
+            },
+            grid: { color: "rgba(255,255,255,0.05)" },
+            title: {
+              display: true,
+              text: "Breakage %",
+              color: "#E6F1FF",
+              font: { size: 14 }
             }
           }
-
         }
-
       }
-
     }
   );
-
 }
 
-
-// 🔄 AUTO REFRESH EVERY 5 MINUTES (ONLY FOR TODAY VIEW)
+/* =====================================================
+   AUTO REFRESH EVERY 5 MINUTES (ONLY LIVE MODE)
+   ===================================================== */
 setInterval(() => {
-
-  if (currentDate === null) {
-    console.log("Auto refreshing dashboard (Today view)...");
+  if (isLiveMode || currentDate === null) {
+    console.log("Auto refreshing dashboard (Live mode)...");
     loadDashboard();
   } else {
     console.log("Auto refresh skipped (History mode active)");
   }
+}, 3 * 60 * 1000);
 
-}, 5 * 60 * 1000);
-
-
-// =====================================================
-// FILTER LISTENERS (SHIFT + DATE + REFRESH)
-// =====================================================
+/* =====================================================
+   FILTER LISTENERS (DATE + LIVE)
+   ===================================================== */
 document.addEventListener("DOMContentLoaded", () => {
-
-  // ---------- SHIFT FILTER ----------
-  const shiftSelect = document.getElementById("shiftSelect");
-
-  if (shiftSelect) {
-    shiftSelect.addEventListener("change", function () {
-
-      const selectedValue = this.value;
-
-      currentShift = selectedValue === "All" ? null : selectedValue;
-
-      console.log("Shift changed to:", currentShift);
-      loadDashboard();
-    });
-  }
-
-
-  // ---------- DATE FILTER ----------
   const dateInput = document.getElementById("historyDate");
 
   if (dateInput) {
     dateInput.addEventListener("change", function () {
+      if (!this.value) {
+        currentDate = null;
+        isLiveMode = true;
+      } else {
+        const parts = this.value.split("-");
+        currentDate =
+          parseInt(parts[1], 10) + "/" +
+          parseInt(parts[2], 10) + "/" +
+          parts[0];
 
-  if (!this.value) {
-    currentDate = null;
-  } else {
-    const parts = this.value.split("-"); 
-    // value = "2026-02-02"
+        isLiveMode = false;
+      }
 
-    currentDate =
-      parseInt(parts[1]) + "/" +
-      parseInt(parts[2]) + "/" +
-      parts[0];
+      console.log("Date changed to:", currentDate, "Live Mode:", isLiveMode);
+      loadDashboard();
+    });
   }
 
-  console.log("Date changed to:", currentDate);
-  loadDashboard();
+  const liveBtn = document.getElementById("liveBtn");
+
+  if (liveBtn) {
+    liveBtn.addEventListener("click", function () {
+      currentDate = null;
+      isLiveMode = true;
+
+      const dateEl = document.getElementById("historyDate");
+      if (dateEl) dateEl.value = "";
+
+      console.log("Switched back to Live Mode");
+      loadDashboard();
+    });
+  }
 });
-  }
 
-
-  // ---------- REFRESH BUTTON ----------
-  const refreshBtn = document.getElementById("historyRefreshBtn");
-
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", refreshHistory);
-  }
-
-});
-  
-  // =====================================================
-// MANUAL HISTORY REFRESH (BYPASS CACHE)
-// =====================================================
-function refreshHistory() {
-
-  if (!currentDate) {
-    console.log("No historical date selected.");
-    return;
-  }
-
-  console.log("Manual history refresh triggered");
-
-  const cacheBreaker = `&t=${new Date().getTime()}`;
-
-  const shiftParam = currentShift
-    ? `&shift=${encodeURIComponent(currentShift)}`
-    : "";
-
-  const dateParam = `&date=${encodeURIComponent(currentDate)}`;
-
-  Promise.all([
-    fetch(`${API_URL}?mode=processed${shiftParam}${dateParam}${cacheBreaker}`),
-    fetch(`${API_URL}?mode=machine${shiftParam}${dateParam}${cacheBreaker}`)
-  ])
-  .then(async ([processedRes, machineRes]) => {
-
-    dashboardProcessed = await processedRes.json();
-    dashboardMachine = await machineRes.json();
-    dashboardData = dashboardProcessed;
-	updateReportDateDisplay(dashboardProcessed);
-
-    buildHourlyTable(dashboardData.hourly || []);
-    rebuildAllCharts();
-
-  })
-  .catch(err => console.error("History refresh error:", err));
-}
-
-// =====================================================
-// FORCE REBUILD ALL CHARTS
-// =====================================================
+/* =====================================================
+   FORCE REBUILD ALL CHARTS
+   ===================================================== */
 function rebuildAllCharts() {
-
-  // Destroy existing charts safely
   if (trendChart) {
     trendChart.destroy();
     trendChart = null;
@@ -1629,34 +1466,15 @@ function rebuildAllCharts() {
     flowChart = null;
   }
 
-  // Rebuild currently visible tab
-  const activeTab = document.querySelector(".tab.active");
-
-  if (!activeTab) return;
-
-  const tabText = activeTab.textContent.toLowerCase();
-
-  if (tabText.includes("trend")) {
-    buildTrendCharts();
-  } 
-  else if (tabText.includes("reason")) {
-    buildReasonChart(dashboardData);
-  } 
-  else if (tabText.includes("machine")) {
-    buildMachineChart(dashboardData);
-  }
-
-  // Always rebuild flow if that tab exists
-  if (document.getElementById("flowChart")) {
-    buildFlowChart(dashboardProcessed);
-  }
+  buildTrendChart(currentMode === "machine" ? dashboardMachine : dashboardProcessed);
+  buildReasonChart(dashboardData);
+  buildMachineChart(dashboardData);
+  buildFlowChart(dashboardProcessed);
 }
 
-
-// =====================================================
-// NAVIGATION
-// =====================================================
+/* =====================================================
+   NAVIGATION
+   ===================================================== */
 function goBack() {
   window.location.href = "index.html";
 }
-
