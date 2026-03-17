@@ -6,6 +6,7 @@
   <title>Investigation Hold Dashboard</title>
   <link rel="stylesheet" href="style-page3.css"/>
 </head>
+
 <body>
 
 <div class="animated-bg"></div>
@@ -99,65 +100,80 @@
       <p>Root causes, returned-to, and delay analysis</p>
     </div>
 
-    <!-- 🔥 TABS -->
+    <!-- MAIN TABS -->
     <div class="tabs">
       <button id="tabReasons" class="tab active">Root Causes</button>
       <button id="tabSentBack" class="tab">Returned To</button>
       <button id="tabDelay" class="tab">Delay Overview</button>
     </div>
 
-    <!-- ROOT CAUSE -->
+    <!-- ROOT CAUSES -->
     <section id="reasonsView" class="tab-panel">
       <div id="reasonBubbles"></div>
     </section>
 
-    <!-- RETURNED TO -->
+    <!-- RETURNED -->
     <section id="sentBackView" class="tab-panel" style="display:none;">
       <div id="sentBackBubbles"></div>
     </section>
 
-    <!-- 🔥 DELAY TAB -->
+    <!-- 🔥 DELAY VIEW -->
     <section id="delayView" class="tab-panel" style="display:none;">
 
-      <!-- BUCKETS -->
-      <div class="stats stats-primary" style="margin-bottom:20px;">
-        <div class="stat">
-          <h3>1–2 Days</h3>
-          <div id="bucket-1-2" class="value">0</div>
-        </div>
-
-        <div class="stat">
-          <h3>3–5 Days</h3>
-          <div id="bucket-3-5" class="value">0</div>
-        </div>
-
-        <div class="stat">
-          <h3>5+ Days</h3>
-          <div id="bucket-5plus" class="value">0</div>
-        </div>
+      <!-- SUB TABS -->
+      <div class="tabs sub-tabs">
+        <button id="delayTabSummary" class="tab active">Summary</button>
+        <button id="delayTabDept" class="tab">By Department</button>
+        <button id="delayTabTable" class="tab">Timeline</button>
       </div>
 
-      <!-- GROUPED -->
-      <div id="delayByDept" style="margin-bottom:20px;"></div>
+      <!-- SUMMARY -->
+      <div id="delaySummaryView">
+
+        <div class="stats stats-primary" style="margin-bottom:20px;">
+          <div class="stat">
+            <h3>1–2 Days</h3>
+            <div id="bucket-1-2" class="value">0</div>
+          </div>
+
+          <div class="stat">
+            <h3>3–5 Days</h3>
+            <div id="bucket-3-5" class="value">0</div>
+          </div>
+
+          <div class="stat">
+            <h3>5+ Days</h3>
+            <div id="bucket-5plus" class="value">0</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- BY DEPARTMENT -->
+      <div id="delayDeptView" style="display:none;">
+        <div id="delayByDept"></div>
+      </div>
 
       <!-- TABLE -->
-      <div class="delay-table-wrap">
-        <table class="delay-table">
-          <thead>
-            <tr>
-              <th>RX Number</th>
-              <th>Returned To</th>
-              <th>Previous Scan</th>
-              <th>Arrived</th>
-              <th>Days</th>
-            </tr>
-          </thead>
-          <tbody id="delayTableBody">
-            <tr>
-              <td colspan="5">Loading...</td>
-            </tr>
-          </tbody>
-        </table>
+      <div id="delayTableView" style="display:none;">
+        <div class="delay-table-wrap">
+          <table class="delay-table">
+            <thead>
+              <tr>
+                <th>RX Number</th>
+                <th>Returned To</th>
+                <th>Previous Scan</th>
+                <th>Arrived</th>
+                <th>Days</th>
+              </tr>
+            </thead>
+            <tbody id="delayTableBody">
+              <tr>
+                <td colspan="5">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
     </section>
@@ -172,5 +188,6 @@
 </main>
 
 <script src="page3.js"></script>
+
 </body>
 </html>
