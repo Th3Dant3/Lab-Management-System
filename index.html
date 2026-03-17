@@ -4,6 +4,8 @@
 <head>
 
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>LMS Operational Control Center</title>
 
 <!-- 🔐 AUTH CHECK BEFORE PAGE LOAD -->
@@ -16,7 +18,6 @@ if (sessionStorage.getItem("lms_logged_in") !== "true") {
 <!-- ⚡ PAGE LOAD PERFORMANCE TIMER -->
 <script>
 console.time("INDEX_LOAD");
-
 window.addEventListener("load", () => {
   console.timeEnd("INDEX_LOAD");
 });
@@ -32,14 +33,23 @@ window.addEventListener("load", () => {
 
 <div class="container">
 
-  <!-- Header -->
+  <!-- =====================================================
+       HEADER
+  ===================================================== -->
   <header class="header">
-    <h1>Lab Management System</h1>
-    <p>Zenni Optical USA Manufacturing Lab<br>Environment: Zenni USA</p>
+
+    <div class="header-content">
+      <h1>Lab Management System</h1>
+      <p>Zenni Optical USA Manufacturing Lab<br>Environment: Zenni USA</p>
+    </div>
+
     <button class="logout-btn" onclick="logout()">Logout</button>
+
   </header>
 
-  <!-- Executive Status Strip -->
+  <!-- =====================================================
+       STATUS STRIP
+  ===================================================== -->
   <section class="status-strip">
 
     <div class="status-item">
@@ -64,27 +74,34 @@ window.addEventListener("load", () => {
 
     <!-- Last Job Completed -->
     <div class="status-item">
+
       <span class="label">Last Job Completed</span>
-      <span id="lastUpdate" class="value">—</span>
-      <span id="lastSince" class="sub">—</span>
+
+      <div class="status-value-group">
+        <span id="lastUpdate" class="value">—</span>
+        <span id="lastSince" class="sub">—</span>
+      </div>
+
     </div>
 
   </section>
 
-  <!-- Critical Operations -->
+  <!-- =====================================================
+       CRITICAL OPERATIONS
+  ===================================================== -->
   <section class="section">
+
     <h2 class="section-title">Critical Operations</h2>
 
     <div class="cards two-col">
 
       <!-- Scanner Map -->
-      <div
-        id="scanner-card"
-        class="card primary"
-        data-gated
-      >
+      <div id="scanner-card" class="card primary" data-gated>
 
-        <h3>Scanner Map</h3>
+        <div class="card-header">
+          <h3>Scanner Map</h3>
+          <span class="badge">Live</span>
+        </div>
 
         <p>Live scanner activity by port</p>
         <p class="sub">Finish · Surface · AR</p>
@@ -98,19 +115,18 @@ window.addEventListener("load", () => {
       </div>
 
       <!-- Investigative Hold Tracker -->
-      <div
-        id="investigation-card"
-        class="card highlight"
-        data-gated
-      >
+      <div id="investigation-card" class="card highlight" data-gated>
 
-        <h3>Investigative Hold Tracker</h3>
+        <div class="card-header">
+          <h3>Investigative Hold Tracker</h3>
+          <span class="badge">Tracking</span>
+        </div>
 
-        <p>Active <strong><span id="activeHolds">—</span></strong></p>
-
-        <p>Completed <strong><span id="completed">—</span></strong></p>
-
-        <p>Coverage <strong><span id="coverageDetail">—</span></strong></p>
+        <div class="metric-list">
+          <p>Active <strong><span id="activeHolds">—</span></strong></p>
+          <p>Completed <strong><span id="completed">—</span></strong></p>
+          <p>Coverage <strong><span id="coverageDetail">—</span></strong></p>
+        </div>
 
         <button onclick="openPage('page3.html')">
           View Investigation Hold
@@ -119,22 +135,24 @@ window.addEventListener("load", () => {
       </div>
 
     </div>
+
   </section>
 
-  <!-- Quality & Engineering -->
+  <!-- =====================================================
+       QUALITY & ENGINEERING
+  ===================================================== -->
   <section class="section">
 
     <h2 class="section-title">Quality & Engineering</h2>
 
     <div class="cards">
 
-      <div
-        id="truecurve-card"
-        class="card"
-        data-gated
-      >
+      <div id="truecurve-card" class="card" data-gated>
 
-        <h3>True Curve / Power Issues</h3>
+        <div class="card-header">
+          <h3>True Curve / Power Issues</h3>
+          <span class="badge subtle">Engineering</span>
+        </div>
 
         <p>Engineering exceptions & trends</p>
 
@@ -148,7 +166,9 @@ window.addEventListener("load", () => {
 
   </section>
 
-  <!-- Tools -->
+  <!-- =====================================================
+       TOOLS
+  ===================================================== -->
   <section class="section">
 
     <h2 class="section-title">Tools</h2>
@@ -156,17 +176,16 @@ window.addEventListener("load", () => {
     <div class="cards">
 
       <!-- LMS Lens Uploads -->
-      <div
-        id="tools-card"
-        class="card"
-        data-gated
-      >
+      <div id="tools-card" class="card" data-gated>
 
-        <h3>LMS Lens Uploads</h3>
+        <div class="card-header">
+          <h3>LMS Lens Uploads</h3>
+          <span class="badge subtle">Tool</span>
+        </div>
 
         <p>In8 & In9 Format</p>
 
-        <h4 id="lensCount">0</h4>
+        <div class="metric-big" id="lensCount">0</div>
 
         <button onclick="openPage('in8-in9.html')">
           Open Tool
@@ -175,16 +194,14 @@ window.addEventListener("load", () => {
       </div>
 
       <!-- Coating Breakage Research -->
-      <div
-        id="coating-card"
-        class="card"
-        data-gated
-      >
+      <div id="coating-card" class="card" data-gated>
 
-        <h3>Coating Breakage Research</h3>
+        <div class="card-header">
+          <h3>Coating Breakage Research</h3>
+          <span class="badge subtle">Analysis</span>
+        </div>
 
         <p>Tool Research For Coating Breakage</p>
-
         <p class="sub">54R · 44R</p>
 
         <button onclick="openPage('coating.html')">
@@ -197,6 +214,9 @@ window.addEventListener("load", () => {
 
   </section>
 
+  <!-- =====================================================
+       FOOTER
+  ===================================================== -->
   <footer>
     LMS Tooling · Internal Use Only
   </footer>

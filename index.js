@@ -1,5 +1,5 @@
 /* =====================================================
-   INDEX DASHBOARD – OPTIMIZED VERSION
+   INDEX DASHBOARD – FINAL OPTIMIZED VERSION
    ===================================================== */
 
 /* 🔗 DATA API */
@@ -111,7 +111,11 @@ function renderDashboard(data) {
   const active = Number(data.active ?? 0);
   const completed = Number(data.completed ?? 0);
 
-  let coverageRaw = parseFloat(data.coverage) || 0;
+  /* ===============================
+     FIX COVERAGE NaN
+     =============================== */
+  let coverageRaw = Number(data.coverage);
+  if (isNaN(coverageRaw)) coverageRaw = 0;
 
   let coveragePct =
     coverageRaw <= 1
@@ -120,6 +124,9 @@ function renderDashboard(data) {
 
   coveragePct = Math.max(0, Math.min(100, coveragePct));
 
+  /* ===============================
+     LAST JOB COMPLETED (FIXED)
+     =============================== */
   const lastCompletedStr = data.lastCompletedAt || "N/A";
 
   setText("lastUpdate", lastCompletedStr);
@@ -127,22 +134,49 @@ function renderDashboard(data) {
   const sinceEl = document.getElementById("lastSince");
   const lastValEl = document.getElementById("lastUpdate");
 
-  lastValEl.classList.remove("ok", "warn", "bad");
+  if (lastValEl) {
+    lastValEl.classList.remove("ok", "warn", "bad");
+  }
 
-if (lastCompletedStr !== "N/A") {
+  if (lastCompletedStr !== "N/A") {
 
-  // Show actual date only
-  sinceEl.textContent = "Last completed date";
+    const parsed = new Date(lastCompletedStr);
 
-  lastValEl.classList.add("ok");
+    if (!isNaN(parsed)) {
 
-} else {
+      const now = new Date();
+      const diffMs = now - parsed;
+      const diffMin = Math.floor(diffMs / 60000);
 
-  sinceEl.textContent = "No completions yet";
-  lastValEl.classList.add("warn");
+      if (sinceEl) {
+        sinceEl.textContent =
+          diffMin < 1 ? "just now" :
+          diffMin < 60 ? `${diffMin} min ago` :
+          `${Math.floor(diffMin / 60)} hr ago`;
+      }
 
-}
+      if (lastValEl) {
+        if (diffMin < 5) lastValEl.classList.add("ok");
+        else if (diffMin < 30) lastValEl.classList.add("warn");
+        else lastValEl.classList.add("bad");
+      }
 
+    } else {
+
+      if (sinceEl) sinceEl.textContent = "Invalid time";
+
+    }
+
+  } else {
+
+    if (sinceEl) sinceEl.textContent = "No completions yet";
+    if (lastValEl) lastValEl.classList.add("warn");
+
+  }
+
+  /* ===============================
+     UPDATE UI
+     =============================== */
   setText("active", active);
   setText("activeHolds", active);
   setText("completed", completed);
@@ -285,13 +319,10 @@ function logout() {
 function setText(id,value) {
 
   const el = document.getElementById(id);
-
   if (el) el.textContent = value;
 
 }
 
 function openPage(page) {
-
   window.location.href = page;
-
 }
