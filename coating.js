@@ -489,37 +489,35 @@ function buildTrendChart(data) {
 
   let colorIndex = 0;
 
-allReasons.forEach(reason => {
+  allReasons.forEach(reason => {
 
-  const reasonTotals = sortedHourly.map(hour => {
+    const reasonTotals = sortedHourly.map(hour => {
 
-    let total = 0;
+      let total = 0;
 
-    Object.values(hour.machines || {}).forEach(machine => {
-      total += machine.reasons?.[reason]?.total || 0;
+      Object.values(hour.machines || {}).forEach(machine => {
+        total += machine.reasons?.[reason]?.total || 0;
+      });
+
+      return total;
+
     });
 
-    return total;
+    datasets.push({
+      label: reason,
+      data: reasonTotals,
+      borderColor: colors[colorIndex % colors.length],
+      backgroundColor: colors[colorIndex % colors.length],
+      borderWidth: 3,
+      tension: 0.35,
+      fill: false,
+      pointRadius: 4,
+      yAxisID: "yBroken"
+    });
+
+    colorIndex++;
 
   });
-
-  datasets.push({
-    label: reason,
-    data: reasonTotals,
-    borderColor: colors[colorIndex % colors.length],
-    backgroundColor: colors[colorIndex % colors.length],
-    borderWidth: 3,
-    tension: 0.35,
-    fill: false,
-    pointRadius: 4,
-    yAxisID: "yBroken"
-  });
-
-  colorIndex++;
-
-});
-
-
 
   // 🟢 Add Coating Jobs (right axis)
   datasets.push({
@@ -540,15 +538,34 @@ allReasons.forEach(reason => {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
+
+      // 🔥 UPDATED SECTION STARTS HERE
       plugins: {
+
         legend: { labels: { color: "#E6F1FF" } },
+
         title: {
           display: true,
-          text: "Breakage Processed by Reason",
+          text: currentMode === "machine"
+            ? "Machine Scan Trend"
+            : "Breakage Processed by Reason",
           color: "#E6F1FF",
           font: { size: 16 }
+        },
+
+        tooltip: {
+          bodyFont: { size: 14 },
+          titleFont: { size: 15 },
+          padding: 12,
+          cornerRadius: 6,
+          backgroundColor: "rgba(15, 25, 45, 0.95)",
+          borderColor: "#4da3ff",
+          borderWidth: 1
         }
+
       },
+      // 🔥 UPDATED SECTION ENDS HERE
+
       scales: {
         yBroken: {
           type: "linear",
@@ -877,16 +894,6 @@ const overnightFlow = filteredHours.map(h => {
   spanGaps: true
 },
 
-{
-  label: "Coater → Break Delay",
-  data: postDelay,
-  borderColor: "#ff6b6b",
-  backgroundColor: "rgba(255,107,107,0.15)",
-  borderWidth: 3,
-  tension: 0.35,
-  fill: true,
-  spanGaps: true
-}
 
 ]
     },
