@@ -327,6 +327,13 @@ tbody tr:hover {
   background: #365b96;
 }
 
+.refresh-timer {
+  font-size: 13px;
+  color: #9db4d4;
+  margin-left: 10px;
+  min-width: 120px;
+}
+
 /* =====================================================
    MODAL
 ===================================================== */

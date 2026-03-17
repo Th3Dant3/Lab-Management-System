@@ -23,24 +23,28 @@
       ● Live Dashboard • Auto refresh every 5 minutes
   </div>
 
-  <!-- ================= FILTERS ================= -->
-  <div class="filters-bar">
+<!-- ================= FILTERS ================= -->
+<div class="filters-bar">
 
-    <!-- Date Filter ONLY -->
-    <div class="date-filter">
-      <label for="historyDate">Date:</label>
-      <input type="date" id="historyDate" />
-    </div>
+  <!-- DATE + LIVE -->
+  <div class="date-filter">
+    <label for="historyDate">Date:</label>
+    <input type="date" id="historyDate" />
 
     <!-- LIVE MODE BUTTON -->
-    <div>
-      <button id="liveBtn" class="live-btn">🔴 Live Mode</button>
-    </div>
+    <button id="liveBtn" class="live-btn" onclick="resetToToday()">
+      🔴 Live Mode
+    </button>
 
-    <!-- REPORT DATE DISPLAY -->
-    <div id="activeReportDate" class="report-date-indicator"></div>
-
+    <!-- COUNTDOWN TIMER -->
+    <div id="refreshTimer" class="refresh-timer"></div>
   </div>
+
+  <!-- REPORT DATE DISPLAY -->
+  <div id="activeReportDate" class="report-date-indicator"></div>
+  <div id="refreshTimer" class="refresh-timer"></div> <!-- ✅ ADD -->
+
+</div>
 
   <!-- ================= MAIN NAV TABS ================= -->
   <div class="tabs main-tabs">

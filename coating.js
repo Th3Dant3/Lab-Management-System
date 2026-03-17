@@ -20,6 +20,9 @@ let currentFlowMode = "average";
 
 
 let currentDate = null;  // 👈 ADD THIS LINE
+let refreshInterval = 5 * 60; // 5 minutes in seconds
+let refreshCountdown = refreshInterval;
+let refreshTimerHandle = null;
 
 // =====================================================
 // GLOBAL BREAKAGE COLOR MAP (FIXED COLORS)
@@ -52,11 +55,11 @@ function updateReportDateDisplay(data){
   const el = document.getElementById("activeReportDate");
   if(!el) return;
 
-  if(currentDate === null){
-    el.innerHTML = "Viewing Report Date: <strong>Today (Live)</strong>";
-  } else {
-    el.innerHTML = "Viewing Report Date: <strong>" + currentDate + "</strong>";
-  }
+if(currentDate === null){
+  el.innerHTML = "Viewing Report Date: <strong style='color:#32ff7e'>LIVE</strong>";
+} else {
+  el.innerHTML = "Viewing Report Date: <strong>" + currentDate + "</strong>";
+}
 
 }
 
@@ -268,15 +271,39 @@ function applyDateFilter() {
   }
 
   loadDashboard();
+  startRefreshCountdown();
 }
 
 
 // 👇 ADD THIS RIGHT HERE
+
 function resetToToday() {
   currentDate = null;
   document.getElementById("historyDate").value = "";
   loadDashboard();
 }
+
+// 🔴 LIVE MODE BUTTON
+document.addEventListener("DOMContentLoaded", () => {
+
+  const liveBtn = document.getElementById("liveBtn");
+
+  if (liveBtn) {
+    liveBtn.addEventListener("click", () => {
+
+      currentDate = null;
+
+      const dateInput = document.getElementById("historyDate");
+      if (dateInput) dateInput.value = "";
+
+      loadDashboard();
+      startRefreshCountdown();
+
+      console.log("Switched to LIVE MODE");
+    });
+  }
+
+});
 
 
 // Keep this at the bottom
@@ -1519,16 +1546,17 @@ function buildMachineChart(data) {
 
 // 🔄 AUTO REFRESH EVERY 5 MINUTES (ONLY FOR TODAY VIEW)
 // 🔄 AUTO REFRESH EVERY 5 MINUTES (LIVE MODE ONLY)
+
 setInterval(() => {
 
   if (currentDate === null) {
     console.log("Auto refreshing (Live Mode)");
+
     loadDashboard();
-  } else {
-    console.log("Auto refresh skipped (History mode active)");
+    startRefreshCountdown(); // ✅ RESET TIMER
   }
 
-}, 3 * 60 * 1000);
+}, refreshInterval * 1000);
 
 
 
@@ -1555,9 +1583,6 @@ setInterval(() => {
   loadDashboard();
 });
   }
-
-
-});
 
 
 // =====================================================
@@ -1607,6 +1632,40 @@ function rebuildAllCharts() {
   if (document.getElementById("flowChart")) {
     buildFlowChart(dashboardProcessed);
   }
+}
+
+function startRefreshCountdown() {
+
+  if (refreshTimerHandle) {
+    clearInterval(refreshTimerHandle);
+  }
+
+  const timerEl = document.getElementById("refreshTimer");
+if (!timerEl) return; // ✅ ADD THIS (prevents crash)
+
+  refreshCountdown = refreshInterval;
+
+  refreshTimerHandle = setInterval(() => {
+
+    if (currentDate !== null) {
+      // History mode → stop countdown display
+      timerEl.textContent = "History Mode";
+      return;
+    }
+
+    const minutes = Math.floor(refreshCountdown / 60);
+    const seconds = refreshCountdown % 60;
+
+    timerEl.textContent =
+      `Refresh in ${minutes}:${seconds.toString().padStart(2, "0")}`;
+
+    refreshCountdown--;
+
+    if (refreshCountdown < 0) {
+      refreshCountdown = refreshInterval;
+    }
+
+  }, 1000);
 }
 
 
