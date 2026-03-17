@@ -1,20 +1,26 @@
 document.addEventListener("DOMContentLoaded", () => {
+
   const API_URL =
     "https://script.google.com/macros/s/AKfycbzb9LNa7_5dfr7lfFf_MCkHVamM3T5Sw7iByx58WKgWCGvvl6ysZZyIsEBWppuCL3A/exec";
 
   const els = {
     dateFilter: document.getElementById("dateFilter"),
     btnAll: document.getElementById("btnAll"),
+
     tabReasons: document.getElementById("tabReasons"),
     tabSentBack: document.getElementById("tabSentBack"),
+    tabDelay: document.getElementById("tabDelay"),
+
     reasonsView: document.getElementById("reasonsView"),
     sentBackView: document.getElementById("sentBackView"),
+    delayView: document.getElementById("delayView"),
+
     reasonBubbles: document.getElementById("reasonBubbles"),
     sentBackBubbles: document.getElementById("sentBackBubbles"),
-    delayTableBody: document.getElementById("delayTableBody"),
 
-    // NEW
+    delayTableBody: document.getElementById("delayTableBody"),
     delayByDept: document.getElementById("delayByDept"),
+
     bucket12: document.getElementById("bucket-1-2"),
     bucket35: document.getElementById("bucket-3-5"),
     bucket5p: document.getElementById("bucket-5plus")
@@ -25,68 +31,28 @@ document.addEventListener("DOMContentLoaded", () => {
   /***********************
    HELPERS
   ***********************/
-  function set(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-  }
+  const safeNumber = v => Number.isFinite(Number(v)) ? Number(v) : 0;
 
-  function safeNumber(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
+  const formatInt = v => safeNumber(v).toLocaleString("en-US");
 
-  function formatInteger(value) {
-    return safeNumber(value).toLocaleString("en-US");
-  }
+  const formatPct = v => `${safeNumber(v).toFixed(0)}%`;
 
-  function formatPercent(value) {
-    return `${safeNumber(value).toFixed(0)}%`;
-  }
+  const formatDec = (v, d = 2) => safeNumber(v).toFixed(d);
 
-  function formatDecimal(value, digits = 2) {
-    return safeNumber(value).toFixed(digits);
-  }
-
-  function formatDelayValue(value) {
-    const n = safeNumber(value);
-    return Number.isInteger(n) ? String(n) : n.toFixed(2);
-  }
-
-  function escapeHtml(str) {
-    return String(str ?? "")
+  const escapeHtml = str =>
+    String(str ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
-  }
 
-  function getFilterValue() {
-    return els.dateFilter?.value?.trim() || "all";
-  }
+  const getFilterValue = () =>
+    els.dateFilter?.value?.trim() || "all";
 
-  function setLoadingState(loading) {
-    document.body.classList.toggle("is-loading", loading);
-  }
-
-  function markAllButton() {
-    if (!els.btnAll) return;
-    els.btnAll.classList.toggle("active", getFilterValue() === "all");
-  }
-
-  function showMetricSkeleton() {
-    [
-      "activeHolds",
-      "evaluatedCount",
-      "coveragePct",
-      "lastUpdated",
-      "avgInvestigationTime",
-      "receivedToday",
-      "evaluatedToday",
-      "avgArrivalDelayDays",
-      "oldestInvestigation",
-      "latestInvestigation"
-    ].forEach(id => set(id, "Loading..."));
+  function set(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
   }
 
   /***********************
@@ -95,19 +61,12 @@ document.addEventListener("DOMContentLoaded", () => {
   async function load() {
     const url = `${API_URL}?date=${encodeURIComponent(getFilterValue())}`;
 
-    markAllButton();
-    setLoadingState(true);
-    showMetricSkeleton();
-
     try {
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
       render(data);
     } catch (e) {
-      console.error(e);
-      fail();
-    } finally {
-      setLoadingState(false);
+      console.error("LOAD ERROR:", e);
     }
   }
 
@@ -115,82 +74,36 @@ document.addEventListener("DOMContentLoaded", () => {
    RENDER
   ***********************/
   function render(d) {
+
     const total = safeNumber(d.total);
 
-    set("activeHolds", formatInteger(d.active));
-    set("evaluatedCount", formatInteger(d.evaluated));
-    set("coveragePct", formatPercent(d.coverage));
+    set("activeHolds", formatInt(d.active));
+    set("evaluatedCount", formatInt(d.evaluated));
+    set("coveragePct", formatPct(d.coverage));
     set("lastUpdated", d.lastUpdated || "--");
 
     set(
       "avgInvestigationTime",
-      `${formatDecimal(d.avgInvestigationDays)} Days (${formatDecimal(d.avgInvestigationHours)} Hours)`
+      `${formatDec(d.avgInvestigationDays)} Days (${formatDec(d.avgInvestigationHours)} Hours)`
     );
 
-    set("receivedToday", formatInteger(d.receivedOnSelectedDate));
-    set("evaluatedToday", formatInteger(d.evaluatedOnSelectedDate));
-    set("avgArrivalDelayDays", `${formatDecimal(d.avgArrivalDelayDays)} Days`);
+    set("receivedToday", formatInt(d.receivedOnSelectedDate));
+    set("evaluatedToday", formatInt(d.evaluatedOnSelectedDate));
+    set("avgArrivalDelayDays", `${formatDec(d.avgArrivalDelayDays)} Days`);
     set("oldestInvestigation", d.oldestInvestigation || "--");
     set("latestInvestigation", d.latestInvestigation || "--");
 
-    renderTop10Bubbles("reasonBubbles", d.reasonsTop10, total);
-    renderTop10Bubbles("sentBackBubbles", d.sentBackTop10, total);
+    renderTop10("reasonBubbles", d.reasonsTop10, total);
+    renderTop10("sentBackBubbles", d.sentBackTop10, total);
 
-    renderDelaySummary(d); // 🔥 NEW
+    renderDelaySummary(d);
     renderDelayTable(d.delayRows);
-  }
-
-  /***********************
-   DELAY SUMMARY (NEW)
-  ***********************/
-  function renderDelaySummary(d) {
-
-    // BUCKETS
-    if (els.bucket12) els.bucket12.textContent = d.delayBuckets?.["1-2 Days"] || 0;
-    if (els.bucket35) els.bucket35.textContent = d.delayBuckets?.["3-5 Days"] || 0;
-    if (els.bucket5p) els.bucket5p.textContent = d.delayBuckets?.["5+ Days"] || 0;
-
-    // GROUPED
-    const wrap = els.delayByDept;
-    if (!wrap) return;
-
-    wrap.innerHTML = "";
-
-    const rows = d.delayByDept || [];
-
-    if (!rows.length) {
-      wrap.innerHTML = `<div class="empty-state">No delay data</div>`;
-      return;
-    }
-
-    rows.forEach(r => {
-      const el = document.createElement("div");
-      el.className = "pill";
-
-      el.innerHTML = `
-        <div class="pill-left">
-          <div class="pill-title">${escapeHtml(r.name)}</div>
-
-          <div class="pill-bar">
-            <div class="pill-fill" style="width:${Math.min(r.count * 10, 100)}%"></div>
-          </div>
-
-          <div class="pill-pct">
-            Avg: ${r.avgDays} days • Max: ${r.maxDays}
-          </div>
-        </div>
-
-        <div class="pill-count">${formatInteger(r.count)}</div>
-      `;
-
-      wrap.appendChild(el);
-    });
   }
 
   /***********************
    TOP 10
   ***********************/
-  function renderTop10Bubbles(target, rows, total) {
+  function renderTop10(target, rows, total) {
     const wrap = document.getElementById(target);
     if (!wrap) return;
 
@@ -200,7 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     wrap.innerHTML = rows.map(item => {
-      const pct = total > 0 ? (item.count / total) * 100 : 0;
+      const pct = total ? (item.count / total) * 100 : 0;
 
       return `
         <div class="pill">
@@ -211,16 +124,87 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="pill-pct">${pct.toFixed(1)}%</div>
           </div>
-          <div class="pill-count">${formatInteger(item.count)}</div>
+          <div class="pill-count">${formatInt(item.count)}</div>
         </div>
       `;
     }).join("");
   }
 
   /***********************
+   DELAY SUMMARY (NO API NEEDED)
+  ***********************/
+  function renderDelaySummary(d) {
+
+    const rows = d.delayRows || [];
+
+    let b12 = 0, b35 = 0, b5p = 0;
+
+    rows.forEach(r => {
+      const days = safeNumber(r.daysToArrive);
+
+      if (days >= 1 && days <= 2) b12++;
+      else if (days > 2 && days <= 5) b35++;
+      else if (days > 5) b5p++;
+    });
+
+    if (els.bucket12) els.bucket12.textContent = b12;
+    if (els.bucket35) els.bucket35.textContent = b35;
+    if (els.bucket5p) els.bucket5p.textContent = b5p;
+
+    // GROUP
+    const map = {};
+
+    rows.forEach(r => {
+      const key = r.sentBack || "Unknown";
+      const days = safeNumber(r.daysToArrive);
+
+      if (!map[key]) {
+        map[key] = { count: 0, total: 0, max: 0 };
+      }
+
+      map[key].count++;
+      map[key].total += days;
+      if (days > map[key].max) map[key].max = days;
+    });
+
+    const grouped = Object.keys(map).map(k => ({
+      name: k,
+      count: map[k].count,
+      avgDays: (map[k].total / map[k].count).toFixed(1),
+      maxDays: map[k].max.toFixed(1)
+    }));
+
+    grouped.sort((a, b) => b.maxDays - a.maxDays);
+
+    const wrap = els.delayByDept;
+    if (!wrap) return;
+
+    if (!grouped.length) {
+      wrap.innerHTML = `<div class="empty-state">No delay data</div>`;
+      return;
+    }
+
+    wrap.innerHTML = grouped.map(r => `
+      <div class="pill">
+        <div class="pill-left">
+          <div class="pill-title">${escapeHtml(r.name)}</div>
+          <div class="pill-bar">
+            <div class="pill-fill" style="width:${Math.min(r.count * 10, 100)}%"></div>
+          </div>
+          <div class="pill-pct">
+            Avg: ${r.avgDays} days • Max: ${r.maxDays}
+          </div>
+        </div>
+        <div class="pill-count">${formatInt(r.count)}</div>
+      </div>
+    `).join("");
+  }
+
+  /***********************
    TABLE
   ***********************/
   function renderDelayTable(rows) {
+
     const body = els.delayTableBody;
     if (!body) return;
 
@@ -229,8 +213,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    body.innerHTML = rows.map(row => {
-      const d = safeNumber(row.daysToArrive);
+    body.innerHTML = rows.map(r => {
+
+      const d = safeNumber(r.daysToArrive);
 
       const cls =
         d >= 3 ? "delay-high" :
@@ -239,13 +224,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       return `
         <tr>
-          <td>${escapeHtml(row.rx)}</td>
-          <td>${escapeHtml(row.sentBack)}</td>
-          <td>${escapeHtml(row.scanDate)}</td>
-          <td>${escapeHtml(row.arrived)}</td>
+          <td>${escapeHtml(r.rx)}</td>
+          <td>${escapeHtml(r.sentBack)}</td>
+          <td>${escapeHtml(r.scanDate)}</td>
+          <td>${escapeHtml(r.arrived)}</td>
           <td>
             <span class="delay-badge ${cls}">
-              ${formatDelayValue(d)}
+              ${d}
             </span>
           </td>
         </tr>
@@ -254,16 +239,31 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /***********************
-   FAIL
+   TABS (FIXED)
   ***********************/
-  function fail() {
-    ["activeHolds","evaluatedCount","coveragePct","lastUpdated"].forEach(id => set(id, "ERR"));
+  function switchTab(tab) {
+
+    activeTab = tab;
+
+    if (els.reasonsView)
+      els.reasonsView.style.display = tab === "reasons" ? "block" : "none";
+
+    if (els.sentBackView)
+      els.sentBackView.style.display = tab === "sent" ? "block" : "none";
+
+    if (els.delayView)
+      els.delayView.style.display = tab === "delay" ? "block" : "none";
+
+    els.tabReasons?.classList.toggle("active", tab === "reasons");
+    els.tabSentBack?.classList.toggle("active", tab === "sent");
+    els.tabDelay?.classList.toggle("active", tab === "delay");
   }
 
   /***********************
    EVENTS
   ***********************/
   els.dateFilter?.addEventListener("change", load);
+
   els.btnAll?.addEventListener("click", () => {
     els.dateFilter.value = "";
     load();
@@ -271,16 +271,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   els.tabReasons?.addEventListener("click", () => switchTab("reasons"));
   els.tabSentBack?.addEventListener("click", () => switchTab("sent"));
-
-  function switchTab(tab) {
-    activeTab = tab;
-    els.reasonsView.style.display = tab === "reasons" ? "block" : "none";
-    els.sentBackView.style.display = tab === "sent" ? "block" : "none";
-  }
+  els.tabDelay?.addEventListener("click", () => switchTab("delay"));
 
   /***********************
    INIT
   ***********************/
   switchTab(activeTab);
   load();
+
 });
