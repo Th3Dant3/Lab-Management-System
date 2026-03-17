@@ -233,7 +233,11 @@ function renderDelayTable(rows) {
     return;
   }
 
-  // 🔥 GROUP BY RANGE
+  // 🔥 SORT FIRST (IMPORTANT)
+  rows.sort((a, b) =>
+    safeNumber(b.daysToArrive) - safeNumber(a.daysToArrive)
+  );
+
   const groups = {
     "1-2": [],
     "3-5": [],
@@ -248,7 +252,6 @@ function renderDelayTable(rows) {
     else if (d > 5) groups["5+"].push(r);
   });
 
-  // 🔥 BUILD HTML
   let html = "";
 
   Object.entries(groups).forEach(([range, list]) => {
@@ -294,10 +297,10 @@ function renderDelayTable(rows) {
 
   body.innerHTML = html;
 
-  // 🔥 TOGGLE LOGIC
+  // 🔥 CLICK TO EXPAND
   document.querySelectorAll(".group-header").forEach(header => {
 
-    header.addEventListener("click", () => {
+    header.onclick = () => {
 
       const target = header.dataset.target;
       const rows = document.querySelectorAll(`.${target}`);
@@ -310,9 +313,10 @@ function renderDelayTable(rows) {
       });
 
       if (icon) icon.textContent = isOpen ? "▶" : "▼";
-    });
+    };
 
   });
+
 }
 
   /***********************
