@@ -221,19 +221,52 @@ document.addEventListener("DOMContentLoaded", () => {
   /***********************
    TABLE (UPDATED)
   ***********************/
-  function renderDelayTable(rows) {
+function renderDelayTable(rows) {
 
-    rows = applyDelayFilter(rows);
+  rows = applyDelayFilter(rows);
 
-    const body = els.delayTableBody;
-    if (!body) return;
+  const body = els.delayTableBody;
+  if (!body) return;
 
-    if (!rows?.length) {
-      body.innerHTML = `<tr><td colspan="5">No delay records</td></tr>`;
-      return;
-    }
+  if (!rows?.length) {
+    body.innerHTML = `<tr><td colspan="5">No delay records</td></tr>`;
+    return;
+  }
 
-    body.innerHTML = rows.map(r => {
+  // 🔥 GROUP BY RANGE
+  const groups = {
+    "1-2": [],
+    "3-5": [],
+    "5+": []
+  };
+
+  rows.forEach(r => {
+    const d = safeNumber(r.daysToArrive);
+
+    if (d >= 1 && d <= 2) groups["1-2"].push(r);
+    else if (d > 2 && d <= 5) groups["3-5"].push(r);
+    else if (d > 5) groups["5+"].push(r);
+  });
+
+  // 🔥 BUILD HTML
+  let html = "";
+
+  Object.entries(groups).forEach(([range, list]) => {
+
+    if (!list.length) return;
+
+    const id = `group-${range}`;
+
+    html += `
+      <tr class="group-header" data-target="${id}">
+        <td colspan="5">
+          <span class="toggle">▶</span>
+          ${range} Days (${list.length})
+        </td>
+      </tr>
+    `;
+
+    html += list.map(r => {
 
       const d = safeNumber(r.daysToArrive);
 
@@ -243,7 +276,7 @@ document.addEventListener("DOMContentLoaded", () => {
         "delay-low";
 
       return `
-        <tr>
+        <tr class="group-row ${id}" style="display:none;">
           <td>${escapeHtml(r.rx)}</td>
           <td>${escapeHtml(r.sentBack)}</td>
           <td>${escapeHtml(r.scanDate)}</td>
@@ -256,7 +289,31 @@ document.addEventListener("DOMContentLoaded", () => {
         </tr>
       `;
     }).join("");
-  }
+
+  });
+
+  body.innerHTML = html;
+
+  // 🔥 TOGGLE LOGIC
+  document.querySelectorAll(".group-header").forEach(header => {
+
+    header.addEventListener("click", () => {
+
+      const target = header.dataset.target;
+      const rows = document.querySelectorAll(`.${target}`);
+      const icon = header.querySelector(".toggle");
+
+      const isOpen = rows[0]?.style.display !== "none";
+
+      rows.forEach(r => {
+        r.style.display = isOpen ? "none" : "table-row";
+      });
+
+      if (icon) icon.textContent = isOpen ? "▶" : "▼";
+    });
+
+  });
+}
 
   /***********************
    TABS

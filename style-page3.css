@@ -739,3 +739,23 @@ body{
     justify-content:center;
   }
 }
+
+.group-header {
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.group-header:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.group-header td {
+  padding: 14px;
+  font-size: 14px;
+}
+
+.toggle {
+  margin-right: 8px;
+  color: #6bbcff;
+}
