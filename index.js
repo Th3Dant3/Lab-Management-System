@@ -112,7 +112,7 @@ function renderDashboard(data) {
   const completed = Number(data.completed ?? 0);
 
   /* ===============================
-     FIX COVERAGE
+     COVERAGE
      =============================== */
   let coverageRaw = Number(data.coverage);
   if (isNaN(coverageRaw)) coverageRaw = 0;
@@ -124,72 +124,52 @@ function renderDashboard(data) {
 
   coveragePct = Math.max(0, Math.min(100, coveragePct));
 
-  /* Fallback if API bad */
   if (completed > 0 && coveragePct === 0) {
     coveragePct = Math.round((completed / (completed + active)) * 100);
   }
 
   /* ===============================
-     LAST JOB COMPLETED
+     🆕 AGING SYSTEM
      =============================== */
-  const lastCompletedStr = data.lastCompletedAt || "N/A";
+  const oldest = Number(data.oldestActiveMinutes ?? 0);
+  const stuck = Number(data.stuckJobs ?? 0);
 
-  const sinceEl = document.getElementById("lastSince");
   const lastValEl = document.getElementById("lastUpdate");
+  const sinceEl = document.getElementById("lastSince");
 
   if (lastValEl) {
     lastValEl.classList.remove("ok", "warn", "bad");
   }
 
-  if (lastCompletedStr !== "N/A") {
+  /* 🔹 Format time */
+  let label = "0 min";
 
-    const parsed = new Date(lastCompletedStr);
-
-    if (!isNaN(parsed)) {
-
-      /* 🔹 Format date */
-      setText("lastUpdate",
-        parsed.toLocaleDateString(undefined, {
-          month: "short",
-          day: "2-digit",
-          year: "numeric"
-        })
-      );
-
-      const now = new Date();
-      const diffMs = now - parsed;
-
-      const diffMin = Math.floor(diffMs / 60000);
-      const diffHr = Math.floor(diffMin / 60);
-      const diffDay = Math.floor(diffHr / 24);
-
-      /* 🔹 Smart "time ago" */
-      if (sinceEl) {
-        if (diffMin < 1) sinceEl.textContent = "just now";
-        else if (diffMin < 60) sinceEl.textContent = `${diffMin} min ago`;
-        else if (diffHr < 24) sinceEl.textContent = `${diffHr} hr ago`;
-        else sinceEl.textContent = `${diffDay} day ago`;
-      }
-
-      /* 🔹 Status color */
-      if (lastValEl) {
-        if (diffMin < 5) lastValEl.classList.add("ok");
-        else if (diffHr < 8) lastValEl.classList.add("warn");
-        else lastValEl.classList.add("bad");
-      }
-
-    } else {
-
-      setText("lastUpdate", lastCompletedStr);
-      if (sinceEl) sinceEl.textContent = "Invalid time";
-
-    }
-
+  if (oldest >= 60) {
+    const hrs = Math.floor(oldest / 60);
+    const mins = oldest % 60;
+    label = `${hrs}h ${mins}m`;
   } else {
+    label = `${oldest} min`;
+  }
 
-    setText("lastUpdate", "—");
-    if (sinceEl) sinceEl.textContent = "No completions yet";
-    if (lastValEl) lastValEl.classList.add("warn");
+  setText("lastUpdate", label);
+
+  if (sinceEl) {
+    sinceEl.textContent = `${stuck} stuck job${stuck === 1 ? "" : "s"}`;
+  }
+
+  /* 🔹 Smart color logic (REAL OPS) */
+  if (lastValEl) {
+
+    if (oldest < 30) {
+      lastValEl.classList.add("ok");        // 🟢 healthy
+    }
+    else if (oldest < 90) {
+      lastValEl.classList.add("warn");      // 🟡 slowing
+    }
+    else {
+      lastValEl.classList.add("bad");       // 🔴 problem
+    }
 
   }
 
