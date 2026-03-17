@@ -1,135 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-<meta charset="UTF-8">
-<title>Investigation Hold Tracker</title>
-
-<link rel="stylesheet" href="style-page3.css">
-
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investigation Hold Dashboard</title>
+  <link rel="stylesheet" href="style-page3.css" />
 </head>
-
 <body>
 
-<div class="animated-bg"></div>
+  <div class="animated-bg"></div>
 
-<main class="wrap">
+  <main class="wrap">
 
-<!-- HEADER -->
-<div class="header">
-<h1>Investigation Hold Tracker</h1>
-<p>Operational Control Surface</p>
-</div>
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-copy">
+        <h1>Investigation Hold Dashboard</h1>
+        <p>Operational Review & Exception Monitoring</p>
+      </div>
+    </header>
 
+    <!-- FILTER BAR -->
+    <section class="filters" aria-label="Dashboard filters">
+      <div class="date-filter">
+        <label for="dateFilter">Report Date</label>
+        <input type="date" id="dateFilter" />
+      </div>
 
-<!-- FILTER BAR -->
-<div class="filters">
+      <div class="quick-buttons" aria-label="Quick date filters">
+        <button id="btnToday" type="button">Today</button>
+        <button id="btnYesterday" type="button">Yesterday</button>
+        <button id="btnAll" type="button">All Dates</button>
+      </div>
+    </section>
 
-<div class="date-filter">
-<label>Filter Date</label>
-<input type="date" id="dateFilter">
-</div>
+    <!-- KPI SECTION -->
+    <section class="kpi-section" aria-label="Key performance indicators">
 
-<div class="quick-buttons">
-<button id="btnToday">Today</button>
-<button id="btnYesterday">Yesterday</button>
-<button id="btnAll">All</button>
-</div>
+      <!-- KPI ROW 1 -->
+      <div class="stats stats-primary">
 
-</div>
+        <article class="stat stat-primary">
+          <h3>Active Holds</h3>
+          <div id="activeHolds" class="value">—</div>
+        </article>
 
+        <article class="stat">
+          <h3>Total Evaluated</h3>
+          <div id="evaluatedCount" class="value">—</div>
+        </article>
 
-<!-- STATS ROW 1 -->
-<div class="stats">
+        <article class="stat">
+          <h3>Evaluation Coverage</h3>
+          <div id="coveragePct" class="value">—</div>
+        </article>
 
-<div class="stat">
-<h3>Active Holds</h3>
-<div id="activeHolds" class="value">—</div>
-</div>
+        <article class="stat">
+          <h3>Last Refresh</h3>
+          <div id="lastUpdated" class="value">—</div>
+        </article>
 
-<div class="stat">
-<h3>Evaluated</h3>
-<div id="evaluatedCount" class="value">—</div>
-</div>
+      </div>
 
-<div class="stat">
-<h3>Coverage</h3>
-<div id="coveragePct" class="value">—</div>
-</div>
+      <!-- KPI ROW 2 -->
+      <div class="stats stats-secondary">
 
-<div class="stat">
-<h3>Last Updated</h3>
-<div id="lastUpdated" class="value">—</div>
-</div>
+        <article class="stat">
+          <h3>Average Investigation Time</h3>
+          <div id="avgInvestigationTime" class="value">—</div>
+        </article>
 
-</div>
+        <article class="stat">
+          <h3>Received on Selected Date</h3>
+          <div id="receivedToday" class="value">—</div>
+        </article>
 
+        <article class="stat">
+          <h3>Evaluated on Selected Date</h3>
+          <div id="evaluatedToday" class="value">—</div>
+        </article>
 
-<!-- STATS ROW 2 -->
-<div class="stats">
+        <article class="stat">
+          <h3>Average Days to Reach IH</h3>
+          <div id="avgArrivalDelayDays" class="value">—</div>
+        </article>
 
-<div class="stat">
-<h3>Avg Investigation Time</h3>
-<div id="avgInvestigationTime" class="value">—</div>
-</div>
+        <article class="stat">
+          <h3>Oldest Open Investigation</h3>
+          <div id="oldestInvestigation" class="value">—</div>
+        </article>
 
-<div class="stat">
-<h3>Received Today</h3>
-<div id="receivedToday" class="value">—</div>
-</div>
+        <article class="stat">
+          <h3>Most Recent Investigation</h3>
+          <div id="latestInvestigation" class="value">—</div>
+        </article>
 
-<div class="stat">
-<h3>Evaluated Today</h3>
-<div id="evaluatedToday" class="value">—</div>
-</div>
+      </div>
 
-<div class="stat">
-<h3>Oldest Investigation</h3>
-<div id="oldestInvestigation" class="value">—</div>
-</div>
+    </section>
 
-<div class="stat">
-<h3>Latest Investigation</h3>
-<div id="latestInvestigation" class="value">—</div>
-</div>
+    <!-- BREAKDOWN PANEL -->
+    <section class="detail-panel">
+      <div class="section-header">
+        <h2>Investigation Breakdown</h2>
+        <p>Review root causes and routing destinations for investigated holds.</p>
+      </div>
 
-</div>
+      <div class="tabs" role="tablist" aria-label="Investigation detail tabs">
+        <button id="tabReasons" class="tab active" type="button" role="tab" aria-selected="true">
+          Root Causes
+        </button>
 
+        <button id="tabSentBack" class="tab" type="button" role="tab" aria-selected="false">
+          Returned To
+        </button>
+      </div>
 
-<!-- TABS -->
-<div class="tabs">
+      <section id="reasonsView" class="tab-panel" role="tabpanel">
+        <div id="reasonBubbles"></div>
+      </section>
 
-<button id="tabReasons" class="tab active">
-Reasons
-</button>
+      <section id="sentBackView" class="tab-panel" role="tabpanel" style="display:none;">
+        <div id="sentBackBubbles"></div>
+      </section>
+    </section>
 
-<button id="tabSentBack" class="tab">
-Sent Back To
-</button>
+    <!-- ARRIVAL DELAY REVIEW -->
+    <section class="detail-panel">
+      <div class="section-header">
+        <h2>Arrival Delay Review</h2>
+        <p>Shows time from Previous Scan Date to Investigation Hold arrival so delayed intake can be reviewed.</p>
+      </div>
 
-</div>
+      <div class="delay-table-wrap">
+        <table class="delay-table">
+          <thead>
+            <tr>
+              <th>RX Number</th>
+              <th>Returned To</th>
+              <th>Previous Scan Date</th>
+              <th>Arrived at IH</th>
+              <th>Days to Reach IH</th>
+            </tr>
+          </thead>
+          <tbody id="delayTableBody">
+            <tr>
+              <td colspan="5">Loading...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
+    <!-- FOOTER -->
+    <div class="page-actions">
+      <a class="back" href="index.html">← Return to Dashboard</a>
+    </div>
 
-<!-- REASONS VIEW -->
-<section id="reasonsView">
-<div id="reasonBubbles"></div>
-</section>
+  </main>
 
-
-<!-- SENT BACK VIEW -->
-<section id="sentBackView" style="display:none">
-<div id="sentBackBubbles"></div>
-</section>
-
-
-<!-- BACK BUTTON -->
-<a class="back" href="index.html">
-← Back
-</a>
-
-</main>
-
-<script src="page3.js"></script>
-
+  <script src="page3.js"></script>
 </body>
 </html>
