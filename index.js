@@ -1,5 +1,5 @@
 /* =====================================================
-   INDEX DASHBOARD – FINAL OPTIMIZED VERSION
+   INDEX DASHBOARD – FINAL PRODUCTION VERSION
    ===================================================== */
 
 /* 🔗 DATA API */
@@ -20,7 +20,7 @@ const AUTH_API =
 })();
 
 /* ===============================
-   SCANNER STORAGE
+   STORAGE
    =============================== */
 const SCANNER_STORAGE_KEY = "lms_scanner_attention";
 
@@ -112,7 +112,7 @@ function renderDashboard(data) {
   const completed = Number(data.completed ?? 0);
 
   /* ===============================
-     FIX COVERAGE NaN
+     FIX COVERAGE
      =============================== */
   let coverageRaw = Number(data.coverage);
   if (isNaN(coverageRaw)) coverageRaw = 0;
@@ -124,12 +124,15 @@ function renderDashboard(data) {
 
   coveragePct = Math.max(0, Math.min(100, coveragePct));
 
+  /* Fallback if API bad */
+  if (completed > 0 && coveragePct === 0) {
+    coveragePct = Math.round((completed / (completed + active)) * 100);
+  }
+
   /* ===============================
-     LAST JOB COMPLETED (FIXED)
+     LAST JOB COMPLETED
      =============================== */
   const lastCompletedStr = data.lastCompletedAt || "N/A";
-
-  setText("lastUpdate", lastCompletedStr);
 
   const sinceEl = document.getElementById("lastSince");
   const lastValEl = document.getElementById("lastUpdate");
@@ -144,31 +147,47 @@ function renderDashboard(data) {
 
     if (!isNaN(parsed)) {
 
+      /* 🔹 Format date */
+      setText("lastUpdate",
+        parsed.toLocaleDateString(undefined, {
+          month: "short",
+          day: "2-digit",
+          year: "numeric"
+        })
+      );
+
       const now = new Date();
       const diffMs = now - parsed;
-      const diffMin = Math.floor(diffMs / 60000);
 
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffHr = Math.floor(diffMin / 60);
+      const diffDay = Math.floor(diffHr / 24);
+
+      /* 🔹 Smart "time ago" */
       if (sinceEl) {
-        sinceEl.textContent =
-          diffMin < 1 ? "just now" :
-          diffMin < 60 ? `${diffMin} min ago` :
-          `${Math.floor(diffMin / 60)} hr ago`;
+        if (diffMin < 1) sinceEl.textContent = "just now";
+        else if (diffMin < 60) sinceEl.textContent = `${diffMin} min ago`;
+        else if (diffHr < 24) sinceEl.textContent = `${diffHr} hr ago`;
+        else sinceEl.textContent = `${diffDay} day ago`;
       }
 
+      /* 🔹 Status color */
       if (lastValEl) {
         if (diffMin < 5) lastValEl.classList.add("ok");
-        else if (diffMin < 30) lastValEl.classList.add("warn");
+        else if (diffHr < 8) lastValEl.classList.add("warn");
         else lastValEl.classList.add("bad");
       }
 
     } else {
 
+      setText("lastUpdate", lastCompletedStr);
       if (sinceEl) sinceEl.textContent = "Invalid time";
 
     }
 
   } else {
 
+    setText("lastUpdate", "—");
     if (sinceEl) sinceEl.textContent = "No completions yet";
     if (lastValEl) lastValEl.classList.add("warn");
 
@@ -188,7 +207,7 @@ function renderDashboard(data) {
 }
 
 /* ===============================
-   APPLY VISIBILITY
+   VISIBILITY
    =============================== */
 function applyVisibilityRules(visibility) {
 
@@ -213,13 +232,6 @@ function applyVisibilityRules(visibility) {
 
   });
 
-}
-
-/* ===============================
-   UNLOCK PAGE
-   =============================== */
-function unlockPage() {
-  document.body.classList.remove("lms-hidden");
 }
 
 /* ===============================
@@ -258,7 +270,7 @@ function updateScannerFromStorage() {
 }
 
 /* ===============================
-   STATUS LOGIC
+   LAB STATUS (FIXED LOGIC)
    =============================== */
 function updateLabStatus(active, coverage) {
 
@@ -268,7 +280,7 @@ function updateLabStatus(active, coverage) {
 
   el.classList.remove("ok","warn","bad");
 
-  if (active === 0 && coverage >= 98) {
+  if (active === 0 && coverage >= 95) {
     el.textContent = "Normal";
     el.classList.add("ok");
   }
@@ -299,6 +311,13 @@ function showErrorState() {
     "lastSince"
   ].forEach(id => setText(id, "ERR"));
 
+}
+
+/* ===============================
+   UNLOCK PAGE
+   =============================== */
+function unlockPage() {
+  document.body.classList.remove("lms-hidden");
 }
 
 /* ===============================
