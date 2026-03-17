@@ -13,6 +13,11 @@
 
 <main class="wrap">
 
+  <!-- ================= TOP NAV ================= -->
+  <div class="top-nav">
+    <button class="back-btn" onclick="goBack()">← Back to Main Page</button>
+  </div>
+
   <!-- HEADER -->
   <header class="header">
     <div class="header-copy">
@@ -183,6 +188,12 @@
 </main>
 
 <script src="page3.js"></script>
+
+<script>
+function goBack() {
+  window.location.href = "index.html";
+}
+</script>
 
 </body>
 </html>

@@ -204,3 +204,143 @@ button:last-child:hover {
   margin: 20px;
   text-align: center;
 }
+
+/* ================= CONTAINER (MATCH OTHER PAGES) ================= */
+.container{
+  max-width:1400px;
+  margin:auto;
+  padding:26px;
+}
+
+/* ================= TOP NAV ================= */
+.top-nav{
+  margin-bottom:10px;
+}
+
+.back-btn{
+  background:transparent;
+  border:1px solid #1f2937;
+  color:#e5e7eb;
+  padding:8px 14px;
+  border-radius:10px;
+  cursor:pointer;
+  transition:all .2s ease;
+}
+
+.back-btn:hover{
+  border-color:#3b82f6;
+  background:rgba(255,255,255,0.05);
+}
+
+/* ================= HEADER ================= */
+.header{
+  background:linear-gradient(180deg,#0b1220,#020617);
+  border:1px solid #1f2937;
+  border-radius:18px;
+  padding:20px;
+  margin-bottom:20px;
+}
+
+.header h1{
+  margin:0;
+  font-size:26px;
+}
+
+.sub{
+  color:#9ca3af;
+  font-size:13px;
+}
+
+/* ================= MAP PANEL ================= */
+.map-panel{
+  border:1px solid #1f2937;
+  border-radius:16px;
+  background:linear-gradient(180deg,#0b1220,#020617);
+  padding:16px;
+  margin-top:10px;
+}
+
+/* ================= GRID IMPROVEMENT ================= */
+.grid{
+  gap:18px;
+}
+
+/* ================= CARD UPGRADE ================= */
+.card{
+  position:relative;
+  overflow:hidden;
+}
+
+/* subtle glow effect */
+.card::after{
+  content:"";
+  position:absolute;
+  bottom:0;
+  left:0;
+  width:100%;
+  height:2px;
+  background:linear-gradient(90deg,transparent,#3b82f6,transparent);
+  opacity:0.3;
+}
+
+/* hover boost */
+.card:hover{
+  transform:translateY(-4px) scale(1.01);
+}
+
+/* ================= STATUS FEEL ================= */
+/* add pulsing glow if needed */
+.card.active{
+  box-shadow:0 0 12px rgba(34,197,94,0.4);
+}
+
+.card.warning{
+  box-shadow:0 0 12px rgba(250,204,21,0.4);
+}
+
+.card.error{
+  box-shadow:0 0 12px rgba(239,68,68,0.4);
+}
+
+/* ================= TEXT HIERARCHY ================= */
+.card-title{
+  font-size:14px;
+  letter-spacing:.3px;
+}
+
+.card-interface,
+.card-port{
+  font-size:12px;
+  opacity:0.75;
+}
+
+/* ================= SECTION HEADERS ================= */
+.section-header,
+.line-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+/* ================= FOOTER POLISH ================= */
+.footer{
+  box-shadow:0 -5px 20px rgba(0,0,0,0.4);
+}
+
+/* ================= PAGE TITLE FIX ================= */
+.page-title{
+  display:none; /* replaced by header */
+}
+
+/* ================= MOBILE ================= */
+@media (max-width:700px){
+
+  .container{
+    padding:14px;
+  }
+
+  .card{
+    padding:12px;
+  }
+
+}

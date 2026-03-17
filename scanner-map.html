@@ -11,18 +11,40 @@
 </head>
 <body>
 
-  <!-- PAGE TITLE -->
-  <div class="page-title">Scanner Map</div>
+  <div class="animated-bg"></div>
 
-  <!-- APP ROOT -->
-  <div id="app"></div>
+  <div class="container">
+
+    <!-- ================= TOP NAV ================= -->
+    <div class="top-nav">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+    </div>
+
+    <!-- ================= HEADER ================= -->
+    <header class="header">
+      <h1>Scanner Map</h1>
+      <p class="sub">Real-time Machine & Scanner Visualization</p>
+    </header>
+
+    <!-- ================= MAIN PANEL ================= -->
+    <div class="map-panel">
+      <div id="app"></div>
+    </div>
+
+  </div>
 
   <!-- LOGIC -->
   <script>
-  const s = document.createElement("script");
-  s.src = "scanner-map.js?v=" + Date.now();
-  document.body.appendChild(s);
-</script>
+    const s = document.createElement("script");
+    s.src = "scanner-map.js?v=" + Date.now();
+    document.body.appendChild(s);
+  </script>
+
+  <script>
+    function goBack() {
+      window.location.href = "index.html";
+    }
+  </script>
 
 </body>
 </html>
