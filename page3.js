@@ -28,15 +28,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let activeTab = "reasons";
 
+  // 🔥 NEW STATE (ADDED)
+  let delayFilter = "all";
+  let lastData = null;
+
   /***********************
    HELPERS
   ***********************/
   const safeNumber = v => Number.isFinite(Number(v)) ? Number(v) : 0;
-
   const formatInt = v => safeNumber(v).toLocaleString("en-US");
-
   const formatPct = v => `${safeNumber(v).toFixed(0)}%`;
-
   const formatDec = (v, d = 2) => safeNumber(v).toFixed(d);
 
   const escapeHtml = str =>
@@ -64,6 +65,9 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
+
+      lastData = data; // 🔥 STORE DATA
+
       render(data);
     } catch (e) {
       console.error("LOAD ERROR:", e);
@@ -131,11 +135,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /***********************
-   DELAY SUMMARY (NO API NEEDED)
+   🔥 FILTER FUNCTION (NEW)
+  ***********************/
+  function applyDelayFilter(rows) {
+    return (rows || []).filter(r => {
+      const d = safeNumber(r.daysToArrive);
+
+      if (delayFilter === "1-2") return d >= 1 && d <= 2;
+      if (delayFilter === "3-5") return d > 2 && d <= 5;
+      if (delayFilter === "5+") return d > 5;
+
+      return true;
+    });
+  }
+
+  /***********************
+   DELAY SUMMARY (UPDATED)
   ***********************/
   function renderDelaySummary(d) {
 
-    const rows = d.delayRows || [];
+    let rows = applyDelayFilter(d.delayRows || []);
 
     let b12 = 0, b35 = 0, b5p = 0;
 
@@ -151,7 +170,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (els.bucket35) els.bucket35.textContent = b35;
     if (els.bucket5p) els.bucket5p.textContent = b5p;
 
-    // GROUP
     const map = {};
 
     rows.forEach(r => {
@@ -201,9 +219,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /***********************
-   TABLE
+   TABLE (UPDATED)
   ***********************/
   function renderDelayTable(rows) {
+
+    rows = applyDelayFilter(rows);
 
     const body = els.delayTableBody;
     if (!body) return;
@@ -239,7 +259,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /***********************
-   TABS (FIXED)
+   TABS
   ***********************/
   function switchTab(tab) {
 
@@ -258,6 +278,55 @@ document.addEventListener("DOMContentLoaded", () => {
     els.tabSentBack?.classList.toggle("active", tab === "sent");
     els.tabDelay?.classList.toggle("active", tab === "delay");
   }
+
+  /***********************
+   🔥 DELAY FILTER CLICK (NEW)
+  ***********************/
+  document.querySelectorAll(".delay-filter").forEach(el => {
+
+    el.addEventListener("click", () => {
+
+      const selected = el.dataset.range;
+
+      delayFilter = delayFilter === selected ? "all" : selected;
+
+      document.querySelectorAll(".delay-filter")
+        .forEach(x => x.classList.remove("active"));
+
+      if (delayFilter !== "all") {
+        el.classList.add("active");
+      }
+
+      if (lastData) {
+        renderDelaySummary(lastData);
+        renderDelayTable(lastData.delayRows);
+      }
+    });
+
+  });
+
+  /***********************
+   🔥 SUB TABS (NEW)
+  ***********************/
+  function switchDelayTab(tab) {
+
+    document.getElementById("delaySummaryView").style.display =
+      tab === "summary" ? "block" : "none";
+
+    document.getElementById("delayDeptView").style.display =
+      tab === "dept" ? "block" : "none";
+
+    document.getElementById("delayTableView").style.display =
+      tab === "table" ? "block" : "none";
+
+    document.getElementById("delayTabSummary")?.classList.toggle("active", tab === "summary");
+    document.getElementById("delayTabDept")?.classList.toggle("active", tab === "dept");
+    document.getElementById("delayTabTable")?.classList.toggle("active", tab === "table");
+  }
+
+  document.getElementById("delayTabSummary")?.addEventListener("click", () => switchDelayTab("summary"));
+  document.getElementById("delayTabDept")?.addEventListener("click", () => switchDelayTab("dept"));
+  document.getElementById("delayTabTable")?.addEventListener("click", () => switchDelayTab("table"));
 
   /***********************
    EVENTS

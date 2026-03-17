@@ -107,7 +107,7 @@
       <button id="tabDelay" class="tab">Delay Overview</button>
     </div>
 
-    <!-- ROOT CAUSES -->
+    <!-- ROOT -->
     <section id="reasonsView" class="tab-panel">
       <div id="reasonBubbles"></div>
     </section>
@@ -117,7 +117,7 @@
       <div id="sentBackBubbles"></div>
     </section>
 
-    <!-- 🔥 DELAY VIEW -->
+    <!-- DELAY -->
     <section id="delayView" class="tab-panel" style="display:none;">
 
       <!-- SUB TABS -->
@@ -130,57 +130,52 @@
       <!-- SUMMARY -->
       <div id="delaySummaryView">
 
-        <div class="stats stats-primary" style="margin-bottom:20px;">
-          <div class="stat">
+        <div class="stats stats-primary">
+
+          <div class="stat delay-filter" data-range="1-2">
             <h3>1–2 Days</h3>
-            <div id="bucket-1-2" class="value">0</div>
+            <div id="bucket-1-2">0</div>
           </div>
 
-          <div class="stat">
+          <div class="stat delay-filter" data-range="3-5">
             <h3>3–5 Days</h3>
-            <div id="bucket-3-5" class="value">0</div>
+            <div id="bucket-3-5">0</div>
           </div>
 
-          <div class="stat">
+          <div class="stat delay-filter" data-range="5+">
             <h3>5+ Days</h3>
-            <div id="bucket-5plus" class="value">0</div>
+            <div id="bucket-5plus">0</div>
           </div>
+
         </div>
 
       </div>
 
-      <!-- BY DEPARTMENT -->
+      <!-- BY DEPT -->
       <div id="delayDeptView" style="display:none;">
         <div id="delayByDept"></div>
       </div>
 
       <!-- TABLE -->
       <div id="delayTableView" style="display:none;">
-        <div class="delay-table-wrap">
-          <table class="delay-table">
-            <thead>
-              <tr>
-                <th>RX Number</th>
-                <th>Returned To</th>
-                <th>Previous Scan</th>
-                <th>Arrived</th>
-                <th>Days</th>
-              </tr>
-            </thead>
-            <tbody id="delayTableBody">
-              <tr>
-                <td colspan="5">Loading...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <table class="delay-table">
+          <thead>
+            <tr>
+              <th>RX</th>
+              <th>Returned To</th>
+              <th>Scan</th>
+              <th>Arrived</th>
+              <th>Days</th>
+            </tr>
+          </thead>
+          <tbody id="delayTableBody"></tbody>
+        </table>
       </div>
 
     </section>
 
   </section>
 
-  <!-- FOOTER -->
   <div class="page-actions">
     <a class="back" href="index.html">← Return to Dashboard</a>
   </div>
