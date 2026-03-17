@@ -27,9 +27,7 @@
         <input type="date" id="dateFilter" />
       </div>
 
-      <div class="quick-buttons" aria-label="Quick date filters">
-        <button id="btnToday" type="button">Today</button>
-        <button id="btnYesterday" type="button">Yesterday</button>
+      <div class="quick-buttons" aria-label="Date actions">
         <button id="btnAll" type="button">All Dates</button>
       </div>
     </section>
@@ -103,7 +101,7 @@
     <section class="detail-panel">
       <div class="section-header">
         <h2>Investigation Breakdown</h2>
-        <p>Review root causes and routing destinations for investigated holds.</p>
+        <p>Top 10 root causes and returned-to destinations for investigated holds.</p>
       </div>
 
       <div class="tabs" role="tablist" aria-label="Investigation detail tabs">
@@ -117,38 +115,52 @@
       </div>
 
       <section id="reasonsView" class="tab-panel" role="tabpanel">
-        <div id="reasonBubbles"></div>
+        <div id="reasonBubbles" class="pill-list"></div>
       </section>
 
       <section id="sentBackView" class="tab-panel" role="tabpanel" style="display:none;">
-        <div id="sentBackBubbles"></div>
+        <div id="sentBackBubbles" class="pill-list"></div>
       </section>
     </section>
 
     <!-- ARRIVAL DELAY REVIEW -->
-    <section class="detail-panel">
-      <div class="section-header">
-        <h2>Arrival Delay Review</h2>
-        <p>Shows time from Previous Scan Date to Investigation Hold arrival so delayed intake can be reviewed.</p>
+    <section class="detail-panel delay-panel">
+      <div class="section-header section-header-split">
+        <div>
+          <h2>Arrival Delay Review</h2>
+          <p>Shows time from Previous Scan Date to Investigation Hold arrival so delayed intake can be reviewed.</p>
+        </div>
+
+        <div class="section-meta">
+          <div class="meta-chip">Chronological Order</div>
+          <div class="meta-chip">Oldest to Newest</div>
+        </div>
       </div>
 
-      <div class="delay-table-wrap">
-        <table class="delay-table">
-          <thead>
-            <tr>
-              <th>RX Number</th>
-              <th>Returned To</th>
-              <th>Previous Scan Date</th>
-              <th>Arrived at IH</th>
-              <th>Days to Reach IH</th>
-            </tr>
-          </thead>
-          <tbody id="delayTableBody">
-            <tr>
-              <td colspan="5">Loading...</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="delay-table-shell">
+        <div class="delay-table-toolbar">
+          <div class="delay-table-title">Delayed Intake Timeline</div>
+          <div class="delay-table-subtitle">Previous Scan Date → Investigation Hold Arrival</div>
+        </div>
+
+        <div class="delay-table-wrap">
+          <table class="delay-table">
+            <thead>
+              <tr>
+                <th>RX Number</th>
+                <th>Returned To</th>
+                <th>Previous Scan Date</th>
+                <th>Arrived at IH</th>
+                <th>Days to Reach IH</th>
+              </tr>
+            </thead>
+            <tbody id="delayTableBody">
+              <tr>
+                <td colspan="5">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 

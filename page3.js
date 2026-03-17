@@ -2,12 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const API_URL =
     "https://script.google.com/macros/s/AKfycbzb9LNa7_5dfr7lfFf_MCkHVamM3T5Sw7iByx58WKgWCGvvl6ysZZyIsEBWppuCL3A/exec";
 
-  const REFRESH_MS = 30000;
-
   const els = {
     dateFilter: document.getElementById("dateFilter"),
-    btnToday: document.getElementById("btnToday"),
-    btnYesterday: document.getElementById("btnYesterday"),
     btnAll: document.getElementById("btnAll"),
     tabReasons: document.getElementById("tabReasons"),
     tabSentBack: document.getElementById("tabSentBack"),
@@ -46,6 +42,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return safeNumber(value).toFixed(digits);
   }
 
+  function formatDelayValue(value) {
+    const n = safeNumber(value);
+    return Number.isInteger(n) ? String(n) : n.toFixed(2);
+  }
+
   function escapeHtml(str) {
     return String(str ?? "")
       .replaceAll("&", "&amp;")
@@ -53,13 +54,6 @@ document.addEventListener("DOMContentLoaded", () => {
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
-  }
-
-  function toLocalInputDate(date) {
-    const yr = date.getFullYear();
-    const mo = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${yr}-${mo}-${day}`;
   }
 
   function getFilterValue() {
@@ -72,40 +66,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.body.classList.toggle("is-loading", loading);
   }
 
-  function markQuickButton(mode) {
-    [els.btnToday, els.btnYesterday, els.btnAll].forEach(btn => {
-      if (btn) btn.classList.remove("active");
-    });
+  function markAllButton() {
+    if (!els.btnAll) return;
 
-    if (mode === "today") els.btnToday?.classList.add("active");
-    if (mode === "yesterday") els.btnYesterday?.classList.add("active");
-    if (mode === "all") els.btnAll?.classList.add("active");
-  }
-
-  function updateQuickButtonsFromDate() {
     const value = getFilterValue();
-
-    if (value === "all") {
-      markQuickButton("all");
-      return;
-    }
-
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const todayStr = toLocalInputDate(today);
-    const yesterdayStr = toLocalInputDate(yesterday);
-
-    [els.btnToday, els.btnYesterday, els.btnAll].forEach(btn => {
-      if (btn) btn.classList.remove("active");
-    });
-
-    if (value === todayStr) {
-      markQuickButton("today");
-    } else if (value === yesterdayStr) {
-      markQuickButton("yesterday");
-    }
+    els.btnAll.classList.toggle("active", value === "all");
   }
 
   function showMetricSkeleton() {
@@ -132,7 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     console.log("API Request:", url);
 
-    updateQuickButtonsFromDate();
+    markAllButton();
     setLoadingState(true);
     showMetricSkeleton();
 
@@ -175,56 +140,73 @@ document.addEventListener("DOMContentLoaded", () => {
       `${formatDecimal(d.avgInvestigationDays, 2)} Days (${formatDecimal(d.avgInvestigationHours, 2)} Hours)`
     );
 
-    set("receivedToday", formatInteger(d.receivedToday));
-    set("evaluatedToday", formatInteger(d.evaluatedToday));
+    set("receivedToday", formatInteger(d.receivedOnSelectedDate));
+    set("evaluatedToday", formatInteger(d.evaluatedOnSelectedDate));
     set("avgArrivalDelayDays", `${formatDecimal(d.avgArrivalDelayDays, 2)} Days`);
     set("oldestInvestigation", d.oldestInvestigation || "--");
     set("latestInvestigation", d.latestInvestigation || "--");
 
-    renderBubbles("reasonBubbles", d.reasons, total, false, "No root cause data available");
-    renderBubbles("sentBackBubbles", d.sentBack, total, true, "No returned-to data available");
+    renderTop10Bubbles(
+      "reasonBubbles",
+      d.reasonsTop10 || [],
+      total,
+      "No root cause data available"
+    );
+
+    renderTop10Bubbles(
+      "sentBackBubbles",
+      d.sentBackTop10 || [],
+      total,
+      "No returned-to data available"
+    );
+
     renderDelayTable(d.delayRows || []);
   }
 
   /***********************
-   RENDER BUBBLES
+   RENDER TOP 10 BREAKDOWN
   ***********************/
-  function renderBubbles(target, data, total, nested = false, emptyMessage = "No data available") {
+  function renderTop10Bubbles(target, rows, total, emptyMessage = "No data available") {
     const wrap = document.getElementById(target);
     if (!wrap) return;
 
     wrap.innerHTML = "";
 
-    if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
+    if (!Array.isArray(rows) || !rows.length) {
       wrap.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)}</div>`;
       return;
     }
 
-    const entries = Object.entries(data)
-      .map(([key, value]) => [key, nested ? safeNumber(value?.count) : safeNumber(value)])
-      .filter(([, count]) => count > 0)
-      .sort((a, b) => b[1] - a[1]);
+    const cleanRows = rows
+      .map(item => ({
+        name: item?.name || "",
+        count: safeNumber(item?.count)
+      }))
+      .filter(item => item.name && item.count > 0)
+      .slice(0, 10);
 
-    if (!entries.length) {
+    if (!cleanRows.length) {
       wrap.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)}</div>`;
       return;
     }
 
-    const safeTotal = total > 0 ? total : entries.reduce((sum, [, count]) => sum + count, 0);
+    const safeTotal = total > 0
+      ? total
+      : cleanRows.reduce((sum, item) => sum + item.count, 0);
 
-    wrap.innerHTML = entries.map(([label, count]) => {
-      const pct = safeTotal > 0 ? (count / safeTotal) * 100 : 0;
+    wrap.innerHTML = cleanRows.map(item => {
+      const pct = safeTotal > 0 ? (item.count / safeTotal) * 100 : 0;
 
       return `
         <div class="pill">
           <div class="pill-left">
-            <div class="pill-title">${escapeHtml(label)}</div>
+            <div class="pill-title">${escapeHtml(item.name)}</div>
             <div class="pill-bar">
               <div class="pill-fill" style="width:${pct.toFixed(1)}%"></div>
             </div>
             <div class="pill-pct">${pct.toFixed(1)}%</div>
           </div>
-          <div class="pill-count">${formatInteger(count)}</div>
+          <div class="pill-count">${formatInteger(item.count)}</div>
         </div>
       `;
     }).join("");
@@ -237,7 +219,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const body = els.delayTableBody;
     if (!body) return;
 
-    if (!rows || !rows.length) {
+    if (!Array.isArray(rows) || !rows.length) {
       body.innerHTML = `
         <tr>
           <td colspan="5">No delay records available</td>
@@ -247,22 +229,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     body.innerHTML = rows
-      .slice(0, 50)
       .map(row => {
+        const delay = safeNumber(row.daysToArrive);
+
         const delayClass =
-          Number(row.daysToArrive) >= 3
+          delay >= 3
             ? "delay-high"
-            : Number(row.daysToArrive) >= 1
+            : delay >= 1
             ? "delay-medium"
             : "delay-low";
 
         return `
           <tr>
-            <td>${escapeHtml(row.rx)}</td>
-            <td>${escapeHtml(row.sentBack || "")}</td>
-            <td>${escapeHtml(row.scanDate || "")}</td>
-            <td>${escapeHtml(row.arrived || "")}</td>
-            <td><span class="delay-badge ${delayClass}">${escapeHtml(row.daysToArrive)}</span></td>
+            <td class="delay-rx">${escapeHtml(row.rx || "")}</td>
+            <td class="delay-returned">${escapeHtml(row.sentBack || "")}</td>
+            <td class="delay-date">${escapeHtml(row.scanDate || "")}</td>
+            <td class="delay-date">${escapeHtml(row.arrived || "")}</td>
+            <td class="delay-days">
+              <span class="delay-badge ${delayClass}">
+                ${escapeHtml(formatDelayValue(delay))}
+              </span>
+            </td>
           </tr>
         `;
       })
@@ -331,27 +318,15 @@ document.addEventListener("DOMContentLoaded", () => {
    FILTER EVENTS
   ***********************/
   els.dateFilter?.addEventListener("change", () => {
-    updateQuickButtonsFromDate();
-    load();
-  });
-
-  els.btnToday?.addEventListener("click", () => {
-    els.dateFilter.value = toLocalInputDate(new Date());
-    markQuickButton("today");
-    load();
-  });
-
-  els.btnYesterday?.addEventListener("click", () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    els.dateFilter.value = toLocalInputDate(d);
-    markQuickButton("yesterday");
+    markAllButton();
     load();
   });
 
   els.btnAll?.addEventListener("click", () => {
-    els.dateFilter.value = "";
-    markQuickButton("all");
+    if (els.dateFilter) {
+      els.dateFilter.value = "";
+    }
+    markAllButton();
     load();
   });
 
@@ -359,13 +334,6 @@ document.addEventListener("DOMContentLoaded", () => {
    INIT
   ***********************/
   switchTab(activeTab);
-  updateQuickButtonsFromDate();
+  markAllButton();
   load();
-
-  /***********************
-   AUTO REFRESH
-  ***********************/
-  setInterval(() => {
-    if (!isLoading) load();
-  }, REFRESH_MS);
 });
