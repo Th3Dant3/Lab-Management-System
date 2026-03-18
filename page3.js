@@ -77,62 +77,72 @@ document.addEventListener("DOMContentLoaded", () => {
   /***********************
    RENDER
   ***********************/
-  function render(d) {
+function render(d) {
 
-    const total = safeNumber(d.total);
+  console.log("FULL DATA:", d); // 👈 DEBUG (important)
 
-    set("activeHolds", formatInt(d.active));
-    set("evaluatedCount", formatInt(d.evaluated));
-    set("coveragePct", formatPct(d.coverage));
-    set("lastUpdated", d.lastUpdated || "--");
+  const total = safeNumber(d.total || d.evaluated || 0);
 
-    set(
-      "avgInvestigationTime",
-      `${formatDec(d.avgInvestigationDays)} Days (${formatDec(d.avgInvestigationHours)} Hours)`
-    );
+  set("activeHolds", formatInt(d.active));
+  set("evaluatedCount", formatInt(d.evaluated));
+  set("coveragePct", formatPct(d.coverage));
+  set("lastUpdated", d.lastUpdated || "--");
 
-    set("receivedToday", formatInt(d.receivedOnSelectedDate));
-    set("evaluatedToday", formatInt(d.evaluatedOnSelectedDate));
-    set("avgArrivalDelayDays", `${formatDec(d.avgArrivalDelayDays)} Days`);
-    set("oldestInvestigation", d.oldestInvestigation || "--");
-    set("latestInvestigation", d.latestInvestigation || "--");
+  set(
+    "avgInvestigationTime",
+    `${formatDec(d.avgInvestigationDays)} Days (${formatDec(d.avgInvestigationHours)} Hours)`
+  );
 
-    renderTop10("reasonBubbles", d.reasonsTop10, total);
-    renderTop10("sentBackBubbles", d.sentBackTop10, total);
+  set("receivedToday", formatInt(d.receivedOnSelectedDate));
+  set("evaluatedToday", formatInt(d.evaluatedOnSelectedDate));
+  set("avgArrivalDelayDays", `${formatDec(d.avgArrivalDelayDays)} Days`);
+  set("oldestInvestigation", d.oldestInvestigation || "--");
+  set("latestInvestigation", d.latestInvestigation || "--");
 
-    renderDelaySummary(d);
-    renderDelayTable(d.delayRows);
-  }
+  // 🔥 FIXED SAFE DATA MAPPING
+  const reasons = d.reasonsTop10 || d.reasons || [];
+  const sentBack = d.sentBackTop10 || d.sentBack || [];
+
+  renderTop10("reasonBubbles", reasons, total);
+  renderTop10("sentBackBubbles", sentBack, total);
+
+  renderDelaySummary(d);
+  renderDelayTable(d.delayRows || []);
+}
 
   /***********************
    TOP 10
   ***********************/
   function renderTop10(target, rows, total) {
-    const wrap = document.getElementById(target);
-    if (!wrap) return;
+  const wrap = document.getElementById(target);
+  if (!wrap) return;
 
-    if (!rows?.length) {
-      wrap.innerHTML = `<div class="empty-state">No data</div>`;
-      return;
-    }
-
-    wrap.innerHTML = rows.map(item => {
-      const pct = total ? (item.count / total) * 100 : 0;
-
-      return `
-        <div class="pill">
-          <div class="pill-left">
-            <div class="pill-title">${escapeHtml(item.name)}</div>
-            <div class="pill-bar">
-              <div class="pill-fill" style="width:${pct.toFixed(1)}%"></div>
-            </div>
-            <div class="pill-pct">${pct.toFixed(1)}%</div>
-          </div>
-          <div class="pill-count">${formatInt(item.count)}</div>
-        </div>
-      `;
-    }).join("");
+  if (!Array.isArray(rows) || rows.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">No data</div>`;
+    return;
   }
+
+  wrap.innerHTML = rows.map(item => {
+
+    const count = safeNumber(item.count || item.value || 0);
+    const name = item.name || item.label || "Unknown";
+
+    const pct = total ? (count / total) * 100 : 0;
+
+    return `
+      <div class="pill">
+        <div class="pill-left">
+          <div class="pill-title">${escapeHtml(name)}</div>
+          <div class="pill-bar">
+            <div class="pill-fill" style="width:${pct.toFixed(1)}%"></div>
+          </div>
+          <div class="pill-pct">${pct.toFixed(1)}%</div>
+        </div>
+        <div class="pill-count">${formatInt(count)}</div>
+      </div>
+    `;
+  }).join("");
+}
 
   /***********************
    🔥 FILTER FUNCTION (NEW)
