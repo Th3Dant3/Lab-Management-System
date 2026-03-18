@@ -202,6 +202,8 @@ body{
   margin-bottom:8px;
   color:#edf4ff;
   font-size:14px;
+  white-space:normal;
+  word-break:break-word;
 }
 
 .pill-bar{
@@ -215,6 +217,12 @@ body{
   height:100%;
   background:linear-gradient(90deg, #58b8ff, #38bdf8);
   border-radius:999px;
+  transition: width 0.5s ease;
+}
+
+.pill:hover{
+  transform:translateX(2px);
+  border-color:rgba(124,199,255,0.22);
 }
 
 .pill-pct{
