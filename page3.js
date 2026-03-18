@@ -23,12 +23,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     bucket12: document.getElementById("bucket-1-2"),
     bucket35: document.getElementById("bucket-3-5"),
-    bucket5p: document.getElementById("bucket-5plus")
+    bucket5p: document.getElementById("bucket-5plus"),
+
+    shiftStatsWrap: document.getElementById("shiftStatsWrap")
   };
 
   let activeTab = "reasons";
-
-  // 🔥 NEW STATE (ADDED)
   let delayFilter = "all";
   let lastData = null;
 
@@ -38,6 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const safeNumber = v => Number.isFinite(Number(v)) ? Number(v) : 0;
   const formatInt = v => safeNumber(v).toLocaleString("en-US");
   const formatPct = v => `${safeNumber(v).toFixed(0)}%`;
+  const formatPct1 = v => `${safeNumber(v).toFixed(1)}%`;
   const formatDec = (v, d = 2) => safeNumber(v).toFixed(d);
 
   const escapeHtml = str =>
@@ -66,8 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
 
-      lastData = data; // 🔥 STORE DATA
-
+      lastData = data;
       render(data);
     } catch (e) {
       console.error("LOAD ERROR:", e);
@@ -77,75 +77,126 @@ document.addEventListener("DOMContentLoaded", () => {
   /***********************
    RENDER
   ***********************/
-function render(d) {
+  function render(d) {
+    const total = safeNumber(d.total);
+    const evaluatedBase = safeNumber(
+      getFilterValue() === "all" ? d.evaluated : d.evaluatedToday
+    );
 
-  console.log("FULL DATA:", d); // 👈 DEBUG (important)
+    set("activeHolds", formatInt(d.active));
+    set("evaluatedCount", formatInt(d.evaluated));
+    set("coveragePct", formatPct(d.coverage));
+    set("lastUpdated", d.lastUpdated || "--");
 
-  const total = safeNumber(d.total || d.evaluated || 0);
+    set(
+      "avgInvestigationTime",
+      `${formatDec(d.avgInvestigationDays)} Days (${formatDec(d.avgInvestigationHours)} Hours)`
+    );
 
-  set("activeHolds", formatInt(d.active));
-  set("evaluatedCount", formatInt(d.evaluated));
-  set("coveragePct", formatPct(d.coverage));
-  set("lastUpdated", d.lastUpdated || "--");
+    set("arrivedToday", formatInt(d.arrived));
+    set("evaluatedToday", formatInt(d.evaluatedToday));
+    set("priorDayIntake", formatInt(d.priorDayIntake));
+    set("sameDayPercent", formatPct1(d.sameDayPercent));
+	// 🔥 ADD THIS BLOCK RIGHT HERE
+const sameDayEl = document.getElementById("sameDayPercent");
 
-  set(
-    "avgInvestigationTime",
-    `${formatDec(d.avgInvestigationDays)} Days (${formatDec(d.avgInvestigationHours)} Hours)`
-  );
+if (sameDayEl) {
+  const val = parseFloat(d.sameDayPercent);
 
-  set("receivedToday", formatInt(d.receivedOnSelectedDate));
-  set("evaluatedToday", formatInt(d.evaluatedOnSelectedDate));
-  set("avgArrivalDelayDays", `${formatDec(d.avgArrivalDelayDays)} Days`);
-  set("oldestInvestigation", d.oldestInvestigation || "--");
-  set("latestInvestigation", d.latestInvestigation || "--");
+  sameDayEl.classList.remove("kpi-good", "kpi-warning", "kpi-bad");
 
-  // 🔥 FIXED SAFE DATA MAPPING
-  const reasons = d.reasonsTop10 || d.reasons || [];
-  const sentBack = d.sentBackTop10 || d.sentBack || [];
+  if (val >= 80) sameDayEl.classList.add("kpi-good");
+  else if (val >= 50) sameDayEl.classList.add("kpi-warning");
+  else sameDayEl.classList.add("kpi-bad");
 
-  renderTop10("reasonBubbles", reasons, total);
-  renderTop10("sentBackBubbles", sentBack, total);
+  // 🔥 ADD THIS PART RIGHT HERE
+  const parentCard = sameDayEl.closest(".stat");
 
-  renderDelaySummary(d);
-  renderDelayTable(d.delayRows || []);
+  if (parentCard) {
+    parentCard.classList.remove("kpi-good", "kpi-warning", "kpi-bad");
+
+    if (val >= 80) parentCard.classList.add("kpi-good");
+    else if (val >= 50) parentCard.classList.add("kpi-warning");
+    else parentCard.classList.add("kpi-bad");
+  }
 }
+	
+    set("avgArrivalDelayDays", `${formatDec(d.avgArrivalDelayDays)} Days`);
+    set("oldestInvestigation", d.oldestInvestigation || "--");
+    set("latestInvestigation", d.latestInvestigation || "--");
+
+    renderShiftStats(d.shiftStats || []);
+    renderTop10("reasonBubbles", d.reasonsTop10, evaluatedBase || total);
+    renderTop10("sentBackBubbles", d.sentBackTop10, evaluatedBase || total);
+
+    renderDelaySummary(d);
+    renderDelayTable(d.delayRows);
+  }
+
+  /***********************
+   SHIFT STATS
+  ***********************/
+  function renderShiftStats(rows) {
+    const wrap = els.shiftStatsWrap;
+    if (!wrap) return;
+
+    if (!rows?.length) {
+      wrap.innerHTML = `<div class="empty-state">No shift data</div>`;
+      return;
+    }
+
+    wrap.innerHTML = rows.map(r => `
+      <div class="pill">
+        <div class="pill-left">
+          <div class="pill-title">${escapeHtml(r.shift)}</div>
+          <div class="pill-bar">
+            <div class="pill-fill" style="width:${Math.min(safeNumber(r.percent), 100)}%"></div>
+          </div>
+          <div class="pill-pct">
+            ${formatPct1(r.percent)} of evaluated •
+            Same-Day ${formatPct1(r.sameDayPercent)} •
+            Prior Day ${formatPct1(r.priorDayPercent)} •
+            Avg Delay ${formatDec(r.avgDelay, 2)} days •
+            Avg Investigation ${formatDec(r.avgInvestigationDays, 2)} days
+          </div>
+        </div>
+        <div class="pill-count">${formatInt(r.count)}</div>
+      </div>
+    `).join("");
+  }
 
   /***********************
    TOP 10
   ***********************/
   function renderTop10(target, rows, total) {
-  const wrap = document.getElementById(target);
-  if (!wrap) return;
+    const wrap = document.getElementById(target);
+    if (!wrap) return;
 
-  if (!Array.isArray(rows) || rows.length === 0) {
-    wrap.innerHTML = `<div class="empty-state">No data</div>`;
-    return;
+    if (!rows?.length) {
+      wrap.innerHTML = `<div class="empty-state">No data</div>`;
+      return;
+    }
+
+    wrap.innerHTML = rows.map(item => {
+      const pct = total ? (safeNumber(item.count) / safeNumber(total)) * 100 : 0;
+
+      return `
+        <div class="pill">
+          <div class="pill-left">
+            <div class="pill-title">${escapeHtml(item.name)}</div>
+            <div class="pill-bar">
+              <div class="pill-fill" style="width:${pct.toFixed(1)}%"></div>
+            </div>
+            <div class="pill-pct">${pct.toFixed(1)}%</div>
+          </div>
+          <div class="pill-count">${formatInt(item.count)}</div>
+        </div>
+      `;
+    }).join("");
   }
 
-  wrap.innerHTML = rows.map(item => {
-
-    const count = safeNumber(item.count || item.value || 0);
-    const name = item.name || item.label || "Unknown";
-
-    const pct = total ? (count / total) * 100 : 0;
-
-    return `
-      <div class="pill">
-        <div class="pill-left">
-          <div class="pill-title">${escapeHtml(name)}</div>
-          <div class="pill-bar">
-            <div class="pill-fill" style="width:${pct.toFixed(1)}%"></div>
-          </div>
-          <div class="pill-pct">${pct.toFixed(1)}%</div>
-        </div>
-        <div class="pill-count">${formatInt(count)}</div>
-      </div>
-    `;
-  }).join("");
-}
-
   /***********************
-   🔥 FILTER FUNCTION (NEW)
+   FILTER FUNCTION
   ***********************/
   function applyDelayFilter(rows) {
     return (rows || []).filter(r => {
@@ -160,10 +211,9 @@ function render(d) {
   }
 
   /***********************
-   DELAY SUMMARY (UPDATED)
+   DELAY SUMMARY
   ***********************/
   function renderDelaySummary(d) {
-
     let rows = applyDelayFilter(d.delayRows || []);
 
     let b12 = 0, b35 = 0, b5p = 0;
@@ -202,7 +252,7 @@ function render(d) {
       maxDays: map[k].max.toFixed(1)
     }));
 
-    grouped.sort((a, b) => b.maxDays - a.maxDays);
+    grouped.sort((a, b) => safeNumber(b.maxDays) - safeNumber(a.maxDays));
 
     const wrap = els.delayByDept;
     if (!wrap) return;
@@ -229,111 +279,100 @@ function render(d) {
   }
 
   /***********************
-   TABLE (UPDATED)
+   DELAY TABLE
   ***********************/
-function renderDelayTable(rows) {
+  function renderDelayTable(rows) {
+    rows = applyDelayFilter(rows);
 
-  rows = applyDelayFilter(rows);
+    const body = els.delayTableBody;
+    if (!body) return;
 
-  const body = els.delayTableBody;
-  if (!body) return;
+    if (!rows?.length) {
+      body.innerHTML = `<tr><td colspan="5">No delay records</td></tr>`;
+      return;
+    }
 
-  if (!rows?.length) {
-    body.innerHTML = `<tr><td colspan="5">No delay records</td></tr>`;
-    return;
-  }
+    rows.sort((a, b) =>
+      safeNumber(b.daysToArrive) - safeNumber(a.daysToArrive)
+    );
 
-  // 🔥 SORT FIRST (IMPORTANT)
-  rows.sort((a, b) =>
-    safeNumber(b.daysToArrive) - safeNumber(a.daysToArrive)
-  );
+    const groups = {
+      "1-2": [],
+      "3-5": [],
+      "5+": []
+    };
 
-  const groups = {
-    "1-2": [],
-    "3-5": [],
-    "5+": []
-  };
-
-  rows.forEach(r => {
-    const d = safeNumber(r.daysToArrive);
-
-    if (d >= 1 && d <= 2) groups["1-2"].push(r);
-    else if (d > 2 && d <= 5) groups["3-5"].push(r);
-    else if (d > 5) groups["5+"].push(r);
-  });
-
-  let html = "";
-
-  Object.entries(groups).forEach(([range, list]) => {
-
-    if (!list.length) return;
-
-    const id = `group-${range}`;
-
-    html += `
-      <tr class="group-header" data-target="${id}">
-        <td colspan="5">
-          <span class="toggle">▶</span>
-          ${range} Days (${list.length})
-        </td>
-      </tr>
-    `;
-
-    html += list.map(r => {
-
+    rows.forEach(r => {
       const d = safeNumber(r.daysToArrive);
 
-      const cls =
-        d >= 3 ? "delay-high" :
-        d >= 1 ? "delay-medium" :
-        "delay-low";
+      if (d >= 1 && d <= 2) groups["1-2"].push(r);
+      else if (d > 2 && d <= 5) groups["3-5"].push(r);
+      else if (d > 5) groups["5+"].push(r);
+    });
 
-      return `
-        <tr class="group-row ${id}" style="display:none;">
-          <td>${escapeHtml(r.rx)}</td>
-          <td>${escapeHtml(r.sentBack)}</td>
-          <td>${escapeHtml(r.scanDate)}</td>
-          <td>${escapeHtml(r.arrived)}</td>
-          <td>
-            <span class="delay-badge ${cls}">
-              ${d}
-            </span>
+    let html = "";
+
+    Object.entries(groups).forEach(([range, list]) => {
+      if (!list.length) return;
+
+      const id = `group-${range}`;
+
+      html += `
+        <tr class="group-header" data-target="${id}">
+          <td colspan="5">
+            <span class="toggle">▶</span>
+            ${range} Days (${list.length})
           </td>
         </tr>
       `;
-    }).join("");
 
-  });
+      html += list.map(r => {
+        const d = safeNumber(r.daysToArrive);
 
-  body.innerHTML = html;
+        const cls =
+          d >= 3 ? "delay-high" :
+          d >= 1 ? "delay-medium" :
+          "delay-low";
 
-  // 🔥 CLICK TO EXPAND
-  document.querySelectorAll(".group-header").forEach(header => {
+        return `
+          <tr class="group-row ${id}" style="display:none;">
+            <td>${escapeHtml(r.rx)}</td>
+            <td>${escapeHtml(r.sentBack)}</td>
+            <td>${escapeHtml(r.scanDate)}</td>
+            <td>${escapeHtml(r.arrived)}</td>
+            <td>
+              <span class="delay-badge ${cls}">
+                ${d}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    });
 
-    header.onclick = () => {
+    body.innerHTML = html;
 
-      const target = header.dataset.target;
-      const rows = document.querySelectorAll(`.${target}`);
-      const icon = header.querySelector(".toggle");
+    document.querySelectorAll(".group-header").forEach(header => {
+      header.onclick = () => {
+        const target = header.dataset.target;
+        const groupRows = document.querySelectorAll(`.${target}`);
+        const icon = header.querySelector(".toggle");
 
-      const isOpen = rows[0]?.style.display !== "none";
+        const isOpen = groupRows[0]?.style.display !== "none";
 
-      rows.forEach(r => {
-        r.style.display = isOpen ? "none" : "table-row";
-      });
+        groupRows.forEach(r => {
+          r.style.display = isOpen ? "none" : "table-row";
+        });
 
-      if (icon) icon.textContent = isOpen ? "▶" : "▼";
-    };
-
-  });
-
-}
+        if (icon) icon.textContent = isOpen ? "▶" : "▼";
+      };
+    });
+  }
 
   /***********************
    TABS
   ***********************/
   function switchTab(tab) {
-
     activeTab = tab;
 
     if (els.reasonsView)
@@ -351,12 +390,10 @@ function renderDelayTable(rows) {
   }
 
   /***********************
-   🔥 DELAY FILTER CLICK (NEW)
+   DELAY FILTER CLICK
   ***********************/
   document.querySelectorAll(".delay-filter").forEach(el => {
-
     el.addEventListener("click", () => {
-
       const selected = el.dataset.range;
 
       delayFilter = delayFilter === selected ? "all" : selected;
@@ -373,14 +410,12 @@ function renderDelayTable(rows) {
         renderDelayTable(lastData.delayRows);
       }
     });
-
   });
 
   /***********************
-   🔥 SUB TABS (NEW)
+   SUB TABS
   ***********************/
   function switchDelayTab(tab) {
-
     document.getElementById("delaySummaryView").style.display =
       tab === "summary" ? "block" : "none";
 
@@ -417,6 +452,7 @@ function renderDelayTable(rows) {
    INIT
   ***********************/
   switchTab(activeTab);
+  switchDelayTab("summary");
   load();
 
 });

@@ -293,3 +293,99 @@ body{
   margin-right: 8px;
   color: #6bbcff;
 }
+/* ================================
+   KPI GRID FIX (MORE CARDS)
+================================ */
+.stats-secondary{
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+}
+
+/* ================================
+   SHIFT SECTION
+================================ */
+#shiftStatsWrap{
+  display:grid;
+  gap:12px;
+  margin-top:10px;
+}
+
+#shiftStatsWrap .pill{
+  background:linear-gradient(180deg, rgba(13,24,44,0.96), rgba(7,14,27,0.96));
+  border:1px solid rgba(96,165,250,0.18);
+}
+
+/* ================================
+   PERFORMANCE COLORS
+================================ */
+
+/* Good (high same-day %) */
+.kpi-good{
+  color:var(--success);
+}
+
+/* Medium */
+.kpi-warning{
+  color:var(--warning);
+}
+
+/* Bad */
+.kpi-bad{
+  color:var(--danger);
+}
+
+/* ================================
+   VALUE EMPHASIS
+================================ */
+.stat .value{
+  font-size:22px;
+  font-weight:800;
+  letter-spacing:0.3px;
+}
+
+/* ================================
+   SUB TEXT (if you add later)
+================================ */
+.stat .sub{
+  font-size:12px;
+  color:var(--muted-2);
+  margin-top:6px;
+}
+
+/* ================================
+   SHIFT PILLS ENHANCEMENT
+================================ */
+#shiftStatsWrap .pill-title{
+  font-size:15px;
+  font-weight:700;
+}
+
+#shiftStatsWrap .pill-pct{
+  font-size:12px;
+  line-height:1.4;
+  color:#8ea0b8;
+}
+
+/* ================================
+   DELAY BADGES (OPTIONAL POLISH)
+================================ */
+.delay-badge{
+  padding:4px 10px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:12px;
+}
+
+.delay-low{
+  background:rgba(102,217,163,0.12);
+  color:var(--success);
+}
+
+.delay-medium{
+  background:rgba(251,191,36,0.12);
+  color:var(--warning);
+}
+
+.delay-high{
+  background:rgba(248,113,113,0.12);
+  color:var(--danger);
+}

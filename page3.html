@@ -70,13 +70,23 @@
       </div>
 
       <div class="stat">
-        <h3>Received</h3>
-        <div id="receivedToday" class="value">—</div>
+        <h3>Arrived</h3>
+        <div id="arrivedToday" class="value">—</div>
       </div>
 
       <div class="stat">
-        <h3>Evaluated</h3>
+        <h3>Evaluated Today</h3>
         <div id="evaluatedToday" class="value">—</div>
+      </div>
+
+      <div class="stat">
+        <h3>Prior Day Intake</h3>
+        <div id="priorDayIntake" class="value">—</div>
+      </div>
+
+      <div class="stat">
+        <h3>Same-Day %</h3>
+        <div id="sameDayPercent" class="value">—</div>
       </div>
 
       <div class="stat">
@@ -92,6 +102,14 @@
       <div class="stat">
         <h3>Latest</h3>
         <div id="latestInvestigation" class="value">—</div>
+      </div>
+    </div>
+
+    <!-- SHIFT SECTION -->
+    <div class="stats stats-secondary">
+      <div class="stat" style="grid-column: 1 / -1;">
+        <h3>Shift Performance</h3>
+        <div id="shiftStatsWrap"></div>
       </div>
     </div>
 
@@ -190,7 +208,7 @@
 <script src="page3.js"></script>
 
 <script>
-function goBack() {
+function goDashboard() {
   window.location.href = "index.html";
 }
 </script>
