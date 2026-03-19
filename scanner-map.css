@@ -344,3 +344,170 @@ button:last-child:hover {
   }
 
 }
+
+/* =====================================================
+   🔥 SECTION BLOCK UPGRADE (MAJOR VISUAL BOOST)
+===================================================== */
+
+.section-content,
+.line-content {
+
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(59,130,246,0.08);
+
+  border-radius: 14px;
+  padding: 16px;
+
+  margin-bottom: 14px;
+
+  box-shadow:
+    0 8px 25px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.03);
+
+}
+
+/* =====================================================
+   🔥 SECTION HEADER ENHANCEMENT
+===================================================== */
+
+.section-header,
+.line-header {
+
+  font-size: 15px;
+  letter-spacing: .04em;
+
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+
+}
+
+/* Add arrow animation feel */
+.section-header::before,
+.line-header::before {
+  content: "▸";
+  margin-right: 6px;
+  opacity: .6;
+  transition: transform .2s ease;
+}
+
+.section-header.active::before,
+.line-header.active::before {
+  transform: rotate(90deg);
+}
+
+/* =====================================================
+   🔥 GRID IMPROVEMENT (MORE STRUCTURE)
+===================================================== */
+
+.grid {
+  padding-top: 10px;
+}
+
+/* =====================================================
+   🔥 CARD DEPTH UPGRADE
+===================================================== */
+
+.card {
+
+  backdrop-filter: blur(6px);
+
+  border: 1px solid rgba(255,255,255,0.04);
+
+}
+
+/* =====================================================
+   🔥 MACHINE TYPE COLORS (MORE PREMIUM)
+===================================================== */
+
+.card.mi {
+  border-left-color: #facc15;
+  box-shadow: 0 0 10px rgba(250,204,21,0.2);
+}
+
+.card.si1 {
+  border-left-color: #ec4899;
+  box-shadow: 0 0 10px rgba(236,72,153,0.2);
+}
+
+.card.si2 {
+  border-left-color: #60a5fa;
+  box-shadow: 0 0 10px rgba(96,165,250,0.2);
+}
+
+.card.si3 {
+  border-left-color: #4ade80;
+  box-shadow: 0 0 10px rgba(74,222,128,0.2);
+}
+
+/* =====================================================
+   🔥 STATUS COLORS (MATCH INDEX PAGE)
+===================================================== */
+
+.card.active {
+  border-left-color: #22c55e;
+  box-shadow: 0 0 12px rgba(34,197,94,0.35);
+}
+
+.card.warning {
+  border-left-color: #fbbf24;
+  box-shadow: 0 0 12px rgba(251,191,36,0.35);
+}
+
+.card.error {
+  border-left-color: #ef4444;
+  box-shadow: 0 0 14px rgba(239,68,68,0.4);
+}
+
+/* =====================================================
+   🔥 HOVER FEEL (SMOOTHER)
+===================================================== */
+
+.card:hover {
+  transform: translateY(-4px) scale(1.015);
+}
+
+/* =====================================================
+   🔥 MAP PANEL DEPTH (MATCH INDEX)
+===================================================== */
+
+.map-panel {
+
+  background:
+    radial-gradient(circle at top, rgba(30,78,140,0.15), transparent 50%),
+    linear-gradient(180deg,#0b1220,#020617);
+
+  box-shadow:
+    0 15px 40px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+
+}
+
+/* =====================================================
+   🔥 TOP NAV POLISH
+===================================================== */
+
+.top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* =====================================================
+   🔥 BACK BUTTON (MATCH INDEX STYLE)
+===================================================== */
+
+.back-btn {
+
+  border-radius: 999px;
+
+  background: rgba(255,255,255,0.06);
+
+  font-size: 12px;
+  letter-spacing: .02em;
+
+}
+
+.back-btn:hover {
+  background: rgba(255,255,255,0.15);
+  transform: translateY(-1px);
+}

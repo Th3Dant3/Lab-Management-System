@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Scanner Map</title>
+  <title>Scanner Network Monitor</title>
 
-  <!-- CSS -->
   <link rel="stylesheet" href="scanner-map.css" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17,14 +16,51 @@
 
     <!-- ================= TOP NAV ================= -->
     <div class="top-nav">
-      <button class="back-btn" onclick="goBack()">← Back</button>
+      <button class="back-btn" onclick="goBack()">← Dashboard</button>
     </div>
 
     <!-- ================= HEADER ================= -->
-    <header class="header">
-      <h1>Scanner Map</h1>
-      <p class="sub">Real-time Machine & Scanner Visualization</p>
+    <header class="header enhanced">
+
+      <div class="header-left">
+        <h1>Scanner Network Monitor</h1>
+        <p class="sub">Real-time scanner & machine connectivity status</p>
+      </div>
+
+      <div class="header-actions">
+  <button onclick="refreshScanner()">Refresh</button>
+</div>
+
     </header>
+
+    <!-- ================= SUMMARY ================= -->
+    <section class="scanner-summary">
+
+      <div class="summary-card ok">
+        <span>Healthy</span>
+        <strong id="healthyCount">—</strong>
+      </div>
+
+      <div class="summary-card warn">
+        <span>Warnings</span>
+        <strong id="warnCount">—</strong>
+      </div>
+
+      <div class="summary-card bad">
+        <span>Critical</span>
+        <strong id="criticalCount">—</strong>
+      </div>
+
+    </section>
+
+    <!-- ================= LEGEND ================= -->
+    <div class="legend">
+
+      <span class="legend-item ok">● Healthy</span>
+      <span class="legend-item warn">● Warning</span>
+      <span class="legend-item bad">● Critical</span>
+
+    </div>
 
     <!-- ================= MAIN PANEL ================= -->
     <div class="map-panel">
@@ -40,10 +76,21 @@
     document.body.appendChild(s);
   </script>
 
+  <!-- ACTIONS -->
   <script>
+
     function goBack() {
       window.location.href = "index.html";
     }
+
+    function refreshScanner() {
+      location.reload();
+    }
+
+    function sendReport() {
+      alert("Trigger Gmail Report (connect to Apps Script)");
+    }
+
   </script>
 
 </body>
