@@ -1,6 +1,6 @@
 /* =====================================================
-   INDEX DASHBOARD – FINAL PRODUCTION VERSION
-   ===================================================== */
+   INDEX DASHBOARD – PRODUCTION UPGRADE
+===================================================== */
 
 /* 🔗 DATA API */
 const API_URL =
@@ -10,26 +10,26 @@ const API_URL =
 const AUTH_API =
 "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
 
-/* ===============================
+/* STORAGE */
+const SCANNER_STORAGE_KEY = "lms_scanner_attention";
+
+/* =====================================================
    AUTH GATE
-   =============================== */
+===================================================== */
 (function authGate() {
   if (sessionStorage.getItem("lms_logged_in") !== "true") {
     window.location.replace("login.html");
   }
 })();
 
-/* ===============================
-   STORAGE
-   =============================== */
-const SCANNER_STORAGE_KEY = "lms_scanner_attention";
-
-/* ===============================
+/* =====================================================
    PAGE LOAD
-   =============================== */
+===================================================== */
 document.addEventListener("DOMContentLoaded", () => {
 
   console.time("TOTAL_DASHBOARD_LOAD");
+
+  initTabs(); // 🔥 NEW
 
   const username = sessionStorage.getItem("lms_user");
 
@@ -41,9 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     renderDashboard(dashboardData);
 
-    if (visibilityData.status === "SUCCESS") {
-      applyVisibilityRules(visibilityData.visibility);
-    }
+    applyVisibilityRules(visibilityData.visibility || {});
 
   })
   .catch(err => {
@@ -61,157 +59,161 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 
-/* ===============================
+/* =====================================================
+   TAB SYSTEM (NEW)
+===================================================== */
+function initTabs() {
+
+  const tabs = document.querySelectorAll(".tab");
+  const contents = document.querySelectorAll(".tab-content");
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+
+      tabs.forEach(t => t.classList.remove("active"));
+      contents.forEach(c => c.classList.remove("active"));
+
+      tab.classList.add("active");
+
+      const target = document.getElementById(tab.dataset.tab);
+      if (target) target.classList.add("active");
+
+    });
+  });
+
+}
+
+/* =====================================================
    FETCH DASHBOARD
-   =============================== */
-function fetchDashboard() {
+===================================================== */
+async function fetchDashboard() {
 
   console.time("DASHBOARD_API");
 
-  return fetch(API_URL + "?t=" + Date.now())
-    .then(res => res.json())
-    .then(data => {
+  try {
 
-      console.timeEnd("DASHBOARD_API");
+    const res = await fetch(API_URL + "?t=" + Date.now());
+    const data = await res.json();
 
-      return data;
+    console.timeEnd("DASHBOARD_API");
 
-    });
+    return data || {};
+
+  } catch (err) {
+
+    console.error("Dashboard API failed", err);
+    return {};
+
+  }
 
 }
 
-/* ===============================
+/* =====================================================
    FETCH VISIBILITY
-   =============================== */
-function fetchVisibility(username) {
+===================================================== */
+async function fetchVisibility(username) {
 
   console.time("VISIBILITY_API");
 
-  if (!username) {
-    return Promise.resolve({ status: "SUCCESS", visibility: {} });
+  if (!username) return { status: "SUCCESS", visibility: {} };
+
+  try {
+
+    const res = await fetch(
+      `${AUTH_API}?action=visibility&username=${encodeURIComponent(username)}`
+    );
+
+    const data = await res.json();
+
+    console.timeEnd("VISIBILITY_API");
+
+    return data || { status: "SUCCESS", visibility: {} };
+
+  } catch (err) {
+
+    console.error("Visibility API failed", err);
+    return { status: "SUCCESS", visibility: {} };
+
   }
-
-  return fetch(`${AUTH_API}?action=visibility&username=${encodeURIComponent(username)}`)
-    .then(res => res.json())
-    .then(data => {
-
-      console.timeEnd("VISIBILITY_API");
-
-      return data;
-
-    });
 
 }
 
-/* ===============================
+/* =====================================================
    RENDER DASHBOARD
-   =============================== */
+===================================================== */
 function renderDashboard(data) {
 
   const active = Number(data.active ?? 0);
   const completed = Number(data.completed ?? 0);
 
-  /* ===============================
-     COVERAGE
-     =============================== */
-  let coverageRaw = Number(data.coverage);
-  if (isNaN(coverageRaw)) coverageRaw = 0;
+  /* COVERAGE */
+  let coverage = Number(data.coverage ?? 0);
 
-  let coveragePct =
-    coverageRaw <= 1
-      ? Math.floor(coverageRaw * 1000) / 10
-      : Math.floor(coverageRaw * 10) / 10;
+  if (coverage <= 1) coverage *= 100;
+  coverage = Math.max(0, Math.min(100, Math.round(coverage)));
 
-  coveragePct = Math.max(0, Math.min(100, coveragePct));
-
-  if (completed > 0 && coveragePct === 0) {
-    coveragePct = Math.round((completed / (completed + active)) * 100);
+  if (completed > 0 && coverage === 0) {
+    coverage = Math.round((completed / (completed + active)) * 100);
   }
 
-  /* ===============================
-     🆕 AGING SYSTEM
-     =============================== */
+  /* AGING */
   const oldest = Number(data.oldestActiveMinutes ?? 0);
   const stuck = Number(data.stuckJobs ?? 0);
+
+  updateAgingDisplay(active, oldest, stuck);
+
+  /* UI UPDATE */
+  setText("active", active);
+  setText("activeHolds", active);
+  setText("completed", completed);
+  setText("coverage", coverage + "%");
+
+  setText(
+    "coverageDetail",
+    active === 0 ? "Complete" : coverage + "%"
+  );
+
+  updateLabStatus(active, coverage);
+
+}
+
+/* =====================================================
+   AGING DISPLAY (NEW CLEAN VERSION)
+===================================================== */
+function updateAgingDisplay(active, oldest, stuck) {
 
   const lastValEl = document.getElementById("lastUpdate");
   const sinceEl = document.getElementById("lastSince");
 
-  if (lastValEl) {
-    lastValEl.classList.remove("ok", "warn", "bad");
-  }
+  if (!lastValEl || !sinceEl) return;
 
-  /* 🔹 Format time */
-  let label = "0 min";
+  lastValEl.classList.remove("ok", "warn", "bad");
 
-  if (oldest >= 60) {
-    const hrs = Math.floor(oldest / 60);
-    const mins = oldest % 60;
-    label = `${hrs}h ${mins}m`;
-  } else {
-    label = `${oldest} min`;
-  }
+  if (active === 0) {
 
- /* ===============================
-   NO ACTIVE CLEAN STATE
-=============================== */
-if (active === 0) {
-
-  setText("lastUpdate", "No Active Jobs");
-
-  if (sinceEl) {
+    setText("lastUpdate", "No Active Jobs");
     sinceEl.textContent = "All clear";
+    return;
+
   }
 
-  if (lastValEl) {
-    lastValEl.classList.remove("ok", "warn", "bad");
-  }
-
-} else {
+  const label =
+    oldest >= 60
+      ? `${Math.floor(oldest / 60)}h ${oldest % 60}m`
+      : `${oldest} min`;
 
   setText("lastUpdate", label);
+  sinceEl.textContent = `${stuck} stuck job${stuck === 1 ? "" : "s"}`;
 
-  if (sinceEl) {
-    sinceEl.textContent = `${stuck} stuck job${stuck === 1 ? "" : "s"}`;
-  }
-
-}
-
-  /* 🔹 Smart color logic (REAL OPS) */
-  if (lastValEl) {
-
-    if (oldest < 30) {
-      lastValEl.classList.add("ok");        // 🟢 healthy
-    }
-    else if (oldest < 90) {
-      lastValEl.classList.add("warn");      // 🟡 slowing
-    }
-    else {
-      lastValEl.classList.add("bad");       // 🔴 problem
-    }
-
-  }
-
-  /* ===============================
-     UPDATE UI
-     =============================== */
-  setText("active", active);
-  setText("activeHolds", active);
-  setText("completed", completed);
-  setText("coverage", coveragePct + "%");
-  if (active === 0) {
-  setText("coverageDetail", "Complete");
-} else {
-  setText("coverageDetail", coveragePct + "%");
-}
-
-  updateLabStatus(active, coveragePct);
+  if (oldest < 30) lastValEl.classList.add("ok");
+  else if (oldest < 90) lastValEl.classList.add("warn");
+  else lastValEl.classList.add("bad");
 
 }
 
-/* ===============================
-   VISIBILITY
-   =============================== */
+/* =====================================================
+   VISIBILITY (SAFE DEFAULT HIDE)
+===================================================== */
 function applyVisibilityRules(visibility) {
 
   const map = {
@@ -223,9 +225,17 @@ function applyVisibilityRules(visibility) {
     "Admin": ".admin-only"
   };
 
+  // Hide all first (safer)
+  Object.values(map).forEach(selector => {
+    document.querySelectorAll(selector).forEach(el => {
+      el.style.display = "none";
+    });
+  });
+
+  // Then enable allowed
   Object.keys(map).forEach(feature => {
 
-    if (visibility[feature] === true) {
+    if (visibility[feature]) {
 
       document.querySelectorAll(map[feature]).forEach(el => {
         el.style.display = "flex";
@@ -237,9 +247,9 @@ function applyVisibilityRules(visibility) {
 
 }
 
-/* ===============================
+/* =====================================================
    SCANNER STATUS
-   =============================== */
+===================================================== */
 function updateScannerFromStorage() {
 
   let scanners = [];
@@ -272,13 +282,12 @@ function updateScannerFromStorage() {
 
 }
 
-/* ===============================
-   LAB STATUS (FIXED LOGIC)
-   =============================== */
+/* =====================================================
+   LAB STATUS
+===================================================== */
 function updateLabStatus(active, coverage) {
 
   const el = document.getElementById("labStatus");
-
   if (!el) return;
 
   el.classList.remove("ok","warn","bad");
@@ -298,9 +307,9 @@ function updateLabStatus(active, coverage) {
 
 }
 
-/* ===============================
+/* =====================================================
    ERROR STATE
-   =============================== */
+===================================================== */
 function showErrorState() {
 
   [
@@ -316,16 +325,16 @@ function showErrorState() {
 
 }
 
-/* ===============================
+/* =====================================================
    UNLOCK PAGE
-   =============================== */
+===================================================== */
 function unlockPage() {
   document.body.classList.remove("lms-hidden");
 }
 
-/* ===============================
+/* =====================================================
    LOGOUT
-   =============================== */
+===================================================== */
 function logout() {
 
   sessionStorage.clear();
@@ -335,14 +344,12 @@ function logout() {
 
 }
 
-/* ===============================
+/* =====================================================
    HELPERS
-   =============================== */
-function setText(id,value) {
-
+===================================================== */
+function setText(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
-
 }
 
 function openPage(page) {

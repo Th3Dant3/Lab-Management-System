@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 
 <meta charset="UTF-8">
-<title>LMS Dashboard Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Zenni LMS Control Center</title>
 
 <link rel="stylesheet" href="login.css">
 
@@ -22,13 +24,26 @@ window.addEventListener("load", () => {
 
   <div class="login-container">
 
-    <h2>LMS Dashboard Login</h2>
+    <!-- 🔹 SYSTEM IDENTITY -->
+    <div class="login-header">
+      <h1>Zenni LMS</h1>
+      <p>Manufacturing Control Center</p>
+    </div>
 
-    <input id="username" placeholder="Username">
-    <input id="password" type="password" placeholder="Password">
+    <!-- 🔹 FORM -->
+    <div class="form-group">
+      <input id="username" placeholder="Username" autocomplete="username">
+    </div>
 
-    <button onclick="login()">Login</button>
+    <div class="form-group password-group">
+      <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+      <span id="togglePassword">👁</span>
+    </div>
 
+    <!-- 🔹 ACTION -->
+    <button id="loginBtn" onclick="login()">Sign In</button>
+
+    <!-- 🔹 STATUS -->
     <p id="message" class="login-message"></p>
 
   </div>
@@ -36,6 +51,24 @@ window.addEventListener("load", () => {
 </div>
 
 <script src="login.js"></script>
+
+<!-- 🔥 UX Enhancements -->
+<script>
+
+  // ENTER KEY LOGIN
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      document.getElementById("loginBtn").click();
+    }
+  });
+
+  // SHOW / HIDE PASSWORD
+  document.getElementById("togglePassword").addEventListener("click", () => {
+    const input = document.getElementById("password");
+    input.type = input.type === "password" ? "text" : "password";
+  });
+
+</script>
 
 </body>
 </html>

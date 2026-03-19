@@ -39,8 +39,8 @@ window.addEventListener("load", () => {
   <header class="header">
 
     <div class="header-content">
-      <h1>Lab Management System</h1>
-      <p>Zenni Optical USA Manufacturing Lab<br>Environment: Zenni USA</p>
+      <h1>Zenni LMS Control Center</h1>
+      <p>Manufacturing Operations Dashboard · Zenni USA</p>
     </div>
 
     <button class="logout-btn" onclick="logout()">Logout</button>
@@ -48,12 +48,12 @@ window.addEventListener("load", () => {
   </header>
 
   <!-- =====================================================
-       STATUS STRIP
+       STATUS STRIP (UNCHANGED)
   ===================================================== -->
   <section class="status-strip">
 
     <div class="status-item">
-      <span class="label">Investigation Hold Status</span>
+      <span class="label">Investigation Status</span>
       <span id="labStatus" class="value ok">Normal</span>
     </div>
 
@@ -72,54 +72,40 @@ window.addEventListener("load", () => {
       <span id="scannerHealth" class="value ok">Online</span>
     </div>
 
-    <!-- Last Job Completed -->
     <div class="status-item">
-
       <span class="label">Oldest Active</span>
-
       <div class="status-value-group">
         <span id="lastUpdate" class="value">—</span>
         <span id="lastSince" class="sub">—</span>
       </div>
-
     </div>
 
   </section>
 
   <!-- =====================================================
-       CRITICAL OPERATIONS
+       NAV TABS (NEW)
   ===================================================== -->
-  <section class="section">
+  <div class="nav-tabs">
 
-    <h2 class="section-title">Critical Operations</h2>
+    <button class="tab active" data-tab="operations">Operations</button>
+    <button class="tab" data-tab="production">Production</button>
+    <button class="tab" data-tab="system">System</button>
+
+  </div>
+
+  <!-- =====================================================
+       OPERATIONS TAB (LMS USERS)
+  ===================================================== -->
+  <section id="operations" class="tab-content active">
 
     <div class="cards two-col">
 
-      <!-- Scanner Map -->
-      <div id="scanner-card" class="card primary" data-gated>
-
-        <div class="card-header">
-          <h3>Scanner Map</h3>
-          <span class="badge">Live</span>
-        </div>
-
-        <p>Live scanner activity by port</p>
-        <p class="sub">Finish · Surface · AR</p>
-
-        <div id="scannerDetail" class="scanner-detail"></div>
-
-        <button onclick="openPage('scanner-map.html')">
-          Open Scanner Map
-        </button>
-
-      </div>
-
-      <!-- Investigative Hold Tracker -->
+      <!-- Investigation Hold -->
       <div id="investigation-card" class="card highlight" data-gated>
 
         <div class="card-header">
-          <h3>Investigative Hold Tracker</h3>
-          <span class="badge">Tracking</span>
+          <h3>Investigation Hold Management</h3>
+          <span class="badge">Live</span>
         </div>
 
         <div class="metric-list">
@@ -129,61 +115,20 @@ window.addEventListener("load", () => {
         </div>
 
         <button onclick="openPage('page3.html')">
-          View Investigation Hold
+          Open Tracker
         </button>
 
       </div>
 
-    </div>
-
-  </section>
-
-  <!-- =====================================================
-       QUALITY & ENGINEERING
-  ===================================================== -->
-  <section class="section">
-
-    <h2 class="section-title">Quality & Engineering</h2>
-
-    <div class="cards">
-
-      <div id="truecurve-card" class="card" data-gated>
-
-        <div class="card-header">
-          <h3>True Curve / Power Issues</h3>
-          <span class="badge subtle">Engineering</span>
-        </div>
-
-        <p>Engineering exceptions & trends</p>
-
-        <button onclick="openPage('true-curve.html')">
-          View True Curve & Power Issues
-        </button>
-
-      </div>
-
-    </div>
-
-  </section>
-
-  <!-- =====================================================
-       TOOLS
-  ===================================================== -->
-  <section class="section">
-
-    <h2 class="section-title">Tools</h2>
-
-    <div class="cards">
-
-      <!-- LMS Lens Uploads -->
+      <!-- Lens Upload -->
       <div id="tools-card" class="card" data-gated>
 
         <div class="card-header">
-          <h3>LMS Lens Uploads</h3>
-          <span class="badge subtle">Tool</span>
+          <h3>Lens Intake & Upload</h3>
+          <span class="badge subtle">LMS</span>
         </div>
 
-        <p>In8 & In9 Format</p>
+        <p>IN8 · IN9 Format Processing</p>
 
         <div class="metric-big" id="lensCount">0</div>
 
@@ -193,19 +138,74 @@ window.addEventListener("load", () => {
 
       </div>
 
-      <!-- Coating Breakage Research -->
+      <!-- True Curve -->
+      <div id="truecurve-card" class="card" data-gated>
+
+        <div class="card-header">
+          <h3>True Curve & Power Analysis</h3>
+          <span class="badge subtle">Engineering</span>
+        </div>
+
+        <p>Exceptions & power validation trends</p>
+
+        <button onclick="openPage('true-curve.html')">
+          View Analysis
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- =====================================================
+       PRODUCTION TAB
+  ===================================================== -->
+  <section id="production" class="tab-content">
+
+    <div class="cards">
+
       <div id="coating-card" class="card" data-gated>
 
         <div class="card-header">
-          <h3>Coating Breakage Research</h3>
-          <span class="badge subtle">Analysis</span>
+          <h3>Coating Breakage Analytics</h3>
+          <span class="badge subtle">Production</span>
         </div>
 
-        <p>Tool Research For Coating Breakage</p>
-        <p class="sub">54R · 44R</p>
+        <p>Breakage trends & root cause analysis</p>
+        <p class="sub">54R · 44R · AR</p>
 
         <button onclick="openPage('coating.html')">
-          Open Coating Tool
+          Open Dashboard
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- =====================================================
+       SYSTEM TAB
+  ===================================================== -->
+  <section id="system" class="tab-content">
+
+    <div class="cards">
+
+      <div id="scanner-card" class="card primary" data-gated>
+
+        <div class="card-header">
+          <h3>Scanner Network Monitor</h3>
+          <span class="badge">Live</span>
+        </div>
+
+        <p>Real-time scanner activity by port</p>
+        <p class="sub">Finish · Surface · AR</p>
+
+        <div id="scannerDetail" class="scanner-detail"></div>
+
+        <button onclick="openPage('scanner-map.html')">
+          Open Scanner Map
         </button>
 
       </div>
@@ -218,13 +218,11 @@ window.addEventListener("load", () => {
        FOOTER
   ===================================================== -->
   <footer>
-    LMS Tooling · Internal Use Only
+    Zenni LMS · OHIO USA
   </footer>
 
 </div>
 
-<!-- 🚀 NON-BLOCKING SCRIPT -->
 <script defer src="index.js"></script>
 
 </body>
-</html>

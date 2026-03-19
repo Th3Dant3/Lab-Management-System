@@ -1,6 +1,28 @@
 /* =================================
-   LMS LOGIN PAGE
+   ZENNI LMS LOGIN – PRODUCTION UI
    ================================= */
+
+:root {
+  --bg-dark: #020b1f;
+  --bg-mid: #051a38;
+
+  --card: rgba(15, 23, 42, 0.78);
+  --border: rgba(255,255,255,0.08);
+
+  --text-main: #e6f2ff;
+  --text-muted: rgba(255,255,255,0.55);
+
+  --accent: #4fbaff;
+  --accent-strong: #3aa1ff;
+
+  --danger: #f87171;
+  --success: #66d9a3;
+  --warning: #fbbf24;
+}
+
+/* ===============================
+   BASE
+   =============================== */
 
 * {
   box-sizing: border-box;
@@ -8,7 +30,7 @@
 }
 
 /* ===============================
-   BACKGROUND
+   BACKGROUND (ENHANCED DEPTH)
    =============================== */
 
 .login-wrapper {
@@ -20,7 +42,7 @@
   background:
     radial-gradient(circle at 20% 20%, #1e4e8c, transparent 40%),
     radial-gradient(circle at 80% 80%, #0b1f42, transparent 40%),
-    linear-gradient(135deg, #020b1f, #051a38);
+    linear-gradient(135deg, var(--bg-dark), var(--bg-mid));
 
   animation: bgMove 14s ease-in-out infinite alternate;
 }
@@ -35,56 +57,66 @@
    =============================== */
 
 .login-container {
-
   width: 100%;
   max-width: 380px;
 
-  padding: 38px 32px;
-
+  padding: 40px 32px;
   border-radius: 18px;
 
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(12px);
+  background: var(--card);
+  backdrop-filter: blur(14px);
 
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
 
   box-shadow:
-    0 20px 50px rgba(0,0,0,0.7),
-    inset 0 1px 0 rgba(255,255,255,0.05);
+    0 25px 60px rgba(0,0,0,0.75),
+    inset 0 1px 0 rgba(255,255,255,0.04);
 
   text-align: center;
-
-  transition: transform .2s ease;
+  transition: all .25s ease;
 }
 
 .login-container:hover {
-  transform: translateY(-3px);
+  transform: translateY(-4px);
+  box-shadow:
+    0 30px 70px rgba(0,0,0,0.8),
+    0 0 25px rgba(79,186,255,0.08);
 }
 
 /* ===============================
-   TITLE
+   HEADER (NEW – PROFESSIONAL LOOK)
    =============================== */
 
-.login-container h2 {
-  margin-bottom: 26px;
+.login-header h1 {
+  margin: 0;
+  font-size: 22px;
   font-weight: 600;
-  letter-spacing: .4px;
-  color: #e6f2ff;
+  color: var(--text-main);
+  letter-spacing: .5px;
+}
+
+.login-header p {
+  margin: 6px 0 26px;
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: .3px;
 }
 
 /* ===============================
-   INPUTS
+   INPUTS (ENHANCED)
    =============================== */
+
+.form-group {
+  margin-bottom: 16px;
+  position: relative;
+}
 
 .login-container input {
-
   width: 100%;
   padding: 13px 14px;
 
-  margin-bottom: 16px;
-
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
 
   background: rgba(255,255,255,0.05);
 
@@ -95,38 +127,52 @@
 }
 
 .login-container input::placeholder {
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.45);
 }
 
 .login-container input:focus {
-
   outline: none;
 
-  border: 1px solid #4fbaff;
-
+  border: 1px solid var(--accent);
   background: rgba(255,255,255,0.08);
 
-  box-shadow: 0 0 0 2px rgba(79,186,255,0.2);
+  box-shadow:
+    0 0 0 2px rgba(79,186,255,0.18),
+    0 0 10px rgba(79,186,255,0.15);
+}
+
+/* PASSWORD TOGGLE */
+.password-group span {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 14px;
+}
+
+.password-group span:hover {
+  opacity: 1;
 }
 
 /* ===============================
-   BUTTON
+   BUTTON (STRONGER ACTION STYLE)
    =============================== */
 
 .login-container button {
-
   width: 100%;
   padding: 13px;
 
   border-radius: 999px;
   border: none;
 
-  background: linear-gradient(135deg,#4fbaff,#3aa1ff);
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
 
   color: #001b36;
 
   font-weight: 600;
   font-size: 14px;
+  letter-spacing: .3px;
 
   cursor: pointer;
 
@@ -134,34 +180,37 @@
 }
 
 .login-container button:hover {
-
   transform: translateY(-1px);
 
   box-shadow:
-    0 6px 18px rgba(79,186,255,0.35);
-
+    0 6px 20px rgba(79,186,255,0.35),
+    0 0 12px rgba(79,186,255,0.25);
 }
 
 .login-container button:active {
-
   transform: translateY(0px);
   box-shadow: none;
-
 }
 
 /* ===============================
-   MESSAGE
+   MESSAGE (UPGRADED STATES READY)
    =============================== */
 
 .login-message {
-
   margin-top: 14px;
-
   font-size: 13px;
-
   min-height: 18px;
+  color: var(--danger);
+  transition: color .2s ease;
+}
 
-  color: #f87171;
+/* OPTIONAL STATES YOU CAN USE IN JS */
+.login-message.success {
+  color: var(--success);
+}
+
+.login-message.warning {
+  color: var(--warning);
 }
 
 /* ===============================
@@ -171,10 +220,8 @@
 @media (max-width: 480px) {
 
   .login-container {
-
     margin: 20px;
     padding: 28px;
-
   }
 
 }
