@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeTab = "reasons";
   let delayFilter = "all";
   let lastData = null;
+  let currentYear = "all";
 
   /***********************
    HELPERS
@@ -61,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
    LOAD
   ***********************/
   async function load() {
-    const url = `${API_URL}?date=${encodeURIComponent(getFilterValue())}`;
+    const url = `${API_URL}?date=${encodeURIComponent(getFilterValue())}&year=${currentYear}`;
 
     try {
       const res = await fetch(url, { cache: "no-store" });
@@ -447,6 +448,23 @@ if (sameDayEl) {
   els.tabReasons?.addEventListener("click", () => switchTab("reasons"));
   els.tabSentBack?.addEventListener("click", () => switchTab("sent"));
   els.tabDelay?.addEventListener("click", () => switchTab("delay"));
+  
+  // 🔥 YEAR TABS (ADD HERE)
+  
+document.querySelectorAll(".year-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+
+    currentYear = btn.dataset.year;
+
+    // UI active state
+    document.querySelectorAll(".year-tab")
+      .forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+
+    load();
+  });
+});
 
   /***********************
    INIT

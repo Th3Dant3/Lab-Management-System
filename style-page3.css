@@ -389,3 +389,18 @@ body{
   background:rgba(248,113,113,0.12);
   color:var(--danger);
 }
+
+.year-tab{
+  padding:10px 16px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(4,10,20,0.78);
+  color:var(--muted);
+  cursor:pointer;
+  font-weight:600;
+}
+
+.year-tab.active{
+  background:linear-gradient(180deg, #69c2ff, #43aef7);
+  color:#06101f;
+}
