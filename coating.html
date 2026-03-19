@@ -26,37 +26,38 @@
   <!-- ================= FILTERS ================= -->
   <div class="filters-bar">
 
-    <!-- Date Filter -->
     <div class="date-filter">
       <label for="historyDate">Date:</label>
       <input type="date" id="historyDate" />      
     </div>
 
-    <!-- LIVE BUTTON -->
-    <div>
-      <button id="liveBtn" class="live-btn">🔴 Live Mode</button>
-    </div>
+    <button id="liveBtn" class="live-btn">🔴 Live Mode</button>
 
-    <!-- REPORT DATE -->
     <div id="activeReportDate" class="report-date-indicator"></div>
-
-    <!-- REFRESH TIMER -->
     <div id="refreshTimer" class="refresh-timer"></div>
 
   </div>
 
-  <!-- ================= MAIN NAV TABS ================= -->
+  <!-- ================= MAIN NAV ================= -->
   <div class="tabs main-tabs">
-
     <button class="tab active" onclick="showTab('overview', this)">Overview</button>
     <button class="tab" onclick="showTab('trends', this)">Trends</button>
     <button class="tab" onclick="showTab('reasons', this)">Top Reasons</button>
     <button class="tab" onclick="showTab('machines', this)">Machine Analysis</button>
-
   </div>
 
   <!-- ================= OVERVIEW ================= -->
   <div id="overview" class="tab-content active">
+
+    <!-- 🔥 INSIGHT PANEL (NEW) -->
+    <div class="summary">
+      <div class="card insight-card">
+        <h3>AI Insights</h3>
+        <div id="insightBox">
+          <p>Loading insights...</p>
+        </div>
+      </div>
+    </div>
 
     <!-- KPI ROW -->
     <div class="summary">
@@ -86,11 +87,6 @@
     <!-- SECOND ROW -->
     <div class="summary">
 
-      <div class="card">
-        <h3>Brkg Avg Time (hrs)</h3>
-        <h2 id="avgTime"></h2>
-      </div>
-
       <div class="card aging today">
         <h3>Same Day Lens Brkg</h3>
         <h2 id="sameDayBreakage"></h2>
@@ -104,6 +100,11 @@
       <div class="card aging late">
         <h3>Over 2+ Days Lens Brkg</h3>
         <h2 id="twoPlusBreakage"></h2>
+      </div>
+
+      <div class="card">
+        <h3>Brkg Avg Time (hrs)</h3>
+        <h2 id="avgTime"></h2>
       </div>
 
     </div>
@@ -153,10 +154,11 @@
   <!-- ================= TRENDS ================= -->
   <div id="trends" class="tab-content">
 
-    <h2>Breakage Trend</h2>
+    <div class="section-header">
+      <h2>Breakage Trend</h2>
+    </div>
 
-    <!-- TREND BUTTONS -->
-    <div style="text-align:center; margin-bottom:20px;">
+    <div class="chart-toolbar">
       <button id="processedBtn" class="mode-btn active" onclick="switchTrend('processed')">
         Breakage Processed
       </button>
@@ -170,24 +172,14 @@
       <canvas id="trendChart"></canvas>
     </div>
 
-    <!-- FLOW SECTION -->
-    <h2>Detaper → Coater Flow Analysis</h2>
+    <div class="section-header">
+      <h2>Detaper → Coater Flow Analysis</h2>
+    </div>
 
-    <!-- FLOW BUTTONS -->
-    <div style="text-align:center; margin-bottom:20px;">
-
-      <button id="avgFlowBtn" class="mode-btn active" onclick="switchFlowMode('average')">
-        Overall Avg
-      </button>
-
-      <button id="machineFlowBtn" class="mode-btn" onclick="switchFlowMode('machine')">
-        By Machine
-      </button>
-
-      <button id="individualFlowBtn" class="mode-btn" onclick="switchFlowMode('individual')">
-        Individual RX
-      </button>
-
+    <div class="chart-toolbar">
+      <button id="avgFlowBtn" class="mode-btn active" onclick="switchFlowMode('average')">Overall Avg</button>
+      <button id="machineFlowBtn" class="mode-btn" onclick="switchFlowMode('machine')">By Machine</button>
+      <button id="individualFlowBtn" class="mode-btn" onclick="switchFlowMode('individual')">Individual RX</button>
     </div>
 
     <div class="trend-card" style="height:450px;">
