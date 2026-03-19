@@ -1275,7 +1275,7 @@ function buildReasonChart(data) {
     }))
     .sort((a, b) => b.total - a.total);
 
-  const maxIndex = 0; // 🔥 highest bar
+  const maxIndex = 0;
 
   reasonChart = new Chart(ctx, {
     type: "bar",
@@ -1285,18 +1285,30 @@ function buildReasonChart(data) {
         label: "Breakage Count",
         data: entries.map(e => e.total),
 
+        // 🔥 FIXED STRONG GRADIENT
         backgroundColor: (ctx) => {
           const i = ctx.dataIndex;
           const baseColor =
             BREAKAGE_COLOR_MAP[entries[i].reason] || "#4da3ff";
 
-          return createGradient(ctx.chart.ctx, baseColor);
+          const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 600, 0);
+          gradient.addColorStop(0, baseColor);
+          gradient.addColorStop(1, baseColor + "AA");
+
+          return gradient;
         },
 
         borderRadius: 10,
         borderSkipped: false,
-        borderWidth: (ctx) => ctx.dataIndex === maxIndex ? 2 : 0,
-        borderColor: "#ffffff"
+
+        borderWidth: (ctx) => ctx.dataIndex === maxIndex ? 2 : 1,
+        borderColor: (ctx) =>
+          ctx.dataIndex === maxIndex ? "#ffffff" : "#ffffff22",
+
+        hoverBorderWidth: 2,
+        hoverBorderColor: "#ffffff",
+
+        barThickness: 28
       }]
     },
 
@@ -1308,7 +1320,10 @@ function buildReasonChart(data) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: "rgba(15,25,45,0.95)"
+          backgroundColor: "rgba(15,25,45,0.95)",
+          callbacks: {
+            label: ctx => `Breakage: ${ctx.raw}`
+          }
         }
       },
 
@@ -1353,6 +1368,10 @@ function buildMachineChart(data) {
     })
     .sort((a, b) => b.percent - a.percent);
 
+  // 🔥 SCALE FIX (for small % values)
+  const maxPercent = Math.max(...entries.map(e => e.percent));
+  const scaleFactor = maxPercent < 10 ? 3 : 1;
+
   const worstIndex = 0;
 
   machineChart = new Chart(ctx, {
@@ -1365,28 +1384,30 @@ function buildMachineChart(data) {
 
         // 🔥 BREAKAGE %
         {
-          label: "Breakage %",
-          data: entries.map(e => e.percent),
+          label: scaleFactor > 1 ? "Breakage % (Scaled)" : "Breakage %",
+          data: entries.map(e => e.percent * scaleFactor),
 
           backgroundColor: (ctx) => {
             const i = ctx.dataIndex;
             const val = entries[i].percent;
 
-            if (i === worstIndex) return "#ff3f34"; // 🔥 worst
-            if (val > 5) return "#ff9f43";
-            return "#ffd32a";
+            if (i === worstIndex) return "#ff0000";   // 🔥 worst
+            if (val > 5) return "#ff9f43";            // medium
+            return "#ffd32a";                         // low
           },
 
           borderRadius: 8,
+          barThickness: 28,
           yAxisID: "y1"
         },
 
-        // 🔵 JOBS
+        // 🔵 JOBS (FIXED VISIBILITY)
         {
           label: "Total Jobs",
           data: entries.map(e => e.jobs),
-          backgroundColor: createGradient(ctx, "#4da3ff"),
+          backgroundColor: "#4da3ff",
           borderRadius: 8,
+          barThickness: 28,
           yAxisID: "y2"
         }
 
@@ -1402,7 +1423,18 @@ function buildMachineChart(data) {
           labels: { color: "#E6F1FF" }
         },
         tooltip: {
-          backgroundColor: "rgba(15,25,45,0.95)"
+          backgroundColor: "rgba(15,25,45,0.95)",
+          callbacks: {
+            label: function(context) {
+
+              if (context.dataset.label.includes("Breakage")) {
+                const real = entries[context.dataIndex].percent;
+                return `Breakage: ${real.toFixed(2)}%`;
+              }
+
+              return `${context.dataset.label}: ${context.raw}`;
+            }
+          }
         }
       },
 
@@ -1410,6 +1442,7 @@ function buildMachineChart(data) {
 
         y1: {
           position: "left",
+          beginAtZero: true,
           title: {
             display: true,
             text: "Breakage %",
@@ -1420,6 +1453,7 @@ function buildMachineChart(data) {
 
         y2: {
           position: "right",
+          beginAtZero: true,
           title: {
             display: true,
             text: "Jobs",
@@ -1439,6 +1473,7 @@ function buildMachineChart(data) {
     plugins: [GLOW_PLUGIN]
   });
 }
+
 // AUTO REFRESH EVERY 5 MINUTES (LIVE MODE ONLY)
 setInterval(() => {
   if (currentDate === null) {
