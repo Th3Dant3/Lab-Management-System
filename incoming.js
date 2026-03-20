@@ -67,13 +67,16 @@ const HOUR_ORDER = [
 /* ================= INIT ================= */
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadData();
-  loadTrend(14); // 🔥 ADD THIS
-  startAutoRefresh();
-  
+
+  loadData();          // existing
+  startAutoRefresh();  // existing
+
+  loadTrend(14);       // 🔥 ADD THIS LINE
+
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("dateFilter").value = today;
   currentDate = today;
+
 });
 
 /* ================= SMART REFRESH ================= */
@@ -469,129 +472,53 @@ function buildTrendChart(trend) {
   const ctx = document.getElementById("trendChart");
   if (!ctx) return;
 
-  const labels = trend.map(d => d.date);
-
-  const totals = trend.map(d => d.total);
-  const finish = trend.map(d => d.departments.Finish || 0);
-  const surface = trend.map(d => d.departments.Surface || 0);
-  const specialty = trend.map(d => d.departments.Specialty || 0);
-  const frame = trend.map(d => d.departments["Frame Only"] || 0);
-
-  const max = Math.max(...totals);
-  const peakIndex = totals.indexOf(max);
-
-  // 🔥 NORMALIZE SMALL LINES (so they show properly)
-  const normalize = (arr) => {
-    const maxVal = Math.max(...arr);
-    if (maxVal === 0) return arr;
-    return arr.map(v => (v / maxVal) * (max * 0.25)); // scale to 25% of total
-  };
-
-  const finishScaled = normalize(finish);
-  const surfaceScaled = normalize(surface);
-  const specialtyScaled = normalize(specialty);
-  const frameScaled = normalize(frame);
-
+  // ✅ SAME PATTERN AS HOURLY
   if (trendChart) trendChart.destroy();
+
+  const labels = trend.map(d => d.date);
+  const totals = trend.map(d => d.total);
+
+  const finish = trend.map(d => d.departments["Finish"] || 0);
+  const surface = trend.map(d => d.departments["Surface"] || 0);
+  const specialty = trend.map(d => d.departments["Specialty"] || 0);
+  const frame = trend.map(d => d.departments["Frame Only"] || 0);
 
   trendChart = new Chart(ctx, {
     type: "line",
     data: {
       labels,
       datasets: [
-
-        // 🔥 TOTAL (MAIN LINE)
         {
           label: "Total",
           data: totals,
-          borderColor: "#5ab6ff",
-          backgroundColor: "rgba(90,182,255,0.15)",
-          fill: true,
-          tension: 0.4,
           borderWidth: 3,
-          pointRadius: ctx => ctx.dataIndex === peakIndex ? 6 : 3,
-          pointBackgroundColor: ctx =>
-            ctx.dataIndex === peakIndex ? "#22c55e" : "#5ab6ff"
+          tension: 0.4
         },
-
-        // 🔹 FINISH
         {
           label: "Finish",
-          data: finishScaled,
-          borderColor: "#86efac",
-          borderDash: [5,5],
-          tension: 0.3,
-          borderWidth: 2,
-          pointRadius: 0
+          data: finish,
+          borderDash: [6,6]
         },
-
-        // 🔹 SURFACE
         {
           label: "Surface",
-          data: surfaceScaled,
-          borderColor: "#60a5fa",
-          borderDash: [5,5],
-          tension: 0.3,
-          pointRadius: 0
+          data: surface,
+          borderDash: [6,6]
         },
-
-        // 🔹 SPECIALTY
         {
           label: "Specialty",
-          data: specialtyScaled,
-          borderColor: "#f97316",
-          borderDash: [5,5],
-          tension: 0.3,
-          pointRadius: 0
+          data: specialty,
+          borderDash: [6,6]
         },
-
-        // 🔹 FRAME
         {
           label: "Frame",
-          data: frameScaled,
-          borderColor: "#22c55e",
-          borderDash: [5,5],
-          tension: 0.3,
-          pointRadius: 0
+          data: frame,
+          borderDash: [6,6]
         }
-
       ]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: "index",
-        intersect: false
-      },
-      plugins: {
-        legend: {
-          labels: {
-            color: "#cbd5f5",
-            usePointStyle: true
-          }
-        },
-        tooltip: {
-          backgroundColor: "#0f172a",
-          borderColor: "#334155",
-          borderWidth: 1,
-          callbacks: {
-            label: function(ctx) {
-              return ctx.dataset.label + ": " + Math.round(ctx.raw);
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: "#94a3b8" },
-          grid: { color: "rgba(255,255,255,0.05)" }
-        },
-        y: {
-          ticks: { color: "#94a3b8" },
-          grid: { color: "rgba(255,255,255,0.05)" }
-        }
-      }
+      maintainAspectRatio: false
     }
   });
 }
