@@ -126,9 +126,9 @@ function showTab(tabId, button) {
     buildReasonChart(dashboardData);
   }
 
-  if (tabId === "machines" && !machineChart) {
-    buildMachineChart(dashboardData);
-  }
+ if (tabId === "machines" && !machineChart) {
+  buildMachineChart(dashboardMachine || dashboardData);
+}
 }
 
 /* =====================================================
@@ -241,8 +241,8 @@ async function loadDashboard() {
     } else if (tabId.includes("reasons")) {
       buildReasonChart(dashboardData);
     } else if (tabId.includes("machines")) {
-      buildMachineChart(dashboardData);
-    }
+  buildMachineChart(dashboardMachine || dashboardData);
+}
   }
 
   if (document.getElementById("flowChart")) {
@@ -1346,62 +1346,65 @@ function buildReasonChart(data) {
    MACHINE CHART
 ===================================================== */
 function buildMachineChart(data) {
+  if (!data || !data.machineTotals) return;
 
-  if (!data.machineTotals) return;
+  const canvas = document.getElementById("machineChart");
+  if (!canvas) return;
 
-  const ctx = document.getElementById("machineChart").getContext("2d");
+  const ctx = canvas.getContext("2d");
 
   if (machineChart) machineChart.destroy();
 
   const entries = Object.entries(data.machineTotals)
     .map(([machine, stats]) => {
+      const jobs = Number(stats.jobs || 0);
+      const broken = Number(stats.breakLenses || 0);
 
-      const jobs = stats.jobs || 0;
-      const broken = stats.breakLenses || 0;
-      const percent = jobs > 0 ? (broken / jobs) * 100 : 0;
+      const percent = jobs > 0
+        ? (broken / jobs) * 100
+        : (broken > 0 ? 100 : 0);
 
       return {
         machine,
-        percent,
-        jobs
+        jobs,
+        broken,
+        percent
       };
     })
-    .sort((a, b) => b.percent - a.percent);
+    .sort((a, b) => {
+  if (a.jobs === 0 && b.jobs === 0) return b.broken - a.broken;
+  if (a.jobs === 0) return 1;
+  if (b.jobs === 0) return -1;
+  return b.percent - a.percent;
+});
 
-  // 🔥 SCALE FIX (for small % values)
-  const maxPercent = Math.max(...entries.map(e => e.percent));
-  const scaleFactor = maxPercent < 10 ? 3 : 1;
+  if (!entries.length) return;
 
-  const worstIndex = 0;
+  const maxPercent = Math.max(...entries.map(e => e.percent), 0);
+  const scaleFactor = maxPercent > 0 && maxPercent < 10 ? 3 : 1;
 
   machineChart = new Chart(ctx, {
     type: "bar",
-
     data: {
-      labels: entries.map(e => e.machine),
-
+      labels: entries.map(e => formatMachineLabel(e.machine)),
       datasets: [
-
-        // 🔥 BREAKAGE %
         {
           label: scaleFactor > 1 ? "Breakage % (Scaled)" : "Breakage %",
           data: entries.map(e => e.percent * scaleFactor),
+          backgroundColor: (context) => {
+            const i = context.dataIndex;
+            const entry = entries[i];
+            const val = entry.percent;
 
-          backgroundColor: (ctx) => {
-            const i = ctx.dataIndex;
-            const val = entries[i].percent;
-
-            if (i === worstIndex) return "#ff0000";   // 🔥 worst
-            if (val > 5) return "#ff9f43";            // medium
-            return "#ffd32a";                         // low
+            if (entry.jobs === 0 && entry.broken > 0) return "#ff00ff";
+            if (i === 0 && val > 0) return "#ff0000";
+            if (val > 5) return "#ff9f43";
+            return "#ffd32a";
           },
-
           borderRadius: 8,
           barThickness: 28,
           yAxisID: "y1"
         },
-
-        // 🔵 JOBS (FIXED VISIBILITY)
         {
           label: "Total Jobs",
           data: entries.map(e => e.jobs),
@@ -1410,14 +1413,11 @@ function buildMachineChart(data) {
           barThickness: 28,
           yAxisID: "y2"
         }
-
       ]
     },
-
     options: {
       responsive: true,
       maintainAspectRatio: false,
-
       plugins: {
         legend: {
           labels: { color: "#E6F1FF" }
@@ -1426,20 +1426,21 @@ function buildMachineChart(data) {
           backgroundColor: "rgba(15,25,45,0.95)",
           callbacks: {
             label: function(context) {
+              const entry = entries[context.dataIndex];
 
               if (context.dataset.label.includes("Breakage")) {
-                const real = entries[context.dataIndex].percent;
-                return `Breakage: ${real.toFixed(2)}%`;
+                if (entry.jobs === 0 && entry.broken > 0) {
+                  return `Breakage: ${entry.broken} lens(es), no job data`;
+                }
+                return `Breakage: ${entry.percent.toFixed(2)}%`;
               }
 
-              return `${context.dataset.label}: ${context.raw}`;
+              return `Total Jobs: ${entry.jobs}`;
             }
           }
         }
       },
-
       scales: {
-
         y1: {
           position: "left",
           beginAtZero: true,
@@ -1448,9 +1449,13 @@ function buildMachineChart(data) {
             text: "Breakage %",
             color: "#ff3f34"
           },
-          ticks: { color: "#ff3f34" }
+          ticks: {
+            color: "#ff3f34",
+            callback: function(value) {
+              return scaleFactor > 1 ? (value / scaleFactor).toFixed(1) + "%" : value + "%";
+            }
+          }
         },
-
         y2: {
           position: "right",
           beginAtZero: true,
@@ -1462,14 +1467,11 @@ function buildMachineChart(data) {
           ticks: { color: "#4da3ff" },
           grid: { drawOnChartArea: false }
         },
-
         x: {
           ticks: { color: "#E6F1FF" }
         }
-
       }
     },
-
     plugins: [GLOW_PLUGIN]
   });
 }
@@ -1666,9 +1668,9 @@ function rebuildAllCharts() {
     buildTrendCharts();
   } else if (tabText.includes("reason")) {
     buildReasonChart(dashboardData);
-  } else if (tabText.includes("machine")) {
-    buildMachineChart(dashboardData);
-  }
+ } else if (tabText.includes("machine")) {
+  buildMachineChart(dashboardMachine || dashboardData);
+}
 
   if (document.getElementById("flowChart")) {
     buildFlowChart(dashboardProcessed);
