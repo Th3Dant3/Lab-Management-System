@@ -1364,9 +1364,11 @@ function buildMachineChart(data) {
       const jobs = Number(stats.jobs || 0);
       const broken = Number(stats.breakLenses || 0);
 
-      const percent = jobs > 0
-        ? (broken / jobs) * 100
-        : (broken > 0 ? 100 : 0);
+      const totalLenses = jobs * 2;
+
+const percent = totalLenses > 0
+  ? (broken / totalLenses) * 100
+  : (broken > 0 ? 100 : 0);
 
       return {
         machine,
@@ -1436,7 +1438,7 @@ function buildMachineChart(data) {
                 if (entry.jobs === 0 && entry.broken > 0) {
                   return `Breakage: ${entry.broken} lens(es), no job data`;
                 }
-                return `Breakage: ${entry.percent.toFixed(2)}%`;
+                return `Breakage: ${entry.percent.toFixed(2)}% (${entry.broken}/${entry.jobs * 2} lenses)`;
               }
 
               return `Total Jobs: ${entry.jobs}`;
@@ -1572,7 +1574,9 @@ function buildInsights(data) {
     const broken = stats.breakLenses || 0;
 
     if (jobs > 0) {
-      const percent = (broken / jobs) * 100;
+      const percent = jobs > 0
+  ? (broken / (jobs * 2)) * 100
+  : 0;
 
       if (percent > worstPercent) {
         worstPercent = percent;
@@ -1583,8 +1587,8 @@ function buildInsights(data) {
 
   if (worstPercent > 0) {
     insights.push(
-      `🛠️ Highest Breakage Machine: <b>${formatMachineLabel(worstMachine)}</b> (${worstPercent.toFixed(1)}%)`
-    );
+  `🛠️ Highest Breakage Machine: <b>${formatMachineLabel(worstMachine)}</b> (${worstPercent.toFixed(1)}% - ${machineTotals[worstMachine].breakLenses}/${machineTotals[worstMachine].jobs * 2})`
+);
   }
 
   /* ===============================
