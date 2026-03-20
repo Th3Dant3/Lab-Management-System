@@ -160,16 +160,20 @@ async function loadDashboard() {
      SUMMARY CARDS (FIXED)
   ================================ */
 
-  setText("totalJobs", summary.totalJobs ?? summary.coatingJobs ?? 0);
-  setText("totalBreakage", summary.totalBreakRX ?? 0);
-  setText("totalLenses", summary.totalBreakLenses ?? 0);
+setText("totalJobs", summary.totalJobs ?? 0);
 
-  setText(
-    "rxBreakage",
-    summary.breakPercent !== undefined
-      ? summary.breakPercent + "%"
-      : "0%"
-  );
+// ✅ correct mapping
+setText("totalLenses", summary.totalLenses ?? 0);
+
+// ✅ this was missing
+setText("totalBroken", summary.totalBreakLenses ?? 0);
+
+setText(
+  "rxBreakage",
+  summary.breakPercent !== undefined
+    ? `${Number(summary.breakPercent).toFixed(2)}% (${summary.totalBreakLenses || 0})`
+    : "0%"
+);
 
   setText(
     "avgTime",
