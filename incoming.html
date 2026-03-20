@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Incoming Jobs Dashboard</title>
+
+<link rel="stylesheet" href="incoming.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+<body>
+
+  <!-- TOP NAV -->
+  <div class="top-nav">
+    <button class="back-btn" onclick="goBack()">← Back to Main Page</button>
+  </div>
+
+<div id="app">
+
+  <!-- HEADER -->
+  <div class="header-bar">
+    <h1>Incoming Jobs Dashboard</h1>
+
+    <div class="meta">
+      <span id="totalJobs">Total: --</span>
+      <span id="lastUpdated">Updated: --</span>
+	  <span id="refreshStatus" class="refresh-status">Live</span>
+    </div>
+  </div>
+
+  <!-- 🔥 NEW FILTER BAR -->
+  <div class="filter-bar">
+
+    <div class="filter-group">
+      <label>Date</label>
+      <input type="date" id="dateFilter">
+    </div>
+
+    <div class="filter-actions">
+      <button class="filter-btn" onclick="applyDateFilter()">Apply</button>
+      <button class="filter-btn secondary" onclick="resetDateFilter()">Today</button>
+    </div>
+
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <!-- MAIN -->
+  <div class="main-grid">
+
+    <!-- LEFT -->
+    <div class="panel">
+      <h3>Queue Breakdown</h3>
+      <div id="container"></div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="panel">
+      <div class="panel-header">
+        <h3>Hourly Flow</h3>
+        <span id="chartInsight" class="chart-insight"></span>
+      </div>
+
+      <canvas id="hourlyChart"></canvas>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="incoming.js"></script>
+
+</body>
+</html>

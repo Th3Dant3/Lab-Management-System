@@ -1,0 +1,482 @@
+const API_URL = "https://script.google.com/macros/s/AKfycbyI2YqO9wXZ4-v34OXqqxD-yCYe3Dnly1-d_cf9mYtkcVkZoXeWhgQ8u6WbgY-lvIQQjg/exec";
+
+let chart = null;
+let lastData = null;
+let currentHour = null;
+let currentDate = null;
+
+/* ================= COLOR MAP ================= */
+
+const status = document.getElementById("refreshStatus");
+
+const QUEUE_COLORS = {
+
+  /* 🔥 RUSH */
+  "Surface Rush Delivery": "#00E5FF",
+  "Rush Delivery Queue": "#00E5FF",
+  "In Rush Delivery Queue": "#00E5FF",
+
+  /* 🔴 CHINA */
+  "Surface China Rush Delivery": "#FF3B3B",
+  "China Rush Queue": "#FF3B3B",
+  "In China Rush Queue": "#FF3B3B",
+  "In China Rush Delivery Queue": "#FF3B3B",
+  "Fin China Rush Delivery": "#B91C1C",
+
+  /* 🔵 STANDARD */
+  "Surface Standard": "#3B82F6",
+  "Standard Queue": "#3B82F6",
+  "In Standard Queue": "#3B82F6",
+  "Fin Standard": "#93C5FD",
+
+  /* 🟡 OVERNIGHT */
+  "Overnight Queue": "#FACC15",
+  "In Overnight Queue": "#FACC15",
+  "Surface Overnight Delivery": "#FACC15",
+  "Fin Overnight Delivery": "#A3A3A3",
+
+  /* 🟢 FINISH */
+  "Fin Rush Delivery": "#86EFAC",
+
+  /* 🟣 BEAST */
+  "Beast Queue": "#A855F7",
+  "In Beast Queue": "#A855F7",
+  "Beast Surface Queue": "#D946EF",
+  "Beast Finish Queue": "#14B8A6",
+
+  /* 🟢 FRAME */
+  "Frame Only Queue": "#22C55E",
+  "In Frame Only Queue": "#22C55E",
+  "Frame Only Test Queue": "#15803D",
+
+  /* ⚙️ OTHER */
+  "Test Jobs Queue": "#2DD4BF",
+  "Echo Queue": "#FB923C",
+
+  /* 🟢 TOTAL */
+  "All Queued Jobs": "#10B981"
+};
+
+const HOUR_ORDER = [
+  "12:00 AM","1:00 AM","2:00 AM","3:00 AM","4:00 AM","5:00 AM",
+  "6:00 AM","7:00 AM","8:00 AM","9:00 AM","10:00 AM","11:00 AM",
+  "12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM",
+  "6:00 PM","7:00 PM","8:00 PM","9:00 PM","10:00 PM","11:00 PM"
+];
+
+/* ================= INIT ================= */
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadData();
+  startAutoRefresh();
+  
+  const today = new Date().toISOString().split("T")[0];
+document.getElementById("dateFilter").value = today;
+currentDate = today;
+  
+});
+
+/* ================= SMART REFRESH ================= */
+
+function startAutoRefresh() {
+
+  const interval = 10 * 60 * 1000;
+  const status = document.getElementById("refreshStatus");
+
+  setInterval(() => {
+
+    if (document.visibilityState !== "visible") return;
+
+    const today = new Date().toISOString().split("T")[0];
+
+    if (!currentDate || currentDate === today) {
+
+      console.log("🔄 Auto Refresh (Today Only)");
+      loadData();
+
+      if (status) {
+        status.textContent = "Live";
+        status.style.color = "#22c55e";
+      }
+
+    } else {
+
+      console.log("⏸ Viewing past date — no auto refresh");
+
+      if (status) {
+        status.textContent = "History";
+        status.style.color = "#facc15";
+      }
+
+    }
+
+  }, interval);
+
+  document.addEventListener("visibilitychange", () => {
+
+    if (document.visibilityState === "visible") {
+      console.log("👀 User returned → refresh");
+      loadData();
+    }
+
+  });
+}
+
+/* ================= HELPERS ================= */
+
+function getQueueColor(queueName) {
+
+  if (QUEUE_COLORS[queueName]) return QUEUE_COLORS[queueName];
+
+  const q = String(queueName || "").toLowerCase();
+
+  if (q.includes("error") || q.includes("waiting")) return "#FF0000";
+  if (q.includes("hold")) return "#FB7185";
+  if (q.includes("surface rush")) return "#00E5FF";
+  if (q.includes("china rush")) return "#FF3B3B";
+  if (q.includes("standard")) return "#3B82F6";
+  if (q.includes("overnight")) return "#FACC15";
+  if (q.includes("beast")) return "#A855F7";
+  if (q.includes("frame only")) return "#22C55E";
+  if (q.includes("test")) return "#2DD4BF";
+  if (q.includes("echo")) return "#FB923C";
+
+  return "#6fb3ff";
+}
+
+function brightenColor(hex, percent = 30) {
+  const num = parseInt(hex.replace("#",""),16);
+  const r = Math.min(255, (num >> 16) + percent);
+  const g = Math.min(255, ((num >> 8) & 0x00FF) + percent);
+  const b = Math.min(255, (num & 0x0000FF) + percent);
+  return `rgb(${r},${g},${b})`;
+}
+
+function toBarFill(color) {
+  return `linear-gradient(90deg, ${color}, ${brightenColor(color, 40)})`;
+}
+
+/* ================= LOAD ================= */
+
+async function loadData() {
+  try {
+    let url = API_URL;
+
+if (currentDate) {
+  url += "?date=" + currentDate;
+}
+
+const res = await fetch(url);
+    const json = await res.json();
+
+    if (!json.success) return;
+
+    document.getElementById("totalJobs").textContent = "Total: " + json.total;
+    document.getElementById("lastUpdated").textContent =
+      "Updated: " + new Date().toLocaleTimeString();
+
+    renderKPI(json.data, json.total);
+
+    if (currentHour) {
+      showHourBreakdown(currentHour, json.data);
+    } else {
+      renderQueueBars(json.data, json.total);
+    }
+
+    buildChart(json.data);
+    setChartInsight(json.data);
+
+    lastData = json.data;
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/* ================= Date Filter  ================= */
+
+function applyDateFilter() {
+
+  const input = document.getElementById("dateFilter");
+  const value = input.value;
+
+  if (!value) return;
+
+  currentDate = value;
+  currentHour = null;
+
+  console.log("📅 Filter Applied:", currentDate);
+
+  loadData();
+}
+
+function resetDateFilter() {
+
+  currentDate = null;
+  currentHour = null;
+
+  document.getElementById("dateFilter").value = "";
+
+  console.log("🔄 Reset to Today");
+
+  loadData();
+}
+
+/* ================= KPI ================= */
+
+function renderKPI(data, grandTotal) {
+  const grid = document.getElementById("kpiGrid");
+  grid.innerHTML = "";
+
+  Object.keys(data).forEach(dept => {
+    if (dept === "_total") return;
+
+    const value = data[dept]._total;
+    const pct = ((value / grandTotal) * 100).toFixed(1);
+
+    const card = document.createElement("div");
+    card.className = "kpi-card";
+    card.innerHTML = `
+      <div class="kpi-title">${dept}</div>
+      <div class="kpi-value">${value}</div>
+      <div class="kpi-sub">${pct}% of total</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+/* ================= QUEUE ================= */
+
+function renderQueueBars(data, grandTotal) {
+  const container = document.getElementById("container");
+  container.innerHTML = "";
+
+  Object.keys(data).forEach(dept => {
+    if (dept === "_total") return;
+
+    const deptTotal = data[dept]._total;
+
+    const deptBlock = document.createElement("div");
+    deptBlock.className = "queue-dept";
+
+    deptBlock.innerHTML = `
+      <div class="dept-header">
+        ${dept} <span>${deptTotal}</span>
+      </div>
+    `;
+
+    Object.keys(data[dept]).forEach(queue => {
+      if (queue === "_total") return;
+
+      const q = data[dept][queue];
+      const pct = ((q.total / deptTotal) * 100).toFixed(1);
+      const color = getQueueColor(queue);
+
+      const row = document.createElement("div");
+      row.className = "queue-row";
+
+      row.innerHTML = `
+        <div class="label">${queue}</div>
+        <div class="bar"><div class="fill"></div></div>
+        <div class="value">${q.total}</div>
+      `;
+
+      deptBlock.appendChild(row);
+
+      const fill = row.querySelector(".fill");
+      const label = row.querySelector(".label");
+
+      label.style.color = color;
+      fill.style.background = toBarFill(color);
+      fill.style.boxShadow = `0 0 10px ${color}`;
+
+      requestAnimationFrame(() => {
+        fill.style.width = pct + "%";
+      });
+    });
+
+    container.appendChild(deptBlock);
+  });
+}
+
+/* ================= HOUR BREAKDOWN ================= */
+
+function showHourBreakdown(hour, dataOverride = null) {
+  const data = dataOverride || lastData;
+  if (!data) return;
+
+  currentHour = hour;
+
+  const container = document.getElementById("container");
+  container.innerHTML = `
+    <div class="dept-header">
+      Hour: ${hour}
+      <span class="reset-link" onclick="resetView()">Reset</span>
+    </div>
+  `;
+
+  Object.keys(data).forEach(dept => {
+    if (dept === "_total") return;
+
+    let deptTotal = 0;
+    const rows = [];
+
+    Object.keys(data[dept]).forEach(queue => {
+      if (queue === "_total") return;
+
+      const entries = data[dept][queue].hours[hour] || [];
+      const total = entries.reduce((s,x)=>s+x.value,0);
+
+      if (total > 0) {
+        deptTotal += total;
+        rows.push({queue,total});
+      }
+    });
+
+    if (!deptTotal) return;
+
+    const block = document.createElement("div");
+    block.className = "queue-dept";
+
+    block.innerHTML = `
+      <div class="dept-header">
+        ${dept} <span>${deptTotal}</span>
+      </div>
+    `;
+
+    rows.forEach(r => {
+      const color = getQueueColor(r.queue);
+      const pct = Math.max((r.total / deptTotal) * 100, 4);
+
+      const row = document.createElement("div");
+      row.className = "queue-row";
+
+      row.innerHTML = `
+        <div class="label">${r.queue}</div>
+        <div class="bar"><div class="fill"></div></div>
+        <div class="value">${r.total}</div>
+      `;
+
+      const fill = row.querySelector(".fill");
+      const label = row.querySelector(".label");
+
+      label.style.color = color;
+      fill.style.background = toBarFill(color);
+      fill.style.boxShadow = `0 0 10px ${color}`;
+      fill.style.width = pct + "%";
+
+      block.appendChild(row);
+    });
+
+    container.appendChild(block);
+  });
+}
+
+/* ================= RESET ================= */
+
+function resetView() {
+  currentHour = null;
+  if (lastData) renderQueueBars(lastData, lastData._total || 0);
+}
+
+/* ================= CHART ================= */
+
+function buildChart(data) {
+  const ctx = document.getElementById("hourlyChart");
+
+  const hourMap = {};
+  HOUR_ORDER.forEach(h => hourMap[h] = 0);
+
+  Object.keys(data).forEach(dept => {
+    if (dept === "_total") return;
+
+    Object.keys(data[dept]).forEach(queue => {
+      if (queue === "_total") return;
+
+      Object.keys(data[dept][queue].hours).forEach(hour => {
+        data[dept][queue].hours[hour].forEach(entry => {
+          hourMap[hour] += entry.value;
+        });
+      });
+    });
+  });
+
+  const labels = HOUR_ORDER.filter(h => hourMap[h] > 0);
+  const values = labels.map(h => hourMap[h]);
+  const max = Math.max(...values);
+
+  const colors = values.map(v => {
+    if (v === max) return "rgba(120,255,180,0.9)";
+    if (v < max * 0.2) return "rgba(120,160,255,0.3)";
+    return "rgba(90,182,255,0.7)";
+  });
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: (evt, elements, chartInstance) => {
+        const points = chartInstance.getElementsAtEventForMode(
+          evt, "index", { intersect: false }, true
+        );
+        if (!points.length) return;
+        const hour = chartInstance.data.labels[points[0].index];
+        showHourBreakdown(hour);
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+/* ================= INSIGHT ================= */
+
+function setChartInsight(data) {
+  const insight = document.getElementById("chartInsight");
+  if (!insight) return;
+
+  const hourMap = {};
+  HOUR_ORDER.forEach(h => hourMap[h] = 0);
+
+  Object.keys(data).forEach(dept => {
+    if (dept === "_total") return;
+
+    Object.keys(data[dept]).forEach(queue => {
+      if (queue === "_total") return;
+
+      Object.keys(data[dept][queue].hours).forEach(hour => {
+        data[dept][queue].hours[hour].forEach(entry => {
+          hourMap[hour] += entry.value;
+        });
+      });
+    });
+  });
+
+  let peak = null;
+  let val = 0;
+
+  Object.keys(hourMap).forEach(h => {
+    if (hourMap[h] > val) {
+      val = hourMap[h];
+      peak = h;
+    }
+  });
+
+  insight.textContent = peak ? `Peak: ${peak} (${val})` : "";
+}
+
+/* ================= NAV ================= */
+
+function goBack() {
+  window.location.href = "index.html";
+}

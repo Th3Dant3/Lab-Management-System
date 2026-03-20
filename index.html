@@ -188,31 +188,47 @@ window.addEventListener("load", () => {
   <!-- =====================================================
        SYSTEM TAB
   ===================================================== -->
-  <section id="system" class="tab-content">
+<section id="system" class="tab-content">
 
-    <div class="cards">
+  <div class="cards two-col">
 
-      <div id="scanner-card" class="card primary" data-gated>
+    <div id="scanner-card" class="card primary" data-gated>
 
-        <div class="card-header">
-          <h3>Scanner Network Monitor</h3>
-          <span class="badge">Live</span>
-        </div>
-
-        <p>Real-time scanner activity by port</p>
-        <p class="sub">Finish · Surface · AR</p>
-
-        <div id="scannerDetail" class="scanner-detail"></div>
-
-        <button onclick="openPage('scanner-map.html')">
-          Open Scanner Map
-        </button>
-
+      <div class="card-header">
+        <h3>Scanner Network Monitor</h3>
+        <span class="badge">Live</span>
       </div>
+
+      <p>Real-time scanner activity by port</p>
+      <p class="sub">Finish · Surface · AR</p>
+
+      <div id="scannerDetail" class="scanner-detail"></div>
+
+      <button onclick="openPage('scanner-map.html')">
+        Open Scanner Map
+      </button>
 
     </div>
 
-  </section>
+    <div id="incoming-card" class="card" data-gated>
+
+      <div class="card-header">
+        <h3>Incoming Jobs Dashboard</h3>
+        <span class="badge subtle">System</span>
+      </div>
+
+      <p>Live incoming queue volume and hourly flow</p>
+      <p class="sub">Finish · Specialty · Surface · Frame</p>
+
+      <button onclick="openPage('incoming.html')">
+        Open Dashboard
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
 
   <!-- =====================================================
        FOOTER

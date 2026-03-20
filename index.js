@@ -222,27 +222,24 @@ function applyVisibilityRules(visibility) {
     "True Curve": "#truecurve-card",
     "Tools": "#tools-card",
     "Coating": "#coating-card",
+    "Incoming Jobs": "#incoming-card", // 🔥 ADD THIS
     "Admin": ".admin-only"
   };
 
-  // Hide all first (safer)
+  // Hide all first (safe default)
   Object.values(map).forEach(selector => {
     document.querySelectorAll(selector).forEach(el => {
       el.style.display = "none";
     });
   });
 
-  // Then enable allowed
+  // Enable allowed features
   Object.keys(map).forEach(feature => {
-
     if (visibility[feature]) {
-
       document.querySelectorAll(map[feature]).forEach(el => {
         el.style.display = "flex";
       });
-
     }
-
   });
 
 }
