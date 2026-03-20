@@ -201,7 +201,10 @@ function applyDateFilter() {
 
   if (!value) return;
 
-  currentDate = value;
+  currentDate = new Date(value)
+    .toISOString()
+    .split("T")[0];
+
   currentHour = null;
 
   console.log("📅 Filter Applied:", currentDate);
