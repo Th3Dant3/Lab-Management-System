@@ -4,6 +4,7 @@ let chart = null;
 let lastData = null;
 let currentHour = null;
 let currentDate = null;
+let trendChart = null;
 
 /* ================= COLOR MAP ================= */
 
@@ -67,12 +68,12 @@ const HOUR_ORDER = [
 
 document.addEventListener("DOMContentLoaded", () => {
   loadData();
+  loadTrend(14); // 🔥 ADD THIS
   startAutoRefresh();
   
   const today = new Date().toISOString().split("T")[0];
-document.getElementById("dateFilter").value = today;
-currentDate = today;
-  
+  document.getElementById("dateFilter").value = today;
+  currentDate = today;
 });
 
 /* ================= SMART REFRESH ================= */
@@ -116,6 +117,7 @@ function startAutoRefresh() {
     if (document.visibilityState === "visible") {
       console.log("👀 User returned → refresh");
       loadData();
+      loadTrend(14); // 🔥 ADD THIS
     }
 
   });
@@ -439,6 +441,182 @@ function buildChart(data) {
       plugins: { legend: { display: false } }
     }
   });
+}
+
+/* ================= TREND ================= */
+
+async function loadTrend(days = 14) {
+
+  try {
+
+    const res = await fetch(API_URL + "?mode=trend&days=" + days);
+    const json = await res.json();
+
+    if (!json.success) return;
+
+    buildTrendChart(json.trend);
+    setTrendInsight(json.trend);
+
+  } catch (err) {
+    console.error("Trend error:", err);
+  }
+}
+
+/* ================= TREND CHART ================= */
+
+function buildTrendChart(trend) {
+
+  const ctx = document.getElementById("trendChart");
+  if (!ctx) return;
+
+  const labels = trend.map(d => d.date);
+
+  const totals = trend.map(d => d.total);
+  const finish = trend.map(d => d.departments.Finish || 0);
+  const surface = trend.map(d => d.departments.Surface || 0);
+  const specialty = trend.map(d => d.departments.Specialty || 0);
+  const frame = trend.map(d => d.departments["Frame Only"] || 0);
+
+  const max = Math.max(...totals);
+  const peakIndex = totals.indexOf(max);
+
+  // 🔥 NORMALIZE SMALL LINES (so they show properly)
+  const normalize = (arr) => {
+    const maxVal = Math.max(...arr);
+    if (maxVal === 0) return arr;
+    return arr.map(v => (v / maxVal) * (max * 0.25)); // scale to 25% of total
+  };
+
+  const finishScaled = normalize(finish);
+  const surfaceScaled = normalize(surface);
+  const specialtyScaled = normalize(specialty);
+  const frameScaled = normalize(frame);
+
+  if (trendChart) trendChart.destroy();
+
+  trendChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+
+        // 🔥 TOTAL (MAIN LINE)
+        {
+          label: "Total",
+          data: totals,
+          borderColor: "#5ab6ff",
+          backgroundColor: "rgba(90,182,255,0.15)",
+          fill: true,
+          tension: 0.4,
+          borderWidth: 3,
+          pointRadius: ctx => ctx.dataIndex === peakIndex ? 6 : 3,
+          pointBackgroundColor: ctx =>
+            ctx.dataIndex === peakIndex ? "#22c55e" : "#5ab6ff"
+        },
+
+        // 🔹 FINISH
+        {
+          label: "Finish",
+          data: finishScaled,
+          borderColor: "#86efac",
+          borderDash: [5,5],
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: 0
+        },
+
+        // 🔹 SURFACE
+        {
+          label: "Surface",
+          data: surfaceScaled,
+          borderColor: "#60a5fa",
+          borderDash: [5,5],
+          tension: 0.3,
+          pointRadius: 0
+        },
+
+        // 🔹 SPECIALTY
+        {
+          label: "Specialty",
+          data: specialtyScaled,
+          borderColor: "#f97316",
+          borderDash: [5,5],
+          tension: 0.3,
+          pointRadius: 0
+        },
+
+        // 🔹 FRAME
+        {
+          label: "Frame",
+          data: frameScaled,
+          borderColor: "#22c55e",
+          borderDash: [5,5],
+          tension: 0.3,
+          pointRadius: 0
+        }
+
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: "index",
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: "#cbd5f5",
+            usePointStyle: true
+          }
+        },
+        tooltip: {
+          backgroundColor: "#0f172a",
+          borderColor: "#334155",
+          borderWidth: 1,
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ": " + Math.round(ctx.raw);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: "#94a3b8" },
+          grid: { color: "rgba(255,255,255,0.05)" }
+        },
+        y: {
+          ticks: { color: "#94a3b8" },
+          grid: { color: "rgba(255,255,255,0.05)" }
+        }
+      }
+    }
+  });
+}
+
+/* ================= TREND INSIGHT ================= */
+
+function setTrendInsight(trend) {
+
+  const el = document.getElementById("trendInsight");
+  if (!el || trend.length < 2) return;
+
+  let peak = trend[0];
+
+  trend.forEach(d => {
+    if (d.total > peak.total) peak = d;
+  });
+
+  const latest = trend[trend.length - 1];
+  const prev = trend[trend.length - 2];
+
+  let change = ((latest.total - prev.total) / prev.total * 100).toFixed(1);
+
+  const trendIcon = change > 0 ? "📈" : "📉";
+
+  el.textContent = `Peak ${peak.date} (${peak.total}) | ${trendIcon} ${change}%`;
 }
 
 /* ================= INSIGHT ================= */

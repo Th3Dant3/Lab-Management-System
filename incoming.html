@@ -24,11 +24,11 @@
     <div class="meta">
       <span id="totalJobs">Total: --</span>
       <span id="lastUpdated">Updated: --</span>
-	  <span id="refreshStatus" class="refresh-status">Live</span>
+      <span id="refreshStatus" class="refresh-status">Live</span>
     </div>
   </div>
 
-  <!-- 🔥 NEW FILTER BAR -->
+  <!-- FILTER BAR -->
   <div class="filter-bar">
 
     <div class="filter-group">
@@ -46,7 +46,7 @@
   <!-- KPI -->
   <div class="kpi-grid" id="kpiGrid"></div>
 
-  <!-- MAIN -->
+  <!-- MAIN GRID -->
   <div class="main-grid">
 
     <!-- LEFT -->
@@ -63,6 +63,26 @@
       </div>
 
       <canvas id="hourlyChart"></canvas>
+    </div>
+
+  </div>
+
+  <!-- 🔥 TREND SECTION (NEW) -->
+  <div class="panel trend-panel">
+
+    <div class="panel-header">
+      <h3>Trend (Daily Incoming)</h3>
+      <span id="trendInsight" class="chart-insight"></span>
+    </div>
+
+    <div class="trend-controls">
+      <button onclick="loadTrend(7)">7D</button>
+      <button onclick="loadTrend(14)">14D</button>
+      <button onclick="loadTrend(30)">30D</button>
+    </div>
+
+    <div class="trend-chart-wrap">
+      <canvas id="trendChart"></canvas>
     </div>
 
   </div>
