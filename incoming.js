@@ -17,11 +17,10 @@ const QUEUE_COLORS = {
   "In Rush Delivery Queue": "#00E5FF",
 
   /* 🔴 CHINA */
-  "Surface China Rush Delivery": "#FF3B3B",
-  "China Rush Queue": "#FF3B3B",
-  "In China Rush Queue": "#FF3B3B",
-  "In China Rush Delivery Queue": "#FF3B3B",
-  "Fin China Rush Delivery": "#B91C1C",
+ "Surface China Rush Delivery": "#F97316",  // orange
+"China Rush Queue": "#F97316",
+"In China Rush Queue": "#F97316",
+"In China Rush Delivery Queue": "#F97316",
 
   /* 🔵 STANDARD */
   "Surface Standard": "#3B82F6",
