@@ -69,7 +69,8 @@ const HOUR_ORDER = [
 
 /* ================= INIT ================= */
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
+
   const today = new Date().toISOString().split("T")[0];
   const dateInput = document.getElementById("dateFilter");
 
@@ -78,8 +79,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   updateRefreshStatus();
 
-  await loadData();
-  
+  loadData(); // ✅ no await
 
   startAutoRefresh();
 });
@@ -218,6 +218,9 @@ function toBarFill(color) {
   return `linear-gradient(90deg, ${color}, ${brightenColor(color, 40)})`;
 }
 
+
+console.log("🚀 loadData called");
+
 /* ================= LOAD ================= */
 
 async function loadData() {
@@ -259,6 +262,8 @@ async function loadData() {
     updateRefreshStatus();
   }
 }
+
+console.log("🚀 loadData called");
 
 /* ================= DATE FILTER ================= */
 
