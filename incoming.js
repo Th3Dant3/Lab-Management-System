@@ -231,8 +231,16 @@ async function loadData() {
     let url = API_URL;
 
     if (currentDate) {
-      url += "?date=" + encodeURIComponent(currentDate);
-    }
+
+  const d = new Date(currentDate);
+
+  const formatted =
+    (d.getMonth() + 1).toString().padStart(2, "0") + "/" +
+    d.getDate().toString().padStart(2, "0") + "/" +
+    d.getFullYear();
+
+  url += "?date=" + encodeURIComponent(formatted);
+}
 
     const res = await fetch(url, { cache: "no-store" });
     const json = await res.json();
