@@ -32,7 +32,7 @@
   <div class="filter-bar">
 
     <div class="filter-group">
-      <label>Date</label>
+      <label for="dateFilter">Date</label>
       <input type="date" id="dateFilter">
     </div>
 
@@ -43,46 +43,65 @@
 
   </div>
 
-  <!-- KPI -->
-  <div class="kpi-grid" id="kpiGrid"></div>
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">
+      Incoming
+    </button>
+    <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">
+      Trend
+    </button>
+  </div>
 
-  <!-- MAIN GRID -->
-  <div class="main-grid">
+  <!-- INCOMING TAB -->
+  <div id="incomingTab" class="tab-content active">
 
-    <!-- LEFT -->
-    <div class="panel">
-      <h3>Queue Breakdown</h3>
-      <div id="container"></div>
-    </div>
+    <!-- KPI -->
+    <div class="kpi-grid" id="kpiGrid"></div>
 
-    <!-- RIGHT -->
-    <div class="panel">
-      <div class="panel-header">
-        <h3>Hourly Flow</h3>
-        <span id="chartInsight" class="chart-insight"></span>
+    <!-- MAIN GRID -->
+    <div class="main-grid">
+
+      <!-- LEFT -->
+      <div class="panel">
+        <h3>Queue Breakdown</h3>
+        <div id="container"></div>
       </div>
 
-      <canvas id="hourlyChart"></canvas>
+      <!-- RIGHT -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Hourly Flow</h3>
+          <span id="chartInsight" class="chart-insight"></span>
+        </div>
+
+        <canvas id="hourlyChart"></canvas>
+      </div>
+
     </div>
 
   </div>
 
-  <!-- 🔥 TREND SECTION (NEW) -->
-  <div class="panel trend-panel">
+  <!-- TREND TAB -->
+  <div id="trendTab" class="tab-content" style="display:none;">
 
-    <div class="panel-header">
-      <h3>Trend (Daily Incoming)</h3>
-      <span id="trendInsight" class="chart-insight"></span>
-    </div>
+    <div class="panel trend-panel">
 
-    <div class="trend-controls">
-      <button onclick="loadTrend(7)">7D</button>
-      <button onclick="loadTrend(14)">14D</button>
-      <button onclick="loadTrend(30)">30D</button>
-    </div>
+      <div class="panel-header">
+        <h3>Trend (Daily Incoming)</h3>
+        <span id="trendInsight" class="chart-insight"></span>
+      </div>
 
-    <div class="trend-chart-wrap">
-      <canvas id="trendChart"></canvas>
+      <div class="trend-controls">
+        <button onclick="loadTrend(7)">7D</button>
+        <button onclick="loadTrend(14)">14D</button>
+        <button onclick="loadTrend(30)">30D</button>
+      </div>
+
+      <div class="trend-chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
+
     </div>
 
   </div>

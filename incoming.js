@@ -6,22 +6,25 @@ let currentHour = null;
 let currentDate = null;
 let trendChart = null;
 
+let refreshTimerHandle = null;
+let isRefreshing = false;
+let isTrendRefreshing = false;
+
 /* ================= COLOR MAP ================= */
 
 const status = document.getElementById("refreshStatus");
 
 const QUEUE_COLORS = {
-
   /* 🔥 RUSH */
   "Surface Rush Delivery": "#00E5FF",
   "Rush Delivery Queue": "#00E5FF",
   "In Rush Delivery Queue": "#00E5FF",
 
   /* 🔴 CHINA */
- "Surface China Rush Delivery": "#F97316",  // orange
-"China Rush Queue": "#F97316",
-"In China Rush Queue": "#F97316",
-"In China Rush Delivery Queue": "#F97316",
+  "Surface China Rush Delivery": "#F97316",
+  "China Rush Queue": "#F97316",
+  "In China Rush Queue": "#F97316",
+  "In China Rush Delivery Queue": "#F97316",
 
   /* 🔵 STANDARD */
   "Surface Standard": "#3B82F6",
@@ -66,70 +69,125 @@ const HOUR_ORDER = [
 
 /* ================= INIT ================= */
 
-document.addEventListener("DOMContentLoaded", () => {
-
-  loadData();          // existing
-  startAutoRefresh();  // existing
-
-  loadTrend(14);       // 🔥 ADD THIS LINE
-
+document.addEventListener("DOMContentLoaded", async () => {
   const today = new Date().toISOString().split("T")[0];
-  document.getElementById("dateFilter").value = today;
+  const dateInput = document.getElementById("dateFilter");
+
+  if (dateInput) dateInput.value = today;
   currentDate = today;
 
+  updateRefreshStatus();
+
+  await loadData();
+  
+
+  startAutoRefresh();
 });
+
+/* ================= MODE HELPERS ================= */
+
+function getTodayString() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function isTodayMode() {
+  return !currentDate || currentDate === getTodayString();
+}
+
+function updateRefreshStatus() {
+  const statusEl = document.getElementById("refreshStatus");
+  if (!statusEl) return;
+
+  if (document.visibilityState !== "visible") {
+    statusEl.textContent = "Paused";
+    statusEl.style.color = "#94a3b8";
+    return;
+  }
+
+  if (isTodayMode()) {
+    statusEl.textContent = "Live";
+    statusEl.style.color = "#22c55e";
+  } else {
+    statusEl.textContent = "History";
+    statusEl.style.color = "#facc15";
+  }
+}
 
 /* ================= SMART REFRESH ================= */
 
 function startAutoRefresh() {
-
   const interval = 10 * 60 * 1000;
-  const status = document.getElementById("refreshStatus");
 
-  setInterval(() => {
+  if (refreshTimerHandle) {
+    clearInterval(refreshTimerHandle);
+    refreshTimerHandle = null;
+  }
 
-    if (document.visibilityState !== "visible") return;
-
-    const today = new Date().toISOString().split("T")[0];
-
-    if (!currentDate || currentDate === today) {
-
-      console.log("🔄 Auto Refresh (Today Only)");
-      loadData();
-
-      if (status) {
-        status.textContent = "Live";
-        status.style.color = "#22c55e";
-      }
-
-    } else {
-
-      console.log("⏸ Viewing past date — no auto refresh");
-
-      if (status) {
-        status.textContent = "History";
-        status.style.color = "#facc15";
-      }
-
+  refreshTimerHandle = setInterval(async () => {
+    if (document.visibilityState !== "visible") {
+      updateRefreshStatus();
+      return;
     }
 
+    if (!isTodayMode()) {
+      console.log("⏸ Viewing past date — no auto refresh");
+      updateRefreshStatus();
+      return;
+    }
+
+    console.log("🔄 Auto Refresh (Today Only)");
+    updateRefreshStatus();
+
+    await loadData();
+   
   }, interval);
 
-  document.addEventListener("visibilitychange", () => {
+  document.addEventListener("visibilitychange", async () => {
+    updateRefreshStatus();
 
-    if (document.visibilityState === "visible") {
-      console.log("👀 User returned → refresh");
-      loadData();
-      loadTrend(14); // 🔥 ADD THIS
-    }
+    if (document.visibilityState !== "visible") return;
+    if (!isTodayMode()) return;
+    if (isRefreshing || isTrendRefreshing) return;
 
+    console.log("👀 User returned → safe refresh");
+    await loadData();
+    
   });
+}
+
+/* ================= TrendTab Swtich ================= */
+
+function switchTab(tab) {
+
+  const incoming = document.getElementById("incomingTab");
+  const trend = document.getElementById("trendTab");
+
+  const btnIncoming = document.getElementById("tabIncomingBtn");
+  const btnTrend = document.getElementById("tabTrendBtn");
+
+  // reset buttons
+  btnIncoming.classList.remove("active");
+  btnTrend.classList.remove("active");
+
+  if (tab === "incoming") {
+    incoming.style.display = "block";
+    trend.style.display = "none";
+    btnIncoming.classList.add("active");
+  } else {
+    incoming.style.display = "none";
+    trend.style.display = "block";
+    btnTrend.classList.add("active");
+
+    // 🔥 ONLY LOAD TREND WHEN TAB IS OPENED
+    if (!trendChart) {
+      loadTrend(14);
+    }
+  }
 }
 
 /* ================= HELPERS ================= */
 
 function getQueueColor(queueName) {
-
   if (QUEUE_COLORS[queueName]) return QUEUE_COLORS[queueName];
 
   const q = String(queueName || "").toLowerCase();
@@ -137,7 +195,7 @@ function getQueueColor(queueName) {
   if (q.includes("error") || q.includes("waiting")) return "#FF0000";
   if (q.includes("hold")) return "#FB7185";
   if (q.includes("surface rush")) return "#00E5FF";
-  if (q.includes("china rush")) return "#FF3B3B";
+  if (q.includes("china rush")) return "#F97316";
   if (q.includes("standard")) return "#3B82F6";
   if (q.includes("overnight")) return "#FACC15";
   if (q.includes("beast")) return "#A855F7";
@@ -149,7 +207,7 @@ function getQueueColor(queueName) {
 }
 
 function brightenColor(hex, percent = 30) {
-  const num = parseInt(hex.replace("#",""),16);
+  const num = parseInt(hex.replace("#", ""), 16);
   const r = Math.min(255, (num >> 16) + percent);
   const g = Math.min(255, ((num >> 8) & 0x00FF) + percent);
   const b = Math.min(255, (num & 0x0000FF) + percent);
@@ -163,14 +221,17 @@ function toBarFill(color) {
 /* ================= LOAD ================= */
 
 async function loadData() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+
   try {
     let url = API_URL;
 
-if (currentDate) {
-  url += "?date=" + currentDate;
-}
+    if (currentDate) {
+      url += "?date=" + encodeURIComponent(currentDate);
+    }
 
-const res = await fetch(url);
+    const res = await fetch(url, { cache: "no-store" });
     const json = await res.json();
 
     if (!json.success) return;
@@ -191,55 +252,59 @@ const res = await fetch(url);
     setChartInsight(json.data);
 
     lastData = json.data;
-
   } catch (err) {
-    console.error(err);
+    console.error("loadData error:", err);
+  } finally {
+    isRefreshing = false;
+    updateRefreshStatus();
   }
 }
 
-/* ================= Date Filter  ================= */
+/* ================= DATE FILTER ================= */
 
-function applyDateFilter() {
-
+async function applyDateFilter() {
   const input = document.getElementById("dateFilter");
   const value = input.value;
-
   if (!value) return;
 
-  currentDate = new Date(value)
-    .toISOString()
-    .split("T")[0];
-
+  currentDate = new Date(value).toISOString().split("T")[0];
   currentHour = null;
 
   console.log("📅 Filter Applied:", currentDate);
 
-  loadData();
+  updateRefreshStatus();
+  await loadData();
 }
 
-function resetDateFilter() {
+async function resetDateFilter() {
+  const today = getTodayString();
 
-  currentDate = null;
+  currentDate = today;
   currentHour = null;
 
-  document.getElementById("dateFilter").value = "";
+  const input = document.getElementById("dateFilter");
+  if (input) input.value = today;
 
   console.log("🔄 Reset to Today");
 
-  loadData();
+  updateRefreshStatus();
+  await loadData();
+  
 }
 
 /* ================= KPI ================= */
 
 function renderKPI(data, grandTotal) {
   const grid = document.getElementById("kpiGrid");
+  if (!grid) return;
+
   grid.innerHTML = "";
 
   Object.keys(data).forEach(dept => {
     if (dept === "_total") return;
 
-    const value = data[dept]._total;
-    const pct = ((value / grandTotal) * 100).toFixed(1);
+    const value = data[dept]._total || 0;
+    const pct = grandTotal > 0 ? ((value / grandTotal) * 100).toFixed(1) : "0.0";
 
     const card = document.createElement("div");
     card.className = "kpi-card";
@@ -256,16 +321,17 @@ function renderKPI(data, grandTotal) {
 
 function renderQueueBars(data, grandTotal) {
   const container = document.getElementById("container");
+  if (!container) return;
+
   container.innerHTML = "";
 
   Object.keys(data).forEach(dept => {
     if (dept === "_total") return;
 
-    const deptTotal = data[dept]._total;
+    const deptTotal = data[dept]._total || 0;
 
     const deptBlock = document.createElement("div");
     deptBlock.className = "queue-dept";
-
     deptBlock.innerHTML = `
       <div class="dept-header">
         ${dept} <span>${deptTotal}</span>
@@ -276,16 +342,16 @@ function renderQueueBars(data, grandTotal) {
       if (queue === "_total") return;
 
       const q = data[dept][queue];
-      const pct = ((q.total / deptTotal) * 100).toFixed(1);
+      const queueTotal = q.total || 0;
+      const pct = deptTotal > 0 ? ((queueTotal / deptTotal) * 100).toFixed(1) : 0;
       const color = getQueueColor(queue);
 
       const row = document.createElement("div");
       row.className = "queue-row";
-
       row.innerHTML = `
         <div class="label">${queue}</div>
         <div class="bar"><div class="fill"></div></div>
-        <div class="value">${q.total}</div>
+        <div class="value">${queueTotal}</div>
       `;
 
       deptBlock.appendChild(row);
@@ -315,6 +381,8 @@ function showHourBreakdown(hour, dataOverride = null) {
   currentHour = hour;
 
   const container = document.getElementById("container");
+  if (!container) return;
+
   container.innerHTML = `
     <div class="dept-header">
       Hour: ${hour}
@@ -331,12 +399,12 @@ function showHourBreakdown(hour, dataOverride = null) {
     Object.keys(data[dept]).forEach(queue => {
       if (queue === "_total") return;
 
-      const entries = data[dept][queue].hours[hour] || [];
-      const total = entries.reduce((s,x)=>s+x.value,0);
+      const entries = (data[dept][queue].hours && data[dept][queue].hours[hour]) || [];
+      const total = entries.reduce((s, x) => s + (x.value || 0), 0);
 
       if (total > 0) {
         deptTotal += total;
-        rows.push({queue,total});
+        rows.push({ queue, total });
       }
     });
 
@@ -344,7 +412,6 @@ function showHourBreakdown(hour, dataOverride = null) {
 
     const block = document.createElement("div");
     block.className = "queue-dept";
-
     block.innerHTML = `
       <div class="dept-header">
         ${dept} <span>${deptTotal}</span>
@@ -357,7 +424,6 @@ function showHourBreakdown(hour, dataOverride = null) {
 
       const row = document.createElement("div");
       row.className = "queue-row";
-
       row.innerHTML = `
         <div class="label">${r.queue}</div>
         <div class="bar"><div class="fill"></div></div>
@@ -389,10 +455,11 @@ function resetView() {
 /* ================= CHART ================= */
 
 function buildChart(data) {
-  const ctx = document.getElementById("hourlyChart");
+  const canvas = document.getElementById("hourlyChart");
+  if (!canvas) return;
 
   const hourMap = {};
-  HOUR_ORDER.forEach(h => hourMap[h] = 0);
+  HOUR_ORDER.forEach(h => { hourMap[h] = 0; });
 
   Object.keys(data).forEach(dept => {
     if (dept === "_total") return;
@@ -400,9 +467,10 @@ function buildChart(data) {
     Object.keys(data[dept]).forEach(queue => {
       if (queue === "_total") return;
 
-      Object.keys(data[dept][queue].hours).forEach(hour => {
-        data[dept][queue].hours[hour].forEach(entry => {
-          hourMap[hour] += entry.value;
+      const queueHours = data[dept][queue].hours || {};
+      Object.keys(queueHours).forEach(hour => {
+        queueHours[hour].forEach(entry => {
+          hourMap[hour] += entry.value || 0;
         });
       });
     });
@@ -410,38 +478,50 @@ function buildChart(data) {
 
   const labels = HOUR_ORDER.filter(h => hourMap[h] > 0);
   const values = labels.map(h => hourMap[h]);
-  const max = Math.max(...values);
+  const max = values.length ? Math.max(...values) : 0;
 
   const colors = values.map(v => {
-    if (v === max) return "rgba(120,255,180,0.9)";
-    if (v < max * 0.2) return "rgba(120,160,255,0.3)";
+    if (v === max && max > 0) return "rgba(120,255,180,0.9)";
+    if (max > 0 && v < max * 0.2) return "rgba(120,160,255,0.3)";
     return "rgba(90,182,255,0.7)";
   });
 
-  if (chart) chart.destroy();
+  const chartData = {
+    labels,
+    datasets: [{
+      data: values,
+      backgroundColor: colors,
+      borderRadius: 6
+    }]
+  };
 
-  chart = new Chart(ctx, {
+  if (chart) {
+    chart.data = chartData;
+    chart.update("none");
+    return;
+  }
+
+  chart = new Chart(canvas, {
     type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: colors,
-        borderRadius: 6
-      }]
-    },
+    data: chartData,
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       onClick: (evt, elements, chartInstance) => {
         const points = chartInstance.getElementsAtEventForMode(
-          evt, "index", { intersect: false }, true
+          evt,
+          "index",
+          { intersect: false },
+          true
         );
         if (!points.length) return;
         const hour = chartInstance.data.labels[points[0].index];
         showHourBreakdown(hour);
       },
-      plugins: { legend: { display: false } }
+      plugins: {
+        legend: { display: false }
+      }
     }
   });
 }
@@ -449,76 +529,86 @@ function buildChart(data) {
 /* ================= TREND ================= */
 
 async function loadTrend(days = 14) {
+  if (isTrendRefreshing) return;
+  isTrendRefreshing = true;
 
   try {
-
-    const res = await fetch(API_URL + "?mode=trend&days=" + days);
+    const res = await fetch(API_URL + "?mode=trend&days=" + days, { cache: "no-store" });
     const json = await res.json();
 
     if (!json.success) return;
 
     buildTrendChart(json.trend);
     setTrendInsight(json.trend);
-
   } catch (err) {
     console.error("Trend error:", err);
+  } finally {
+    isTrendRefreshing = false;
   }
 }
 
 /* ================= TREND CHART ================= */
 
 function buildTrendChart(trend) {
-
-  const ctx = document.getElementById("trendChart");
-  if (!ctx) return;
-
-  // ✅ SAME PATTERN AS HOURLY
-  if (trendChart) trendChart.destroy();
+  const canvas = document.getElementById("trendChart");
+  if (!canvas) return;
 
   const labels = trend.map(d => d.date);
   const totals = trend.map(d => d.total);
+  const finish = trend.map(d => (d.departments && d.departments["Finish"]) || 0);
+  const surface = trend.map(d => (d.departments && d.departments["Surface"]) || 0);
+  const specialty = trend.map(d => (d.departments && d.departments["Specialty"]) || 0);
+  const frame = trend.map(d => (d.departments && d.departments["Frame Only"]) || 0);
 
-  const finish = trend.map(d => d.departments["Finish"] || 0);
-  const surface = trend.map(d => d.departments["Surface"] || 0);
-  const specialty = trend.map(d => d.departments["Specialty"] || 0);
-  const frame = trend.map(d => d.departments["Frame Only"] || 0);
+  const trendData = {
+    labels,
+    datasets: [
+      {
+        label: "Total",
+        data: totals,
+        borderWidth: 3,
+        tension: 0.4
+      },
+      {
+        label: "Finish",
+        data: finish,
+        borderDash: [6, 6],
+        tension: 0.4
+      },
+      {
+        label: "Surface",
+        data: surface,
+        borderDash: [6, 6],
+        tension: 0.4
+      },
+      {
+        label: "Specialty",
+        data: specialty,
+        borderDash: [6, 6],
+        tension: 0.4
+      },
+      {
+        label: "Frame",
+        data: frame,
+        borderDash: [6, 6],
+        tension: 0.4
+      }
+    ]
+  };
 
-  trendChart = new Chart(ctx, {
+  if (trendChart) {
+    trendChart.data = trendData;
+    trendChart.update("none");
+    return;
+  }
+
+  trendChart = new Chart(canvas, {
     type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Total",
-          data: totals,
-          borderWidth: 3,
-          tension: 0.4
-        },
-        {
-          label: "Finish",
-          data: finish,
-          borderDash: [6,6]
-        },
-        {
-          label: "Surface",
-          data: surface,
-          borderDash: [6,6]
-        },
-        {
-          label: "Specialty",
-          data: specialty,
-          borderDash: [6,6]
-        },
-        {
-          label: "Frame",
-          data: frame,
-          borderDash: [6,6]
-        }
-      ]
-    },
+    data: trendData,
     options: {
       responsive: true,
-      maintainAspectRatio: false
+      maintainAspectRatio: false,
+      animation: false
     }
   });
 }
@@ -526,12 +616,10 @@ function buildTrendChart(trend) {
 /* ================= TREND INSIGHT ================= */
 
 function setTrendInsight(trend) {
-
   const el = document.getElementById("trendInsight");
-  if (!el || trend.length < 2) return;
+  if (!el || !trend || trend.length < 2) return;
 
   let peak = trend[0];
-
   trend.forEach(d => {
     if (d.total > peak.total) peak = d;
   });
@@ -539,10 +627,14 @@ function setTrendInsight(trend) {
   const latest = trend[trend.length - 1];
   const prev = trend[trend.length - 2];
 
-  let change = ((latest.total - prev.total) / prev.total * 100).toFixed(1);
+  let change = 0;
+  if (prev.total > 0) {
+    change = ((latest.total - prev.total) / prev.total * 100).toFixed(1);
+  } else {
+    change = latest.total > 0 ? "100.0" : "0.0";
+  }
 
-  const trendIcon = change > 0 ? "📈" : "📉";
-
+  const trendIcon = Number(change) > 0 ? "📈" : "📉";
   el.textContent = `Peak ${peak.date} (${peak.total}) | ${trendIcon} ${change}%`;
 }
 
@@ -553,7 +645,7 @@ function setChartInsight(data) {
   if (!insight) return;
 
   const hourMap = {};
-  HOUR_ORDER.forEach(h => hourMap[h] = 0);
+  HOUR_ORDER.forEach(h => { hourMap[h] = 0; });
 
   Object.keys(data).forEach(dept => {
     if (dept === "_total") return;
@@ -561,9 +653,10 @@ function setChartInsight(data) {
     Object.keys(data[dept]).forEach(queue => {
       if (queue === "_total") return;
 
-      Object.keys(data[dept][queue].hours).forEach(hour => {
-        data[dept][queue].hours[hour].forEach(entry => {
-          hourMap[hour] += entry.value;
+      const queueHours = data[dept][queue].hours || {};
+      Object.keys(queueHours).forEach(hour => {
+        queueHours[hour].forEach(entry => {
+          hourMap[hour] += entry.value || 0;
         });
       });
     });
