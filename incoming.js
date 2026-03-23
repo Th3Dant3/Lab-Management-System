@@ -5,6 +5,7 @@ let lastData = null;
 let currentHour = null;
 let currentDate = null;
 let trendChart = null;
+let isRenderingChart = false;
 
 /* ================= COLOR MAP ================= */
 
@@ -82,7 +83,6 @@ document.addEventListener("DOMContentLoaded", () => {
 function startAutoRefresh() {
 
   const interval = 10 * 60 * 1000;
-  const status = document.getElementById("refreshStatus");
 
   setInterval(() => {
 
@@ -95,21 +95,14 @@ function startAutoRefresh() {
       console.log("🔄 Auto Refresh (Today Only)");
       loadData();
 
-      if (status) {
-        status.textContent = "Live";
-        status.style.color = "#22c55e";
-      }
-
     } else {
 
       console.log("⏸ Viewing past date — no auto refresh");
 
-      if (status) {
-        status.textContent = "History";
-        status.style.color = "#facc15";
-      }
-
     }
+
+    // ✅ ALWAYS UPDATE STATUS HERE
+    updateRefreshStatus();
 
   }, interval);
 
@@ -118,6 +111,7 @@ function startAutoRefresh() {
     if (document.visibilityState === "visible") {
       console.log("👀 User returned → refresh");
       loadData();
+      updateRefreshStatus(); // ✅ ADD THIS
     }
 
   });
@@ -195,7 +189,18 @@ function toBarFill(color) {
 /* ================= LOAD ================= */
 
 async function loadData() {
+
+  // 🔒 PREVENT OVERLAP
+  if (window.isLoadingData) {
+    console.log("⛔ Skipping load — already running");
+    return;
+  }
+
+  window.isLoadingData = true;
+  updateRefreshStatus("updating");
+
   try {
+
     let url = API_URL;
 
     if (currentDate) {
@@ -223,9 +228,52 @@ async function loadData() {
     setChartInsight(json.data);
 
     lastData = json.data;
+	// ✅ ADD THIS
+updateRefreshStatus();
 
   } catch (err) {
     console.error(err);
+  }
+
+  // 🔓 RELEASE LOCK (ALWAYS RUNS)
+  window.isLoadingData = false;
+  updateRefreshStatus();
+}
+
+/* ================= UpdateStatus ================= */
+
+function updateRefreshStatus(state = "auto") {
+
+  const el = document.getElementById("refreshStatus");
+  if (!el) return;
+
+  const today = new Date().toISOString().split("T")[0];
+
+  let mode;
+
+  if (state === "updating") {
+    mode = "updating";
+  } else if (!currentDate || currentDate === today) {
+    mode = "live";
+  } else {
+    mode = "history";
+  }
+
+  el.classList.remove("live", "history", "updating");
+
+  if (mode === "live") {
+    el.textContent = "Live";
+    el.classList.add("live");
+  }
+
+  if (mode === "history") {
+    el.textContent = "History";
+    el.classList.add("history");
+  }
+
+  if (mode === "updating") {
+    el.textContent = "Updating...";
+    el.classList.add("updating");
   }
 }
 
@@ -247,7 +295,8 @@ function applyDateFilter() {
 
   console.log("📅 Filter Applied:", currentDate);
 
-  loadData();
+  updateRefreshStatus();   // 🔥 ADD THIS
+loadData();
 }
 
 function resetDateFilter() {
@@ -259,7 +308,8 @@ function resetDateFilter() {
 
   console.log("🔄 Reset to Today");
 
-  loadData();
+  updateRefreshStatus();   // 🔥 ADD THIS
+loadData();
 }
 
 /* ================= KPI ================= */
@@ -422,61 +472,96 @@ function resetView() {
 /* ================= CHART ================= */
 
 function buildChart(data) {
-  const ctx = document.getElementById("hourlyChart");
 
-  const hourMap = {};
-  HOUR_ORDER.forEach(h => hourMap[h] = 0);
+  if (isRenderingChart) {
+    console.log("⛔ Chart update skipped (busy)");
+    return;
+  }
 
-  Object.keys(data).forEach(dept => {
-    if (dept === "_total") return;
+  isRenderingChart = true;
 
-    Object.keys(data[dept]).forEach(queue => {
-      if (queue === "_total") return;
+  try {
 
-      Object.keys(data[dept][queue].hours).forEach(hour => {
-        data[dept][queue].hours[hour].forEach(entry => {
-          hourMap[hour] += entry.value;
+    const canvas = document.getElementById("hourlyChart");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+
+    const hourMap = {};
+    HOUR_ORDER.forEach(h => hourMap[h] = 0);
+
+    Object.keys(data).forEach(dept => {
+      if (dept === "_total") return;
+
+      Object.keys(data[dept]).forEach(queue => {
+        if (queue === "_total") return;
+
+        Object.keys(data[dept][queue].hours).forEach(hour => {
+          data[dept][queue].hours[hour].forEach(entry => {
+            hourMap[hour] += entry.value;
+          });
         });
       });
     });
-  });
 
-  const labels = HOUR_ORDER.filter(h => hourMap[h] > 0);
-  const values = labels.map(h => hourMap[h]);
-  const max = Math.max(...values);
+    const labels = HOUR_ORDER.filter(h => hourMap[h] > 0);
+    const values = labels.map(h => hourMap[h]);
+    const max = Math.max(...values);
 
-  const colors = values.map(v => {
-    if (v === max) return "rgba(120,255,180,0.9)";
-    if (v < max * 0.2) return "rgba(120,160,255,0.3)";
-    return "rgba(90,182,255,0.7)";
-  });
+    const colors = values.map(v => {
+      if (v === max) return "rgba(120,255,180,0.9)";
+      if (v < max * 0.2) return "rgba(120,160,255,0.3)";
+      return "rgba(90,182,255,0.7)";
+    });
 
-  if (chart) chart.destroy();
+    /* =========================
+       🔥 UPDATE INSTEAD OF DESTROY
+    ========================= */
 
-  chart = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: colors,
-        borderRadius: 6
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      onClick: (evt, elements, chartInstance) => {
-        const points = chartInstance.getElementsAtEventForMode(
-          evt, "index", { intersect: false }, true
-        );
-        if (!points.length) return;
-        const hour = chartInstance.data.labels[points[0].index];
-        showHourBreakdown(hour);
-      },
-      plugins: { legend: { display: false } }
+    if (chart) {
+
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = values;
+      chart.data.datasets[0].backgroundColor = colors;
+
+      chart.update("none"); // smooth, no flicker
+
+    } else {
+
+      chart = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: colors,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          onClick: (evt, elements, chartInstance) => {
+            const points = chartInstance.getElementsAtEventForMode(
+              evt, "index", { intersect: false }, true
+            );
+            if (!points.length) return;
+            const hour = chartInstance.data.labels[points[0].index];
+            showHourBreakdown(hour);
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+
     }
-  });
+
+  } catch (err) {
+    console.error("Chart error:", err);
+  }
+
+  setTimeout(() => {
+    isRenderingChart = false;
+  }, 50);
 }
 
 /* ================= TREND ================= */
