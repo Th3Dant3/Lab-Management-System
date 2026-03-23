@@ -243,7 +243,19 @@ async function loadData() {
 }
 
     const res = await fetch(url, { cache: "no-store" });
-    const json = await res.json();
+
+const text = await res.text();
+console.log("🔥 RAW RESPONSE:", text);
+
+let json;
+try {
+  json = JSON.parse(text);
+} catch (e) {
+  console.error("❌ JSON PARSE FAILED", e);
+  return;
+}
+
+console.log("✅ PARSED JSON:", json);
 
     if (!json.success) return;
 
@@ -271,7 +283,7 @@ async function loadData() {
   }
 }
 
-console.log("🚀 loadData called");
+
 
 /* ================= DATE FILTER ================= */
 
