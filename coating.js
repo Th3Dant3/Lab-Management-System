@@ -171,13 +171,11 @@ async function loadDashboard() {
     ? `&date=${encodeURIComponent(currentDate)}`
     : "";
 
-  const [processedRes, machineRes] = await Promise.all([
-    fetch(`${API_URL}?mode=processed${dateParam}`),
-    fetch(`${API_URL}?mode=machine${dateParam}`)
-  ]);
+const res = await fetch(`${API_URL}?mode=combined${dateParam}`);
+const data = await res.json();
 
-  dashboardProcessed = await processedRes.json();
-  dashboardMachine = await machineRes.json();
+dashboardProcessed = data.processed;
+dashboardMachine = data.machine;
 
   dashboardData = dashboardProcessed;
 
