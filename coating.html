@@ -16,27 +16,31 @@
     <button class="back-btn" onclick="goBack()">← Back to Main Page</button>
   </div>
 
-  <h1>Coating Tracker</h1>
+  <h1>Coating Flow Tracker</h1>
 
   <!-- LIVE STATUS -->
-  <div class="live-indicator">
-    ● Live Dashboard • Auto refresh every 5 minutes
-  </div>
+ <div class="status-bar">
+  <span id="refreshStatus" class="status-badge">Live</span>
+</div>
 
   <!-- ================= FILTERS ================= -->
-  <div class="filters-bar">
+<div class="filters-bar">
 
-    <div class="date-filter">
-      <label for="historyDate">Date:</label>
-      <input type="date" id="historyDate" />      
-    </div>
+  <!-- LEFT SIDE -->
+  <div class="filter-left">
+    <label for="historyDate">Date:</label>
+    <input type="date" id="historyDate" />
 
-    <button id="liveBtn" class="live-btn">🔴 Live Mode</button>
-
-    <div id="activeReportDate" class="report-date-indicator"></div>
-    <div id="refreshTimer" class="refresh-timer"></div>
-
+    <button onclick="applyDateFilter()" class="apply-btn">Apply</button>
+    <button onclick="resetToToday()" class="today-btn">Today</button>
   </div>
+
+  <!-- RIGHT SIDE -->
+  <div class="filter-right">
+    <span id="refreshStatus" class="status-badge">Live</span>
+  </div>
+
+</div>
 
   <!-- ================= MAIN NAV ================= -->
   <div class="tabs main-tabs">

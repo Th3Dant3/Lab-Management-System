@@ -50,6 +50,33 @@ const GLOW_PLUGIN = {
 };
 
 // =====================================================
+// Status Badge
+// =====================================================
+
+function updateStatusBadge(state) {
+  const el = document.getElementById("refreshStatus");
+  if (!el) return;
+
+  // 🔥 RESET CLASSES
+  el.classList.remove("live", "updating", "history");
+
+  // 🔥 ADD NEW CLASS
+  el.classList.add(state);
+
+  if (state === "live") {
+    el.textContent = "Live";
+  }
+
+  if (state === "updating") {
+    el.textContent = "Updating...";
+  }
+
+  if (state === "history") {
+    el.textContent = "History";
+  }
+}
+
+// =====================================================
 // GLOBAL BREAKAGE COLOR MAP (FIXED COLORS)
 // =====================================================
 
@@ -135,6 +162,9 @@ function showTab(tabId, button) {
    LOAD DASHBOARD
 ===================================================== */
 async function loadDashboard() {
+
+  updateStatusBadge("updating");
+
   const startTime = performance.now();
 
   const dateParam = currentDate
@@ -150,30 +180,26 @@ async function loadDashboard() {
   dashboardMachine = await machineRes.json();
 
   dashboardData = dashboardProcessed;
-  buildInsights(dashboardProcessed);
 
+  const summary = dashboardData.summary || {}; // 🔥 MUST BE HERE
+
+  buildInsights(dashboardProcessed);
   updateReportDateDisplay(dashboardProcessed);
 
-  const summary = dashboardData.summary || {};
-
   /* ===============================
-     SUMMARY CARDS (FIXED)
+     SUMMARY CARDS
   ================================ */
 
-setText("totalJobs", summary.totalJobs ?? 0);
+  setText("totalJobs", summary.totalJobs ?? 0);
+  setText("totalLenses", summary.totalLenses ?? 0);
+  setText("totalBroken", summary.totalBreakLenses ?? 0);
 
-// ✅ correct mapping
-setText("totalLenses", summary.totalLenses ?? 0);
-
-// ✅ this was missing
-setText("totalBroken", summary.totalBreakLenses ?? 0);
-
-setText(
-  "rxBreakage",
-  summary.breakPercent !== undefined
-    ? `${Number(summary.breakPercent).toFixed(2)}% (${summary.totalBreakLenses || 0})`
-    : "0%"
-);
+  setText(
+    "rxBreakage",
+    summary.breakPercent !== undefined
+      ? `${Number(summary.breakPercent).toFixed(2)}% (${summary.totalBreakLenses || 0})`
+      : "0%"
+  );
 
   setText(
     "avgTime",
@@ -185,7 +211,7 @@ setText(
   setText("peakHour", summary.peakHour ?? "-");
 
   /* ===============================
-     FLOW HEALTH SUMMARY
+     FLOW + AGING
   ================================ */
 
   if (summary.flowHealth) {
@@ -195,10 +221,6 @@ setText(
     setText("flowOvernight", summary.flowHealth.overnight || 0);
   }
 
-  /* ===============================
-     BREAKAGE AGING SUMMARY
-  ================================ */
-
   if (summary.aging) {
     setText("sameDayBreakage", summary.aging.sameDay || 0);
     setText("yesterdayBreakage", summary.aging.oneDay || 0);
@@ -206,51 +228,40 @@ setText(
   }
 
   /* ===============================
-     HOURLY TABLE
+     TABLE + CHART RESET
   ================================ */
 
   buildHourlyTable(dashboardData.hourly || []);
 
-  /* ===============================
-     FORCE CHART REFRESH
-  ================================ */
+  if (trendChart) trendChart.destroy();
+  if (reasonChart) reasonChart.destroy();
+  if (machineChart) machineChart.destroy();
+  if (flowChart) flowChart.destroy();
 
-  if (trendChart) {
-    trendChart.destroy();
-    trendChart = null;
-  }
-
-  if (reasonChart) {
-    reasonChart.destroy();
-    reasonChart = null;
-  }
-
-  if (machineChart) {
-    machineChart.destroy();
-    machineChart = null;
-  }
-
-  if (flowChart) {
-    flowChart.destroy();
-    flowChart = null;
-  }
+  trendChart = reasonChart = machineChart = flowChart = null;
 
   const activeTab = document.querySelector(".tab.active");
 
   if (activeTab) {
     const tabId = activeTab.getAttribute("onclick") || "";
 
-    if (tabId.includes("trends")) {
-      buildTrendCharts();
-    } else if (tabId.includes("reasons")) {
-      buildReasonChart(dashboardData);
-    } else if (tabId.includes("machines")) {
-  buildMachineChart(dashboardMachine || dashboardData);
-}
+    if (tabId.includes("trends")) buildTrendCharts();
+    else if (tabId.includes("reasons")) buildReasonChart(dashboardData);
+    else if (tabId.includes("machines")) buildMachineChart(dashboardMachine || dashboardData);
   }
 
   if (document.getElementById("flowChart")) {
     buildFlowChart(dashboardProcessed);
+  }
+
+  /* ===============================
+     STATUS BADGE (FINAL STATE)
+  ================================ */
+
+  if (currentDate === null) {
+    updateStatusBadge("live");
+  } else {
+    updateStatusBadge("history");
   }
 
   const endTime = performance.now();
@@ -263,12 +274,14 @@ setText(
 function applyDateFilter() {
   const dateInput = document.getElementById("historyDate").value;
 
-  if (!dateInput) {
-    currentDate = null;
-  } else {
-    const d = new Date(dateInput);
-    currentDate = (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
-  }
+  if (!dateInput) return;
+
+  const parts = dateInput.split("-");
+
+  currentDate =
+    parseInt(parts[1], 10) + "/" +
+    parseInt(parts[2], 10) + "/" +
+    parts[0];
 
   loadDashboard();
   startRefreshCountdown();
@@ -276,9 +289,12 @@ function applyDateFilter() {
 
 function resetToToday() {
   currentDate = null;
+
   const dateEl = document.getElementById("historyDate");
   if (dateEl) dateEl.value = "";
+
   loadDashboard();
+  startRefreshCountdown();
 }
 
 // LIVE MODE BUTTON
@@ -1491,27 +1507,6 @@ setInterval(() => {
   }
 }, refreshInterval * 1000);
 
-// DATE FILTER
-const dateInput = document.getElementById("historyDate");
-
-if (dateInput) {
-  dateInput.addEventListener("change", function() {
-    if (!this.value) {
-      currentDate = null;
-    } else {
-      const parts = this.value.split("-");
-
-      currentDate =
-        parseInt(parts[1], 10) + "/" +
-        parseInt(parts[2], 10) + "/" +
-        parts[0];
-    }
-
-    console.log("Date changed to:", currentDate);
-    loadDashboard();
-    startRefreshCountdown();
-  });
-}
 
 /* =====================================================
    🧠 BUILD INSIGHTS ENGINE
