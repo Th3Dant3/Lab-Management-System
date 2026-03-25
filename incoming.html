@@ -19,12 +19,15 @@
 
   <!-- HEADER -->
   <div class="header-bar">
-    <h1>Incoming Jobs Dashboard</h1>
+    <div>
+      <h1>Incoming Jobs Dashboard</h1>
+      <div class="subtitle">Real-time queue distribution by department</div>
+    </div>
 
     <div class="meta">
       <span id="totalJobs">Total: --</span>
       <span id="lastUpdated">Updated: --</span>
-      <span id="refreshStatus" class="refresh-status">Live</span>
+      <span id="refreshStatus">Live</span>
     </div>
   </div>
 
@@ -62,21 +65,23 @@
     <!-- MAIN GRID -->
     <div class="main-grid">
 
-      <!-- LEFT -->
-      <div class="panel">
+      <!-- LEFT PANEL -->
+      <section class="panel">
         <h3>Queue Breakdown</h3>
         <div id="container"></div>
-      </div>
+      </section>
 
-      <!-- RIGHT -->
-      <div class="panel">
+      <!-- RIGHT PANEL -->
+      <section class="panel">
         <div class="panel-header">
           <h3>Hourly Flow</h3>
           <span id="chartInsight" class="chart-insight"></span>
         </div>
 
-        <canvas id="hourlyChart"></canvas>
-      </div>
+        <div class="chart-wrap">
+          <canvas id="hourlyChart"></canvas>
+        </div>
+      </section>
 
     </div>
 
@@ -85,7 +90,7 @@
   <!-- TREND TAB -->
   <div id="trendTab" class="tab-content" style="display:none;">
 
-    <div class="panel trend-panel">
+    <section class="panel trend-panel">
 
       <div class="panel-header">
         <h3>Trend (Daily Incoming)</h3>
@@ -102,7 +107,7 @@
         <canvas id="trendChart"></canvas>
       </div>
 
-    </div>
+    </section>
 
   </div>
 
