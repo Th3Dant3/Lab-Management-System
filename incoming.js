@@ -69,53 +69,16 @@ const HOUR_ORDER = [
 
 document.addEventListener("DOMContentLoaded", () => {
 
-  loadData();
-  startAutoRefresh();
-
   const today = new Date().toISOString().split("T")[0];
+
   document.getElementById("dateFilter").value = today;
   currentDate = today;
 
+  loadData();              // ✅ ONE TIME LOAD
+  updateRefreshStatus();   // ✅ status only
+
 });
 
-/* ================= SMART REFRESH ================= */
-
-function startAutoRefresh() {
-
-  const interval = 10 * 60 * 1000;
-
-  setInterval(() => {
-
-    if (document.visibilityState !== "visible") return;
-
-    const today = new Date().toISOString().split("T")[0];
-
-    if (!currentDate || currentDate === today) {
-
-      console.log("🔄 Auto Refresh (Today Only)");
-      loadData();
-
-    } else {
-
-      console.log("⏸ Viewing past date — no auto refresh");
-
-    }
-
-    // ✅ ALWAYS UPDATE STATUS HERE
-    updateRefreshStatus();
-
-  }, interval);
-
-  document.addEventListener("visibilitychange", () => {
-
-    if (document.visibilityState === "visible") {
-      console.log("👀 User returned → refresh");
-      loadData();
-      updateRefreshStatus(); // ✅ ADD THIS
-    }
-
-  });
-}
 
 /* ================= TAB SWITCH ================= */
 
@@ -392,12 +355,14 @@ function renderQueueBars(data, grandTotal) {
 /* ================= HOUR BREAKDOWN ================= */
 
 function showHourBreakdown(hour, dataOverride = null) {
+
   const data = dataOverride || lastData;
   if (!data) return;
 
   currentHour = hour;
 
   const container = document.getElementById("container");
+
   container.innerHTML = `
     <div class="dept-header">
       Hour: ${hour}
@@ -406,24 +371,33 @@ function showHourBreakdown(hour, dataOverride = null) {
   `;
 
   Object.keys(data).forEach(dept => {
+
     if (dept === "_total") return;
 
-    let deptTotal = 0;
-    const rows = [];
+    let rows = [];
 
     Object.keys(data[dept]).forEach(queue => {
+
       if (queue === "_total") return;
 
       const entries = data[dept][queue].hours[hour] || [];
       const total = entries.reduce((s,x)=>s+x.value,0);
 
       if (total > 0) {
-        deptTotal += total;
-        rows.push({queue,total});
+        rows.push({
+          queue,
+          total
+        });
       }
+
     });
 
-    if (!deptTotal) return;
+    // 🔥 SORT DESC (MOST IMPORTANT FIRST)
+    rows.sort((a,b) => b.total - a.total);
+
+    if (!rows.length) return;
+
+    const deptTotal = rows.reduce((s,r)=>s+r.total,0);
 
     const block = document.createElement("div");
     block.className = "queue-dept";
@@ -435,6 +409,7 @@ function showHourBreakdown(hour, dataOverride = null) {
     `;
 
     rows.forEach(r => {
+
       const color = getQueueColor(r.queue);
       const pct = Math.max((r.total / deptTotal) * 100, 4);
 
@@ -456,10 +431,13 @@ function showHourBreakdown(hour, dataOverride = null) {
       fill.style.width = pct + "%";
 
       block.appendChild(row);
+
     });
 
     container.appendChild(block);
+
   });
+
 }
 
 /* ================= RESET ================= */
