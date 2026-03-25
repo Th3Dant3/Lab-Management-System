@@ -69,13 +69,11 @@ const HOUR_ORDER = [
 
 document.addEventListener("DOMContentLoaded", () => {
 
-  const today = new Date().toISOString().split("T")[0];
+  loadData();
 
+  const today = new Date().toISOString().split("T")[0];
   document.getElementById("dateFilter").value = today;
   currentDate = today;
-
-  loadData();              // ✅ ONE TIME LOAD
-  updateRefreshStatus();   // ✅ status only
 
 });
 
