@@ -8,47 +8,50 @@ const AUTH_API =
  * INIT
  **************************************************/
 document.addEventListener("DOMContentLoaded", () => {
-
   const userEl = document.getElementById("username");
-
   if (userEl) {
     userEl.addEventListener("input", () => {
       userEl.value = userEl.value.toUpperCase();
     });
   }
-
 });
 
 /**************************************************
  * UI HELPERS
  **************************************************/
 function setMessage(text, type = "error") {
-
   const el = document.getElementById("message");
-
   el.textContent = text;
   el.className = "login-message " + (type || "");
-
 }
 
 function setLoading(isLoading) {
-
-  const btn = document.getElementById("loginBtn");
+  const btn    = document.getElementById("loginBtn");
+  const prog   = document.getElementById("progressBar");
+  const progWrap = document.getElementById("progressWrap");
 
   if (!btn) return;
 
   if (isLoading) {
     btn.disabled = true;
-    btn.textContent = "Signing In...";
+    btn.innerHTML = '<span class="btn-spinner"></span> Authenticating...';
+    if (progWrap) progWrap.classList.add("active");
+    if (prog)     prog.style.width = "40%";
   } else {
     btn.disabled = false;
-    btn.textContent = "Sign In";
+    btn.innerHTML = 'Sign In';
+    if (progWrap) progWrap.classList.remove("active");
+    if (prog)     prog.style.width = "0%";
   }
+}
 
+function setProgress(pct) {
+  const prog = document.getElementById("progressBar");
+  if (prog) prog.style.width = pct + "%";
 }
 
 /**************************************************
- * LOGIN
+ * LOGIN  (single API call — login + visibility merged)
  **************************************************/
 async function login() {
 
@@ -69,30 +72,29 @@ async function login() {
     return;
   }
 
+  // ── Single call: action=loginFull returns auth + visibility together ──
   const url =
-    `${AUTH_API}?action=login` +
+    `${AUTH_API}?action=loginFull` +
     `&username=${encodeURIComponent(username)}` +
     `&password=${encodeURIComponent(password)}`;
 
   console.time("LOGIN_API");
 
   try {
-
-    const res = await fetch(url);
+    const res  = await fetch(url);
     const data = await res.json();
 
     console.timeEnd("LOGIN_API");
 
+    setProgress(80);
     await handleLoginResponse(data, password);
 
   } catch (err) {
-
     setMessage("Connection error. Try again.", "error");
-
   }
 
   setLoading(false);
-
+  console.timeEnd("LOGIN_TOTAL");
 }
 
 /**************************************************
@@ -111,74 +113,34 @@ async function handleLoginResponse(data, originalPassword) {
   }
 
   if (data.status === "SET_PASSWORD_REQUIRED") {
-
     setMessage("First login — setting password…", "warning");
-
     await setPassword(data.username, originalPassword);
     return;
   }
 
   if (data.status === "SUCCESS") {
-
     setMessage("Access Granted", "success");
+    setProgress(100);
 
-    sessionStorage.setItem("lms_logged_in", "true");
-    sessionStorage.setItem("lms_user", data.username);
-    sessionStorage.setItem("lms_role", data.role);
+    sessionStorage.setItem("lms_logged_in",  "true");
+    sessionStorage.setItem("lms_user",        data.username);
+    sessionStorage.setItem("lms_role",        data.role    || "");
+    sessionStorage.setItem("lms_subrole",     data.subRole || "");
 
-    await loadVisibility(data.username);
-
-  }
-
-}
-
-/**************************************************
- * LOAD VISIBILITY
- **************************************************/
-async function loadVisibility(username) {
-
-  console.time("VISIBILITY_API");
-
-  try {
-
-    const res = await fetch(
-      `${AUTH_API}?action=visibility&username=${encodeURIComponent(username)}`
+    // visibility already bundled in the same response — no second call needed
+    sessionStorage.setItem(
+      "lms_visibility",
+      JSON.stringify(data.visibility || {})
     );
 
-    const visData = await res.json();
-
-    console.timeEnd("VISIBILITY_API");
-
-    if (visData.status === "SUCCESS") {
-
-      sessionStorage.setItem(
-        "lms_visibility",
-        JSON.stringify(visData.visibility)
-      );
-
-    } else {
-
-      sessionStorage.setItem("lms_visibility", "{}");
-
-    }
-
-  } catch (err) {
-
-    sessionStorage.setItem("lms_visibility", "{}");
-
+    setTimeout(() => {
+      window.location.replace("index.html");
+    }, 350);
   }
-
-  console.timeEnd("LOGIN_TOTAL");
-
-  // slight delay for UX smoothness
-  setTimeout(() => {
-    window.location.replace("index.html");
-  }, 400);
-
 }
 
 /**************************************************
- * SET PASSWORD
+ * SET PASSWORD  (first-login flow — still separate call)
  **************************************************/
 async function setPassword(username, password) {
 
@@ -188,8 +150,7 @@ async function setPassword(username, password) {
     `&password=${encodeURIComponent(password)}`;
 
   try {
-
-    const res = await fetch(url);
+    const res  = await fetch(url);
     const data = await res.json();
 
     if (data.status !== "PASSWORD_SET") {
@@ -197,17 +158,23 @@ async function setPassword(username, password) {
       return;
     }
 
-    sessionStorage.setItem("lms_logged_in", "true");
-    sessionStorage.setItem("lms_user", username);
+    // After setting password call loginFull to get everything in one shot
+    setMessage("Password set — signing in…", "warning");
+    setProgress(60);
 
-    await loadVisibility(username);
+    const fullUrl =
+      `${AUTH_API}?action=loginFull` +
+      `&username=${encodeURIComponent(username)}` +
+      `&password=${encodeURIComponent(password)}`;
+
+    const res2  = await fetch(fullUrl);
+    const data2 = await res2.json();
+
+    await handleLoginResponse(data2, password);
 
   } catch (err) {
-
     setMessage("Password setup failed", "error");
-
   }
-
 }
 
 /**************************************************
