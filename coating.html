@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Coating Tracker Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coating Flow Tracker</title>
   <link rel="stylesheet" href="coating.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -13,36 +14,33 @@
 
   <!-- ================= TOP NAV ================= -->
   <div class="top-nav">
-    <button class="back-btn" onclick="goBack()">← Back to Main Page</button>
+    <button class="back-btn" onclick="goBack()">← Back</button>
   </div>
 
-  <h1>Coating Flow Tracker</h1>
-
-  <!-- LIVE STATUS -->
- <div class="status-bar">
-  <span id="refreshStatus" class="status-badge">Live</span>
-</div>
+  <!-- ================= PAGE HEADER ================= -->
+  <div class="page-header">
+    <div class="header-left">
+      <div class="page-eyebrow">Production · Optical</div>
+      <h1>Coating Flow Tracker</h1>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span id="refreshTimer" class="refresh-timer">Loading...</span>
+      <span id="refreshStatus" class="status-badge live">Live</span>
+    </div>
+  </div>
 
   <!-- ================= FILTERS ================= -->
-<div class="filters-bar">
-
-  <!-- LEFT SIDE -->
-  <div class="filter-left">
-    <label for="historyDate">Date:</label>
-    <input type="date" id="historyDate" />
-
-    <button onclick="applyDateFilter()" class="apply-btn">Apply</button>
-    <button onclick="resetToToday()" class="today-btn">Today</button>
+  <div class="filters-bar">
+    <div class="filter-left">
+      <label for="historyDate">Date:</label>
+      <input type="date" id="historyDate" />
+      <button onclick="applyDateFilter()" class="apply-btn">Apply</button>
+      <button onclick="resetToToday()" class="today-btn">Today</button>
+    </div>
+    <div class="filter-right"></div>
   </div>
 
-  <!-- RIGHT SIDE -->
-  <div class="filter-right">
-    <span id="refreshStatus" class="status-badge">Live</span>
-  </div>
-
-</div>
-
-  <!-- ================= MAIN NAV ================= -->
+  <!-- ================= MAIN TABS ================= -->
   <div class="tabs main-tabs">
     <button class="tab active" onclick="showTab('overview', this)">Overview</button>
     <button class="tab" onclick="showTab('trends', this)">Trends</button>
@@ -56,142 +54,116 @@
     <!-- AI INSIGHTS -->
     <div class="summary">
       <div class="card insight-card">
-        <h3>AI Insights</h3>
+        <h3>⬡ AI Insights</h3>
         <div id="insightBox">
-          <p>Loading insights...</p>
+          <span class="insight-item loading-shimmer" style="width:200px; height:28px;">&nbsp;</span>
+          <span class="insight-item loading-shimmer" style="width:160px; height:28px;">&nbsp;</span>
+          <span class="insight-item loading-shimmer" style="width:230px; height:28px;">&nbsp;</span>
         </div>
       </div>
     </div>
 
-    <!-- ================= KPI ROW ================= -->
+    <!-- KPI ROW -->
     <div class="summary">
-
       <div class="card">
         <h3>Total Coating Jobs</h3>
         <h2 id="totalJobs">--</h2>
       </div>
-
       <div class="card">
         <h3>Total Lenses</h3>
         <h2 id="totalLenses">--</h2>
       </div>
-
       <div class="card">
         <h3>Total Lenses Broken</h3>
         <h2 id="totalBroken">--</h2>
       </div>
-
       <div class="card">
         <h3>Coating Brkg %</h3>
         <h2 id="rxBreakage">--</h2>
       </div>
-
       <div class="card">
         <h3>Breakage Peak Hour</h3>
         <h2 id="peakHour">--</h2>
       </div>
-
     </div>
 
-    <!-- ================= SECOND ROW ================= -->
+    <!-- AGING ROW -->
     <div class="summary">
-
       <div class="card aging today">
         <h3>Same Day Lens Brkg</h3>
         <h2 id="sameDayBreakage">--</h2>
       </div>
-
       <div class="card aging yesterday">
         <h3>Previous Day Lens Brkg</h3>
         <h2 id="yesterdayBreakage">--</h2>
       </div>
-
       <div class="card aging late">
         <h3>Over 2+ Days Lens Brkg</h3>
         <h2 id="twoPlusBreakage">--</h2>
       </div>
-
       <div class="card">
         <h3>Brkg Avg Time (hrs)</h3>
         <h2 id="avgTime">--</h2>
       </div>
-
     </div>
 
-    <!-- ================= FLOW HEALTH ================= -->
+    <!-- FLOW HEALTH ROW -->
     <div class="summary">
-
       <div class="card flowHealthy">
         <h3>Workflow Healthy</h3>
         <h2 id="flowHealthy">--</h2>
       </div>
-
       <div class="card flowWatch">
         <h3>Workflow Watch</h3>
         <h2 id="flowWatch">--</h2>
       </div>
-
       <div class="card flowDelayed">
         <h3>Workflow Delayed</h3>
         <h2 id="flowDelayed">--</h2>
       </div>
-
       <div class="card overnight">
         <h3>Overnight Carryover</h3>
         <h2 id="flowOvernight">--</h2>
       </div>
-
     </div>
 
-    <!-- ================= TABLE ================= -->
+    <!-- HOURLY TABLE -->
     <h2>Hourly Breakdown</h2>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Hour</th>
-          <th>Total Lenses Broken</th>
-          <th>Coating Jobs</th>
-          <th>Primary Driver</th>
-        </tr>
-      </thead>
-      <tbody id="hourlyBody"></tbody>
-    </table>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Hour</th>
+            <th>Total Lenses Broken</th>
+            <th>Coating Jobs</th>
+            <th>Primary Driver</th>
+          </tr>
+        </thead>
+        <tbody id="hourlyBody"></tbody>
+      </table>
+    </div>
 
   </div>
 
   <!-- ================= TRENDS ================= -->
   <div id="trends" class="tab-content">
 
-    <div class="section-header">
-      <h2>Breakage Trend</h2>
-    </div>
-
+    <h2>Breakage Trend</h2>
     <div class="chart-toolbar">
-      <button id="processedBtn" class="mode-btn active" onclick="switchTrend('processed')">
-        Breakage Processed
-      </button>
-
-      <button id="machineBtn" class="mode-btn" onclick="switchTrend('machine')">
-        Machine Scan
-      </button>
+      <button id="processedBtn" class="mode-btn active" onclick="switchTrend('processed')">Breakage Processed</button>
+      <button id="machineBtn"   class="mode-btn"        onclick="switchTrend('machine')">Machine Scan</button>
     </div>
-
-    <div class="trend-card" style="height:450px;">
+    <div class="trend-card" style="height:480px;">
       <canvas id="trendChart"></canvas>
     </div>
 
-    <div class="section-header">
-      <h2>Detaper → Coater Flow Analysis</h2>
-    </div>
-
+    <h2>Detaper → Coater Flow Analysis</h2>
     <div class="chart-toolbar">
-      <button id="avgFlowBtn" class="mode-btn active" onclick="switchFlowMode('average')">Overall Avg</button>
-      <button id="machineFlowBtn" class="mode-btn" onclick="switchFlowMode('machine')">By Machine</button>
-      <button id="individualFlowBtn" class="mode-btn" onclick="switchFlowMode('individual')">Individual RX</button>
+      <button id="avgFlowBtn"        class="mode-btn active" onclick="switchFlowMode('average')">Overall Avg</button>
+      <button id="machineFlowBtn"    class="mode-btn"        onclick="switchFlowMode('machine')">By Machine</button>
+      <button id="individualFlowBtn" class="mode-btn"        onclick="switchFlowMode('individual')">Individual RX</button>
     </div>
-
-    <div class="trend-card" style="height:450px;">
+    <div class="trend-card" style="height:480px;">
       <canvas id="flowChart"></canvas>
     </div>
 
@@ -199,14 +171,16 @@
 
   <!-- ================= REASONS ================= -->
   <div id="reasons" class="tab-content">
-    <div class="full-width-chart" style="height:500px;">
+    <h2>Top Breakage Reasons</h2>
+    <div class="full-width-chart" style="height:520px;">
       <canvas id="reasonChart"></canvas>
     </div>
   </div>
 
   <!-- ================= MACHINES ================= -->
   <div id="machines" class="tab-content">
-    <div class="full-width-chart" style="height:500px;">
+    <h2>Machine Performance</h2>
+    <div class="full-width-chart" style="height:520px;">
       <canvas id="machineChart"></canvas>
     </div>
   </div>
