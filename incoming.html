@@ -6,7 +6,7 @@
 <title>Incoming Jobs Dashboard</title>
 <link rel="stylesheet" href="incoming.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -39,12 +39,12 @@
       </div>
       <div class="meta">
         <div class="meta-item">
-          <span class="meta-label">TOTAL</span>
+          <span class="meta-label">Total</span>
           <span id="totalJobs" class="meta-value">--</span>
         </div>
         <div class="meta-divider"></div>
         <div class="meta-item">
-          <span class="meta-label">UPDATED</span>
+          <span class="meta-label">Updated</span>
           <span id="lastUpdated" class="meta-value">--</span>
         </div>
         <div class="meta-divider"></div>
@@ -74,7 +74,6 @@
       <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">
         <span class="tab-icon">◎</span> Trend
       </button>
-      <div class="tab-indicator"></div>
     </div>
 
     <!-- INCOMING TAB -->
@@ -86,7 +85,7 @@
       <!-- MAIN GRID -->
       <div class="main-grid">
 
-        <!-- LEFT PANEL: Queue Breakdown -->
+        <!-- LEFT: Queue Breakdown -->
         <section class="panel panel--queue">
           <div class="panel-header">
             <h3><span class="panel-icon">▦</span> Queue Breakdown</h3>
@@ -94,7 +93,7 @@
           <div id="container"></div>
         </section>
 
-        <!-- RIGHT PANEL: Hourly Flow -->
+        <!-- RIGHT: Hourly Flow -->
         <section class="panel panel--chart">
           <div class="panel-header">
             <h3><span class="panel-icon">◈</span> Hourly Flow</h3>
@@ -116,7 +115,7 @@
           <span id="trendInsight" class="chart-insight"></span>
         </div>
         <div class="trend-controls">
-          <button onclick="loadTrend(7)" class="trend-btn">7D</button>
+          <button onclick="loadTrend(7)"  class="trend-btn">7D</button>
           <button onclick="loadTrend(14)" class="trend-btn active">14D</button>
           <button onclick="loadTrend(30)" class="trend-btn">30D</button>
         </div>
