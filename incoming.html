@@ -2,118 +2,132 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Incoming Jobs Dashboard</title>
-
 <link rel="stylesheet" href="incoming.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 </head>
 <body>
 
+  <!-- AMBIENT BACKGROUND -->
+  <div class="bg-orb bg-orb--1"></div>
+  <div class="bg-orb bg-orb--2"></div>
+  <div class="bg-orb bg-orb--3"></div>
+  <div class="scan-lines"></div>
+
   <!-- TOP NAV -->
-  <div class="top-nav">
-    <button class="back-btn" onclick="goBack()">← Back to Main Page</button>
-  </div>
-
-<div id="app">
-
-  <!-- HEADER -->
-  <div class="header-bar">
-    <div>
-      <h1>Incoming Jobs Dashboard</h1>
-      <div class="subtitle">Real-time queue distribution by department</div>
-    </div>
-
-    <div class="meta">
-      <span id="totalJobs">Total: --</span>
-      <span id="lastUpdated">Updated: --</span>
-      <span id="refreshStatus">Live</span>
-    </div>
-  </div>
-
-  <!-- FILTER BAR -->
-  <div class="filter-bar">
-
-    <div class="filter-group">
-      <label for="dateFilter">Date</label>
-      <input type="date" id="dateFilter">
-    </div>
-
-    <div class="filter-actions">
-      <button class="filter-btn" onclick="applyDateFilter()">Apply</button>
-      <button class="filter-btn secondary" onclick="resetDateFilter()">Today</button>
-    </div>
-
-  </div>
-
-  <!-- TAB BAR -->
-  <div class="tab-bar">
-    <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">
-      Incoming
+  <nav class="top-nav">
+    <button class="back-btn" onclick="goBack()">
+      <span class="back-arrow">←</span>
+      <span>Main Page</span>
     </button>
-    <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">
-      Trend
-    </button>
-  </div>
+    <div class="nav-brand">
+      <span class="brand-dot"></span>
+      JOBS MONITOR
+    </div>
+  </nav>
 
-  <!-- INCOMING TAB -->
-  <div id="incomingTab" class="tab-content active">
+  <div id="app">
 
-    <!-- KPI -->
-    <div class="kpi-grid" id="kpiGrid"></div>
+    <!-- HEADER -->
+    <header class="header-bar">
+      <div class="header-left">
+        <div class="header-eyebrow">Real-time Queue Distribution</div>
+        <h1>Incoming Jobs <span class="header-accent">Dashboard</span></h1>
+      </div>
+      <div class="meta">
+        <div class="meta-item">
+          <span class="meta-label">TOTAL</span>
+          <span id="totalJobs" class="meta-value">--</span>
+        </div>
+        <div class="meta-divider"></div>
+        <div class="meta-item">
+          <span class="meta-label">UPDATED</span>
+          <span id="lastUpdated" class="meta-value">--</span>
+        </div>
+        <div class="meta-divider"></div>
+        <span id="refreshStatus" class="status-badge live">Live</span>
+      </div>
+    </header>
 
-    <!-- MAIN GRID -->
-    <div class="main-grid">
+    <!-- FILTER BAR -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="dateFilter">
+          <span class="filter-icon">◈</span> Date Filter
+        </label>
+        <input type="date" id="dateFilter">
+      </div>
+      <div class="filter-actions">
+        <button class="filter-btn" onclick="applyDateFilter()">Apply</button>
+        <button class="filter-btn secondary" onclick="resetDateFilter()">Today</button>
+      </div>
+    </div>
 
-      <!-- LEFT PANEL -->
-      <section class="panel">
-        <h3>Queue Breakdown</h3>
-        <div id="container"></div>
-      </section>
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">
+        <span class="tab-icon">⬡</span> Incoming
+      </button>
+      <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">
+        <span class="tab-icon">◎</span> Trend
+      </button>
+      <div class="tab-indicator"></div>
+    </div>
 
-      <!-- RIGHT PANEL -->
-      <section class="panel">
+    <!-- INCOMING TAB -->
+    <div id="incomingTab" class="tab-content active">
+
+      <!-- KPI -->
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <!-- MAIN GRID -->
+      <div class="main-grid">
+
+        <!-- LEFT PANEL: Queue Breakdown -->
+        <section class="panel panel--queue">
+          <div class="panel-header">
+            <h3><span class="panel-icon">▦</span> Queue Breakdown</h3>
+          </div>
+          <div id="container"></div>
+        </section>
+
+        <!-- RIGHT PANEL: Hourly Flow -->
+        <section class="panel panel--chart">
+          <div class="panel-header">
+            <h3><span class="panel-icon">◈</span> Hourly Flow</h3>
+            <span id="chartInsight" class="chart-insight"></span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="hourlyChart"></canvas>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- TREND TAB -->
+    <div id="trendTab" class="tab-content" style="display:none;">
+      <section class="panel trend-panel">
         <div class="panel-header">
-          <h3>Hourly Flow</h3>
-          <span id="chartInsight" class="chart-insight"></span>
+          <h3><span class="panel-icon">◎</span> Daily Incoming Trend</h3>
+          <span id="trendInsight" class="chart-insight"></span>
         </div>
-
-        <div class="chart-wrap">
-          <canvas id="hourlyChart"></canvas>
+        <div class="trend-controls">
+          <button onclick="loadTrend(7)" class="trend-btn">7D</button>
+          <button onclick="loadTrend(14)" class="trend-btn active">14D</button>
+          <button onclick="loadTrend(30)" class="trend-btn">30D</button>
+        </div>
+        <div class="trend-chart-wrap">
+          <canvas id="trendChart"></canvas>
         </div>
       </section>
-
     </div>
 
-  </div>
-
-  <!-- TREND TAB -->
-  <div id="trendTab" class="tab-content" style="display:none;">
-
-    <section class="panel trend-panel">
-
-      <div class="panel-header">
-        <h3>Trend (Daily Incoming)</h3>
-        <span id="trendInsight" class="chart-insight"></span>
-      </div>
-
-      <div class="trend-controls">
-        <button onclick="loadTrend(7)">7D</button>
-        <button onclick="loadTrend(14)">14D</button>
-        <button onclick="loadTrend(30)">30D</button>
-      </div>
-
-      <div class="trend-chart-wrap">
-        <canvas id="trendChart"></canvas>
-      </div>
-
-    </section>
-
-  </div>
-
-</div>
+  </div><!-- /#app -->
 
 <script src="incoming.js"></script>
-
 </body>
 </html>
