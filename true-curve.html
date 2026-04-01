@@ -2,97 +2,113 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>True Curve / Power Issues</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>True Curve / Power Issues</title>
   <link rel="stylesheet" href="style-true-curve.css" />
 </head>
-
 <body>
-<div class="animated-bg"></div>
 
-<div class="container">
+  <div class="animated-bg"></div>
 
-  <!-- TOP NAV -->
-  <div class="top-nav">
-    <button class="back-btn" onclick="goBack()">← Back</button>
-  </div>
+  <div class="container">
 
-  <!-- HEADER -->
-  <header class="header">
-    <h1>True Curve / Power Issues</h1>
-    <p class="sub">RX Power & Adjustment Tracking</p>
-  </header>
+    <!-- TOP NAV -->
+    <div class="top-nav">
+      <button class="back-btn" onclick="goBack()">← Dashboard</button>
+    </div>
 
-  <!-- YEAR -->
-  <div class="tab-group">
-    <div class="tabs tabs-year">
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <h1>True Curve / Power Issues</h1>
+        <p class="sub">RX Power &amp; Adjustment Tracking</p>
+      </div>
+      <div class="header-logo">
+        <img src="zenni-logo.png" alt="Zenni" />
+      </div>
+    </header>
+
+    <!-- YEAR TABS -->
+    <div class="tabs-year">
       <button class="tab active" data-year="2026">2026</button>
       <button class="tab" data-year="2025">2025</button>
     </div>
-  </div>
 
-  <!-- KPI -->
-  <section class="metrics">
-    <div class="metric"><span>Total RX</span><strong id="k-total">0</strong></div>
-    <div class="metric"><span>Active</span><strong id="k-active">0</strong></div>
-    <div class="metric"><span>Completed</span><strong id="k-completed">0</strong></div>
-    <div class="metric"><span>Adjusted</span><strong id="k-adjusted">0</strong></div>
-    <div class="metric"><span>Escalated</span><strong id="k-escalated">0</strong></div>
-    <div class="metric"><span>Test</span><strong id="k-test">0</strong></div>
-    <div class="metric"><span>Cancel</span><strong id="k-cancel">0</strong></div>
-  </section>
+    <!-- KPI -->
+    <section class="metrics">
+      <div class="metric"><span>Total RX</span>  <strong id="k-total">—</strong></div>
+      <div class="metric"><span>Active</span>     <strong id="k-active">—</strong></div>
+      <div class="metric"><span>Completed</span>  <strong id="k-completed">—</strong></div>
+      <div class="metric"><span>Adjusted</span>   <strong id="k-adjusted">—</strong></div>
+      <div class="metric"><span>Escalated</span>  <strong id="k-escalated">—</strong></div>
+      <div class="metric"><span>Test</span>        <strong id="k-test">—</strong></div>
+      <div class="metric"><span>Cancel</span>      <strong id="k-cancel">—</strong></div>
+    </section>
 
-  <!-- FILTER SECTION -->
-  <div class="tab-group">
+    <!-- FILTER BAR -->
+    <div class="filter-bar">
 
-    <!-- JOB TYPE -->
-    <div class="tabs tabs-mode">
-      <button class="tab active" data-mode="production">Production</button>
-      <button class="tab" data-mode="completed">Completed</button>
-      <button class="tab" data-mode="test">Test / Cancel</button>
+      <div class="tabs-mode">
+        <button class="tab active" data-mode="production">Production</button>
+        <button class="tab" data-mode="completed">Completed</button>
+        <button class="tab" data-mode="test">Test / Cancel</button>
+      </div>
+
+      <div class="filter-divider"></div>
+
+      <div class="tabs-view">
+        <button class="tab active" data-view="material">By Material</button>
+        <button class="tab" data-view="flat">Flat List</button>
+      </div>
+
+      <div class="filter-divider"></div>
+
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input
+          class="search-input"
+          id="search-input"
+          type="text"
+          placeholder="Search RX, SKU, material…"
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="row-count" id="row-count"></div>
+
     </div>
 
-    <!-- VIEW -->
-    <div class="tabs tabs-view small">
-      <button class="tab active" data-view="material">By Material</button>
-      <button class="tab" data-view="flat">Flat List</button>
+    <!-- TABLE -->
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>RX</th>
+            <th>Lens SKU</th>
+            <th>LMS TC</th>
+            <th>After Gen/HC TC</th>
+            <th>Material</th>
+            <th>Status</th>
+            <th>Date Shipped</th>
+            <th>Breakage #</th>
+            <th>Adjustment</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr class="loading-row">
+            <td colspan="9"><span class="spinner"></span>Loading data…</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
   </div>
 
-  <!-- TABLE CARD -->
-  <div class="table-card">
-    <table>
-      <thead>
-        <tr>
-          <th>RX</th>
-          <th>Lens SKU</th>
-          <th>LMS TC</th>
-          <th>After Gen/HC TC</th>
-          <th>Material</th>
-          <th>Status</th>
-          <th>Date Shipped</th>
-          <th>Breakage #</th>
-          <th>Adjustment</th>
-        </tr>
-      </thead>
-      <tbody id="table-body">
-        <tr class="loading-row">
-          <td colspan="9">Loading data...</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <script src="true-curve.js"></script>
 
-</div>
-
-<script src="true-curve.js"></script>
-
-<script>
-function goBack() {
-  window.location.href = "index.html";
-}
-</script>
+  <script>
+    function goBack() { window.location.href = "index.html"; }
+  </script>
 
 </body>
 </html>

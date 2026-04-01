@@ -2,67 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Scanner Network Monitor</title>
-
-  <link rel="stylesheet" href="scanner-map.css" />
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scanner Network Monitor</title>
+  <link rel="stylesheet" href="scanner-map.css" />
 </head>
 <body>
 
-  <div class="animated-bg"></div>
+  <!-- Ambient background -->
+  <div class="bg-canvas">
+    <div class="bg-grid"></div>
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="bg-orb bg-orb-3"></div>
+  </div>
 
   <div class="container">
 
-    <!-- ================= TOP NAV ================= -->
+    <!-- TOP NAV -->
     <div class="top-nav">
-      <button class="back-btn" onclick="goBack()">← Dashboard</button>
+      <button class="back-btn" onclick="window.location.href='index.html'">← Dashboard</button>
     </div>
 
-    <!-- ================= HEADER ================= -->
-    <header class="header enhanced">
-
+    <!-- HEADER -->
+    <header class="header">
       <div class="header-left">
         <h1>Scanner Network Monitor</h1>
-        <p class="sub">Real-time scanner & machine connectivity status</p>
+        <p class="sub">Real-time scanner &amp; machine connectivity status</p>
       </div>
-
-      <div class="header-actions">
-  <button onclick="refreshScanner()">Refresh</button>
-</div>
-
+      <div class="header-right">
+        <div class="header-logo">
+          <img src="zenni-logo.png" alt="Zenni" />
+        </div>
+        <div class="header-actions">
+          <button onclick="location.reload()">↺ Refresh</button>
+        </div>
+      </div>
     </header>
 
-    <!-- ================= SUMMARY ================= -->
+    <!-- SUMMARY -->
     <section class="scanner-summary">
-
       <div class="summary-card ok">
         <span>Healthy</span>
         <strong id="healthyCount">—</strong>
       </div>
-
       <div class="summary-card warn">
         <span>Warnings</span>
         <strong id="warnCount">—</strong>
       </div>
-
       <div class="summary-card bad">
         <span>Critical</span>
         <strong id="criticalCount">—</strong>
       </div>
-
     </section>
 
-    <!-- ================= LEGEND ================= -->
-    <div class="legend">
+    <!-- INTERFACE LEGEND BAR -->
+    <div class="legend-bar">
+      <span class="legend-label">Interfaces</span>
 
-      <span class="legend-item ok">● Healthy</span>
-      <span class="legend-item warn">● Warning</span>
-      <span class="legend-item bad">● Critical</span>
+      <div class="legend-item mi">
+        <span class="legend-dot"></span>
+        MI 1
+      </div>
+      <div class="legend-item si1">
+        <span class="legend-dot"></span>
+        SI 1
+      </div>
+      <div class="legend-item si2">
+        <span class="legend-dot"></span>
+        SI 2
+      </div>
+      <div class="legend-item si3">
+        <span class="legend-dot"></span>
+        SI 3
+      </div>
 
+      <div class="legend-divider"></div>
+
+      <div class="legend-status-item">
+        <span class="legend-dot ok"></span>
+        Healthy
+      </div>
+      <div class="legend-status-item">
+        <span class="legend-dot crit"></span>
+        Critical — click any card to flag
+      </div>
     </div>
 
-    <!-- ================= MAIN PANEL ================= -->
+    <!-- MAIN PANEL -->
     <div class="map-panel">
       <div id="app"></div>
     </div>
@@ -71,26 +97,10 @@
 
   <!-- LOGIC -->
   <script>
+    // Load script with cache-busting
     const s = document.createElement("script");
     s.src = "scanner-map.js?v=" + Date.now();
     document.body.appendChild(s);
-  </script>
-
-  <!-- ACTIONS -->
-  <script>
-
-    function goBack() {
-      window.location.href = "index.html";
-    }
-
-    function refreshScanner() {
-      location.reload();
-    }
-
-    function sendReport() {
-      alert("Trigger Gmail Report (connect to Apps Script)");
-    }
-
   </script>
 
 </body>
