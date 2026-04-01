@@ -1,171 +1,166 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Lens Uploads</title>
-
-<style>
-:root{
-  --bg:#020617;
-  --border:rgba(255,255,255,.08);
-  --text:#e5e7eb;
-  --muted:#94a3b8;
-  --accent:#38bdf8;
-  --ok:#22c55e;
-  --warn:#f59e0b;
-  --err:#ef4444;
-  --radius:14px;
-}
-
-body{
-  margin:0;
-  background:radial-gradient(ellipse at top,#020617,#000);
-  color:var(--text);
-  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;
-}
-
-.wrap{
-  max-width:1100px;
-  margin:32px auto;
-  padding:0 18px 60px;
-}
-
-.header{
-  padding:20px;
-  border-radius:18px;
-  border:1px solid var(--border);
-}
-.header h1{margin:0;font-size:28px;font-weight:900}
-.header p{margin:6px 0 0;color:var(--muted);font-size:14px}
-
-.section{
-  margin-top:22px;
-  padding:18px;
-  border-radius:18px;
-  border:1px solid var(--border);
-}
-
-.dropzone{
-  border:2px dashed var(--border);
-  border-radius:14px;
-  padding:22px;
-  text-align:center;
-  cursor:pointer;
-  margin-bottom:14px;
-}
-.dropzone.drag{border-color:var(--accent);background:rgba(56,189,248,.08)}
-
-input[type="file"],select{
-  width:100%;
-  padding:10px;
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:#020617;
-  color:var(--text);
-}
-
-.actions{
-  margin-top:14px;
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-}
-
-button{
-  padding:10px 14px;
-  border-radius:10px;
-  border:1px solid var(--border);
-  background:#020617;
-  color:#fff;
-  font-weight:800;
-  cursor:pointer;
-}
-button.primary{background:var(--accent);border-color:transparent}
-button:disabled{opacity:.4;cursor:not-allowed}
-
-.status{
-  margin-top:14px;
-  padding:12px;
-  border-radius:12px;
-  font-size:14px;
-}
-.status.ok{background:rgba(34,197,94,.12);color:var(--ok)}
-.status.warn{background:rgba(245,158,11,.12);color:var(--warn)}
-.status.err{background:rgba(239,68,68,.12);color:var(--err)}
-
-.preview{
-  margin-top:16px;
-  border-radius:14px;
-  border:1px solid var(--border);
-  background:#020617;
-  padding:12px;
-  font-family:ui-monospace,monospace;
-  font-size:12px;
-  white-space:pre;
-  max-height:260px;
-  overflow:auto;
-}
-
-.cols{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-top:10px;
-}
-.cols label{
-  font-size:12px;
-  background:#020617;
-  border:1px solid var(--border);
-  padding:6px 10px;
-  border-radius:999px;
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IN8 / IN9 — Lens Upload Tool</title>
+  <link rel="stylesheet" href="in8-in9.css" />
 </head>
-
 <body>
-<div class="wrap">
 
-<header class="header">
-  <h1>Lens Uploads</h1>
-  <p>IN8 (LMS BIN) · IN9 (Cost / Price)</p>
-</header>
+  <div class="bg-grid"></div>
 
-<section class="section">
+  <div class="wrap">
 
-  <!-- Drag & Drop -->
-  <div id="dropzone" class="dropzone">
-    Drag & drop Excel here or click to browse
-    <input id="fileInput" type="file" accept=".xlsx,.xlsm" hidden>
+    <!-- TOP NAV -->
+    <div class="top-nav">
+      <button class="back-btn" onclick="window.location.href='index.html'">← back</button>
+    </div>
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-winbar">
+          <div class="win-dot r"></div>
+          <div class="win-dot y"></div>
+          <div class="win-dot g"></div>
+          <span class="win-title">lens-upload-tool — IN8/IN9 CSV GENERATOR</span>
+        </div>
+        <h1>IN8 <span class="slash">/</span> IN9</h1>
+        <p class="sub">
+          <span class="tag">LMS BIN</span> · <span class="tag">COST/PRICE</span> · CSV EXPORT TOOL
+        </p>
+      </div>
+      <div class="header-logo">
+        <img src="zenni-logo.png" alt="Zenni" />
+      </div>
+    </header>
+
+    <!-- FILE INFO BAR (shown after upload) -->
+    <div class="file-info" id="fileInfo">
+      <div class="file-info-item">
+        <span class="file-info-label">FILE</span>
+        <span class="file-info-value" id="fi-name">—</span>
+      </div>
+      <div class="file-info-item">
+        <span class="file-info-label">SIZE</span>
+        <span class="file-info-value" id="fi-size">—</span>
+      </div>
+      <div class="file-info-item">
+        <span class="file-info-label">ROWS</span>
+        <span class="file-info-value" id="fi-rows">—</span>
+      </div>
+      <div class="file-info-item">
+        <span class="file-info-label">COLS</span>
+        <span class="file-info-value" id="fi-cols">—</span>
+      </div>
+      <div class="file-info-item">
+        <span class="file-info-label">SHEETS</span>
+        <span class="file-info-value" id="fi-sheets">—</span>
+      </div>
+    </div>
+
+    <!-- MAIN TWO-COLUMN GRID -->
+    <div class="main-grid">
+
+      <!-- LEFT: CONTROLS -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">upload &amp; configure</span>
+        </div>
+        <div class="panel-body">
+
+          <!-- Dropzone -->
+          <div id="dropzone" class="dropzone">
+            <span class="dropzone-icon">⬆</span>
+            <span class="dropzone-text">Drop Excel file here</span>
+            <span class="dropzone-hint">.XLSX · .XLSM · CLICK TO BROWSE</span>
+            <input id="fileInput" type="file" accept=".xlsx,.xlsm" hidden />
+          </div>
+
+          <!-- Sheet -->
+          <div class="field">
+            <label class="field-label" for="sheetSelect">Sheet</label>
+            <select id="sheetSelect" disabled>
+              <option>-- SELECT SHEET --</option>
+            </select>
+          </div>
+
+          <!-- Format -->
+          <div class="field">
+            <label class="field-label">Format</label>
+            <div class="fmt-group">
+              <label class="fmt-label">
+                <input type="radio" name="fmt" value="IN8" checked /> IN8
+              </label>
+              <label class="fmt-label">
+                <input type="radio" name="fmt" value="IN9" /> IN9
+              </label>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="actions">
+            <button id="previewBtn" class="btn primary" disabled>▶ Preview CSV</button>
+            <button id="downloadBtn" class="btn secondary" disabled>↓ Download</button>
+          </div>
+
+          <!-- Status -->
+          <div class="status-bar ready" id="statusBar">
+            <div class="dot"></div>
+            <span id="statusText">ready — awaiting file upload</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: COLUMNS + PREVIEW -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">column picker</span>
+        </div>
+        <div class="panel-body">
+          <div class="col-grid" id="columnPicker">
+            <span style="font-size:10px;color:var(--muted);letter-spacing:0.06em;">-- upload file to see columns --</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM FULL: TERMINAL LOG -->
+      <div class="panel panel-full">
+        <div class="panel-header">
+          <span class="panel-title">system log</span>
+          <span style="font-size:9px;color:var(--muted);letter-spacing:0.08em;" id="logTimestamp"></span>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div class="terminal" id="terminal">
+            <span class="log-line dim">-- LENS UPLOAD TOOL v2.0 --</span>
+            <span class="log-line dim">-- IN8 (LMS BIN) / IN9 (COST/PRICE) --</span>
+            <span class="log-line sys" id="initLine"></span>
+            <span class="cursor" id="cursor"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM FULL: CSV PREVIEW -->
+      <div class="panel panel-full">
+        <div class="panel-header">
+          <span class="panel-title">csv preview</span>
+          <span style="font-size:9px;color:var(--muted);letter-spacing:0.08em;" id="previewMeta"></span>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div class="preview-panel" id="preview">
+            <span class="preview-placeholder">// no preview yet — configure and click Preview CSV</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 
-  <label>Sheet</label>
-  <select id="sheetSelect" disabled></select>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="in8-in9.js"></script>
 
-  <div class="cols" id="columnPicker"></div>
-
-  <div class="actions">
-    <label><input type="radio" name="fmt" value="IN8" checked> IN8</label>
-    <label><input type="radio" name="fmt" value="IN9"> IN9</label>
-  </div>
-
-  <div class="actions">
-    <button id="previewBtn" class="primary" disabled>Preview CSV</button>
-    <button id="downloadBtn" disabled>Download CSV</button>
-  </div>
-
-  <div id="status" class="status warn">Ready. Upload a file.</div>
-  <div id="preview" class="preview">(no preview yet)</div>
-
-</section>
-
-<div class="actions">
-  <a href="index.html" style="color:#fff;text-decoration:none">← Back to Dashboard</a>
-</div>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="in8-in9.js"></script>
 </body>
 </html>
