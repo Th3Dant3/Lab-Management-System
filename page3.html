@@ -1,230 +1,237 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Investigation Hold Dashboard</title>
   <link rel="stylesheet" href="style-page3.css"/>
 </head>
-
 <body>
-
-<div class="animated-bg"></div>
 
 <main class="wrap">
 
-  <!-- ================= TOP NAV ================= -->
-  <div class="top-nav">
-    <button class="nav-btn" onclick="goDashboard()">← Dashboard</button>
-  </div>
+  <!-- TOP NAV -->
+  <nav class="topnav">
+    <button class="nav-back" onclick="goDashboard()">← Dashboard</button>
+    <div class="nav-brand">INV · HOLD · OPS</div>
+    <div class="nav-live">
+      <span class="live-dot"></span>
+      <span>Live</span>
+    </div>
+  </nav>
 
   <!-- HEADER -->
-  <header class="header">
-    <div class="header-copy">
-      <h1>Investigation Hold Dashboard</h1>
-      <p>Operational Review & Exception Monitoring</p>
+  <header class="hdr">
+    <div class="hdr-left">
+      <div class="hdr-tag">Operational Review</div>
+      <h1 class="hdr-title">Investigation <em>Hold</em> Dashboard</h1>
+      <p class="hdr-sub">Exception monitoring &amp; root cause analysis</p>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-stat">
+        <div class="hdr-sl">Status</div>
+        <div class="hdr-sv green" id="headerStatus">—</div>
+      </div>
+      <div class="hdr-stat">
+        <div class="hdr-sl">Coverage</div>
+        <div class="hdr-sv white" id="headerCoverage">—</div>
+      </div>
+      <div class="hdr-stat">
+        <div class="hdr-sl">Last sync</div>
+        <div class="hdr-sv sm" id="headerSync">—</div>
+      </div>
     </div>
   </header>
 
-  <!-- FILTER -->
-  <section class="filters">
-    <div class="date-filter">
-      <label for="dateFilter">Report Date</label>
-      <input type="date" id="dateFilter"/>
+  <!-- FILTER BAR -->
+  <section class="filterbar">
+    <div class="fb-group">
+      <label class="fb-lbl">Report date</label>
+      <div class="fb-inputs">
+        <input type="date" id="dateFilter" class="fb-date"/>
+        <button id="clearDate" class="fb-clear">✕ Clear</button>
+      </div>
     </div>
-
-    <div class="quick-buttons">
-
-  <button class="year-tab active" data-year="all">
-    Total Jobs
-  </button>
-
-  <button class="year-tab" data-year="2025">
-    2025
-  </button>
-
-  <button class="year-tab" data-year="2026">
-    2026
-  </button>
-
-</div>
-
+    <div class="fb-divider"></div>
+    <div class="fb-yrs">
+      <button class="fb-yr active" data-year="all">All time</button>
+      <button class="fb-yr" data-year="2025">2025</button>
+      <button class="fb-yr" data-year="2026">2026</button>
+    </div>
   </section>
 
-  <!-- KPI -->
-  <section class="kpi-section">
-
-    <div class="stats stats-primary">
-      <div class="stat stat-primary">
-        <h3>Active Holds</h3>
-        <div id="activeHolds" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Total Evaluated</h3>
-        <div id="evaluatedCount" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Coverage</h3>
-        <div id="coveragePct" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Last Refresh</h3>
-        <div id="lastUpdated" class="value">—</div>
-      </div>
+  <!-- PRIMARY KPIs -->
+  <section class="kpi4">
+    <div class="kcard hero">
+      <div class="kc-label">Active holds</div>
+      <div class="kc-val" id="activeHolds">—</div>
+      <div class="kc-bar"><div class="kc-fill" id="activeBar"></div></div>
     </div>
-
-    <div class="stats stats-secondary">
-      <div class="stat">
-        <h3>Avg Investigation</h3>
-        <div id="avgInvestigationTime" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Arrived</h3>
-        <div id="arrivedToday" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Evaluated Today</h3>
-        <div id="evaluatedToday" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Prior Day Intake</h3>
-        <div id="priorDayIntake" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Same-Day %</h3>
-        <div id="sameDayPercent" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Avg Delay</h3>
-        <div id="avgArrivalDelayDays" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Oldest</h3>
-        <div id="oldestInvestigation" class="value">—</div>
-      </div>
-
-      <div class="stat">
-        <h3>Latest</h3>
-        <div id="latestInvestigation" class="value">—</div>
-      </div>
+    <div class="kcard">
+      <div class="kc-label">Total evaluated</div>
+      <div class="kc-val" id="evaluatedCount">—</div>
     </div>
-
-    <!-- SHIFT SECTION -->
-    <div class="stats stats-secondary">
-      <div class="stat" style="grid-column: 1 / -1;">
-        <h3>Shift Performance</h3>
-        <div id="shiftStatsWrap"></div>
-      </div>
+    <div class="kcard">
+      <div class="kc-label">Coverage</div>
+      <div class="kc-val" id="coveragePct">—</div>
     </div>
-
+    <div class="kcard">
+      <div class="kc-label">Last refresh</div>
+      <div class="kc-val sm" id="lastUpdated">—</div>
+    </div>
   </section>
 
-  <!-- MAIN PANEL -->
-  <section class="detail-panel">
+  <!-- SECONDARY KPIs -->
+  <section class="kpi7">
+    <div class="ksm">
+      <div class="ksm-label">Avg investigation</div>
+      <div class="ksm-val" id="avgInvestigationTime">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Arrive to Inv Hold</div>
+      <div class="ksm-val" id="arrivedToday">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Evaluated completed</div>
+      <div class="ksm-val" id="evaluatedToday">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Prior day intake</div>
+      <div class="ksm-val" id="priorDayIntake">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Avg delay</div>
+      <div class="ksm-val" id="avgArrivalDelayDays">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Oldest</div>
+      <div class="ksm-val mono" id="oldestInvestigation">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Latest</div>
+      <div class="ksm-val mono" id="latestInvestigation">—</div>
+    </div>
+  </section>
 
-    <div class="section-header">
-      <h2>Investigation Insights</h2>
-      <p>Root causes, returned-to, and delay analysis</p>
+  <!-- SHIFT PERFORMANCE -->
+  <section class="section">
+    <div class="sec-eyebrow">Shift performance</div>
+    <div id="shiftStatsWrap"></div>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section class="insights-wrap">
+    <div class="ins-header">
+      <div>
+        <h2 class="ins-title">Investigation Insights</h2>
+        <p class="ins-sub">Root causes · Return destinations · Delay patterns</p>
+      </div>
+      <div class="ins-tabs">
+        <button id="tabReasons" class="ins-tab active">⚡ Root causes</button>
+        <button id="tabSentBack" class="ins-tab">↩ Returned to</button>
+        <button id="tabDelay" class="ins-tab">⏱ Delay overview</button>
+      </div>
     </div>
 
-    <!-- MAIN TABS -->
-    <div class="tabs">
-      <button id="tabReasons" class="tab active">Root Causes</button>
-      <button id="tabSentBack" class="tab">Returned To</button>
-      <button id="tabDelay" class="tab">Delay Overview</button>
-    </div>
-
-    <!-- ROOT -->
-    <section id="reasonsView" class="tab-panel">
+    <!-- ROOT CAUSES -->
+    <div id="reasonsView" style="display:block;">
       <div id="reasonBubbles"></div>
-    </section>
+    </div>
 
-    <!-- RETURNED -->
-    <section id="sentBackView" class="tab-panel" style="display:none;">
+    <!-- RETURNED TO -->
+    <div id="sentBackView" style="display:none;">
       <div id="sentBackBubbles"></div>
-    </section>
+    </div>
 
     <!-- DELAY -->
-    <section id="delayView" class="tab-panel" style="display:none;">
-
-      <!-- SUB TABS -->
-      <div class="tabs sub-tabs">
-        <button id="delayTabSummary" class="tab active">Summary</button>
-        <button id="delayTabDept" class="tab">By Department</button>
-        <button id="delayTabTable" class="tab">Timeline</button>
+    <div id="delayView" style="display:none;">
+      <div class="stabs">
+        <button id="delayTabSummary" class="stab active">Summary</button>
+        <button id="delayTabDept" class="stab">By department</button>
+        <button id="delayTabTable" class="stab">Timeline</button>
       </div>
 
-      <!-- SUMMARY -->
       <div id="delaySummaryView">
-
-        <div class="stats stats-primary">
-
-          <div class="stat delay-filter" data-range="1-2">
-            <h3>1–2 Days</h3>
-            <div id="bucket-1-2">0</div>
+        <div class="delay-buckets">
+          <div class="dbucket db-low delay-filter" data-range="1-2">
+            <div class="dbucket-range">1–2 Days</div>
+            <div class="dbucket-num" id="bucket-1-2">0</div>
+            <div class="dbucket-sub">Short delay</div>
           </div>
-
-          <div class="stat delay-filter" data-range="3-5">
-            <h3>3–5 Days</h3>
-            <div id="bucket-3-5">0</div>
+          <div class="dbucket db-mid delay-filter" data-range="3-5">
+            <div class="dbucket-range">3–5 Days</div>
+            <div class="dbucket-num" id="bucket-3-5">0</div>
+            <div class="dbucket-sub">Medium delay</div>
           </div>
-
-          <div class="stat delay-filter" data-range="5+">
-            <h3>5+ Days</h3>
-            <div id="bucket-5plus">0</div>
+          <div class="dbucket db-hi delay-filter" data-range="5+">
+            <div class="dbucket-range">5+ Days</div>
+            <div class="dbucket-num" id="bucket-5plus">0</div>
+            <div class="dbucket-sub">Critical</div>
           </div>
-
         </div>
-
       </div>
 
-      <!-- BY DEPT -->
       <div id="delayDeptView" style="display:none;">
         <div id="delayByDept"></div>
       </div>
 
-      <!-- TABLE -->
       <div id="delayTableView" style="display:none;">
-        <table class="delay-table">
-          <thead>
-            <tr>
-              <th>RX</th>
-              <th>Returned To</th>
-              <th>Scan</th>
-              <th>Arrived</th>
-              <th>Days</th>
-            </tr>
-          </thead>
-          <tbody id="delayTableBody"></tbody>
-        </table>
+        <div class="tbl-wrap">
+          <table class="dtbl">
+            <thead>
+              <tr>
+                <th>RX</th>
+                <th>Returned to</th>
+                <th>Scan date</th>
+                <th>Arrived</th>
+                <th>Days</th>
+              </tr>
+            </thead>
+            <tbody id="delayTableBody"></tbody>
+          </table>
+        </div>
       </div>
-
-    </section>
-
+    </div>
   </section>
 
-  <div class="page-actions">
-    <button class="nav-btn" onclick="goDashboard()">← Dashboard</button>
+  <!-- TREND CHARTS -->
+  <section class="trends">
+    <div class="trend-card">
+      <div class="trend-eyebrow">Arrival trend</div>
+      <div class="trend-title">Arrive to Inv Hold</div>
+      <div class="trend-legend">
+        <span class="tleg-line" style="background:#00ff88;"></span>
+        Date arrived at IH
+      </div>
+      <div class="chart-wrap">
+        <canvas id="arrivalTrendChart"></canvas>
+      </div>
+    </div>
+    <div class="trend-card">
+      <div class="trend-eyebrow">Evaluated trend</div>
+      <div class="trend-title">Evaluated Completed</div>
+      <div class="trend-legend">
+        <span class="tleg-line" style="background:#ffb700;"></span>
+        Investigation completed
+      </div>
+      <div class="chart-wrap">
+        <canvas id="evaluatedTrendChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <div class="page-foot">
+    <button class="nav-back" onclick="goDashboard()">← Dashboard</button>
+    <div class="foot-stamp">INV-HOLD · OPS System</div>
   </div>
 
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="page3.js"></script>
-
 <script>
-function goDashboard() {
-  window.location.href = "index.html";
-}
+function goDashboard() { window.location.href = "index.html"; }
 </script>
-
 </body>
 </html>
