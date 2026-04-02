@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastData    = null;
   let currentYear = "all";
   let delayFilter = "all";
+  let chartScan      = null;
   let chartArrival   = null;
   let chartEvaluated = null;
 
@@ -69,8 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPills("reasonBubbles",   d.reasonsTop10,  evalBase || total);
     renderPills("sentBackBubbles", d.sentBackTop10, evalBase || total);
     renderDelay(d);
-    renderChart("arrivalTrendChart",   "arrival",   d.trend           || {}, "#00ff88", "rgba(0,255,136,.08)");
-    renderChart("evaluatedTrendChart", "evaluated", d.evaluatedTrend  || {}, "#ffb700", "rgba(255,183,0,.08)");
+    // Charts render on-demand when Trend tab is clicked
   }
 
   /* ── SHIFTS ── */
@@ -198,7 +198,7 @@ document.addEventListener("DOMContentLoaded", () => {
       Object.entries(grps).forEach(([range, list]) => {
         if (!list.length) return;
         const id  = `grp-${range.replace("+","p").replace("-","")}`;
-        const col = range === "5+" ? "#ff4d6a" : range === "3-5" ? "#ffb700" : "#00ff88";
+        const col = range === "5+" ? "#ff4d6a" : range === "3-5" ? "#f5a623" : "#00e87a";
         html += `
           <tr class="grp-hdr-row" data-target="${id}">
             <td colspan="5">
@@ -252,10 +252,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     const values = entries.map(e => e[1]);
 
-    const prev = key === "arrival" ? chartArrival : chartEvaluated;
-    if (prev) prev.destroy();
+    const prev = key === "arrival" ? chartArrival : key === "scan" ? chartScan : chartEvaluated;
+    if (prev) { prev.destroy(); }
 
-    const inst = new Chart(canvas, {
+    const cfg = {
       type: "bar",
       data: {
         labels,
@@ -264,21 +264,24 @@ document.addEventListener("DOMContentLoaded", () => {
           backgroundColor: bg,
           borderColor:     color,
           borderWidth:     1,
-          borderRadius:    3,
-          borderSkipped:   false
+          borderRadius:    2,
+          borderSkipped:   "bottom",
+          barPercentage:   0.85,
+          categoryPercentage: 0.9
         }]
       },
       options: {
+        animation:           false,
         responsive:          true,
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#141414",
-            borderColor:     "#1e1e1e",
+            backgroundColor: "#13151a",
+            borderColor:     "#1f2330",
             borderWidth:     1,
             titleColor:      color,
-            bodyColor:       "#444",
+            bodyColor:       "#8b96b0",
             titleFont:       { size: 10, weight: "700" },
             bodyFont:        { size: 11, weight: "700" },
             callbacks: {
@@ -289,37 +292,66 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         scales: {
           x: {
-            ticks: { color: "#4a5368", font: { size: 9, weight: "600" }, maxTicksLimit: 12, maxRotation: 0 },
-            grid:  { color: "#2e3447" },
-            border:{ color: "#4a5368" }
+            ticks: { color: "#4a5368", font: { size: 9, weight: "600" }, maxTicksLimit: 12, maxRotation: 0, autoSkip: true },
+            grid:  { color: "#1f2330" },
+            border:{ color: "#1f2330" }
           },
           y: {
             ticks:       { color: "#4a5368", font: { size: 9, weight: "600" } },
-            grid:        { color: "#2e3447" },
-            border:      { color: "#4a5368" },
+            grid:        { color: "#1f2330" },
+            border:      { color: "#1f2330" },
             beginAtZero: true
           }
         }
       }
-    });
+    };
 
-    if (key === "arrival") chartArrival = inst;
-    else                   chartEvaluated = inst;
+    const inst = new Chart(canvas, cfg);
+    if (key === "arrival")   chartArrival   = inst;
+    else if (key === "scan") chartScan      = inst;
+    else                     chartEvaluated = inst;
   }
 
   /* ── TABS ── */
   function switchMainTab(tab) {
     const views = {
-      reasons: document.getElementById("reasonsView"),
-      sent:    document.getElementById("sentBackView"),
-      delay:   document.getElementById("delayView")
+      reasons:  document.getElementById("reasonsView"),
+      sent:     document.getElementById("sentBackView"),
+      delay:    document.getElementById("delayView"),
+      trend:    document.getElementById("trendView"),
+      pipeline: document.getElementById("pipelineView")
     };
     Object.entries(views).forEach(([k, el]) => {
       if (el) el.style.display = k === tab ? "block" : "none";
     });
-    document.getElementById("tabReasons")?.classList.toggle("active",  tab === "reasons");
-    document.getElementById("tabSentBack")?.classList.toggle("active", tab === "sent");
-    document.getElementById("tabDelay")?.classList.toggle("active",    tab === "delay");
+    document.getElementById("tabReasons")?.classList.toggle("active",   tab === "reasons");
+    document.getElementById("tabSentBack")?.classList.toggle("active",  tab === "sent");
+    document.getElementById("tabDelay")?.classList.toggle("active",     tab === "delay");
+    document.getElementById("tabTrend")?.classList.toggle("active",     tab === "trend");
+    document.getElementById("tabPipeline")?.classList.toggle("active",  tab === "pipeline");
+
+    if (tab === "trend") {
+      setTimeout(() => {
+        if (!lastData) return;
+
+        // Build scan trend from rows (col D) since API doesn't send it separately
+        const scanTrend = {};
+        (lastData.rows || []).forEach(r => {
+          if (!r.scanDate) return;
+          // scanDate comes as MM/dd/yyyy — convert to yyyy-MM-dd for sorting
+          const parts = r.scanDate.split("/");
+          if (parts.length === 3) {
+            const key = `${parts[2]}-${parts[0].padStart(2,"0")}-${parts[1].padStart(2,"0")}`;
+            scanTrend[key] = (scanTrend[key] || 0) + 1;
+          }
+        });
+
+        renderChart("scanTrendChart",      "scan",     scanTrend,                    "#4a7ab0", "rgba(74,122,176,.2)");
+        renderChart("arrivalTrendChart",   "arrival",  lastData.trend          || {}, "#00e87a", "rgba(0,232,122,.18)");
+        renderChart("evaluatedTrendChart", "evaluated",lastData.evaluatedTrend || {}, "#f5a623", "rgba(245,166,35,.18)");
+      }, 80);
+    }
+    if (tab === "pipeline" && lastData) renderPipeline(lastData);
   }
 
   function switchDelayTab(tab) {
@@ -332,9 +364,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ── EVENTS ── */
-  document.getElementById("tabReasons")?.addEventListener("click",  () => switchMainTab("reasons"));
-  document.getElementById("tabSentBack")?.addEventListener("click", () => switchMainTab("sent"));
-  document.getElementById("tabDelay")?.addEventListener("click",    () => switchMainTab("delay"));
+  document.getElementById("tabReasons")?.addEventListener("click",   () => switchMainTab("reasons"));
+  document.getElementById("tabSentBack")?.addEventListener("click",  () => switchMainTab("sent"));
+  document.getElementById("tabDelay")?.addEventListener("click",     () => switchMainTab("delay"));
+  document.getElementById("tabTrend")?.addEventListener("click",     () => switchMainTab("trend"));
+  document.getElementById("tabPipeline")?.addEventListener("click",  () => switchMainTab("pipeline"));
 
   document.getElementById("delayTabSummary")?.addEventListener("click", () => switchDelayTab("summary"));
   document.getElementById("delayTabDept")?.addEventListener("click",    () => switchDelayTab("dept"));
@@ -368,6 +402,104 @@ document.addEventListener("DOMContentLoaded", () => {
       load();
     });
   });
+
+  /* ── PIPELINE ── */
+  function daysBetween(a, b) {
+    if (!a || !b) return null;
+    // Parse MM/dd/yyyy format from API
+    function parseDate(s) {
+      if (!s) return null;
+      // Try MM/dd/yyyy first
+      const p = s.split("/");
+      if (p.length === 3) return new Date(`${p[2]}-${p[0].padStart(2,"0")}-${p[1].padStart(2,"0")}T00:00:00`);
+      return new Date(s);
+    }
+    const da = parseDate(a), db = parseDate(b);
+    if (!da || !db || isNaN(da) || isNaN(db)) return null;
+    const diff = Math.round((db - da) / (1000 * 60 * 60 * 24));
+    return diff;
+  }
+
+  function gapBadge(days) {
+    if (days === null || days === undefined) return `<span class="dt-cell">—</span>`;
+    const cls = days <= 1 ? "gbadge gbadge-ok" : days <= 3 ? "gbadge gbadge-warn" : "gbadge gbadge-bad";
+    return `<span class="${cls}">${days}d</span>`;
+  }
+
+  function renderPipeline(d) {
+    // Use rows that match current filter window (same rows shown in other tabs)
+    const rows = (d.rows || []).filter(r => r.scanDate && r.arrived);
+    if (!rows.length) {
+      const tbody = document.getElementById("pipelineTableBody");
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="pipe-empty">No journey data available</td></tr>`;
+      return;
+    }
+
+    let totalScan = 0, countScan = 0, totalHold = 0, countHold = 0, maxTotal = 0;
+
+    const processed = rows.map(r => {
+      const scanGap = daysBetween(r.scanDate, r.arrived);
+
+      // Compute hold from arrived→completed dates — most accurate
+      // Fall back to col G if dates unavailable
+      let holdDays = null;
+      if (r.arrived && r.completed) {
+        holdDays = daysBetween(r.arrived, r.completed);
+      } else if (r.duration !== null && r.duration !== "" && r.duration !== undefined) {
+        holdDays = Math.round(Number(r.duration));
+      }
+
+      if (scanGap  !== null) { totalScan += scanGap;  countScan++; }
+      if (holdDays !== null) { totalHold += holdDays; countHold++; }
+
+      const tot = (scanGap || 0) + (holdDays || 0);
+      if (tot > maxTotal) maxTotal = tot;
+      return { ...r, scanGap, holdDays, tot };
+    });
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set("pipeTotal",     fmtInt(rows.length));
+    set("pipeArrived",   fmtInt(rows.filter(r => r.arrived).length));
+    set("pipeCompleted", fmtInt(rows.filter(r => r.completed).length));
+    set("pipeGap1", countScan >= 0 ? `${(countScan ? totalScan/countScan : 0).toFixed(1)}d avg` : "—");
+    set("pipeGap2", countHold >= 0 ? `${(countHold ? totalHold/countHold : 0).toFixed(1)}d avg` : "—");
+
+    // Show most recent 60 rows sorted newest first
+    const tbody = document.getElementById("pipelineTableBody");
+    if (!tbody) return;
+
+    const display = [...processed].sort((a, b) => {
+      const da = new Date(a.arrived || a.scanDate || "");
+      const db = new Date(b.arrived || b.scanDate || "");
+      return db - da;
+    }).slice(0, 60);
+    const mx = maxTotal || 10;
+
+    tbody.innerHTML = display.map(r => {
+      const sg = r.scanGap, hd = r.holdDays;
+      const scanW  = Math.max(sg  !== null ? Math.round(sg  / mx * 80) : 5, 5);
+      const holdW  = Math.max(hd  !== null ? Math.round(hd  / mx * 80) : 5, 5);
+      const restW  = Math.max(100 - scanW - holdW - 4, 0);
+
+      return `
+        <tr>
+          <td><span class="rx-cell">${esc(r.rx)}</span></td>
+          <td><span class="sent-cell">${esc(r.sentBack || "—")}</span></td>
+          <td><span class="dt-cell">${esc(r.scanDate || "—")}</span></td>
+          <td>${gapBadge(sg)}</td>
+          <td><span class="dt-cell">${esc(r.arrived || "—")}</span></td>
+          <td>${gapBadge(hd)}</td>
+          <td><span class="dt-cell">${esc(r.completed || "—")}</span></td>
+          <td>
+            <div class="jbar">
+              <div class="jbar-scan" style="width:${scanW}%">${sg !== null ? sg + "d" : ""}</div>
+              <div class="jbar-marker"></div>
+              <div class="jbar-hold" style="width:${holdW}%">${hd !== null ? hd + "d" : ""}</div>
+            </div>
+          </td>
+        </tr>`;
+    }).join("");
+  }
 
   /* ── INIT ── */
   switchMainTab("reasons");

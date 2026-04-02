@@ -130,6 +130,8 @@
         <button id="tabReasons" class="ins-tab active">⚡ Root causes</button>
         <button id="tabSentBack" class="ins-tab">↩ Returned to</button>
         <button id="tabDelay" class="ins-tab">⏱ Delay overview</button>
+        <button id="tabTrend" class="ins-tab">📈 Trend</button>
+        <button id="tabPipeline" class="ins-tab">→ Job journey</button>
       </div>
     </div>
 
@@ -192,32 +194,117 @@
         </div>
       </div>
     </div>
-  </section>
+    <!-- TREND TAB -->
+    <div id="trendView" style="display:none;">
+      <div class="trend-tab-inner">
+        <div class="trend-tab-card">
+          <div class="trend-eyebrow">Scan trend</div>
+          <div class="trend-title">Previous Scan</div>
+          <div class="trend-legend">
+            <span class="tleg-line" style="background:#4a7ab0;"></span>
+            Date scanned
+          </div>
+          <div class="chart-wrap-tab">
+            <canvas id="scanTrendChart"></canvas>
+          </div>
+        </div>
+        <div class="trend-tab-card">
+          <div class="trend-eyebrow">Arrival trend</div>
+          <div class="trend-title">Arrive to Inv Hold</div>
+          <div class="trend-legend">
+            <span class="tleg-line" style="background:#00e87a;"></span>
+            Date received at IH
+          </div>
+          <div class="chart-wrap-tab">
+            <canvas id="arrivalTrendChart"></canvas>
+          </div>
+        </div>
+        <div class="trend-tab-card">
+          <div class="trend-eyebrow">Evaluated trend</div>
+          <div class="trend-title">Evaluated Completed</div>
+          <div class="trend-legend">
+            <span class="tleg-line" style="background:#f5a623;"></span>
+            Date investigation resolved
+          </div>
+          <div class="chart-wrap-tab">
+            <canvas id="evaluatedTrendChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  <!-- TREND CHARTS -->
-  <section class="trends">
-    <div class="trend-card">
-      <div class="trend-eyebrow">Arrival trend</div>
-      <div class="trend-title">Arrive to Inv Hold</div>
-      <div class="trend-legend">
-        <span class="tleg-line" style="background:#00ff88;"></span>
-        Date arrived at IH
+    <!-- PIPELINE TAB -->
+    <div id="pipelineView" style="display:none;">
+
+      <!-- STAGE SUMMARY -->
+      <div class="pipe-stages">
+        <div class="pipe-stage pipe-stage-scan">
+          <div class="pipe-stage-icon">D</div>
+          <div class="pipe-stage-label">Previous Scan Date</div>
+          <div class="pipe-stage-val" id="pipeTotal">—</div>
+          <div class="pipe-stage-sub">rx jobs scanned</div>
+        </div>
+        <div class="pipe-connector">
+          <div class="pipe-connector-line"></div>
+          <div class="pipe-connector-gap">
+            <div class="pipe-connector-label">Transit time</div>
+            <div class="pipe-connector-val blue" id="pipeGap1">—</div>
+          </div>
+          <div class="pipe-connector-arrow">→</div>
+        </div>
+        <div class="pipe-stage pipe-stage-arrive">
+          <div class="pipe-stage-icon" style="background:rgba(0,232,122,.1);color:#00e87a;border-color:rgba(0,232,122,.2)">E</div>
+          <div class="pipe-stage-label">Received at IH</div>
+          <div class="pipe-stage-val" id="pipeArrived">—</div>
+          <div class="pipe-stage-sub">rx jobs received</div>
+        </div>
+        <div class="pipe-connector">
+          <div class="pipe-connector-line" style="background:linear-gradient(90deg,#00e87a,#f5a623)"></div>
+          <div class="pipe-connector-gap">
+            <div class="pipe-connector-label">Investigation time</div>
+            <div class="pipe-connector-val amber" id="pipeGap2">—</div>
+          </div>
+          <div class="pipe-connector-arrow">→</div>
+        </div>
+        <div class="pipe-stage pipe-stage-hold">
+          <div class="pipe-stage-icon" style="background:rgba(245,166,35,.1);color:#f5a623;border-color:rgba(245,166,35,.2)">F</div>
+          <div class="pipe-stage-label">Investigation Complete</div>
+          <div class="pipe-stage-val" id="pipeCompleted">—</div>
+          <div class="pipe-stage-sub">rx jobs resolved</div>
+        </div>
       </div>
-      <div class="chart-wrap">
-        <canvas id="arrivalTrendChart"></canvas>
+
+      <!-- LEGEND -->
+      <div class="pipe-legend">
+        <div class="pipe-leg-item"><div class="pipe-leg-sq" style="background:#1e3a5a"></div>Transit delay</div>
+        <div class="pipe-leg-item"><div class="pipe-leg-sq" style="background:#00e87a"></div>Received at IH</div>
+        <div class="pipe-leg-item"><div class="pipe-leg-sq" style="background:#3a2808"></div>Investigation duration</div>
+        <div class="pipe-leg-item"><span class="gbadge gbadge-ok">≤1d</span>On time</div>
+        <div class="pipe-leg-item"><span class="gbadge gbadge-warn">2–3d</span>Moderate delay</div>
+        <div class="pipe-leg-item"><span class="gbadge gbadge-bad">4d+</span>Critical delay</div>
       </div>
+
+      <!-- JOB TABLE -->
+      <div class="pipe-tbl-wrap">
+        <table class="pipe-tbl">
+          <thead>
+            <tr>
+              <th>RX Number</th>
+              <th>Returned to</th>
+              <th>Date scanned</th>
+              <th>Transit time</th>
+              <th>Received at IH</th>
+              <th>Investigation</th>
+              <th>Resolved</th>
+              <th>Journey</th>
+            </tr>
+          </thead>
+          <tbody id="pipelineTableBody"></tbody>
+        </table>
+      </div>
+
     </div>
-    <div class="trend-card">
-      <div class="trend-eyebrow">Evaluated trend</div>
-      <div class="trend-title">Evaluated Completed</div>
-      <div class="trend-legend">
-        <span class="tleg-line" style="background:#ffb700;"></span>
-        Investigation completed
-      </div>
-      <div class="chart-wrap">
-        <canvas id="evaluatedTrendChart"></canvas>
-      </div>
-    </div>
+
   </section>
 
   <!-- FOOTER -->
