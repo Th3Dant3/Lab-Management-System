@@ -1,196 +1,226 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Coating Flow Tracker</title>
   <link rel="stylesheet" href="coating.css">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
+
+<!-- SPIKE ALERT BANNER -->
+
+<div id="alertBanner" class="alert-banner" style="display:none;">
+  <div class="alert-dot"></div>
+  <span id="alertText" class="alert-text"></span>
+  <span class="alert-close" onclick="document.getElementById('alertBanner').style.display='none'">×</span>
+</div>
+
+<!-- HEADER -->
+
+<div class="site-header">
+  <div class="header-left">
+    <button class="back-btn" onclick="goBack()">← Back</button>
+    <div class="header-divider"></div>
+    <div class="logo-block">
+      <div class="eyebrow">Production · Optical</div>
+      <div class="site-title">Coating Flow Tracker</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <label class="filter-label">Date</label>
+    <input type="date" id="historyDate" class="date-input" />
+    <button onclick="applyDateFilter()" class="btn-apply">Apply</button>
+    <button id="liveBtn" onclick="resetToToday()" class="btn-today">Today</button>
+    <div class="header-divider"></div>
+    <span id="refreshTimer" class="refresh-timer">Loading...</span>
+    <span id="refreshStatus" class="status-badge live">● Live</span>
+  </div>
+</div>
 
 <div class="container">
 
-  <!-- ================= TOP NAV ================= -->
-  <div class="top-nav">
-    <button class="back-btn" onclick="goBack()">← Back</button>
-  </div>
+  <!-- TABS ROW -->
 
-  <!-- ================= PAGE HEADER ================= -->
-  <div class="page-header">
-    <div class="header-left">
-      <div class="page-eyebrow">Production · Optical</div>
-      <h1>Coating Flow Tracker</h1>
+  <div class="tabs-row">
+    <div class="tabs-bar">
+      <button class="tab active" onclick="showTab('overview',this)">Overview</button>
+      <button class="tab" onclick="showTab('trends',this)">Trends</button>
+      <button class="tab" onclick="showTab('reasons',this)">Top Reasons</button>
+      <button class="tab" onclick="showTab('machines',this)">Machine Analysis</button>
     </div>
-    <div style="display:flex; align-items:center; gap:10px;">
-      <span id="refreshTimer" class="refresh-timer">Loading...</span>
-      <span id="refreshStatus" class="status-badge live">Live</span>
+    <div class="tabs-actions">
+      <button class="btn-export-csv" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn-export-pdf" onclick="exportPDF()">⬇ Export PDF</button>
     </div>
   </div>
 
-  <!-- ================= FILTERS ================= -->
-  <div class="filters-bar">
-    <div class="filter-left">
-      <label for="historyDate">Date:</label>
-      <input type="date" id="historyDate" />
-      <button onclick="applyDateFilter()" class="apply-btn">Apply</button>
-      <button onclick="resetToToday()" class="today-btn">Today</button>
-    </div>
-    <div class="filter-right"></div>
-  </div>
+  <!-- ══ OVERVIEW ══ -->
 
-  <!-- ================= MAIN TABS ================= -->
-  <div class="tabs main-tabs">
-    <button class="tab active" onclick="showTab('overview', this)">Overview</button>
-    <button class="tab" onclick="showTab('trends', this)">Trends</button>
-    <button class="tab" onclick="showTab('reasons', this)">Top Reasons</button>
-    <button class="tab" onclick="showTab('machines', this)">Machine Analysis</button>
-  </div>
-
-  <!-- ================= OVERVIEW ================= -->
   <div id="overview" class="tab-content active">
 
-    <!-- AI INSIGHTS -->
-    <div class="summary">
-      <div class="card insight-card">
-        <h3>⬡ AI Insights</h3>
-        <div id="insightBox">
-          <span class="insight-item loading-shimmer" style="width:200px; height:28px;">&nbsp;</span>
-          <span class="insight-item loading-shimmer" style="width:160px; height:28px;">&nbsp;</span>
-          <span class="insight-item loading-shimmer" style="width:230px; height:28px;">&nbsp;</span>
-        </div>
-      </div>
-    </div>
+```
+<!-- AI INSIGHTS -->
+<div class="insights-card">
+  <div class="insights-label">AI Insights</div>
+  <div id="insightBox" class="insight-box">
+    <span class="insight-item insight-loading" style="width:200px;">&nbsp;</span>
+    <span class="insight-item insight-loading" style="width:160px;">&nbsp;</span>
+    <span class="insight-item insight-loading" style="width:220px;">&nbsp;</span>
+  </div>
+</div>
 
-    <!-- KPI ROW -->
-    <div class="summary">
-      <div class="card">
-        <h3>Total Coating Jobs</h3>
-        <h2 id="totalJobs">--</h2>
-      </div>
-      <div class="card">
-        <h3>Total Lenses</h3>
-        <h2 id="totalLenses">--</h2>
-      </div>
-      <div class="card">
-        <h3>Total Lenses Broken</h3>
-        <h2 id="totalBroken">--</h2>
-      </div>
-      <div class="card">
-        <h3>Coating Brkg %</h3>
-        <h2 id="rxBreakage">--</h2>
-      </div>
-      <div class="card">
-        <h3>Breakage Peak Hour</h3>
-        <h2 id="peakHour">--</h2>
-      </div>
+<!-- SHIFT COMPARISON -->
+<div class="shift-compare">
+  <div class="shift-compare-label">Shift Comparison — Today vs Yesterday</div>
+  <div class="shift-cols">
+    <div class="shift-col">
+      <div class="shift-col-label">Total Jobs</div>
+      <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num" id="shiftTodayJobs">--</span></div>
+      <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestJobs">--</span><span class="shift-delta" id="shiftDeltaJobs"></span></div>
     </div>
+    <div class="shift-col">
+      <div class="shift-col-label">Lenses Broken</div>
+      <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num red" id="shiftTodayBroken">--</span></div>
+      <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestBroken">--</span><span class="shift-delta" id="shiftDeltaBroken"></span></div>
+    </div>
+    <div class="shift-col">
+      <div class="shift-col-label">Breakage %</div>
+      <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num red" id="shiftTodayPct">--</span></div>
+      <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestPct">--</span><span class="shift-delta" id="shiftDeltaPct"></span></div>
+    </div>
+    <div class="shift-col">
+      <div class="shift-col-label">Avg Flow Time</div>
+      <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num yellow" id="shiftTodayFlow">--</span></div>
+      <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestFlow">--</span><span class="shift-delta" id="shiftDeltaFlow"></span></div>
+    </div>
+  </div>
+</div>
 
-    <!-- AGING ROW -->
-    <div class="summary">
-      <div class="card aging today">
-        <h3>Same Day Lens Brkg</h3>
-        <h2 id="sameDayBreakage">--</h2>
-      </div>
-      <div class="card aging yesterday">
-        <h3>Previous Day Lens Brkg</h3>
-        <h2 id="yesterdayBreakage">--</h2>
-      </div>
-      <div class="card aging late">
-        <h3>Over 2+ Days Lens Brkg</h3>
-        <h2 id="twoPlusBreakage">--</h2>
-      </div>
-      <div class="card">
-        <h3>Brkg Avg Time (hrs)</h3>
-        <h2 id="avgTime">--</h2>
-      </div>
-    </div>
+<!-- KPI CARDS -->
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="kpi-label">Total Coating Jobs</div><div class="kpi-value" id="totalJobs">--</div></div>
+  <div class="kpi-card"><div class="kpi-label">Total Lenses</div><div class="kpi-value" id="totalLenses">--</div></div>
+  <div class="kpi-card"><div class="kpi-label">Total Lenses Broken</div><div class="kpi-value red" id="totalBroken">--</div></div>
+  <div class="kpi-card"><div class="kpi-label">Coating Brkg %</div><div class="kpi-value red" id="rxBreakage">--</div></div>
+  <div class="kpi-card"><div class="kpi-label">Breakage Peak Hour</div><div class="kpi-value yellow" id="peakHour">--</div></div>
+</div>
 
-    <!-- FLOW HEALTH ROW -->
-    <div class="summary">
-      <div class="card flowHealthy">
-        <h3>Workflow Healthy</h3>
-        <h2 id="flowHealthy">--</h2>
-      </div>
-      <div class="card flowWatch">
-        <h3>Workflow Watch</h3>
-        <h2 id="flowWatch">--</h2>
-      </div>
-      <div class="card flowDelayed">
-        <h3>Workflow Delayed</h3>
-        <h2 id="flowDelayed">--</h2>
-      </div>
-      <div class="card overnight">
-        <h3>Overnight Carryover</h3>
-        <h2 id="flowOvernight">--</h2>
-      </div>
-    </div>
+<div class="kpi-grid">
+  <div class="kpi-card accent-green"><div class="kpi-label">Same Day Lens Brkg</div><div class="kpi-value green" id="sameDayBreakage">--</div></div>
+  <div class="kpi-card accent-yellow"><div class="kpi-label">Previous Day Lens Brkg</div><div class="kpi-value yellow" id="yesterdayBreakage">--</div></div>
+  <div class="kpi-card accent-red"><div class="kpi-label">Over 2+ Days Lens Brkg</div><div class="kpi-value red" id="twoPlusBreakage">--</div></div>
+  <div class="kpi-card"><div class="kpi-label">Brkg Avg Time (hrs)</div><div class="kpi-value" id="avgTime">--</div></div>
+</div>
 
-    <!-- HOURLY TABLE -->
-    <h2>Hourly Breakdown</h2>
-    <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>Hour</th>
-            <th>Total Lenses Broken</th>
-            <th>Coating Jobs</th>
-            <th>Primary Driver</th>
-          </tr>
-        </thead>
-        <tbody id="hourlyBody"></tbody>
-      </table>
+<div class="kpi-grid">
+  <div class="kpi-card accent-green"><div class="kpi-label">Workflow Healthy</div><div class="kpi-value green" id="flowHealthy">--</div></div>
+  <div class="kpi-card accent-yellow"><div class="kpi-label">Workflow Watch</div><div class="kpi-value yellow" id="flowWatch">--</div></div>
+  <div class="kpi-card accent-red"><div class="kpi-label">Workflow Delayed</div><div class="kpi-value red" id="flowDelayed">--</div></div>
+  <div class="kpi-card accent-blue"><div class="kpi-label">Overnight Carryover</div><div class="kpi-value blue" id="flowOvernight">--</div></div>
+</div>
+
+<!-- HOURLY TABLE -->
+<div class="table-block">
+  <div class="table-header">
+    <span class="table-title">Hourly Breakdown</span>
+    <div class="table-actions">
+      <span class="table-hint">Click row for drill-down</span>
+      <button class="btn-export-sm" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn-export-sm blue" onclick="exportPDF()">⬇ PDF</button>
     </div>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Hour</th>
+          <th>Total Lenses Broken</th>
+          <th>Coating Jobs</th>
+          <th>Breakage by Machine</th>
+          <th>Primary Driver</th>
+        </tr>
+      </thead>
+      <tbody id="hourlyBody"></tbody>
+    </table>
+  </div>
+</div>
+```
 
   </div>
 
-  <!-- ================= TRENDS ================= -->
-  <div id="trends" class="tab-content">
+  <!-- ══ TRENDS ══ -->
 
-    <h2>Breakage Trend</h2>
+  <div id="trends" class="tab-content">
+    <div class="section-label">Breakage Trend</div>
     <div class="chart-toolbar">
       <button id="processedBtn" class="mode-btn active" onclick="switchTrend('processed')">Breakage Processed</button>
       <button id="machineBtn"   class="mode-btn"        onclick="switchTrend('machine')">Machine Scan</button>
     </div>
-    <div class="trend-card" style="height:480px;">
-      <canvas id="trendChart"></canvas>
-    </div>
+    <div class="chart-card" style="height:460px;"><canvas id="trendChart"></canvas></div>
 
-    <h2>Detaper → Coater Flow Analysis</h2>
-    <div class="chart-toolbar">
-      <button id="avgFlowBtn"        class="mode-btn active" onclick="switchFlowMode('average')">Overall Avg</button>
-      <button id="machineFlowBtn"    class="mode-btn"        onclick="switchFlowMode('machine')">By Machine</button>
-      <button id="individualFlowBtn" class="mode-btn"        onclick="switchFlowMode('individual')">Individual RX</button>
-    </div>
-    <div class="trend-card" style="height:480px;">
-      <canvas id="flowChart"></canvas>
-    </div>
+```
+<div class="section-label" style="margin-top:24px;">Detaper → Coater Flow Analysis</div>
+<div class="flow-stats">
+  <div class="flow-stat-pill">
+    <span class="flow-stat-label">Healthy Jobs</span>
+    <span class="flow-stat-value green" id="flowStatHealthy">--</span>
+  </div>
+  <div class="flow-stat-pill">
+    <span class="flow-stat-label">Watch Jobs</span>
+    <span class="flow-stat-value yellow" id="flowStatWatch">--</span>
+  </div>
+  <div class="flow-stat-pill">
+    <span class="flow-stat-label">Delayed Jobs</span>
+    <span class="flow-stat-value red" id="flowStatDelayed">--</span>
+  </div>
+  <div class="flow-stat-pill">
+    <span class="flow-stat-label">Breakage Events</span>
+    <span class="flow-stat-value pink" id="flowStatBreakage">--</span>
+  </div>
+</div>
+<div class="chart-toolbar">
+  <button id="avgFlowBtn"        class="mode-btn active" onclick="switchFlowMode('average')">Overall Avg</button>
+  <button id="machineFlowBtn"    class="mode-btn"        onclick="switchFlowMode('machine')">By Machine</button>
+  <button id="individualFlowBtn" class="mode-btn"        onclick="switchFlowMode('individual')">Individual RX</button>
+</div>
+<div class="chart-card" style="height:460px;"><canvas id="flowChart"></canvas></div>
+<div class="flow-legend">
+  <div class="flow-legend-item"><span class="flow-legend-dot" style="background:#4ade80"></span>Healthy ≤15m</div>
+  <div class="flow-legend-item"><span class="flow-legend-dot" style="background:#fbbf24"></span>Watch 16–30m</div>
+  <div class="flow-legend-item"><span class="flow-legend-dot" style="background:#f87171"></span>Delayed >30m</div>
+  <div class="flow-legend-item"><span class="flow-legend-dot" style="background:#38bdf8"></span>Overnight >6h</div>
+  <div class="flow-legend-item"><span class="flow-legend-dash"></span>Broken Jobs Avg</div>
+  <div class="flow-legend-item"><span class="flow-legend-dot" style="background:#f472b6;border-radius:50%;"></span>Breakage event</div>
+</div>
+```
 
   </div>
 
-  <!-- ================= REASONS ================= -->
+  <!-- ══ REASONS ══ -->
+
   <div id="reasons" class="tab-content">
-    <h2>Top Breakage Reasons</h2>
-    <div class="full-width-chart" style="height:520px;">
-      <canvas id="reasonChart"></canvas>
-    </div>
+    <div class="section-label">Top Breakage Reasons</div>
+    <div class="chart-card" style="height:520px;"><canvas id="reasonChart"></canvas></div>
   </div>
 
-  <!-- ================= MACHINES ================= -->
+  <!-- ══ MACHINES ══ -->
+
   <div id="machines" class="tab-content">
-    <h2>Machine Performance</h2>
-    <div class="full-width-chart" style="height:520px;">
-      <canvas id="machineChart"></canvas>
-    </div>
+    <div class="section-label">Machine Performance</div>
+    <div class="chart-card" style="height:520px;"><canvas id="machineChart"></canvas></div>
   </div>
 
 </div>
 
-<!-- ================= MODAL ================= -->
-<div id="chartModal">
-  <div id="modalContent">
-    <span class="close-modal" onclick="closeModal()">&times;</span>
+<!-- MODAL -->
+
+<div id="chartModal" class="modal-overlay">
+  <div id="modalContent" class="modal-content">
+    <span class="modal-close" onclick="closeModal()">×</span>
     <div id="modalBody"></div>
   </div>
 </div>
