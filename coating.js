@@ -697,12 +697,25 @@ function buildFlowChart(data) {
     { label: "Overnight >6h",   color: "#38bdf8", filter: p => p.flow > 360                 },
   ];
 
+  // Smart Y cap — ignore overnight outliers for axis calculation
+  const allFlowVals = [];
+  filtered.forEach(h => (h.flowPoints || []).forEach(p => {
+    if (p.flow > 0 && p.flow <= 360) allFlowVals.push(p.flow);
+  }));
+  const p95 = allFlowVals.length
+    ? allFlowVals.sort((a,b)=>a-b)[Math.floor(allFlowVals.length * 0.95)]
+    : 60;
+  const yAxisMax = Math.max(60, Math.ceil(p95 * 1.25 / 10) * 10);
+
   // Avg flow time per bucket per hour
   const bucketDatasets = bucketDefs.map(b => {
+    const isOvernight = b.label.includes("Overnight");
     const vals = filtered.map(h => {
       const pts = (h.flowPoints || []).filter(b.filter);
       if (!pts.length) return null;
-      return Math.round(pts.reduce((s, p) => s + p.flow, 0) / pts.length);
+      const avg = Math.round(pts.reduce((s, p) => s + p.flow, 0) / pts.length);
+      // Cap overnight on main axis so it doesn't blow the scale
+      return isOvernight ? Math.min(avg, yAxisMax) : avg;
     });
     const fill = ctx.createLinearGradient(0, 0, 0, chartH);
     fill.addColorStop(0,   b.color + "22");
@@ -722,6 +735,7 @@ function buildFlowChart(data) {
       pointBorderWidth   : 1.5,
       spanGaps           : false,
       _bucketColor       : b.color,
+      _isOvernight       : isOvernight,
     };
   });
 
@@ -840,7 +854,44 @@ function buildFlowChart(data) {
       interaction        : { mode: "index", intersect: false },
 
       plugins: {
-        legend: { display: false },
+        legend: {
+          display  : true,
+          position : "top",
+          labels: {
+            color        : "rgba(255,255,255,0.4)",
+            font         : { family: CHART_FONT, size: 11, weight: "500" },
+            usePointStyle: true,
+            pointStyle   : "circle",
+            padding      : 20,
+            boxWidth     : 9,
+            boxHeight    : 9,
+            // Strike-through text on hidden datasets
+            generateLabels(chart) {
+              return chart.data.datasets.map((ds, i) => {
+                const meta   = chart.getDatasetMeta(i);
+                const hidden = meta.hidden;
+                return {
+                  text          : ds.label,
+                  fillStyle     : ds.borderColor,
+                  strokeStyle   : ds.borderColor,
+                  pointStyle    : "circle",
+                  hidden,
+                  lineDash      : ds.borderDash || [],
+                  datasetIndex  : i,
+                  fontColor     : hidden ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.55)",
+                  lineWidth     : 1,
+                };
+              });
+            },
+          },
+          onClick(e, legendItem, legend) {
+            const index = legendItem.datasetIndex;
+            const ci    = legend.chart;
+            const meta  = ci.getDatasetMeta(index);
+            meta.hidden = !meta.hidden;
+            ci.update();
+          },
+        },
         tooltip: {
           ...GLASS_TOOLTIP,
           callbacks: {
@@ -849,6 +900,14 @@ function buildFlowChart(data) {
               const v = ctx.raw;
               if (v === null || v === undefined) return null;
               if (ctx.dataset.label === "Broken Jobs Avg") return `  Broken avg: ${v}m`;
+              // Overnight values are capped for display — show label
+              if (ctx.dataset._isOvernight && v >= yAxisMax) {
+                return `  ${ctx.dataset.label}: >${Math.floor(yAxisMax/60)}h (capped on axis)`;
+              }
+              if (v >= 60) {
+                const h = Math.floor(v/60), m = v%60;
+                return `  ${ctx.dataset.label}: ${h}h${m>0?" "+m+"m":""}`;
+              }
               return `  ${ctx.dataset.label}: ${v}m avg`;
             },
             afterBody: items => {
@@ -867,12 +926,12 @@ function buildFlowChart(data) {
         },
         y: {
           beginAtZero : true,
-          suggestedMax: 65,
-          ...axisStyle("rgba(140,175,220,0.4)", "Flow Time (min)"),
+          max         : yAxisMax,
+          ...axisStyle("rgba(140,175,220,0.4)", "Flow Time"),
           ticks: {
             color   : "rgba(140,175,220,0.45)",
             font    : { family: CHART_MONO, size: 10 },
-            callback: v => v + "m",
+            callback: v => v >= 60 ? (v/60).toFixed(1) + "h" : v + "m",
           },
           grid: { ...GLASS_GRID },
         },
