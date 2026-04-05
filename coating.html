@@ -47,6 +47,7 @@
       <button class="tab" onclick="showTab('trends',this)">Trends</button>
       <button class="tab" onclick="showTab('reasons',this)">Top Reasons</button>
       <button class="tab" onclick="showTab('machines',this)">Machine Analysis</button>
+      <button class="tab" onclick="showTab('compare',this)">Date Comparison</button>
     </div>
     <div class="tabs-actions">
       <button class="btn-export-csv" onclick="exportCSV()">⬇ Export CSV</button>
@@ -64,33 +65,6 @@
         <span class="insight-item insight-loading" style="width:200px;">&nbsp;</span>
         <span class="insight-item insight-loading" style="width:160px;">&nbsp;</span>
         <span class="insight-item insight-loading" style="width:220px;">&nbsp;</span>
-      </div>
-    </div>
-
-    <!-- SHIFT COMPARISON -->
-    <div class="shift-compare">
-      <div class="shift-compare-label">Shift Comparison — Today vs Yesterday</div>
-      <div class="shift-cols">
-        <div class="shift-col">
-          <div class="shift-col-label">Total Jobs</div>
-          <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num" id="shiftTodayJobs">--</span></div>
-          <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestJobs">--</span><span class="shift-delta" id="shiftDeltaJobs"></span></div>
-        </div>
-        <div class="shift-col">
-          <div class="shift-col-label">Lenses Broken</div>
-          <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num red" id="shiftTodayBroken">--</span></div>
-          <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestBroken">--</span><span class="shift-delta" id="shiftDeltaBroken"></span></div>
-        </div>
-        <div class="shift-col">
-          <div class="shift-col-label">Breakage %</div>
-          <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num red" id="shiftTodayPct">--</span></div>
-          <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestPct">--</span><span class="shift-delta" id="shiftDeltaPct"></span></div>
-        </div>
-        <div class="shift-col">
-          <div class="shift-col-label">Avg Flow Time</div>
-          <div class="shift-row"><span class="shift-day">Today</span><span class="shift-num yellow" id="shiftTodayFlow">--</span></div>
-          <div class="shift-row"><span class="shift-day">Yesterday</span><span class="shift-num muted" id="shiftYestFlow">--</span><span class="shift-delta" id="shiftDeltaFlow"></span></div>
-        </div>
       </div>
     </div>
 
@@ -192,6 +166,40 @@
   <div id="machines" class="tab-content">
     <div class="section-label">Machine Performance</div>
     <div class="chart-card" style="height:520px;"><canvas id="machineChart"></canvas></div>
+  </div>
+
+  <!-- ══ DATE COMPARISON ══ -->
+  <div id="compare" class="tab-content">
+
+    <div class="compare-picker-bar">
+      <div class="compare-picker-label">Select dates to compare (up to 7)</div>
+      <div class="compare-picker-row">
+        <div class="compare-date-inputs" id="compareDateInputs"></div>
+        <button class="compare-add-btn" id="compareAddBtn" onclick="compareAddSlot()">+ Add Date</button>
+      </div>
+      <div class="compare-picker-actions">
+        <div class="compare-metric-toggles">
+          <span class="compare-toggle-label">Chart metric:</span>
+          <button class="compare-metric-btn active" id="cMetricBroken" onclick="setCompareMetric('broken',this)">Breakage Count</button>
+          <button class="compare-metric-btn" id="cMetricPct"  onclick="setCompareMetric('pct',this)">Breakage %</button>
+          <button class="compare-metric-btn" id="cMetricFlow" onclick="setCompareMetric('flow',this)">Avg Flow Time</button>
+          <button class="compare-metric-btn" id="cMetricJobs" onclick="setCompareMetric('jobs',this)">Coating Jobs</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="compare-run-btn" onclick="compareRun()">Compare</button>
+          <button class="compare-clear-btn" onclick="compareClear()">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card" style="height:420px;">
+      <canvas id="compareTrendChart"></canvas>
+    </div>
+
+    <div id="compareTable" class="compare-table-wrap">
+      <div class="compare-empty">Select dates above and click Compare.</div>
+    </div>
+
   </div>
 
 </div>

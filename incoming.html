@@ -6,127 +6,144 @@
 <title>Incoming Jobs Dashboard</title>
 <link rel="stylesheet" href="incoming.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-  <!-- AMBIENT BACKGROUND -->
   <div class="bg-orb bg-orb--1"></div>
   <div class="bg-orb bg-orb--2"></div>
-  <div class="bg-orb bg-orb--3"></div>
   <div class="scan-lines"></div>
 
-  <!-- TOP NAV -->
-  <nav class="top-nav">
-    <button class="back-btn" onclick="goBack()">
-      <span class="back-arrow">←</span>
-      <span>Main Page</span>
-    </button>
-    <div class="nav-brand">
-      <span class="brand-dot"></span>
-      JOBS MONITOR
+  <nav class="topbar">
+    <button class="back-btn" onclick="goBack()">← Main Page</button>
+    <div class="topbar-brand"><span class="brand-pulse"></span>JOBS MONITOR</div>
+    <div class="topbar-meta">
+      <div class="meta-block"><span class="meta-lbl">Total</span><span class="meta-val" id="totalJobs">--</span></div>
+      <div class="meta-sep"></div>
+      <div class="meta-block"><span class="meta-lbl">Updated</span><span class="meta-val" id="lastUpdated">--</span></div>
+      <div class="meta-sep"></div>
+      <span id="refreshStatus" class="status-pill live">Live</span>
     </div>
   </nav>
 
   <div id="app">
 
-    <!-- HEADER -->
-    <header class="header-bar">
-      <div class="header-left">
-        <div class="header-eyebrow">Real-time Queue Distribution</div>
-        <h1>Incoming Jobs <span class="header-accent">Dashboard</span></h1>
+    <div class="controls-row">
+      <div class="filter-wrap">
+        <label class="filter-lbl" for="dateFilter">Date</label>
+        <input type="date" id="dateFilter" class="date-input">
+        <button class="btn-apply" onclick="applyDateFilter()">Apply</button>
+        <button class="btn-today" onclick="resetDateFilter()">Today</button>
       </div>
-      <div class="meta">
-        <div class="meta-item">
-          <span class="meta-label">Total</span>
-          <span id="totalJobs" class="meta-value">--</span>
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">Incoming</button>
+        <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">Trend</button>
+        <button class="tab-btn" id="tabCompareBtn" onclick="switchTab('compare')">Compare</button>
+      </div>
+    </div>
+
+    <div id="incomingTab" class="tab-content">
+      <div class="kpi-strip" id="kpiGrid"></div>
+      <div class="split-body">
+        <div class="split-left">
+          <div class="panel-head">
+            <span class="panel-title">Queue Breakdown</span>
+            <span id="queueHourLabel" class="panel-sub"></span>
+          </div>
+          <div id="container" class="queue-list"></div>
         </div>
-        <div class="meta-divider"></div>
-        <div class="meta-item">
-          <span class="meta-label">Updated</span>
-          <span id="lastUpdated" class="meta-value">--</span>
+        <div class="split-right">
+          <div class="compare-card">
+            <div class="panel-head">
+              <span class="panel-title" id="compareTitle">Today vs Yesterday</span>
+              <div class="compare-legend">
+                <span class="leg-item"><span class="leg-dot today-dot"></span><span id="legToday">Today</span></span>
+                <span class="leg-item"><span class="leg-dot yest-dot"></span><span id="legYest">Yesterday</span></span>
+              </div>
+            </div>
+            <div class="compare-chart-wrap"><canvas id="comparisonChart"></canvas></div>
+          </div>
+          <div class="hourly-card">
+            <div class="panel-head">
+              <span class="panel-title">Hourly Flow</span>
+              <span id="chartInsight" class="insight-pill"></span>
+            </div>
+            <div class="hourly-chart-wrap"><canvas id="hourlyChart"></canvas></div>
+          </div>
         </div>
-        <div class="meta-divider"></div>
-        <span id="refreshStatus" class="status-badge live">Live</span>
-      </div>
-    </header>
-
-    <!-- FILTER BAR -->
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label for="dateFilter">
-          <span class="filter-icon">◈</span> Date Filter
-        </label>
-        <input type="date" id="dateFilter">
-      </div>
-      <div class="filter-actions">
-        <button class="filter-btn" onclick="applyDateFilter()">Apply</button>
-        <button class="filter-btn secondary" onclick="resetDateFilter()">Today</button>
       </div>
     </div>
 
-    <!-- TAB BAR -->
-    <div class="tab-bar">
-      <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">
-        <span class="tab-icon">⬡</span> Incoming
-      </button>
-      <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">
-        <span class="tab-icon">◎</span> Trend
-      </button>
-    </div>
+    <!-- COMPARE TAB -->
+    <div id="compareTab" class="tab-content" style="display:none;">
+      <div class="compare-tab-wrap">
 
-    <!-- INCOMING TAB -->
-    <div id="incomingTab" class="tab-content active">
-
-      <!-- KPI -->
-      <div class="kpi-grid" id="kpiGrid"></div>
-
-      <!-- MAIN GRID -->
-      <div class="main-grid">
-
-        <!-- LEFT: Queue Breakdown -->
-        <section class="panel panel--queue">
-          <div class="panel-header">
-            <h3><span class="panel-icon">▦</span> Queue Breakdown</h3>
+        <!-- Date Picker Row -->
+        <div class="comp-picker-row">
+          <div class="comp-picker-label">Select up to 5 dates to compare</div>
+          <div class="comp-picker-inputs" id="compDateInputs">
+            <div class="comp-date-slot">
+              <input type="date" class="comp-date-input" id="compDate0">
+              <div class="comp-dot" style="background:#38bdf8"></div>
+            </div>
+            <div class="comp-date-slot">
+              <input type="date" class="comp-date-input" id="compDate1">
+              <div class="comp-dot" style="background:#a78bfa"></div>
+            </div>
+            <div class="comp-date-slot">
+              <input type="date" class="comp-date-input" id="compDate2">
+              <div class="comp-dot" style="background:#22d3ee"></div>
+            </div>
+            <div class="comp-date-slot">
+              <input type="date" class="comp-date-input" id="compDate3">
+              <div class="comp-dot" style="background:#fb923c"></div>
+            </div>
+            <div class="comp-date-slot">
+              <input type="date" class="comp-date-input" id="compDate4">
+              <div class="comp-dot" style="background:#4ade80"></div>
+            </div>
           </div>
-          <div id="container"></div>
-        </section>
+          <button class="btn-apply" onclick="runComparison()">Compare</button>
+          <button class="btn-today" onclick="resetComparison()">Reset</button>
+        </div>
 
-        <!-- RIGHT: Hourly Flow -->
-        <section class="panel panel--chart">
-          <div class="panel-header">
-            <h3><span class="panel-icon">◈</span> Hourly Flow</h3>
-            <span id="chartInsight" class="chart-insight"></span>
+        <!-- KPI Comparison Grid -->
+        <div id="compKpiGrid" class="comp-kpi-grid"></div>
+
+        <!-- Dept Bar Chart -->
+        <div class="comp-chart-card" id="compChartCard" style="display:none">
+          <div class="panel-head">
+            <span class="panel-title">Department Totals</span>
+            <span id="compInsight" class="insight-pill"></span>
           </div>
-          <div class="chart-wrap">
-            <canvas id="hourlyChart"></canvas>
+          <div class="comp-multi-chart-wrap">
+            <canvas id="compMultiChart"></canvas>
           </div>
-        </section>
+        </div>
+
+        <!-- Per-dept breakdown -->
+        <div id="compDeptGrid" class="comp-dept-grid"></div>
 
       </div>
     </div>
 
-    <!-- TREND TAB -->
     <div id="trendTab" class="tab-content" style="display:none;">
-      <section class="panel trend-panel">
-        <div class="panel-header">
-          <h3><span class="panel-icon">◎</span> Daily Incoming Trend</h3>
-          <span id="trendInsight" class="chart-insight"></span>
+      <div class="trend-card">
+        <div class="panel-head">
+          <span class="panel-title">Daily Incoming Trend</span>
+          <span id="trendInsight" class="insight-pill"></span>
         </div>
         <div class="trend-controls">
           <button onclick="loadTrend(7)"  class="trend-btn">7D</button>
           <button onclick="loadTrend(14)" class="trend-btn active">14D</button>
           <button onclick="loadTrend(30)" class="trend-btn">30D</button>
         </div>
-        <div class="trend-chart-wrap">
-          <canvas id="trendChart"></canvas>
-        </div>
-      </section>
+        <div class="trend-chart-wrap"><canvas id="trendChart"></canvas></div>
+      </div>
     </div>
 
-  </div><!-- /#app -->
-
+  </div>
 <script src="incoming.js"></script>
 </body>
 </html>

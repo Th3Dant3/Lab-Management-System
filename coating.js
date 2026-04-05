@@ -307,8 +307,20 @@ function showTab(tabId, button) {
       if (dashboardProcessed) buildFlowChart(dashboardProcessed);
     }, 100);
   }
-  if (tabId === "reasons"  && !reasonChart)  buildReasonChart(dashboardData);
-  if (tabId === "machines" && !machineChart) buildMachineChart(dashboardMachine || dashboardData);
+  // Always rebuild these — they may have been destroyed on data reload
+  if (tabId === "reasons") {
+    if (reasonChart) { reasonChart.destroy(); reasonChart = null; }
+    setTimeout(() => buildReasonChart(dashboardData), 80);
+  }
+  if (tabId === "machines") {
+    if (machineChart) { machineChart.destroy(); machineChart = null; }
+    setTimeout(() => buildMachineChart(dashboardMachine || dashboardData), 80);
+  }
+  if (tabId === "compare") {
+    // Init the comparison picker if not already done
+    const inp = document.getElementById("compareDateInputs");
+    if (inp && inp.children.length === 0) compareInit();
+  }
 }
 
 /* =====================================================
@@ -334,7 +346,6 @@ async function loadDashboard() {
   buildInsights(dashboardProcessed);
   updateReportDateDisplay(dashboardProcessed);
   checkSpikeAlert(dashboardData.hourly || []);
-  updateShiftComparison(summary);
 
   setText("totalJobs",   summary.totalJobs         ?? 0);
   setText("totalLenses", summary.totalLenses        ?? 0);
@@ -429,6 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   startRefreshCountdown();
+  compareInit();
 });
 
 loadDashboard();
@@ -1439,53 +1451,373 @@ setInterval(() => {
 function goBack() { window.location.href = "index.html"; }
 
 /* =====================================================
-   NEON NOIR — SHIFT COMPARISON
+   MULTI-DATE COMPARISON
 ===================================================== */
 
+let compareSlots      = [];
+let compareDataCache  = {};   // { "M/D/YYYY": full API response }
+let compareMetric     = "broken";
+let compareTrendChart = null;
+const MAX_COMPARE     = 7;
+
+// Palette for each date line
+const COMPARE_PALETTE = [
+  "#60a5fa","#4ade80","#f87171","#fbbf24","#a78bfa","#2dd4bf","#fb923c"
+];
+
+function compareInit() {
+  const today = new Date();
+  const yest  = new Date(today);
+  yest.setDate(yest.getDate() - 1);
+  compareSlots = [];
+  compareAddSlot(formatDateInput(yest));
+  compareAddSlot(formatDateInput(today));
+  renderCompareDateInputs();
+}
+
+function formatDateInput(dateObj) {
+  // Returns YYYY-MM-DD for <input type="date">
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth()+1).padStart(2,"0");
+  const d = String(dateObj.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}`;
+}
+
+function inputToApiDate(inputVal) {
+  // Converts YYYY-MM-DD → M/D/YYYY for API
+  if (!inputVal) return null;
+  const [y, m, d] = inputVal.split("-");
+  return `${parseInt(m)}/${parseInt(d)}/${y}`;
+}
+
+function apiDateToLabel(apiDate) {
+  // Converts M/D/YYYY → short label like "Apr 4"
+  if (!apiDate) return "--";
+  const parts = apiDate.split("/");
+  if (parts.length < 3) return apiDate;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[parseInt(parts[0])-1]} ${parseInt(parts[1])}`;
+}
+
+function compareDateToApi(inputVal) {
+  return inputToApiDate(inputVal);
+}
+
+function compareAddSlot(prefillValue) {
+  if (compareSlots.length >= MAX_COMPARE) return;
+  compareSlots.push(prefillValue || "");
+  renderCompareDateInputs();
+  const addBtn = document.getElementById("compareAddBtn");
+  if (addBtn) addBtn.disabled = compareSlots.length >= MAX_COMPARE;
+}
+
+function compareRemoveSlot(idx) {
+  compareSlots.splice(idx, 1);
+  renderCompareDateInputs();
+  const addBtn = document.getElementById("compareAddBtn");
+  if (addBtn) addBtn.disabled = compareSlots.length >= MAX_COMPARE;
+}
+
+function renderCompareDateInputs() {
+  const container = document.getElementById("compareDateInputs");
+  if (!container) return;
+  container.innerHTML = compareSlots.map((val, i) => `
+    <div class="compare-date-slot" id="compareSlot${i}">
+      <input type="date" value="${val}" onchange="compareSlots[${i}]=this.value" />
+      <button class="compare-date-remove" onclick="compareRemoveSlot(${i})" title="Remove">×</button>
+    </div>
+  `).join("");
+}
+
+function setCompareMetric(metric, btn) {
+  compareMetric = metric;
+  document.querySelectorAll(".compare-metric-btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  // Rebuild chart with new metric if data already loaded
+  if (Object.keys(compareDataCache).length) buildCompareChart();
+}
+
+async function compareRun() {
+  const tableEl    = document.getElementById("compareTable");
+  const chartWrap  = document.getElementById("compareTrendWrap");
+  if (!tableEl) return;
+
+  const filledSlots = compareSlots.filter(s => s && s.trim());
+  if (!filledSlots.length) {
+    tableEl.innerHTML = `<div class="compare-empty">Add at least one date to compare.</div>`;
+    return;
+  }
+
+  tableEl.innerHTML = `<div class="compare-loading"><div class="compare-spinner"></div>Loading ${filledSlots.length} date${filledSlots.length > 1 ? "s" : ""}...</div>`;
+
+  const todayApiDate = (() => {
+    const n = new Date();
+    return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`;
+  })();
+
+  const apiDates = filledSlots.map(inputToApiDate);
+
+  // Fetch each date (use cache to avoid re-fetching)
+  await Promise.all(apiDates.map(async (apiDate) => {
+    if (!apiDate || compareDataCache[apiDate]) return;
+    // Check if it's today and we already have live data
+    if (apiDate === todayApiDate && dashboardData) {
+      compareDataCache[apiDate] = dashboardData;
+      return;
+    }
+    try {
+      const res  = await fetch(`${API_URL}?mode=processed&date=${encodeURIComponent(apiDate)}`);
+      compareDataCache[apiDate] = await res.json();
+    } catch(e) {
+      compareDataCache[apiDate] = null;
+    }
+  }));
+
+  const validDates = apiDates.filter(d => d && compareDataCache[d]?.summary);
+  if (!validDates.length) {
+    tableEl.innerHTML = `<div class="compare-empty">No data found. Make sure the dates exist in your history sheets.</div>`;
+    return;
+  }
+
+  // Build trend chart
+  buildCompareChart(validDates, todayApiDate);
+
+  // Build summary table
+  buildCompareTable(validDates, todayApiDate, tableEl);
+}
+
+function buildCompareChart(validDates, todayApiDate) {
+  const canvas = document.getElementById("compareTrendChart");
+  if (!canvas) return;
+  if (compareTrendChart) { compareTrendChart.destroy(); compareTrendChart = null; }
+
+  // Use passed dates or all cached dates
+  const dates = validDates || Object.keys(compareDataCache).filter(d => compareDataCache[d]?.summary);
+  if (!dates.length) return;
+
+  const today = todayApiDate || (() => {
+    const n = new Date(); return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`;
+  })();
+
+  // Collect all unique hours across all dates, sorted
+  const allHoursSet = new Set();
+  dates.forEach(d => {
+    (compareDataCache[d]?.hourly || []).forEach(h => allHoursSet.add(h.hour));
+  });
+  const allHours = [...allHoursSet].sort((a,b) => new Date("1/1/2000 " + a) - new Date("1/1/2000 " + b));
+
+  // Metric extractor per hour
+  function getHourMetric(hourObj) {
+    if (!hourObj) return null;
+    if (compareMetric === "broken") return hourObj.totalBroken || 0;
+    if (compareMetric === "jobs")   return hourObj.coatingJobs || 0;
+    if (compareMetric === "flow")   return hourObj.avgFlowAll  || null;
+    if (compareMetric === "pct") {
+      const jobs = hourObj.coatingJobs || 0;
+      const brk  = hourObj.totalBroken || 0;
+      return jobs > 0 ? parseFloat(((brk / (jobs*2))*100).toFixed(2)) : 0;
+    }
+    return null;
+  }
+
+  const metricLabels = {
+    broken: "Lenses Broken",
+    pct   : "Breakage %",
+    flow  : "Avg Flow Time (min)",
+    jobs  : "Coating Jobs",
+  };
+
+  const ctx = canvas.getContext("2d");
+  const datasets = dates.map((apiDate, i) => {
+    const color   = COMPARE_PALETTE[i % COMPARE_PALETTE.length];
+    const hourly  = compareDataCache[apiDate]?.hourly || [];
+    const hourMap = {};
+    hourly.forEach(h => { hourMap[h.hour] = h; });
+
+    const isToday = apiDate === today;
+    return {
+      label          : apiDateToLabel(apiDate) + (isToday ? " ★" : ""),
+      data           : allHours.map(h => getHourMetric(hourMap[h])),
+      borderColor    : color,
+      backgroundColor: color + "18",
+      borderWidth    : isToday ? 2.5 : 1.8,
+      borderDash     : isToday ? [] : [],
+      tension        : 0.42,
+      fill           : false,
+      pointRadius    : 3,
+      pointHoverRadius: 7,
+      pointBackgroundColor: color,
+      pointBorderColor: "rgba(8,10,15,0.7)",
+      pointBorderWidth: 1.5,
+      spanGaps       : true,
+    };
+  });
+
+  compareTrendChart = new Chart(ctx, {
+    type: "line",
+    data: { labels: allHours, datasets },
+    options: {
+      responsive         : true,
+      maintainAspectRatio: false,
+      animation          : { duration: 400, easing: "easeOutQuart" },
+      interaction        : { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          display : true,
+          position: "top",
+          labels: {
+            color        : "rgba(255,255,255,0.4)",
+            font         : { family: CHART_FONT, size: 11 },
+            usePointStyle: true,
+            pointStyle   : "circle",
+            padding      : 18,
+          },
+          onClick(e, item, legend) {
+            const meta = legend.chart.getDatasetMeta(item.datasetIndex);
+            meta.hidden = !meta.hidden;
+            legend.chart.update();
+          },
+        },
+        tooltip: {
+          ...GLASS_TOOLTIP,
+          callbacks: {
+            title : items => `  ${items[0].label}`,
+            label : ctx => {
+              const v = ctx.raw;
+              if (v === null || v === undefined) return null;
+              const suffix = compareMetric === "flow" ? "m" : compareMetric === "pct" ? "%" : "";
+              return `  ${ctx.dataset.label}: ${v}${suffix}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks : { color: "rgba(255,255,255,0.3)", font: { family: CHART_MONO, size: 10 }, maxRotation: 0 },
+          grid  : { color: "rgba(255,255,255,0.04)" },
+          border: { display: false },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color   : "rgba(255,255,255,0.3)",
+            font    : { family: CHART_MONO, size: 10 },
+            callback: v => compareMetric === "pct" ? v + "%" : compareMetric === "flow" ? v + "m" : v,
+          },
+          grid  : { color: "rgba(255,255,255,0.04)" },
+          border: { display: false },
+          title : {
+            display: true,
+            text   : metricLabels[compareMetric],
+            color  : "rgba(255,255,255,0.25)",
+            font   : { family: CHART_MONO, size: 10 },
+          },
+        },
+      },
+    },
+  });
+}
+
+function buildCompareTable(validDates, todayApiDate, tableEl) {
+  const metrics = [
+    { key: "totalJobs",          label: "Total Coating Jobs",  lowerIsBetter: false },
+    { key: "totalLenses",        label: "Total Lenses",        lowerIsBetter: false },
+    { key: "totalBreakLenses",   label: "Lenses Broken",       lowerIsBetter: true  },
+    { key: "breakPercent",       label: "Breakage %",          lowerIsBetter: true,  suffix: "%" },
+    { key: "avgDetaper",         label: "Avg Flow Time",       lowerIsBetter: true,  suffix: "m" },
+    { key: "peakHour",           label: "Peak Hour",           lowerIsBetter: false, isText: true },
+    { key: "aging.sameDay",      label: "Same Day Breakage",   lowerIsBetter: true  },
+    { key: "aging.oneDay",       label: "Prev Day Breakage",   lowerIsBetter: true  },
+    { key: "aging.twoPlus",      label: "2+ Day Breakage",     lowerIsBetter: true  },
+    { key: "flowHealth.healthy", label: "Flow Healthy Jobs",   lowerIsBetter: false },
+    { key: "flowHealth.watch",   label: "Flow Watch Jobs",     lowerIsBetter: true  },
+    { key: "flowHealth.delayed", label: "Flow Delayed Jobs",   lowerIsBetter: true  },
+  ];
+
+  function getVal(summary, key) {
+    if (!summary) return null;
+    if (key.includes(".")) {
+      const [a, b] = key.split(".");
+      return summary[a]?.[b] ?? null;
+    }
+    return summary[key] ?? null;
+  }
+
+  let html = `<table>
+    <thead><tr>
+      <th style="min-width:170px;">Metric</th>
+      ${validDates.map((d, i) => {
+        const isToday = d === todayApiDate;
+        const color   = COMPARE_PALETTE[i % COMPARE_PALETTE.length];
+        return `<th class="date-col ${isToday ? "compare-today-col" : ""}"
+          style="border-top:2px solid ${color};">
+          ${apiDateToLabel(d)}${isToday ? " ★" : ""}
+        </th>`;
+      }).join("")}
+    </tr></thead>
+    <tbody>`;
+
+  metrics.forEach(m => {
+    const summaries = validDates.map(d => compareDataCache[d]?.summary || null);
+    const vals      = summaries.map(s => getVal(s, m.key));
+    const nums      = vals.filter(v => v !== null && !isNaN(Number(v))).map(Number);
+
+    let best = null, worst = null;
+    if (!m.isText && nums.length > 1) {
+      best  = m.lowerIsBetter ? Math.min(...nums) : Math.max(...nums);
+      worst = m.lowerIsBetter ? Math.max(...nums) : Math.min(...nums);
+    }
+
+    html += `<tr><td class="metric-label">${m.label}</td>`;
+    vals.forEach((raw, i) => {
+      if (raw === null || raw === undefined) {
+        html += `<td style="color:rgba(255,255,255,0.15)">—</td>`;
+        return;
+      }
+      const num     = Number(raw);
+      const display = m.isText ? raw : (isNaN(num) ? raw : (m.suffix ? parseFloat(num).toFixed(m.suffix === "%" ? 2 : 0) + m.suffix : num.toLocaleString()));
+      const isBest  = !m.isText && !isNaN(num) && nums.length > 1 && num === best;
+      const isWorst = !m.isText && !isNaN(num) && nums.length > 1 && num === worst;
+      const isToday = validDates[i] === todayApiDate;
+      const cls     = [isBest ? "best" : isWorst ? "worst" : "", isToday ? "compare-today-col" : ""].join(" ").trim();
+      html += `<td class="${cls}">${display}</td>`;
+    });
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table>
+    <div style="padding:8px 14px 6px;font-size:10px;color:var(--dim);">
+      <span style="color:var(--green);font-weight:700;">Green</span> = best &nbsp;·&nbsp;
+      <span style="color:var(--red);font-weight:700;">Red</span> = worst &nbsp;·&nbsp;
+      ★ = today's live data
+    </div>`;
+
+  tableEl.innerHTML = html;
+}
+
+function compareClear() {
+  compareSlots     = [];
+  compareDataCache = {};
+  if (compareTrendChart) { compareTrendChart.destroy(); compareTrendChart = null; }
+  compareAddSlot();
+  compareAddSlot();
+  const tableEl = document.getElementById("compareTable");
+  if (tableEl) tableEl.innerHTML = `<div class="compare-empty">Select dates above and click Compare.</div>`;
+}
+
+// ── Legacy: keep today's data for spike alert ──
 let previousDayData = null;
 
 async function loadPreviousDay() {
   try {
-    const tz     = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const now    = new Date();
-    const yest   = new Date(now);
+    const now  = new Date();
+    const yest = new Date(now);
     yest.setDate(yest.getDate() - 1);
     const m = yest.getMonth() + 1, d = yest.getDate(), y = yest.getFullYear();
     const dateStr = `${m}/${d}/${y}`;
-    const res  = await fetch(`${API_URL}?mode=processed&date=${encodeURIComponent(dateStr)}`);
+    const res = await fetch(`${API_URL}?mode=processed&date=${encodeURIComponent(dateStr)}`);
     previousDayData = await res.json();
   } catch(e) { previousDayData = null; }
-}
-
-function updateShiftComparison(todaySummary) {
-  const prev = previousDayData?.summary || null;
-
-  function setShift(todayId, yesterdayId, deltaId, todayVal, prevVal, isPercent, lowerIsBetter) {
-    const t = document.getElementById(todayId);
-    const y = document.getElementById(yesterdayId);
-    const d = document.getElementById(deltaId);
-    if (!t || !y || !d) return;
-    t.textContent = todayVal !== undefined && todayVal !== null ? todayVal : "--";
-    y.textContent = prevVal  !== undefined && prevVal  !== null ? prevVal  : "--";
-    if (prevVal != null && todayVal != null) {
-      const diff = parseFloat(todayVal) - parseFloat(prevVal);
-      const sign = diff > 0 ? "+" : "";
-      d.textContent = sign + (isPercent ? diff.toFixed(2) + "%" : diff);
-      d.className   = "shift-delta " + (diff === 0 ? "same" : (diff > 0 === lowerIsBetter ? "up" : "down"));
-    } else {
-      d.textContent = "--";
-      d.className   = "shift-delta same";
-    }
-  }
-
-  setShift("shiftTodayJobs",   "shiftYestJobs",   "shiftDeltaJobs",   todaySummary.totalJobs,      prev?.totalJobs,     false, false);
-  setShift("shiftTodayBroken", "shiftYestBroken", "shiftDeltaBroken", todaySummary.totalBreakLenses, prev?.totalBreakLenses, false, true);
-  setShift("shiftTodayPct",    "shiftYestPct",    "shiftDeltaPct",    todaySummary.breakPercent,   prev?.breakPercent,  true,  true);
-  setShift("shiftTodayFlow",   "shiftYestFlow",   "shiftDeltaFlow",
-    todaySummary.avgDetaper ? todaySummary.avgDetaper + "m" : "--",
-    prev?.avgDetaper         ? prev.avgDetaper + "m"        : "--",
-    false, true
-  );
 }
 
 /* =====================================================
