@@ -1909,5 +1909,143 @@ function exportCSV() {
 ===================================================== */
 
 function exportPDF() {
-  window.print();
+  // Collect all visible chart canvases
+  const canvases = [
+    { id: "trendChart",      label: "Breakage Trend"              },
+    { id: "flowChart",       label: "Detaper → Coater Flow"       },
+    { id: "reasonChart",     label: "Top Breakage Reasons"        },
+    { id: "machineChart",    label: "Machine Performance"         },
+    { id: "compareTrendChart", label: "Date Comparison Trend"     },
+  ];
+
+  const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const reportDate = currentDate || today;
+  const summary = dashboardData?.summary || {};
+
+  // Build HTML for print window
+  let chartSections = "";
+  canvases.forEach(({ id, label }) => {
+    const canvas = document.getElementById(id);
+    if (!canvas || canvas.width === 0) return;
+    try {
+      const img = canvas.toDataURL("image/png", 1.0);
+      chartSections += `
+        <div class="chart-section">
+          <div class="chart-label">${label}</div>
+          <img src="${img}" style="width:100%;border-radius:6px;border:1px solid #2a2d35;" />
+        </div>`;
+    } catch(e) { /* skip cross-origin issues */ }
+  });
+
+  const kpis = [
+    { label: "Total Jobs",       value: summary.totalJobs       || 0 },
+    { label: "Total Lenses",     value: summary.totalLenses     || 0 },
+    { label: "Lenses Broken",    value: summary.totalBreakLenses|| 0 },
+    { label: "Breakage %",       value: (summary.breakPercent   || 0) + "%" },
+    { label: "Peak Hour",        value: summary.peakHour        || "--" },
+    { label: "Avg Flow Time",    value: summary.avgDetaper ? summary.avgDetaper + "m" : "--" },
+  ];
+
+  const kpiHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="kpi-l">${k.label}</div>
+      <div class="kpi-v">${k.value}</div>
+    </div>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Coating Flow Report — ${reportDate}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #080a0f;
+      color: #e8f0ff;
+      font-family: 'Segoe UI', 'Inter', sans-serif;
+      padding: 32px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #1e2535;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+    .header-title { font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: -0.3px; }
+    .header-sub   { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+    .header-date  { font-size: 13px; color: rgba(255,255,255,0.6); text-align: right; }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .kpi {
+      background: #111520;
+      border: 1px solid #1e2535;
+      border-radius: 8px;
+      padding: 14px 12px;
+    }
+    .kpi-l { font-size: 9px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.45); margin-bottom: 6px; }
+    .kpi-v { font-size: 22px; font-weight: 700; color: #ffffff; }
+    .chart-section { margin-bottom: 28px; page-break-inside: avoid; }
+    .chart-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 8px;
+      padding-left: 2px;
+      border-left: 3px solid rgba(255,255,255,0.25);
+      padding-left: 10px;
+    }
+    .footer {
+      margin-top: 32px;
+      padding-top: 14px;
+      border-top: 1px solid #1e2535;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      display: flex;
+      justify-content: space-between;
+    }
+    @media print {
+      body { background: #080a0f !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="header-title">Coating Flow Tracker</div>
+      <div class="header-sub">Production · Optical · Zenni Lab</div>
+    </div>
+    <div class="header-date">
+      Report Date: <strong style="color:#ffffff">${reportDate}</strong><br>
+      Generated: ${new Date().toLocaleTimeString()}
+    </div>
+  </div>
+
+  <div class="kpi-grid">${kpiHTML}</div>
+
+  ${chartSections || "<p style='color:rgba(255,255,255,0.3);font-size:13px;'>Open each chart tab first to capture charts in the export.</p>"}
+
+  <div class="footer">
+    <span>Coating Flow Tracker — Auto-generated Report</span>
+    <span>${reportDate}</span>
+  </div>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank", "width=1100,height=800");
+  if (!win) { alert("Please allow pop-ups to export PDF."); return; }
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => {
+    setTimeout(() => {
+      win.print();
+    }, 500);
+  };
 }
