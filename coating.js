@@ -39,7 +39,7 @@ const GLASS_TOOLTIP = {
   titleColor      : "#00ffc8",
   bodyColor       : "rgba(0, 255, 200, 0.65)",
   footerColor     : "rgba(0, 255, 200, 0.3)",
-  titleFont       : { family: CHART_ORB,  size: 9, weight: "600" },
+  titleFont       : { family: CHART_FONT, size: 14, weight: "700" },
   bodyFont        : { family: CHART_MONO, size: 11 },
   padding         : 13,
   cornerRadius    : 4,
@@ -51,13 +51,13 @@ const GLASS_TOOLTIP = {
 
 const GLASS_LEGEND = {
   labels: {
-    color        : "rgba(0, 255, 200, 0.35)",
-    font         : { family: CHART_ORB, size: 8 },
+    color        : "#ffffff",
+    font         : { family: CHART_FONT, size: 15, weight: "600" },
     usePointStyle: true,
     pointStyle   : "circle",
-    padding      : 20,
-    boxWidth     : 8,
-    boxHeight    : 8,
+    padding      : 28,
+    boxWidth     : 14,
+    boxHeight    : 14,
   },
   position: "top",
 };
@@ -129,11 +129,11 @@ function glassBarFill(ctx, color, h) {
 
 function axisStyle(tickColor, label) {
   return {
-    ticks : { color: tickColor, font: { family: CHART_MONO, size: 10 }, maxRotation: 0 },
+    ticks : { color: "#ffffff", font: { family: CHART_FONT, size: 13 }, maxRotation: 0 },
     grid  : GLASS_GRID,
     border: { display: false },
     title : label
-      ? { display: true, text: label, color: tickColor, font: { family: CHART_MONO, size: 10 }, padding: { bottom: 4 } }
+      ? { display: true, text: label, color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "700" }, padding: { bottom: 8 } }
       : { display: false },
   };
 }
@@ -514,21 +514,17 @@ function buildTrendChart(data) {
 
     datasets.push({
       label              : reason,
+      type               : "bar",
       data               : totals,
+      backgroundColor    : color + "cc",
       borderColor        : color,
-      backgroundColor    : glassFill(ctx, color, chartH),
-      borderWidth        : isTop ? 2 : 1.5,
-      tension            : 0.42,
-      fill               : isTop,
-      pointRadius        : ctx => { const v = totals[ctx.dataIndex] || 0; return v === peak && v > 0 ? 5 : (v > 0 ? 2.5 : 0); },
-      pointHoverRadius   : 7,
-      pointBackgroundColor: ctx => { const v = totals[ctx.dataIndex] || 0; return v === peak && v > 0 ? "#fff" : color; },
-      pointBorderColor   : color,
-      pointBorderWidth   : 1.5,
-      spanGaps           : false,
+      borderWidth        : 1,
+      borderRadius       : { topLeft: 4, topRight: 4 },
+      borderSkipped      : false,
+      barPercentage      : 0.75,
+      categoryPercentage : 0.85,
       yAxisID            : "yBroken",
       order              : 2,
-      _showPeak          : isTop,
     });
     ci++;
   });
@@ -536,6 +532,7 @@ function buildTrendChart(data) {
   // Coating jobs — amber dashed reference line
   datasets.push({
     label            : "Coating Jobs",
+    type             : "line",
     data             : sorted.map(h => h.coatingJobs || 0),
     borderColor      : GC.yellow + "88",
     backgroundColor  : "transparent",
@@ -581,13 +578,13 @@ function buildTrendChart(data) {
         yBroken: {
           type: "linear", position: "left", beginAtZero: true,
           ...axisStyle("rgba(248,113,113,0.6)", "Breakage"),
-          ticks: { color: "rgba(248,113,113,0.6)", font: { family: CHART_MONO, size: 10 }, stepSize: 1 },
+          ticks: { color: "#ff8888", font: { family: CHART_FONT, size: 13 }, stepSize: 1 },
           grid: { ...GLASS_GRID, color: "rgba(248,113,113,0.05)" },
         },
         yJobs: {
           type: "linear", position: "right", beginAtZero: true,
           ...axisStyle("rgba(251,191,36,0.35)", "Jobs"),
-          ticks: { color: "rgba(251,191,36,0.35)", font: { family: CHART_MONO, size: 10 } },
+          ticks: { color: "#fbbf24", font: { family: CHART_FONT, size: 13 } },
           grid: { drawOnChartArea: false },
         },
       },
@@ -870,13 +867,13 @@ function buildFlowChart(data) {
           display  : true,
           position : "top",
           labels: {
-            color        : "rgba(255,255,255,0.4)",
-            font         : { family: CHART_FONT, size: 11, weight: "500" },
+            color        : "#ffffff",
+            font         : { family: CHART_FONT, size: 14, weight: "600" },
             usePointStyle: true,
             pointStyle   : "circle",
-            padding      : 20,
-            boxWidth     : 9,
-            boxHeight    : 9,
+            padding      : 24,
+            boxWidth     : 12,
+            boxHeight    : 12,
             // Strike-through text on hidden datasets
             generateLabels(chart) {
               return chart.data.datasets.map((ds, i) => {
@@ -941,7 +938,7 @@ function buildFlowChart(data) {
           max         : yAxisMax,
           ...axisStyle("rgba(140,175,220,0.4)", "Flow Time"),
           ticks: {
-            color   : "rgba(140,175,220,0.45)",
+            color: "rgba(255,255,255,0.75)",
             font    : { family: CHART_MONO, size: 10 },
             callback: v => v >= 60 ? (v/60).toFixed(1) + "h" : v + "m",
           },
@@ -1104,13 +1101,32 @@ function showHourDetails(hourData) {
     const dm = formatMachineLabel(machine);
     let reasonHTML = "";
     Object.entries(stats.reasons || {}).forEach(([reason, rStats]) => {
-      const c = BREAKAGE_COLOR_MAP[reason] || "#8aabcc";
-      reasonHTML += `<div style="margin-top:8px;padding:8px 12px;background:rgba(255,255,255,0.02);border-left:2px solid ${c};border-radius:3px;font-size:12px;"><strong style="color:${c}">${reason}</strong> — <strong>${rStats.total || 0}</strong><br><span style="color:rgba(100,140,180,0.6);font-size:11px;">Same: ${rStats.sameDay||0} · Prev: ${rStats.oneDay||0} · 2+: ${rStats.twoPlus||0}</span></div>`;
+      const c = BREAKAGE_COLOR_MAP[reason] || "#60a5fa";
+      reasonHTML += `<div style="margin-top:10px;padding:10px 14px;background:rgba(255,255,255,0.04);border-left:3px solid ${c};border-radius:4px;">
+        <strong style="color:${c};font-size:14px;">${reason}</strong>
+        <span style="color:#ffffff;font-size:14px;margin-left:8px;">— ${rStats.total || 0}</span>
+        <div style="color:rgba(255,255,255,0.55);font-size:12px;margin-top:4px;">Same: ${rStats.sameDay||0} &nbsp;·&nbsp; Prev: ${rStats.oneDay||0} &nbsp;·&nbsp; 2+: ${rStats.twoPlus||0}</div>
+      </div>`;
     });
-    machineHTML += `<div style="margin-bottom:12px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(120,160,255,0.08);border-radius:8px;font-size:13px;line-height:1.9;font-family:${CHART_FONT};"><strong style="color:rgba(160,200,255,0.9);font-size:14px;">${dm}</strong><br><span style="color:rgba(100,140,180,0.6);font-size:11px;">JOBS: <strong style="color:#c8dff5;">${stats.jobs||0}</strong> &nbsp;·&nbsp; BROKEN: <strong style="color:${GC.red};">${stats.total||0}</strong></span><br><span style="color:rgba(100,140,180,0.5);font-size:11px;">Same: ${stats.sameDay||0} · Prev: ${stats.oneDay||0} · 2+: ${stats.twoPlus||0}</span>${reasonHTML}</div>`;
+    machineHTML += `<div style="margin-bottom:14px;padding:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;line-height:1.8;">
+      <div style="color:#ffffff;font-size:16px;font-weight:700;margin-bottom:8px;">${dm}</div>
+      <div style="font-size:13px;margin-bottom:4px;">
+        <span style="color:rgba(255,255,255,0.6);">JOBS:</span> <strong style="color:#ffffff;font-size:14px;">${stats.jobs||0}</strong>
+        &nbsp;&nbsp;
+        <span style="color:rgba(255,255,255,0.6);">BROKEN:</span> <strong style="color:${GC.red};font-size:14px;">${stats.total||0}</strong>
+      </div>
+      <div style="color:rgba(255,255,255,0.55);font-size:12px;">Same: ${stats.sameDay||0} &nbsp;·&nbsp; Prev: ${stats.oneDay||0} &nbsp;·&nbsp; 2+: ${stats.twoPlus||0}</div>
+      ${reasonHTML}
+    </div>`;
   });
 
-  modalBody.innerHTML = `<h2>${hourData.hour}</h2><div style="color:rgba(140,175,220,0.7);font-size:13px;margin-bottom:14px;">Total Lenses Broken: <strong style="color:${GC.red};font-size:18px;">${hourData.totalBroken||0}</strong></div>${machineHTML || "<p style='color:rgba(100,140,180,0.4)'>No data</p>"}`;
+  modalBody.innerHTML = `
+    <h2 style="font-size:20px;color:#ffffff;margin-bottom:6px;">${hourData.hour}</h2>
+    <div style="font-size:15px;margin-bottom:16px;">
+      <span style="color:rgba(255,255,255,0.6);">Total Lenses Broken:</span>
+      <strong style="color:${GC.red};font-size:22px;margin-left:8px;">${hourData.totalBroken||0}</strong>
+    </div>
+    ${machineHTML || "<p style='color:rgba(255,255,255,0.4);font-size:14px;'>No data</p>"}`;
   modal.classList.add("active");
 }
 
@@ -1189,7 +1205,7 @@ function buildReasonChart(data) {
         x: {
           beginAtZero: true,
           max        : Math.ceil(maxVal * 1.06),
-          ticks: { color: "rgba(140,175,220,0.3)", font: { family: CHART_MONO, size: 10 }, stepSize: Math.max(1, Math.ceil(maxVal / 8)) },
+          ticks: { color: "rgba(255,255,255,0.75)", font: { family: CHART_MONO, size: 10 }, stepSize: Math.max(1, Math.ceil(maxVal / 8)) },
           grid  : GLASS_GRID,
           border: { display: false },
         },
@@ -1302,12 +1318,19 @@ function buildMachineChart(data) {
       interaction        : { mode: "index", intersect: false },
       plugins: {
         legend: {
-          ...GLASS_LEGEND,
+          display : true,
+          position: "top",
           labels: {
-            ...GLASS_LEGEND.labels,
+            color        : "#ffffff",
+            font         : { family: CHART_FONT, size: 15, weight: "600" },
+            usePointStyle: true,
+            pointStyle   : "circle",
+            padding      : 28,
+            boxWidth     : 14,
+            boxHeight    : 14,
             generateLabels: () => [
-              { text: "Breakage %", fillStyle: "#ef4444", strokeStyle: "#ef4444", pointStyle: "circle", hidden: false, datasetIndex: 0 },
-              { text: "Total Jobs", fillStyle: "#3b82f6", strokeStyle: "#3b82f6", pointStyle: "circle", hidden: false, datasetIndex: 1 },
+              { text: "Breakage %", fillStyle: "#ef4444", strokeStyle: "#ef4444", fontColor: "#ffffff", pointStyle: "circle", hidden: false, datasetIndex: 0 },
+              { text: "Total Jobs",  fillStyle: "#3b82f6", strokeStyle: "#3b82f6", fontColor: "#ffffff", pointStyle: "circle", hidden: false, datasetIndex: 1 },
             ],
           },
         },
@@ -1340,16 +1363,16 @@ function buildMachineChart(data) {
           ticks: { color: "rgba(248,113,113,0.6)", font: { family: CHART_MONO, size: 10 }, callback: v => v + "%" },
           grid  : { ...GLASS_GRID, color: "rgba(248,113,113,0.05)" },
           border: { display: false },
-          title : { display: true, text: "Breakage %", color: "rgba(248,113,113,0.5)", font: { family: CHART_MONO, size: 10 } },
+          title : { display: true, text: "Breakage %", color: "#ff8888", font: { family: CHART_FONT, size: 14, weight: "700" } },
         },
         y2: {
           position   : "right",
           beginAtZero: true,
           suggestedMax: Math.ceil(maxJobs * 1.25),
-          ticks: { color: "rgba(96,165,250,0.4)", font: { family: CHART_MONO, size: 10 } },
+          ticks: { color: "#93c5fd", font: { family: CHART_FONT, size: 13 } },
           grid  : { drawOnChartArea: false },
           border: { display: false },
-          title : { display: true, text: "Jobs", color: "rgba(96,165,250,0.35)", font: { family: CHART_MONO, size: 10 } },
+          title : { display: true, text: "Jobs", color: "#93c5fd", font: { family: CHART_FONT, size: 14, weight: "700" } },
         },
       },
     },
@@ -1666,11 +1689,11 @@ function buildCompareChart(validDates, todayApiDate) {
           display : true,
           position: "top",
           labels: {
-            color        : "rgba(255,255,255,0.4)",
-            font         : { family: CHART_FONT, size: 11 },
+            color        : "#ffffff",
+            font         : { family: CHART_FONT, size: 14, weight: "600" },
             usePointStyle: true,
             pointStyle   : "circle",
-            padding      : 18,
+            padding      : 24,
           },
           onClick(e, item, legend) {
             const meta = legend.chart.getDatasetMeta(item.datasetIndex);
@@ -1693,24 +1716,20 @@ function buildCompareChart(validDates, todayApiDate) {
       },
       scales: {
         x: {
-          ticks : { color: "rgba(255,255,255,0.3)", font: { family: CHART_MONO, size: 10 }, maxRotation: 0 },
+          ticks : { color: "rgba(255,255,255,0.75)", font: { family: CHART_MONO, size: 10 }, maxRotation: 0 },
           grid  : { color: "rgba(255,255,255,0.04)" },
           border: { display: false },
         },
         y: {
           beginAtZero: true,
           ticks: {
-            color   : "rgba(255,255,255,0.3)",
+            color   : "rgba(255,255,255,0.75)",
             font    : { family: CHART_MONO, size: 10 },
             callback: v => compareMetric === "pct" ? v + "%" : compareMetric === "flow" ? v + "m" : v,
           },
           grid  : { color: "rgba(255,255,255,0.04)" },
           border: { display: false },
-          title : {
-            display: true,
-            text   : metricLabels[compareMetric],
-            color  : "rgba(255,255,255,0.25)",
-            font   : { family: CHART_MONO, size: 10 },
+          title: { display: true, text: metricLabels[compareMetric], color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "700" },
           },
         },
       },
