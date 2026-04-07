@@ -700,8 +700,8 @@ function buildComparisonChart(todayData, yesterdayData) {
         }
       },
       scales: {
-        x: { grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10}} },
-        y: { grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10},callback:v=>v.toLocaleString()} }
+        x: { grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12}} },
+        y: { grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},callback:v=>v.toLocaleString()} }
       }
     }
   });
@@ -785,8 +785,8 @@ function buildHourlyChart(data) {
           }
         },
         scales:{
-          x:{ grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10},maxRotation:45} },
-          y:{ grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10},callback:v=>v.toLocaleString()} }
+          x:{ grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},maxRotation:45} },
+          y:{ grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},callback:v=>v.toLocaleString()} }
         }
       }
     });
@@ -867,8 +867,8 @@ function buildHourlyChart(data) {
           }
         },
         scales: {
-          x: { grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10},maxRotation:45} },
-          y: { grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10},callback:v=>v.toLocaleString()} }
+          x: { grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},maxRotation:45} },
+          y: { grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},callback:v=>v.toLocaleString()} }
         }
       }
     });
@@ -1017,8 +1017,8 @@ function buildTrendDeptChart(trend) {
         }
       },
       scales:{
-        x:{ grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:9},maxTicksLimit:10,maxRotation:45} },
-        y:{ grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:9},callback:v=>v.toLocaleString()} }
+        x:{ grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:11},maxTicksLimit:10,maxRotation:45} },
+        y:{ grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:11},callback:v=>v.toLocaleString()} }
       }
     }
   });
@@ -1368,8 +1368,8 @@ function renderCompChart(results) {
         }
       },
       scales: {
-        x: { grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10}} },
-        y: { grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#4a6a90",font:{family:"'Space Mono',monospace",size:10},callback:v=>v.toLocaleString()} }
+        x: { grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12}} },
+        y: { grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},callback:v=>v.toLocaleString()} }
       }
     }
   });
