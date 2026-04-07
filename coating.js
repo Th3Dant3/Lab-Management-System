@@ -83,12 +83,12 @@ const GC = {
 };
 
 const BREAKAGE_COLOR_MAP = {
-  "S-HC Contamination"       : "#f87171",
-  "S-HC Pit"                 : "#a78bfa",
-  "S-HC Run"                 : "#fb923c",
-  "S-HC Wagon Wheel"         : "#60a5fa",
-  "S-HC Suction Cup Marks"   : "#2dd4bf",
-  "S-HC HC Suction Cup Marks": "#2dd4bf",
+  "S-HC Contamination"       : "#ff4d4d",
+  "S-HC Pit"                 : "#9b72ff",
+  "S-HC Run"                 : "#ff8c00",
+  "S-HC Wagon Wheel"         : "#38bdf8",
+  "S-HC Suction Cup Marks"   : "#00e5cc",
+  "S-HC HC Suction Cup Marks": "#00e5cc",
 };
 
 /* =====================================================
@@ -347,16 +347,39 @@ async function loadDashboard() {
   updateReportDateDisplay(dashboardProcessed);
   checkSpikeAlert(dashboardData.hourly || []);
 
-  setText("totalJobs",   summary.totalJobs         ?? 0);
-  setText("totalLenses", summary.totalLenses        ?? 0);
-  setText("totalBroken", summary.totalBreakLenses   ?? 0);
-  setText("rxBreakage",
-    summary.breakPercent !== undefined
-      ? `${Number(summary.breakPercent).toFixed(2)}% (${summary.totalBreakLenses || 0})`
-      : "0%"
-  );
-  setText("avgTime",  summary.avgBreakTimeHours ? summary.avgBreakTimeHours + " hrs" : "-");
-  setText("peakHour", summary.peakHour ?? "-");
+  // Total Jobs — teal
+  const jobsEl = document.getElementById("totalJobs");
+  if (jobsEl) { jobsEl.textContent = summary.totalJobs ?? 0; jobsEl.className = "kpi-value teal"; }
+
+  // Total Lenses — white
+  const lensesEl = document.getElementById("totalLenses");
+  if (lensesEl) { lensesEl.textContent = (summary.totalLenses ?? 0).toLocaleString(); lensesEl.className = "kpi-value"; }
+
+  // Total Lenses Broken — threshold color
+  const brokenVal = summary.totalBreakLenses || 0;
+  const brokenEl  = document.getElementById("totalBroken");
+  if (brokenEl) {
+    brokenEl.textContent = brokenVal;
+    brokenEl.className   = "kpi-value " + (brokenVal === 0 ? "green" : brokenVal <= 20 ? "yellow" : "red");
+  }
+
+  // Breakage % — threshold color + count
+  const pctVal = parseFloat(summary.breakPercent) || 0;
+  const pctEl  = document.getElementById("rxBreakage");
+  if (pctEl) {
+    pctEl.textContent = pctVal.toFixed(2) + "%  (" + brokenVal + ")";
+    pctEl.className   = "kpi-value " + (pctVal < 2 ? "green" : pctVal < 4 ? "yellow" : "red");
+  }
+
+  // Avg Break Time — color by severity
+  const avgHrs = parseFloat(summary.avgBreakTimeHours) || 0;
+  const avgEl  = document.getElementById("avgTime");
+  if (avgEl) {
+    avgEl.textContent = avgHrs > 0 ? avgHrs + " hrs" : "--";
+    avgEl.className   = "kpi-value " + (avgHrs === 0 ? "green" : avgHrs < 8 ? "yellow" : "red");
+  }
+
+  setText("peakHour", summary.peakHour ?? "--");
 
   if (summary.flowHealth) {
     setText("flowHealthy",   summary.flowHealth.healthy   || 0);
@@ -1158,14 +1181,8 @@ function buildReasonChart(data) {
   const colors     = entries.map((e, i) => BREAKAGE_COLOR_MAP[e.reason] || fallback[i % fallback.length]);
   const valueLabels = entries.map(e => `${e.total}  ·  ${((e.total / grandTotal) * 100).toFixed(1)}%`);
 
-  const bgs = colors.map(c => {
-    const W = canvas.clientWidth * 0.78 || 700;
-    const g = ctx.createLinearGradient(0, 0, W, 0);
-    g.addColorStop(0,   c + "ff");
-    g.addColorStop(0.7, c + "dd");
-    g.addColorStop(1,   c + "88");
-    return g;
-  });
+  // Solid vivid colors — no fading
+  const bgs = colors.map(c => c + "ee");
 
   reasonChart = new Chart(ctx, {
     type: "bar",
@@ -1205,12 +1222,12 @@ function buildReasonChart(data) {
         x: {
           beginAtZero: true,
           max        : Math.ceil(maxVal * 1.06),
-          ticks: { color: "rgba(255,255,255,0.75)", font: { family: CHART_MONO, size: 10 }, stepSize: Math.max(1, Math.ceil(maxVal / 8)) },
+          ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 13, weight: "600" }, stepSize: Math.max(1, Math.ceil(maxVal / 8)) },
           grid  : GLASS_GRID,
           border: { display: false },
         },
         y: {
-          ticks : { color: "rgba(160,200,240,0.65)", font: { family: CHART_FONT, size: 12, weight: "500" }, padding: 10 },
+          ticks : { color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "600" }, padding: 12 },
           grid  : { display: false },
           border: { display: false },
         },
