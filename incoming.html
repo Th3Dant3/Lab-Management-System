@@ -17,7 +17,11 @@
 
   <nav class="topbar">
     <button class="back-btn" onclick="goBack()">← Main Page</button>
-    <div class="topbar-brand"><span class="brand-pulse"></span>JOBS MONITOR</div>
+    <!-- brand-text span lets CSS hide the label on mobile while keeping the pulse dot -->
+    <div class="topbar-brand">
+      <span class="brand-pulse"></span>
+      <span class="brand-text">JOBS MONITOR</span>
+    </div>
     <div class="topbar-meta">
       <div class="meta-block"><span class="meta-lbl">Total</span><span class="meta-val" id="totalJobs">--</span></div>
       <div class="meta-sep"></div>
@@ -36,13 +40,15 @@
         <button class="btn-apply" onclick="applyDateFilter()">Apply</button>
         <button class="btn-today" onclick="resetDateFilter()">Today</button>
       </div>
+      <!-- Pill-style tab bar -->
       <div class="tab-bar">
         <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">Incoming</button>
-        <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">Trend</button>
-        <button class="tab-btn" id="tabCompareBtn" onclick="switchTab('compare')">Compare</button>
+        <button class="tab-btn"        id="tabTrendBtn"    onclick="switchTab('trend')">Trend</button>
+        <button class="tab-btn"        id="tabCompareBtn"  onclick="switchTab('compare')">Compare</button>
       </div>
     </div>
 
+    <!-- ══════ TAB: INCOMING ══════ -->
     <div id="incomingTab" class="tab-content">
       <div class="kpi-strip" id="kpiGrid"></div>
       <div class="split-body">
@@ -67,45 +73,67 @@
           <div class="hourly-card">
             <div class="panel-head">
               <span class="panel-title">Hourly Flow</span>
-              <span id="chartInsight" class="insight-pill"></span>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <!-- chips appear here when queues are selected for comparison -->
+                <div id="hourlyFilterChips" class="hourly-filter-chips" style="display:none"></div>
+                <span id="chartInsight" class="insight-pill"></span>
+              </div>
             </div>
             <div class="hourly-chart-wrap"><canvas id="hourlyChart"></canvas></div>
+            <div class="chart-click-hint">↑ Click any bar to drill into that hour's breakdown</div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- COMPARE TAB -->
+    <!-- ══════ TAB: COMPARE ══════ -->
     <div id="compareTab" class="tab-content" style="display:none;">
       <div class="compare-tab-wrap">
 
-        <!-- Date Picker Row -->
+        <!-- Improved Date Picker — numbered slots, dot on left -->
         <div class="comp-picker-row">
-          <div class="comp-picker-label">Select up to 5 dates to compare</div>
+          <div class="comp-picker-label">Compare up to 5 dates</div>
           <div class="comp-picker-inputs" id="compDateInputs">
             <div class="comp-date-slot">
-              <input type="date" class="comp-date-input" id="compDate0">
-              <div class="comp-dot" style="background:#38bdf8"></div>
+              <div class="comp-slot-lbl">Date 1</div>
+              <div class="comp-date-inner">
+                <div class="comp-dot" style="background:#38bdf8"></div>
+                <input type="date" class="comp-date-input" id="compDate0">
+              </div>
             </div>
             <div class="comp-date-slot">
-              <input type="date" class="comp-date-input" id="compDate1">
-              <div class="comp-dot" style="background:#a78bfa"></div>
+              <div class="comp-slot-lbl">Date 2</div>
+              <div class="comp-date-inner">
+                <div class="comp-dot" style="background:#a78bfa"></div>
+                <input type="date" class="comp-date-input" id="compDate1">
+              </div>
             </div>
             <div class="comp-date-slot">
-              <input type="date" class="comp-date-input" id="compDate2">
-              <div class="comp-dot" style="background:#22d3ee"></div>
+              <div class="comp-slot-lbl">Date 3 <span class="opt">(optional)</span></div>
+              <div class="comp-date-inner">
+                <div class="comp-dot" style="background:#22d3ee;opacity:.6"></div>
+                <input type="date" class="comp-date-input" id="compDate2">
+              </div>
             </div>
             <div class="comp-date-slot">
-              <input type="date" class="comp-date-input" id="compDate3">
-              <div class="comp-dot" style="background:#fb923c"></div>
+              <div class="comp-slot-lbl">Date 4 <span class="opt">(optional)</span></div>
+              <div class="comp-date-inner">
+                <div class="comp-dot" style="background:#fb923c;opacity:.45"></div>
+                <input type="date" class="comp-date-input" id="compDate3">
+              </div>
             </div>
             <div class="comp-date-slot">
-              <input type="date" class="comp-date-input" id="compDate4">
-              <div class="comp-dot" style="background:#4ade80"></div>
+              <div class="comp-slot-lbl">Date 5 <span class="opt">(optional)</span></div>
+              <div class="comp-date-inner">
+                <div class="comp-dot" style="background:#4ade80;opacity:.45"></div>
+                <input type="date" class="comp-date-input" id="compDate4">
+              </div>
             </div>
           </div>
-          <button class="btn-apply" onclick="runComparison()">Compare</button>
-          <button class="btn-today" onclick="resetComparison()">Reset</button>
+          <div class="comp-picker-actions">
+            <button class="btn-compare" onclick="runComparison()">Run Comparison</button>
+            <button class="btn-clear"   onclick="resetComparison()">Clear</button>
+          </div>
         </div>
 
         <!-- KPI Comparison Grid -->
@@ -128,22 +156,46 @@
       </div>
     </div>
 
+    <!-- ══════ TAB: TREND ══════ -->
     <div id="trendTab" class="tab-content" style="display:none;">
       <div class="trend-card">
         <div class="panel-head">
           <span class="panel-title">Daily Incoming Trend</span>
           <span id="trendInsight" class="insight-pill"></span>
         </div>
-        <div class="trend-controls">
-          <button onclick="loadTrend(7)"  class="trend-btn">7D</button>
-          <button onclick="loadTrend(14)" class="trend-btn active">14D</button>
-          <button onclick="loadTrend(30)" class="trend-btn">30D</button>
+
+        <!-- View tabs + day selector row -->
+        <div class="trend-top-row">
+          <div class="trend-view-tabs">
+            <button class="trend-view-tab active-dept" id="trendTabDept" onclick="setTrendView('dept')">All Dept</button>
+            <button class="trend-view-tab" id="trendTabQueue" onclick="setTrendView('queue')">By Queue</button>
+          </div>
+          <div class="trend-controls">
+            <button onclick="loadTrend(7)"  class="trend-btn">7D</button>
+            <button onclick="loadTrend(14)" class="trend-btn active">14D</button>
+            <button onclick="loadTrend(30)" class="trend-btn">30D</button>
+          </div>
         </div>
-        <div class="trend-chart-wrap"><canvas id="trendChart"></canvas></div>
+
+        <!-- All Dept zone: grouped bar + total line -->
+        <div id="trendDeptZone">
+          <div class="trend-chart-wrap"><canvas id="trendChart"></canvas></div>
+          <div class="trend-leg-row" id="trendLegRow"></div>
+        </div>
+
+        <!-- By Queue zone: heatmap grid -->
+        <div id="trendQueueZone" style="display:none">
+          <div class="trend-hm-scroll"><div class="trend-hm-grid" id="trendHmGrid"></div></div>
+          <div class="trend-leg-row" id="trendHmLeg"></div>
+        </div>
+
+        <!-- Insight strip -->
+        <div class="trend-insight-bar" id="trendInsightBar"></div>
       </div>
     </div>
 
-  </div>
+  </div><!-- /#app -->
+
 <script src="incoming.js"></script>
 </body>
 </html>
