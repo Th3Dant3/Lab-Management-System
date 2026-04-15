@@ -1,185 +1,159 @@
-/**************************************************
- * CONFIG
- **************************************************/
 const AUTH_API =
-"https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
+  "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
 
-/**************************************************
- * INIT
- **************************************************/
 document.addEventListener("DOMContentLoaded", () => {
   const userEl = document.getElementById("username");
+  const passwordEl = document.getElementById("password");
+  const toggleBtn = document.getElementById("togglePassword");
+
   if (userEl) {
     userEl.addEventListener("input", () => {
       userEl.value = userEl.value.toUpperCase();
     });
   }
+
+  if (toggleBtn && passwordEl) {
+    toggleBtn.addEventListener("click", () => {
+      const isPassword = passwordEl.type === "password";
+      passwordEl.type = isPassword ? "text" : "password";
+      toggleBtn.textContent = isPassword ? "Hide" : "Show";
+    });
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter") login();
+  });
 });
 
-/**************************************************
- * UI HELPERS
- **************************************************/
-function setMessage(text, type = "error") {
+function setMessage(text, type = "warning") {
+  const wrap = document.getElementById("messageWrap");
   const el = document.getElementById("message");
+  if (!wrap || !el) return;
+
+  wrap.classList.remove("warning", "success", "error");
+  wrap.classList.add(type);
   el.textContent = text;
-  el.className = "login-message " + (type || "");
 }
 
 function setLoading(isLoading) {
-  const btn    = document.getElementById("loginBtn");
-  const prog   = document.getElementById("progressBar");
-  const progWrap = document.getElementById("progressWrap");
+  const btn = document.getElementById("loginBtn");
+  const btnText = document.getElementById("loginBtnText");
 
-  if (!btn) return;
+  if (!btn || !btnText) return;
 
-  if (isLoading) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="btn-spinner"></span> Authenticating...';
-    if (progWrap) progWrap.classList.add("active");
-    if (prog)     prog.style.width = "40%";
-  } else {
-    btn.disabled = false;
-    btn.innerHTML = 'Sign In';
-    if (progWrap) progWrap.classList.remove("active");
-    if (prog)     prog.style.width = "0%";
-  }
+  btn.disabled = isLoading;
+  btnText.textContent = isLoading ? "Signing In..." : "Sign In";
 }
 
 function setProgress(pct) {
   const prog = document.getElementById("progressBar");
-  if (prog) prog.style.width = pct + "%";
+  if (prog) prog.style.width = `${pct}%`;
 }
 
-/**************************************************
- * LOGIN  (single API call — login + visibility merged)
- **************************************************/
 async function login() {
-
-  console.time("LOGIN_TOTAL");
-
   const usernameEl = document.getElementById("username");
   const passwordEl = document.getElementById("password");
 
-  const username = usernameEl.value.trim().toUpperCase();
-  const password = passwordEl.value.trim();
-
-  setMessage("");
-  setLoading(true);
+  const username = usernameEl?.value.trim().toUpperCase();
+  const password = passwordEl?.value.trim();
 
   if (!username || !password) {
-    setMessage("Enter username and password", "error");
-    setLoading(false);
+    setMessage("Enter username and password.", "error");
+    setProgress(0);
     return;
   }
 
-  // ── Single call: action=loginFull returns auth + visibility together ──
+  setLoading(true);
+  setMessage("Authenticating secure session...", "warning");
+  setProgress(25);
+
   const url =
     `${AUTH_API}?action=loginFull` +
     `&username=${encodeURIComponent(username)}` +
     `&password=${encodeURIComponent(password)}`;
 
-  console.time("LOGIN_API");
-
   try {
-    const res  = await fetch(url);
+    const res = await fetch(url);
     const data = await res.json();
 
-    console.timeEnd("LOGIN_API");
-
-    setProgress(80);
+    setProgress(70);
     await handleLoginResponse(data, password);
-
   } catch (err) {
-    setMessage("Connection error. Try again.", "error");
+    console.error("Login error:", err);
+    setMessage("Connection error. Please try again.", "error");
+    setProgress(0);
+  } finally {
+    setLoading(false);
   }
-
-  setLoading(false);
-  console.timeEnd("LOGIN_TOTAL");
 }
 
-/**************************************************
- * HANDLE RESPONSE
- **************************************************/
 async function handleLoginResponse(data, originalPassword) {
-
   if (!data || !data.status) {
-    setMessage("Invalid server response", "error");
+    setMessage("Invalid server response.", "error");
+    setProgress(0);
     return;
   }
 
   if (data.status === "ERROR") {
-    setMessage(data.message || "Login failed", "error");
+    setMessage(data.message || "Login failed.", "error");
+    setProgress(0);
     return;
   }
 
   if (data.status === "SET_PASSWORD_REQUIRED") {
-    setMessage("First login — setting password…", "warning");
+    setMessage("First login detected. Setting password...", "warning");
+    setProgress(55);
     await setPassword(data.username, originalPassword);
     return;
   }
 
   if (data.status === "SUCCESS") {
-    setMessage("Access Granted", "success");
+    sessionStorage.setItem("lms_logged_in", "true");
+    sessionStorage.setItem("lms_user", data.username);
+    sessionStorage.setItem("lms_role", data.role || "");
+    sessionStorage.setItem("lms_subrole", data.subRole || "");
+    sessionStorage.setItem("lms_visibility", JSON.stringify(data.visibility || {}));
+
     setProgress(100);
-
-    sessionStorage.setItem("lms_logged_in",  "true");
-    sessionStorage.setItem("lms_user",        data.username);
-    sessionStorage.setItem("lms_role",        data.role    || "");
-    sessionStorage.setItem("lms_subrole",     data.subRole || "");
-
-    // visibility already bundled in the same response — no second call needed
-    sessionStorage.setItem(
-      "lms_visibility",
-      JSON.stringify(data.visibility || {})
-    );
+    setMessage("Access granted. Redirecting...", "success");
 
     setTimeout(() => {
       window.location.replace("index.html");
-    }, 350);
+    }, 500);
   }
 }
 
-/**************************************************
- * SET PASSWORD  (first-login flow — still separate call)
- **************************************************/
 async function setPassword(username, password) {
-
   const url =
     `${AUTH_API}?action=setPassword` +
     `&username=${encodeURIComponent(username)}` +
     `&password=${encodeURIComponent(password)}`;
 
   try {
-    const res  = await fetch(url);
+    const res = await fetch(url);
     const data = await res.json();
 
     if (data.status !== "PASSWORD_SET") {
-      setMessage("Password setup failed", "error");
+      setMessage("Password setup failed.", "error");
+      setProgress(0);
       return;
     }
 
-    // After setting password call loginFull to get everything in one shot
-    setMessage("Password set — signing in…", "warning");
-    setProgress(60);
+    setMessage("Password set. Signing in...", "warning");
+    setProgress(75);
 
     const fullUrl =
       `${AUTH_API}?action=loginFull` +
       `&username=${encodeURIComponent(username)}` +
       `&password=${encodeURIComponent(password)}`;
 
-    const res2  = await fetch(fullUrl);
+    const res2 = await fetch(fullUrl);
     const data2 = await res2.json();
 
     await handleLoginResponse(data2, password);
-
   } catch (err) {
-    setMessage("Password setup failed", "error");
+    console.error("Password setup error:", err);
+    setMessage("Password setup failed.", "error");
+    setProgress(0);
   }
 }
-
-/**************************************************
- * ENTER KEY
- **************************************************/
-document.addEventListener("keydown", e => {
-  if (e.key === "Enter") login();
-});

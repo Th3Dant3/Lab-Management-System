@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Surface Flow — Power Breakage</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="power.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<header class="nav">
+  <div class="nav-brand">
+    <button class="back-btn" onclick="window.location.href='index.html'" title="Back to Command Center">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="nav-brand-ico">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 0v4h3L6 12V8H3L6 0z"/></svg>
+    </div>
+    <span class="nav-brand-name">Surface Flow</span>
+    <span class="nav-brand-sep">/</span>
+    <span class="nav-brand-sub">breakage</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="sw('overview',this)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      <span>Overview</span>
+    </button>
+    <button class="tab-btn" onclick="sw('flow',this)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8h14M9 4l4 4-4 4" stroke-linecap="round"/></svg>
+      <span>RX Flow</span>
+    </button>
+    <button class="tab-btn" onclick="sw('research',this)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="4"/><path d="M10 10l4 4" stroke-linecap="round"/></svg>
+      <span>Research</span>
+    </button>
+    <button class="tab-btn" onclick="sw('alerts',this)">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L2 14h12L8 2z"/><path d="M8 7v3M8 11.5v.5" stroke-linecap="round"/></svg>
+      <span>Alerts</span>
+    </button>
+  </div>
+  <div class="nav-right">
+    <div class="live-badge">
+      <span class="live-dot" id="liveDot"></span>
+      <span id="liveStatus">Connecting</span>
+    </div>
+    <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+  </div>
+</header>
+
+<!-- EVENT STRIP -->
+<div class="event-strip" id="eventStrip">
+  <span class="event-tag">power event</span>
+  <span class="event-msg" id="bannerSub">Loading data...</span>
+  <span class="event-time" id="bannerTime"></span>
+  <button class="event-close" onclick="document.getElementById('eventStrip').style.display='none'">dismiss</button>
+</div>
+
+<div class="page">
+
+  <!-- ════ OVERVIEW ════ -->
+  <section class="tab active" id="t-overview">
+
+    <!-- KPI Strip (horizontal, concept 2 style) -->
+    <div class="kpi-strip">
+      <div class="kpi-cell">
+        <div class="kpi-num c-peach" id="m-jobs">--</div>
+        <div class="kpi-label">Total jobs</div>
+        <div class="kpi-sub" id="m-jobs-sub">this batch</div>
+      </div>
+      <div class="kpi-div"></div>
+      <div class="kpi-cell">
+        <div class="kpi-num c-peri" id="m-lens">--</div>
+        <div class="kpi-label">Lenses broken</div>
+        <div class="kpi-sub" id="m-lens-sub">--</div>
+      </div>
+      <div class="kpi-div"></div>
+      <div class="kpi-cell">
+        <div class="kpi-num c-teal" id="m-ar41brk">--</div>
+        <div class="kpi-label">Avg AR41 → Breakage</div>
+        <div class="kpi-sub">all reasons</div>
+      </div>
+      <div class="kpi-div"></div>
+      <div class="kpi-cell">
+        <div class="kpi-num c-white" id="m-brkpro">--</div>
+        <div class="kpi-label">Avg Brk → Processed</div>
+        <div class="kpi-sub">all reasons</div>
+      </div>
+    </div>
+
+    <!-- Timing + Machines -->
+    <div class="grid-3-2">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Timing by reason</span>
+        </div>
+        <div id="reasonTimingList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Jobs by BrkSource machine</span>
+          <span class="panel-hint">hover bar for details</span>
+        </div>
+        <div class="bar-list" id="srcBarList"></div>
+      </div>
+    </div>
+
+    <!-- Material + Reasons -->
+    <div class="grid-equal">
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">Lenses broken by material</span></div>
+        <div class="bar-list" id="matList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">Breakage reasons</span></div>
+        <div class="legend" id="reasonLeg"></div>
+        <div class="chart-wrap h180"><canvas id="reasonPieC" role="img" aria-label="Breakage reasons"></canvas></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ════ RX FLOW ════ -->
+  <section class="tab" id="t-flow">
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Reason</label>
+        <select id="filterReason" onchange="renderFlow()"><option value="">All reasons</option></select>
+      </div>
+      <div class="filter-group">
+        <label>BrkSource</label>
+        <select id="filterSource" onchange="renderFlow()"><option value="">All machines</option></select>
+      </div>
+      <div class="filter-group">
+        <label>AR41</label>
+        <select id="filterAR41" onchange="renderFlow()"><option value="">All AR41</option></select>
+      </div>
+      <div class="filter-legend">
+        <span class="fleg-item"><span class="fleg-sq peach"></span>Source → AR41</span>
+        <span class="fleg-item"><span class="fleg-sq peri"></span>AR41 → Breakage</span>
+        <span class="fleg-item"><span class="fleg-sq teal"></span>Brk → Processed</span>
+      </div>
+      <div class="flow-count"><span id="flowCount">--</span> jobs</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">RX breakage journey</span>
+        <span class="panel-hint">hover any segment for exact times</span>
+      </div>
+      <div id="flowList"><div class="empty">Loading...</div></div>
+    </div>
+
+  </section>
+
+  <!-- ════ RESEARCH ════ -->
+  <section class="tab" id="t-research">
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>ORB Machine</label>
+        <select id="resORB" onchange="renderResearch()"><option value="">All ORB</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Brk Reason</label>
+        <select id="resReason" onchange="renderResearch()"><option value="">All reasons</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Material</label>
+        <select id="resMaterial" onchange="renderResearch()"><option value="">All materials</option></select>
+      </div>
+    </div>
+
+    <!-- Research KPI strip -->
+    <div class="kpi-strip">
+      <div class="kpi-cell"><div class="kpi-num c-peach" id="res-jobs">--</div><div class="kpi-label">Filtered jobs</div></div>
+      <div class="kpi-div"></div>
+      <div class="kpi-cell"><div class="kpi-num c-peri" id="res-lens">--</div><div class="kpi-label">Lenses broken</div></div>
+      <div class="kpi-div"></div>
+      <div class="kpi-cell"><div class="kpi-num c-teal" id="res-rsph">--</div><div class="kpi-label">Avg R Sph</div></div>
+      <div class="kpi-div"></div>
+      <div class="kpi-cell"><div class="kpi-num c-white" id="res-lsph">--</div><div class="kpi-label">Avg L Sph</div></div>
+    </div>
+
+    <!-- Inner tabs for Sph / Cyl -->
+    <div class="inner-tab-bar">
+      <button class="inner-tab active" onclick="swInner('sph',this)">Spherical — R &amp; L Sph</button>
+      <button class="inner-tab" onclick="swInner('cyl',this)">Cylinder — R &amp; L Cyl</button>
+      <button class="inner-tab" onclick="swInner('table',this)">Prescription table</button>
+    </div>
+
+    <!-- SPH section -->
+    <div class="inner-section active" id="is-sph">
+      <div class="grid-equal">
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">R Sph distribution</span>
+            <span class="panel-hint">periwinkle = negative · teal = positive</span>
+          </div>
+          <div class="chart-wrap h220"><canvas id="rsphC" role="img" aria-label="R Sph distribution"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">L Sph distribution</span>
+            <span class="panel-hint">periwinkle = negative · teal = positive</span>
+          </div>
+          <div class="chart-wrap h220"><canvas id="lsphC" role="img" aria-label="L Sph distribution"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CYL section -->
+    <div class="inner-section" id="is-cyl">
+      <div class="grid-equal">
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">R Cyl distribution</span>
+            <span class="panel-hint">peach = negative · teal = positive</span>
+          </div>
+          <div class="chart-wrap h220"><canvas id="rcylC" role="img" aria-label="R Cyl distribution"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">L Cyl distribution</span>
+            <span class="panel-hint">peach = negative · teal = positive</span>
+          </div>
+          <div class="chart-wrap h220"><canvas id="lcylC" role="img" aria-label="L Cyl distribution"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE section -->
+    <div class="inner-section" id="is-table">
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">RX prescription detail</span></div>
+        <div id="resTable"><div class="empty">Loading...</div></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ════ ALERTS ════ -->
+  <section class="tab" id="t-alerts">
+
+    <!-- Big 3 KPIs (concept 3 style) -->
+    <div class="al-kpi3">
+      <div class="al-kpi-card peach">
+        <div class="al-kpi-num" id="al-total">--</div>
+        <div class="al-kpi-label">Total delays</div>
+      </div>
+      <div class="al-kpi-card peri">
+        <div class="al-kpi-num" id="al-spower">--</div>
+        <div class="al-kpi-label">S-Power delays</div>
+      </div>
+      <div class="al-kpi-card teal">
+        <div class="al-kpi-num" id="al-saxis">--</div>
+        <div class="al-kpi-label">S-Axis delays</div>
+      </div>
+    </div>
+
+    <!-- Alert list + quick stats side by side (concept 4 style) -->
+    <div class="grid-3-1">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">All active alerts</span>
+          <span class="panel-hint">sorted by worst delay · colored by reason</span>
+        </div>
+        <div id="alertList"><div class="empty">Loading...</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">Quick stats</span></div>
+        <div id="quickStats"></div>
+      </div>
+    </div>
+
+  </section>
+
+</div>
+
+<div class="gantt-tip" id="ganttTip"></div>
+<script src="power.js"></script>
+</body>
+</html>
