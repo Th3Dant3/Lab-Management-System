@@ -26,51 +26,86 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 <body>
 
 <!-- ============================================================
+     LOADING SCREEN
+     ============================================================ -->
+<div id="lms-loader" class="lms-loader">
+  <div class="loader-inner">
+    <div class="loader-logo">
+      <div class="loader-bar"></div>
+      <div class="loader-bar"></div>
+      <div class="loader-bar"></div>
+    </div>
+    <div class="loader-brand">Zenni USA</div>
+    <div class="loader-sub">Dashboard</div>
+    <div class="loader-track">
+      <div class="loader-fill" id="loaderFill"></div>
+    </div>
+    <div class="loader-status" id="loaderStatus">Initializing…</div>
+  </div>
+  <canvas id="loaderCanvas" class="loader-canvas"></canvas>
+</div>
+
+<!-- Custom cursor (visible during load) -->
+<div id="lms-cursor" class="lms-cursor">
+  <div class="cursor-ring"></div>
+  <div class="cursor-dot"></div>
+</div>
+
+<!-- ============================================================
      COMMAND BAR — sticky full-bleed top strip
      ============================================================ -->
 <div class="command-bar">
 
-  <!-- Brand -->
+  <!-- Brand with animated canvas -->
   <div class="cb-brand">
-    <div class="cb-logo">
-      <div class="cb-logo-bar"></div>
-      <div class="cb-logo-bar"></div>
-      <div class="cb-logo-bar"></div>
-    </div>
-    <div class="cb-brand-text">
-      <div class="cb-name">Zenni LMS</div>
-      <div class="cb-sub">Command Center</div>
+    <canvas id="cb-brand-canvas" class="cb-brand-canvas" width="220" height="80"></canvas>
+    <div class="cb-brand-text-over">
+      <div class="cb-name">Zenni USA</div>
+      <div class="cb-sub">Dashboard</div>
     </div>
   </div>
 
-  <!-- Live KPIs — 3 metrics -->
+  <!-- Live KPIs — 3 metrics with canvas sparklines -->
   <div class="cb-metrics">
+
     <div class="cb-metric cb-metric--hi">
       <div class="cb-m-label">Total Incoming</div>
       <div class="cb-m-val cb-m-val--gold" id="totalIncoming">—</div>
+      <canvas class="cb-sparkline" id="spark-incoming" height="28"></canvas>
     </div>
+
     <div class="cb-metric">
       <div class="cb-m-label">Active Holds</div>
       <div class="cb-m-val cb-m-val--steel" id="active">—</div>
       <div class="cb-m-sub">Open holds</div>
+      <canvas class="cb-sparkline" id="spark-holds" height="28"></canvas>
     </div>
+
     <div class="cb-metric">
       <div class="cb-m-label">Scanner Health</div>
-      <div class="cb-m-val cb-m-val--green" id="scannerHealth">Online</div>
+      <div class="cb-m-val cb-m-val--green" id="scannerHealth">—</div>
       <div class="cb-m-sub" id="scannerSub">All ports</div>
+      <canvas class="cb-sparkline" id="spark-scanner" height="28"></canvas>
     </div>
+
   </div>
 
-  <!-- Right: live indicator + clock + user -->
+  <!-- Right: live + datetime + user vertical + logout -->
   <div class="cb-right">
     <div class="live-tag">
       <span class="live-dot"></span>
       Live
     </div>
-    <div class="cb-clock" id="topbarTime">—</div>
+    <div class="cb-datetime">
+      <div class="cb-date" id="topbarDate">—</div>
+      <div class="cb-time" id="topbarTime">—</div>
+    </div>
     <div class="user-chip">
       <div class="user-avatar" id="userAvatar">—</div>
-      <span class="user-name" id="userName">Loading…</span>
+      <div class="user-info">
+        <span class="user-name" id="userName">Loading…</span>
+        <span class="user-role">Operator</span>
+      </div>
     </div>
     <button class="logout-btn" onclick="logout()" title="Logout">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -84,28 +119,47 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
      SECTION NAV — secondary tab bar
      ============================================================ -->
 <div class="section-nav">
-  <button class="nav-item active" data-tab="operations">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-      <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-      <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-      <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-    </svg>
-    <span>Operations</span>
+
+  <button class="nav-item nav-item--anim active" data-tab="operations">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-ops" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span>LMS Command</span>
+      </div>
+    </div>
   </button>
-  <button class="nav-item" data-tab="production">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <path d="M2 20h20M6 20V10l6-6 6 6v10"/><path d="M10 20v-6h4v6"/>
-    </svg>
-    <span>Production</span>
+
+  <button class="nav-item nav-item--anim" data-tab="production">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-prod" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M2 20h20M6 20V10l6-6 6 6v10"/><path d="M10 20v-6h4v6"/>
+        </svg>
+        <span>Production</span>
+      </div>
+    </div>
   </button>
-  <button class="nav-item" data-tab="system">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <circle cx="12" cy="12" r="3"/>
-      <path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 1 14.14 14.14"/>
-    </svg>
-    <span>System</span>
+
+  <button class="nav-item nav-item--anim" data-tab="system">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-sys" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 1 14.14 14.14"/>
+        </svg>
+        <span>System</span>
+      </div>
+    </div>
   </button>
+
 </div>
 
 <!-- ============================================================
@@ -116,11 +170,12 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
   <!-- OPERATIONS TAB -->
   <section id="operations" class="tab-content active">
     <div class="module-head">
-      <div class="module-label">Operations Modules</div>
+      <div class="module-label">LMS Command Center</div>
     </div>
     <div class="cards-grid">
 
       <div id="investigation-card" class="card card--featured" data-gated>
+        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#64a0dc"></canvas>
         <div class="card-accent"></div>
         <div class="card-inner">
           <div class="card-top">
@@ -154,6 +209,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
       </div>
 
       <div id="tools-card" class="card" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>
         <div class="card-inner">
           <div class="card-top">
             <div class="card-title-row">
@@ -170,6 +226,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
       </div>
 
       <div id="truecurve-card" class="card" data-gated>
+        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#f5c842"></canvas>
         <div class="card-inner">
           <div class="card-top">
             <div class="card-title-row">
@@ -201,6 +258,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     <div class="cards-grid">
 
       <div id="coating-card" class="card" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>
         <div class="card-inner">
           <div class="card-top">
             <div class="card-title-row">
@@ -222,6 +280,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
       </div>
 
       <div id="power-card" class="card card--power" data-gated>
+        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#9b6bff"></canvas>
         <div class="card-accent card-accent--violet"></div>
         <div class="card-inner">
           <div class="card-top">
@@ -255,6 +314,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     <div class="cards-grid">
 
       <div id="scanner-card" class="card card--featured" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#30e8c0"></canvas>
         <div class="card-accent card-accent--cyan"></div>
         <div class="card-inner">
           <div class="card-top">
@@ -278,6 +338,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
       </div>
 
       <div id="incoming-card" class="card" data-gated>
+        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#64a0dc"></canvas>
         <div class="card-inner">
           <div class="card-top">
             <div class="card-title-row">
