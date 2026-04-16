@@ -7,8 +7,149 @@
   <link rel="stylesheet" href="coating.css">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* ── CRITICAL INLINE: Loading screen + cursor (renders before coating.css) ── */
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#040c0b;cursor:none;}
+
+    /* Custom cursor */
+    .custom-cursor{
+      position:fixed;width:14px;height:14px;border-radius:50%;
+      background:#20a091;pointer-events:none;z-index:99999;
+      transform:translate(-50%,-50%);
+      box-shadow:0 0 12px #20a091,0 0 24px rgba(32,160,145,0.4);
+      mix-blend-mode:screen;transition:width .15s,height .15s;
+    }
+    .cursor-trail{
+      position:fixed;width:36px;height:36px;border-radius:50%;
+      border:1px solid rgba(32,160,145,0.35);pointer-events:none;
+      z-index:99998;transform:translate(-50%,-50%);
+      transition:left .12s ease-out,top .12s ease-out;
+    }
+
+    /* Loading screen */
+    .loading-screen{
+      position:fixed;inset:0;background:#040c0b;z-index:99990;
+      display:flex;align-items:center;justify-content:center;
+      flex-direction:column;overflow:hidden;
+    }
+    .loading-screen.fade-out{
+      animation:loadFadeOut 0.6s ease forwards;
+    }
+    @keyframes loadFadeOut{
+      0%{opacity:1;transform:scale(1);}
+      100%{opacity:0;transform:scale(1.03);pointer-events:none;}
+    }
+    .loading-content{
+      display:flex;flex-direction:column;align-items:center;gap:36px;
+      position:relative;z-index:2;
+      animation:loadContentIn 0.7s ease;
+    }
+    @keyframes loadContentIn{
+      from{opacity:0;transform:translateY(16px);}
+      to{opacity:1;transform:translateY(0);}
+    }
+    .loading-logo{text-align:center;}
+    .loading-eyebrow{
+      font-family:'Space Grotesk',sans-serif;
+      font-size:11px;font-weight:600;letter-spacing:3px;
+      text-transform:uppercase;color:#20a091;margin-bottom:10px;opacity:0.8;
+    }
+    .loading-title{
+      font-family:'Space Grotesk',sans-serif;
+      font-size:42px;font-weight:700;letter-spacing:-1px;
+      color:#ffffff;line-height:1;
+    }
+    .loading-title span{color:#20a091;}
+    .loading-bar-wrap{
+      width:320px;display:flex;flex-direction:column;gap:10px;align-items:center;
+    }
+    .loading-bar-track{
+      width:100%;height:3px;background:rgba(32,160,145,0.12);
+      border-radius:2px;overflow:hidden;
+    }
+    .loading-bar-fill{
+      height:100%;width:0%;
+      background:linear-gradient(90deg,#20a091,#4ade80);
+      border-radius:2px;box-shadow:0 0 10px #20a091;
+      transition:width 0.4s ease;
+    }
+    .loading-status{
+      font-family:'JetBrains Mono',monospace;
+      font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:0.5px;
+    }
+    .loading-orbs{
+      position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1;
+    }
+    .loading-orb{position:absolute;border-radius:50%;animation:orbFloat 6s ease-in-out infinite;}
+    .orb1{
+      width:500px;height:500px;top:-150px;left:-100px;animation-duration:7s;
+      background:radial-gradient(circle,rgba(32,160,145,0.07) 0%,transparent 70%);
+    }
+    .orb2{
+      width:400px;height:400px;bottom:-100px;right:-80px;animation-delay:-3s;
+      background:radial-gradient(circle,rgba(74,222,128,0.05) 0%,transparent 70%);
+    }
+    .orb3{
+      width:300px;height:300px;top:50%;left:60%;animation-delay:-1.5s;
+      background:radial-gradient(circle,rgba(32,160,145,0.06) 0%,transparent 70%);
+    }
+    @keyframes orbFloat{
+      0%,100%{transform:translate(0,0) scale(1);}
+      50%{transform:translate(20px,-20px) scale(1.08);}
+    }
+  </style>
 </head>
 <body>
+
+<!-- CUSTOM CURSOR -->
+<div id="customCursor" class="custom-cursor"></div>
+<div id="cursorTrail" class="cursor-trail"></div>
+
+<!-- LOADING SCREEN -->
+<div id="loadingScreen" class="loading-screen">
+  <div class="loading-content">
+    <div class="loading-logo">
+      <div class="loading-eyebrow">Production · Optical · Zenni Lab</div>
+      <div class="loading-title">Coating <span>Flow</span> Tracker</div>
+    </div>
+    <div class="loading-bar-wrap">
+      <div class="loading-bar-track">
+        <div class="loading-bar-fill" id="loadingBarFill"></div>
+      </div>
+      <div class="loading-status" id="loadingStatus">Connecting to data source...</div>
+    </div>
+    <div class="loading-orbs">
+      <div class="loading-orb orb1"></div>
+      <div class="loading-orb orb2"></div>
+      <div class="loading-orb orb3"></div>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY LOADING OVERLAY -->
+<div id="historyLoadOverlay" class="history-load-overlay">
+  <div class="hlo-backdrop"></div>
+  <div class="hlo-panel">
+    <div class="hlo-icon">
+      <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+        <circle cx="18" cy="18" r="15" stroke="rgba(251,191,36,0.2)" stroke-width="2"/>
+        <path d="M18 8 A10 10 0 0 1 28 18" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round">
+          <animateTransform attributeName="transform" type="rotate" from="0 18 18" to="360 18 18" dur="0.9s" repeatCount="indefinite"/>
+        </path>
+        <circle cx="18" cy="8" r="2" fill="#fbbf24">
+          <animateTransform attributeName="transform" type="rotate" from="0 18 18" to="360 18 18" dur="0.9s" repeatCount="indefinite"/>
+        </circle>
+      </svg>
+    </div>
+    <div class="hlo-text">
+      <div class="hlo-title" id="hloTitle">Loading History</div>
+      <div class="hlo-date" id="hloDate">—</div>
+    </div>
+    <div class="hlo-bar-track"><div class="hlo-bar-fill" id="hloBarFill"></div></div>
+    <div class="hlo-status" id="hloStatus">Fetching scan records...</div>
+  </div>
+</div>
 
 <!-- SPIKE ALERT BANNER -->
 <div id="alertBanner" class="alert-banner" style="display:none;">
@@ -24,7 +165,7 @@
     <div class="header-divider"></div>
     <div class="logo-block">
       <div class="eyebrow">Production · Optical · Zenni Lab</div>
-      <div class="site-title">Coating Flow Tracker</div>
+      <div class="site-title">Coating <span>Flow</span> Tracker</div>
     </div>
   </div>
   <div class="header-right">

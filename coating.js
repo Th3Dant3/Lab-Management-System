@@ -25,6 +25,100 @@ let refreshCountdown   = refreshInterval;
 let refreshTimerHandle = null;
 
 /* =====================================================
+   ANIMATION UTILITIES
+===================================================== */
+
+// Animate a numeric KPI value counting up
+function animateValue(el, targetVal, suffix, colorClass) {
+  if (!el) return;
+  const isFloat  = String(targetVal).includes(".");
+  const start    = 0;
+  const duration = 700;
+  const startTs  = performance.now();
+
+  function step(ts) {
+    const progress = Math.min((ts - startTs) / duration, 1);
+    const ease     = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+    const current  = start + (targetVal - start) * ease;
+    el.textContent = (isFloat ? current.toFixed(2) : Math.round(current)) + (suffix || "");
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = (isFloat ? targetVal.toFixed(2) : targetVal) + (suffix || "");
+  }
+  requestAnimationFrame(step);
+
+  if (colorClass) el.className = "kpi-value " + colorClass;
+  el.style.animation = "none";
+  requestAnimationFrame(() => {
+    el.style.animation = "countUp 0.4s cubic-bezier(.22,1,.36,1) both";
+  });
+}
+
+// Stagger-animate all KPI cards
+function animateKpiCards() {
+  document.querySelectorAll(".kpi-card").forEach((card, i) => {
+    card.style.animation = "none";
+    card.style.opacity   = "0";
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        card.style.animation = `scaleIn 0.38s cubic-bezier(.22,1,.36,1) both`;
+        card.style.opacity   = "";
+      }, i * 45);
+    });
+  });
+}
+
+// Stagger-animate table rows
+function animateTableRows() {
+  document.querySelectorAll("#hourlyBody tr").forEach((tr, i) => {
+    tr.style.animation = "none";
+    tr.style.opacity   = "0";
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        tr.style.animation = `rowSlideIn 0.3s cubic-bezier(.22,1,.36,1) both`;
+        tr.style.opacity   = "";
+      }, i * 40);
+    });
+  });
+}
+
+// Show a toast message at bottom
+let _toastTimer = null;
+function showToast(msg, color) {
+  let toast = document.getElementById("historyToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "historyToast";
+    toast.className = "history-mode-toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.background = color === "live"
+    ? "rgba(32,160,145,0.12)"   : "rgba(251,191,36,0.12)";
+  toast.style.borderColor  = color === "live"
+    ? "rgba(32,160,145,0.35)"   : "rgba(251,191,36,0.35)";
+  toast.style.color = color === "live" ? "#20a091" : "#fbbf24";
+
+  clearTimeout(_toastTimer);
+  toast.classList.remove("show");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { toast.classList.add("show"); });
+  });
+  _toastTimer = setTimeout(() => toast.classList.remove("show"), 3000);
+}
+
+// Flash the container when switching modes
+function flashContainer(mode) {
+  const container = document.querySelector(".container");
+  if (!container) return;
+  const cls = mode === "history" ? "history-flash" : "live-flash";
+  container.classList.remove("history-flash", "live-flash");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => container.classList.add(cls));
+  });
+  setTimeout(() => container.classList.remove(cls), 600);
+}
+
+/* =====================================================
    NEON NOIR CHART CONSTANTS
 ===================================================== */
 
@@ -37,22 +131,22 @@ const GLASS_TOOLTIP = {
   borderColor     : "rgba(0, 255, 200, 0.2)",
   borderWidth     : 1,
   titleColor      : "#00ffc8",
-  bodyColor       : "rgba(0, 255, 200, 0.65)",
-  footerColor     : "rgba(0, 255, 200, 0.3)",
-  titleFont       : { family: CHART_FONT, size: 14, weight: "700" },
-  bodyFont        : { family: CHART_MONO, size: 11 },
-  padding         : 13,
+  bodyColor       : "rgba(0, 255, 200, 0.75)",
+  footerColor     : "rgba(0, 255, 200, 0.4)",
+  titleFont       : { family: CHART_FONT, size: 15, weight: "700" },
+  bodyFont        : { family: CHART_MONO, size: 13 },
+  padding         : 14,
   cornerRadius    : 4,
   displayColors   : true,
-  boxWidth        : 8,
-  boxHeight       : 8,
+  boxWidth        : 10,
+  boxHeight       : 10,
   boxPadding      : 3,
 };
 
 const GLASS_LEGEND = {
   labels: {
     color        : "#ffffff",
-    font         : { family: CHART_FONT, size: 15, weight: "600" },
+    font         : { family: CHART_FONT, size: 14, weight: "600" },
     usePointStyle: true,
     pointStyle   : "circle",
     padding      : 28,
@@ -347,56 +441,51 @@ async function loadDashboard() {
   updateReportDateDisplay(dashboardProcessed);
   checkSpikeAlert(dashboardData.hourly || []);
 
-  // Total Jobs — teal
-  const jobsEl = document.getElementById("totalJobs");
-  if (jobsEl) { jobsEl.textContent = summary.totalJobs ?? 0; jobsEl.className = "kpi-value teal"; }
-
-  // Total Lenses — white
-  const lensesEl = document.getElementById("totalLenses");
-  if (lensesEl) { lensesEl.textContent = (summary.totalLenses ?? 0).toLocaleString(); lensesEl.className = "kpi-value"; }
-
-  // Total Lenses Broken — threshold color
+  // ── Animate KPI values ──
   const brokenVal = summary.totalBreakLenses || 0;
-  const brokenEl  = document.getElementById("totalBroken");
-  if (brokenEl) {
-    brokenEl.textContent = brokenVal;
-    brokenEl.className   = "kpi-value " + (brokenVal === 0 ? "green" : brokenVal <= 20 ? "yellow" : "red");
-  }
+  const pctVal    = parseFloat(summary.breakPercent) || 0;
+  const avgHrs    = parseFloat(summary.avgBreakTimeHours) || 0;
 
-  // Breakage % — threshold color + count
-  const pctVal = parseFloat(summary.breakPercent) || 0;
-  const pctEl  = document.getElementById("rxBreakage");
+  animateValue(document.getElementById("totalJobs"),   summary.totalJobs ?? 0, "", "teal");
+  animateValue(document.getElementById("totalLenses"), summary.totalLenses ?? 0, "", "");
+  animateValue(document.getElementById("totalBroken"), brokenVal, "",
+    brokenVal === 0 ? "green" : brokenVal <= 20 ? "yellow" : "red");
+
+  const pctEl = document.getElementById("rxBreakage");
   if (pctEl) {
-    pctEl.textContent = pctVal.toFixed(2) + "%  (" + brokenVal + ")";
-    pctEl.className   = "kpi-value " + (pctVal < 2 ? "green" : pctVal < 4 ? "yellow" : "red");
+    animateValue(pctEl, pctVal, "%  (" + brokenVal + ")",
+      pctVal < 2 ? "green" : pctVal < 4 ? "yellow" : "red");
   }
 
-  // Avg Break Time — color by severity
-  const avgHrs = parseFloat(summary.avgBreakTimeHours) || 0;
-  const avgEl  = document.getElementById("avgTime");
+  const avgEl = document.getElementById("avgTime");
   if (avgEl) {
-    avgEl.textContent = avgHrs > 0 ? avgHrs + " hrs" : "--";
-    avgEl.className   = "kpi-value " + (avgHrs === 0 ? "green" : avgHrs < 8 ? "yellow" : "red");
+    animateValue(avgEl, avgHrs, avgHrs > 0 ? " hrs" : "",
+      avgHrs === 0 ? "green" : avgHrs < 8 ? "yellow" : "red");
   }
 
   setText("peakHour", summary.peakHour ?? "--");
 
   if (summary.flowHealth) {
-    setText("flowHealthy",   summary.flowHealth.healthy   || 0);
-    setText("flowWatch",     summary.flowHealth.watch     || 0);
-    setText("flowDelayed",   summary.flowHealth.delayed   || 0);
-    setText("flowOvernight", summary.flowHealth.overnight || 0);
+    animateValue(document.getElementById("flowHealthy"),   summary.flowHealth.healthy   || 0, "", "green");
+    animateValue(document.getElementById("flowWatch"),     summary.flowHealth.watch     || 0, "", "yellow");
+    animateValue(document.getElementById("flowDelayed"),   summary.flowHealth.delayed   || 0, "", "red");
+    animateValue(document.getElementById("flowOvernight"), summary.flowHealth.overnight || 0, "", "blue");
   }
   if (summary.aging) {
-    setText("sameDayBreakage",   summary.aging.sameDay || 0);
-    setText("yesterdayBreakage", summary.aging.oneDay  || 0);
-    setText("twoPlusBreakage",   summary.aging.twoPlus || 0);
+    animateValue(document.getElementById("sameDayBreakage"),   summary.aging.sameDay || 0, "", "green");
+    animateValue(document.getElementById("yesterdayBreakage"), summary.aging.oneDay  || 0, "", "yellow");
+    animateValue(document.getElementById("twoPlusBreakage"),   summary.aging.twoPlus || 0, "", "red");
   }
+
+  // Stagger KPI cards in
+  animateKpiCards();
 
   // Update flow stat pills if they exist
   updateFlowStatPills(summary);
 
   buildHourlyTable(dashboardData.hourly || []);
+  // Stagger table rows in after a brief pause
+  setTimeout(animateTableRows, 80);
 
   if (trendChart)   trendChart.destroy();
   if (reasonChart)  reasonChart.destroy();
@@ -430,6 +519,49 @@ function updateFlowStatPills(summary) {
   });
 }
 
+// Show history/live loading overlay
+function showHistoryLoader(mode, dateLabel) {
+  const overlay = document.getElementById("historyLoadOverlay");
+  const title   = document.getElementById("hloTitle");
+  const date    = document.getElementById("hloDate");
+  const bar     = document.getElementById("hloBarFill");
+  const status  = document.getElementById("hloStatus");
+  if (!overlay) return;
+
+  overlay.classList.remove("mode-live", "mode-history");
+  overlay.classList.add(mode === "live" ? "mode-live" : "mode-history");
+
+  if (title)  title.textContent  = mode === "live" ? "Returning to Live" : "Loading History";
+  if (date)   date.textContent   = mode === "live" ? "Today" : (dateLabel || "—");
+  if (bar)    bar.style.width    = "0%";
+  if (status) status.textContent = "Fetching scan records...";
+
+  overlay.classList.add("active");
+
+  // Animate bar in steps
+  const steps = [
+    { pct: 30, msg: "Fetching scan records...",     delay: 0   },
+    { pct: 60, msg: "Loading machine data...",       delay: 350 },
+    { pct: 85, msg: "Building dashboard...",         delay: 700 },
+  ];
+  steps.forEach(s => {
+    setTimeout(() => {
+      if (bar)    bar.style.width    = s.pct + "%";
+      if (status) status.textContent = s.msg;
+    }, s.delay);
+  });
+}
+
+function hideHistoryLoader() {
+  const overlay = document.getElementById("historyLoadOverlay");
+  const bar     = document.getElementById("hloBarFill");
+  const status  = document.getElementById("hloStatus");
+  if (!overlay) return;
+  if (bar)    bar.style.width    = "100%";
+  if (status) status.textContent = "Ready.";
+  setTimeout(() => overlay.classList.remove("active"), 300);
+}
+
 /* =====================================================
    DATE FILTER
 ===================================================== */
@@ -439,7 +571,8 @@ function applyDateFilter() {
   if (!dateInput) return;
   const parts = dateInput.split("-");
   currentDate = parseInt(parts[1], 10) + "/" + parseInt(parts[2], 10) + "/" + parts[0];
-  loadDashboard();
+  showHistoryLoader("history", currentDate);
+  loadDashboard().finally(() => hideHistoryLoader());
   startRefreshCountdown();
 }
 
@@ -447,7 +580,8 @@ function resetToToday() {
   currentDate = null;
   const dateEl = document.getElementById("historyDate");
   if (dateEl) dateEl.value = "";
-  loadDashboard();
+  showHistoryLoader("live", "Today");
+  loadDashboard().finally(() => hideHistoryLoader());
   startRefreshCountdown();
 }
 
@@ -458,15 +592,81 @@ document.addEventListener("DOMContentLoaded", () => {
       currentDate = null;
       const d = document.getElementById("historyDate");
       if (d) d.value = "";
-      loadDashboard();
+      showHistoryLoader("live", "Today");
+      loadDashboard().finally(() => hideHistoryLoader());
       startRefreshCountdown();
     });
   }
   startRefreshCountdown();
   compareInit();
+
+  /* ── CUSTOM CURSOR ── */
+  const cursor = document.getElementById("customCursor");
+  const trail  = document.getElementById("cursorTrail");
+  let trailX = 0, trailY = 0, cursorX = 0, cursorY = 0;
+
+  document.addEventListener("mousemove", e => {
+    cursorX = e.clientX; cursorY = e.clientY;
+    if (cursor) { cursor.style.left = cursorX + "px"; cursor.style.top = cursorY + "px"; }
+  });
+
+  function animateTrail() {
+    trailX += (cursorX - trailX) * 0.14;
+    trailY += (cursorY - trailY) * 0.14;
+    if (trail) { trail.style.left = trailX + "px"; trail.style.top = trailY + "px"; }
+    requestAnimationFrame(animateTrail);
+  }
+  animateTrail();
+
+  document.addEventListener("mousedown", () => {
+    if (cursor) { cursor.style.transform = "translate(-50%,-50%) scale(0.7)"; }
+    if (trail)  { trail.style.transform  = "translate(-50%,-50%) scale(0.7)"; }
+  });
+  document.addEventListener("mouseup", () => {
+    if (cursor) { cursor.style.transform = "translate(-50%,-50%) scale(1)"; }
+    if (trail)  { trail.style.transform  = "translate(-50%,-50%) scale(1)"; }
+  });
+
+  /* ── LOADING SCREEN ── */
+  const loadScreen = document.getElementById("loadingScreen");
+  const barFill    = document.getElementById("loadingBarFill");
+  const statusEl   = document.getElementById("loadingStatus");
+
+  const steps = [
+    { pct: 20, msg: "Connecting to data source..." },
+    { pct: 45, msg: "Fetching processed scan data..." },
+    { pct: 70, msg: "Loading machine metrics..." },
+    { pct: 90, msg: "Building dashboard..." },
+  ];
+  let stepIdx = 0;
+  const stepInterval = setInterval(() => {
+    if (stepIdx < steps.length) {
+      const s = steps[stepIdx++];
+      if (barFill) barFill.style.width = s.pct + "%";
+      if (statusEl) statusEl.textContent = s.msg;
+    } else {
+      clearInterval(stepInterval);
+    }
+  }, 380);
+
+  window._dismissLoadingScreen = function() {
+    clearInterval(stepInterval);
+    if (barFill)  barFill.style.width = "100%";
+    if (statusEl) statusEl.textContent = "Ready.";
+    setTimeout(() => {
+      if (loadScreen) {
+        loadScreen.classList.add("fade-out");
+        setTimeout(() => { loadScreen.style.display = "none"; }, 620);
+      }
+    }, 300);
+  };
 });
 
-loadDashboard();
+loadDashboard().then(() => {
+  if (typeof window._dismissLoadingScreen === "function") window._dismissLoadingScreen();
+}).catch(() => {
+  if (typeof window._dismissLoadingScreen === "function") window._dismissLoadingScreen();
+});
 loadPreviousDay();
 
 /* =====================================================
@@ -926,26 +1126,22 @@ function buildFlowChart(data) {
         },
         tooltip: {
           ...GLASS_TOOLTIP,
+          titleFont       : { family: CHART_FONT, size: 15, weight: "700" },
+          bodyFont        : { family: CHART_MONO, size: 13 },
           callbacks: {
             title: items => `  ${items[0].label}`,
             label: ctx => {
               const v = ctx.raw;
               if (v === null || v === undefined) return null;
+              // Only show Broken Jobs Avg in the tooltip body lines
               if (ctx.dataset.label === "Broken Jobs Avg") return `  Broken avg: ${v}m`;
-              // Overnight values are capped for display — show label
-              if (ctx.dataset._isOvernight && v >= yAxisMax) {
-                return `  ${ctx.dataset.label}: >${Math.floor(yAxisMax/60)}h (capped on axis)`;
-              }
-              if (v >= 60) {
-                const h = Math.floor(v/60), m = v%60;
-                return `  ${ctx.dataset.label}: ${h}h${m>0?" "+m+"m":""}`;
-              }
-              return `  ${ctx.dataset.label}: ${v}m avg`;
+              // Hide all bucket lines (Healthy / Watch / Delayed / Overnight) from tooltip
+              return null;
             },
             afterBody: items => {
               const hour  = items[0]?.label;
               const brkPt = breakageDots.find(d => d.hour === hour);
-              return brkPt ? ["", `  Breakage: ${brkPt.count} lenses this hour`] : [];
+              return brkPt ? ["", `  🔴 Breakage: ${brkPt.count} lenses this hour`] : [];
             },
           },
         },
