@@ -3,199 +3,1460 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Incoming Jobs Dashboard</title>
+<title>Incoming Jobs — Command Center</title>
 <link rel="stylesheet" href="incoming.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 </head>
 <body>
 
-  <div class="bg-orb bg-orb--1"></div>
-  <div class="bg-orb bg-orb--2"></div>
-  <div class="scan-lines"></div>
+<!-- ambient world -->
+<div class="bg-orb bg-orb--1"></div>
+<div class="bg-orb bg-orb--2"></div>
+<div class="bg-grid"></div>
 
-  <nav class="topbar">
-    <button class="back-btn" onclick="goBack()">← Main Page</button>
-    <!-- brand-text span lets CSS hide the label on mobile while keeping the pulse dot -->
-    <div class="topbar-brand">
-      <span class="brand-pulse"></span>
-      <span class="brand-text">JOBS MONITOR</span>
+<!-- ═══════════════════════════════════════════
+     TOPBAR — sticky command header
+═══════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="topbar-scanner"></div>
+
+  <button class="back-btn" onclick="goBack()">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    <span>Back</span>
+  </button>
+
+  <div class="brand">
+    <div class="brand-pulse"></div>
+    <div class="brand-text">
+      <span class="brand-name">JOBS MONITOR</span>
+      <span class="brand-sub">INCOMING JOBS DASHBOARD</span>
     </div>
-    <div class="topbar-meta">
-      <div class="meta-block"><span class="meta-lbl">Total</span><span class="meta-val" id="totalJobs">--</span></div>
-      <div class="meta-sep"></div>
-      <div class="meta-block"><span class="meta-lbl">Updated</span><span class="meta-val" id="lastUpdated">--</span></div>
-      <div class="meta-sep"></div>
-      <span id="refreshStatus" class="status-pill live">Live</span>
-    </div>
-  </nav>
+  </div>
 
-  <div id="app">
-
-    <div class="controls-row">
-      <div class="filter-wrap">
-        <label class="filter-lbl" for="dateFilter">Date</label>
-        <input type="date" id="dateFilter" class="date-input">
-        <button class="btn-apply" onclick="applyDateFilter()">Apply</button>
-        <button class="btn-today" onclick="resetDateFilter()">Today</button>
-      </div>
-      <!-- Pill-style tab bar -->
-      <div class="tab-bar">
-        <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">Incoming</button>
-        <button class="tab-btn"        id="tabTrendBtn"    onclick="switchTab('trend')">Trend</button>
-        <button class="tab-btn"        id="tabCompareBtn"  onclick="switchTab('compare')">Compare</button>
+  <!-- Live ticker strip -->
+  <div class="ticker-wrap">
+    <div class="ticker-label">LIVE</div>
+    <div class="ticker-track">
+      <div class="ticker-items" id="tickerItems">
+        <span class="tick-item">Loading data…</span>
       </div>
     </div>
+  </div>
 
-    <!-- ══════ TAB: INCOMING ══════ -->
-    <div id="incomingTab" class="tab-content">
-      <div class="kpi-strip" id="kpiGrid"></div>
-      <div class="split-body">
-        <div class="split-left">
-          <div class="panel-head">
+  <!-- Topbar dept stats -->
+  <div class="topbar-stats" id="topbarStats">
+    <div class="tb-stat" id="tbDeptFinish" style="display:none">
+      <span class="tb-stat-lbl">Finish</span>
+      <span class="tb-stat-val" id="tbvFinish" style="color:#22d3ee">—</span>
+      <span class="tb-stat-badge" id="tbhFinish"></span>
+    </div>
+    <div class="tb-sep" id="tbsep1" style="display:none"></div>
+    <div class="tb-stat" id="tbDeptSpeciality" style="display:none">
+      <span class="tb-stat-lbl">Speciality</span>
+      <span class="tb-stat-val" id="tbvSpeciality" style="color:#a78bfa">—</span>
+      <span class="tb-stat-badge" id="tbhSpeciality"></span>
+    </div>
+    <div class="tb-sep" id="tbsep2" style="display:none"></div>
+    <div class="tb-stat" id="tbDeptSurface" style="display:none">
+      <span class="tb-stat-lbl">Surface</span>
+      <span class="tb-stat-val" id="tbvSurface" style="color:#38bdf8">—</span>
+      <span class="tb-stat-badge" id="tbhSurface"></span>
+    </div>
+    <div class="tb-sep" id="tbsep3" style="display:none"></div>
+    <div class="tb-stat" id="tbDeptFrameOnly" style="display:none">
+      <span class="tb-stat-lbl">Frame Only</span>
+      <span class="tb-stat-val" id="tbvFrameOnly" style="color:#fb923c">—</span>
+      <span class="tb-stat-badge" id="tbhFrameOnly"></span>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="tb-stat tb-total">
+      <span class="tb-stat-lbl">Total Jobs</span>
+      <div class="topbar-sparkline" id="topbarSparkline"></div>
+      <span class="tb-total-val" id="totalJobs">--</span>
+      <span class="total-trend-badge" id="totalTrendBadge"></span>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <div class="tb-clock">
+      <span class="tb-clock-lbl">Updated</span>
+      <span class="tb-clock-val" id="lastUpdated">--</span>
+    </div>
+    <span id="refreshStatus" class="status-pill live">● Live</span>
+  </div>
+
+  <div class="topbar-sweep" id="topbarSweep"></div>
+</header>
+
+<!-- ═══════════════════════════════════════════
+     VELOCITY STRIP — jobs/hr rate bar
+═══════════════════════════════════════════ -->
+<div class="velocity-strip" id="velocityStrip" style="display:none">
+  <div class="vel-label">Job Velocity</div>
+  <div class="vel-depts" id="velDepts"></div>
+  <div class="vel-total">
+    <span id="velTotalNum">0</span>
+    <span class="vel-unit">jobs this hour</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN APP
+═══════════════════════════════════════════ -->
+<main id="app">
+
+  <!-- CONTROLS ROW -->
+  <div class="controls-row">
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24"><path d="M3 4h18M7 12h10M11 20h2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      <label class="filter-lbl" for="dateFilter">Date</label>
+      <input type="date" id="dateFilter" class="date-input">
+      <button class="btn-apply" onclick="applyDateFilter()">Apply</button>
+      <button class="btn-today" onclick="resetDateFilter()">Today</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabIncomingBtn" onclick="switchTab('incoming')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        Incoming
+      </button>
+      <button class="tab-btn" id="tabTrendBtn" onclick="switchTab('trend')">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Trend
+      </button>
+      <button class="tab-btn" id="tabCompareBtn" onclick="switchTab('compare')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="20" x2="12" y2="4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="20" x2="6" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Compare
+      </button>
+      <div class="tab-indicator" id="tabIndicator"></div>
+    </div>
+  </div>
+
+  <!-- ══════ TAB: INCOMING ══════ -->
+  <div id="incomingTab" class="tab-content">
+
+    <!-- KPI STRIP -->
+    <div class="kpi-strip" id="kpiGrid"></div>
+
+    <!-- MAIN BODY: 3 columns -->
+    <div class="main-body">
+
+      <!-- LEFT: Queue breakdown -->
+      <aside class="panel queue-panel">
+        <div class="panel-head">
+          <div class="panel-title-wrap">
             <span class="panel-title">Queue Breakdown</span>
             <span id="queueHourLabel" class="panel-sub"></span>
           </div>
-          <div id="container" class="queue-list"></div>
-        </div>
-        <div class="split-right">
-          <div class="compare-card">
-            <div class="panel-head">
-              <span class="panel-title" id="compareTitle">Today vs Yesterday</span>
-              <div class="compare-legend">
-                <span class="leg-item"><span class="leg-dot today-dot"></span><span id="legToday">Today</span></span>
-                <span class="leg-item"><span class="leg-dot yest-dot"></span><span id="legYest">Yesterday</span></span>
-              </div>
+          <div class="panel-actions">
+            <div class="queue-search-wrap">
+              <svg viewBox="0 0 24 24" width="13" height="13"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <input class="queue-search" id="queueSearch" placeholder="Search queues…" oninput="filterQueues(this.value)">
             </div>
-            <div class="compare-chart-wrap"><canvas id="comparisonChart"></canvas></div>
-          </div>
-          <div class="hourly-card">
-            <div class="panel-head">
-              <span class="panel-title">Hourly Flow</span>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <!-- chips appear here when queues are selected for comparison -->
-                <div id="hourlyFilterChips" class="hourly-filter-chips" style="display:none"></div>
-                <span id="chartInsight" class="insight-pill"></span>
-              </div>
-            </div>
-            <div class="hourly-chart-wrap"><canvas id="hourlyChart"></canvas></div>
-            <div class="chart-click-hint">↑ Click any bar to drill into that hour's breakdown</div>
           </div>
         </div>
-      </div>
-    </div>
+        <div id="container" class="queue-list"></div>
+      </aside>
 
-    <!-- ══════ TAB: COMPARE ══════ -->
-    <div id="compareTab" class="tab-content" style="display:none;">
-      <div class="compare-tab-wrap">
+      <!-- CENTER: Charts stacked -->
+      <div class="center-col">
 
-        <!-- Improved Date Picker — numbered slots, dot on left -->
-        <div class="comp-picker-row">
-          <div class="comp-picker-label">Compare up to 5 dates</div>
-          <div class="comp-picker-inputs" id="compDateInputs">
-            <div class="comp-date-slot">
-              <div class="comp-slot-lbl">Date 1</div>
-              <div class="comp-date-inner">
-                <div class="comp-dot" style="background:#38bdf8"></div>
-                <input type="date" class="comp-date-input" id="compDate0">
-              </div>
-            </div>
-            <div class="comp-date-slot">
-              <div class="comp-slot-lbl">Date 2</div>
-              <div class="comp-date-inner">
-                <div class="comp-dot" style="background:#a78bfa"></div>
-                <input type="date" class="comp-date-input" id="compDate1">
-              </div>
-            </div>
-            <div class="comp-date-slot">
-              <div class="comp-slot-lbl">Date 3 <span class="opt">(optional)</span></div>
-              <div class="comp-date-inner">
-                <div class="comp-dot" style="background:#22d3ee;opacity:.6"></div>
-                <input type="date" class="comp-date-input" id="compDate2">
-              </div>
-            </div>
-            <div class="comp-date-slot">
-              <div class="comp-slot-lbl">Date 4 <span class="opt">(optional)</span></div>
-              <div class="comp-date-inner">
-                <div class="comp-dot" style="background:#fb923c;opacity:.45"></div>
-                <input type="date" class="comp-date-input" id="compDate3">
-              </div>
-            </div>
-            <div class="comp-date-slot">
-              <div class="comp-slot-lbl">Date 5 <span class="opt">(optional)</span></div>
-              <div class="comp-date-inner">
-                <div class="comp-dot" style="background:#4ade80;opacity:.45"></div>
-                <input type="date" class="comp-date-input" id="compDate4">
-              </div>
-            </div>
-          </div>
-          <div class="comp-picker-actions">
-            <button class="btn-compare" onclick="runComparison()">Run Comparison</button>
-            <button class="btn-clear"   onclick="resetComparison()">Clear</button>
-          </div>
-        </div>
-
-        <!-- KPI Comparison Grid -->
-        <div id="compKpiGrid" class="comp-kpi-grid"></div>
-
-        <!-- Dept Bar Chart -->
-        <div class="comp-chart-card" id="compChartCard" style="display:none">
+        <!-- Hourly flow chart — redesigned -->
+        <div class="panel hourly-panel">
           <div class="panel-head">
-            <span class="panel-title">Department Totals</span>
-            <span id="compInsight" class="insight-pill"></span>
+            <div class="panel-title-wrap">
+              <span class="panel-title">Hourly Flow</span>
+              <span id="chartInsight" class="insight-pill"></span>
+            </div>
+            <div id="hourlyFilterChips" class="hourly-filter-chips" style="display:none"></div>
           </div>
-          <div class="comp-multi-chart-wrap">
-            <canvas id="compMultiChart"></canvas>
+          <!-- chart type toggle -->
+          <div class="chart-type-bar">
+            <button class="ctype-btn active" id="ctypeBar" onclick="setChartType('bar')">
+              <svg viewBox="0 0 24 24" width="13" height="13"><rect x="2" y="10" width="4" height="12" rx="1" fill="currentColor"/><rect x="10" y="4" width="4" height="18" rx="1" fill="currentColor"/><rect x="18" y="7" width="4" height="15" rx="1" fill="currentColor"/></svg>
+              Bar
+            </button>
+            <button class="ctype-btn" id="ctypeLine" onclick="setChartType('line')">
+              <svg viewBox="0 0 24 24" width="13" height="13"><polyline points="3 17 8 12 13 16 21 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Line
+            </button>
+            <button class="ctype-btn" id="ctypeArea" onclick="setChartType('area')">
+              <svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 17 8 12 13 16 21 7 21 20 3 20Z" fill="currentColor" opacity=".6"/></svg>
+              Area
+            </button>
           </div>
+          <div class="hourly-chart-wrap"><canvas id="hourlyChart"></canvas></div>
+          <div class="chart-click-hint" id="chartHint">↑ Click any bar to drill into that hour's breakdown</div>
         </div>
 
-        <!-- Per-dept breakdown -->
-        <div id="compDeptGrid" class="comp-dept-grid"></div>
+        <!-- Today vs Yesterday comparison -->
+        <div class="panel compare-panel">
+          <div class="panel-head">
+            <div class="panel-title-wrap">
+              <span class="panel-title" id="compareTitle">Today vs Yesterday</span>
+            </div>
+            <div class="compare-legend">
+              <span class="leg-item"><span class="leg-swatch today-swatch"></span><span id="legToday">Today</span></span>
+              <span class="leg-item"><span class="leg-swatch yest-swatch"></span><span id="legYest">Yesterday</span></span>
+            </div>
+          </div>
+          <div class="compare-chart-wrap"><canvas id="comparisonChart"></canvas></div>
+        </div>
 
       </div>
-    </div>
 
-    <!-- ══════ TAB: TREND ══════ -->
-    <div id="trendTab" class="tab-content" style="display:none;">
-      <div class="trend-card">
+      <!-- RIGHT: Donut + stats -->
+      <aside class="panel right-panel">
         <div class="panel-head">
+          <span class="panel-title">Distribution</span>
+        </div>
+        <!-- Donut chart -->
+        <div class="donut-wrap">
+          <canvas id="donutChart"></canvas>
+          <div class="donut-center">
+            <span class="donut-total" id="donutTotal">--</span>
+            <span class="donut-lbl">total</span>
+          </div>
+        </div>
+        <!-- Dept breakdown list -->
+        <div class="dept-list" id="deptList"></div>
+        <!-- Pct bar stack -->
+        <div class="pct-stack" id="pctStack"></div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- ══════ TAB: TREND ══════ -->
+  <div id="trendTab" class="tab-content" style="display:none">
+
+    <!-- ── TREND STAT CARDS ── -->
+    <div class="trend-kpis" id="trendKpis"></div>
+
+    <!-- ── MAIN TREND PANEL ── -->
+    <div class="panel trend-panel">
+
+      <!-- header row -->
+      <div class="trend-header">
+        <div class="trend-header-left">
           <span class="panel-title">Daily Incoming Trend</span>
           <span id="trendInsight" class="insight-pill"></span>
         </div>
-
-        <!-- View tabs + day selector row -->
-        <div class="trend-top-row">
+        <div class="trend-header-right">
+          <!-- view toggle -->
           <div class="trend-view-tabs">
-            <button class="trend-view-tab active-dept" id="trendTabDept" onclick="setTrendView('dept')">All Dept</button>
-            <button class="trend-view-tab" id="trendTabQueue" onclick="setTrendView('queue')">By Queue</button>
+            <button class="trend-view-tab active-dept" id="trendTabDept" onclick="setTrendView('dept')">
+              <svg viewBox="0 0 24 24" width="12" height="12"><rect x="2" y="10" width="4" height="12" rx="1" fill="currentColor"/><rect x="10" y="4" width="4" height="18" rx="1" fill="currentColor"/><rect x="18" y="7" width="4" height="15" rx="1" fill="currentColor"/></svg>
+              All Dept
+            </button>
+            <button class="trend-view-tab" id="trendTabQueue" onclick="setTrendView('queue')">
+              <svg viewBox="0 0 24 24" width="12" height="12"><rect x="2" y="3" width="20" height="4" rx="1" fill="currentColor" opacity=".9"/><rect x="2" y="10" width="20" height="4" rx="1" fill="currentColor" opacity=".6"/><rect x="2" y="17" width="20" height="4" rx="1" fill="currentColor" opacity=".3"/></svg>
+              Heatmap
+            </button>
           </div>
+          <!-- day range -->
           <div class="trend-controls">
             <button onclick="loadTrend(7)"  class="trend-btn">7D</button>
             <button onclick="loadTrend(14)" class="trend-btn active">14D</button>
             <button onclick="loadTrend(30)" class="trend-btn">30D</button>
           </div>
+          <!-- overlay toggle -->
+          <div class="trend-overlay-toggles" id="trendOverlayToggles">
+            <button class="overlay-btn active" id="overlayTotal" onclick="toggleTrendOverlay('total')" title="Total line">
+              <span class="overlay-swatch" style="background:#f1f5f9"></span>Total
+            </button>
+            <button class="overlay-btn active" id="overlayAvg" onclick="toggleTrendOverlay('avg')" title="Avg line">
+              <span class="overlay-swatch" style="background:#facc15;border-style:dashed"></span>Avg
+            </button>
+            <button class="overlay-btn" id="overlayArea" onclick="toggleTrendOverlay('area')" title="Area fill">
+              <span class="overlay-swatch" style="background:rgba(56,189,248,.4)"></span>Area
+            </button>
+          </div>
+          <!-- replay button -->
+          <button class="replay-btn" id="replayBtn" onclick="replayTrendChart()" title="Replay animation">
+            <svg viewBox="0 0 24 24" width="13" height="13"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="3 3 3 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polygon points="10 9 16 12 10 15" fill="currentColor"/></svg>
+            Replay
+          </button>
         </div>
-
-        <!-- All Dept zone: grouped bar + total line -->
-        <div id="trendDeptZone">
-          <div class="trend-chart-wrap"><canvas id="trendChart"></canvas></div>
-          <div class="trend-leg-row" id="trendLegRow"></div>
-        </div>
-
-        <!-- By Queue zone: heatmap grid -->
-        <div id="trendQueueZone" style="display:none">
-          <div class="trend-hm-scroll"><div class="trend-hm-grid" id="trendHmGrid"></div></div>
-          <div class="trend-leg-row" id="trendHmLeg"></div>
-        </div>
-
-        <!-- Insight strip -->
-        <div class="trend-insight-bar" id="trendInsightBar"></div>
       </div>
+
+      <!-- loading state -->
+      <div class="trend-loading" id="trendLoading" style="display:none">
+        <div class="trend-loading-bars">
+          <div class="tl-bar"></div><div class="tl-bar"></div><div class="tl-bar"></div>
+          <div class="tl-bar"></div><div class="tl-bar"></div><div class="tl-bar"></div>
+          <div class="tl-bar"></div><div class="tl-bar"></div>
+        </div>
+        <span class="trend-loading-lbl">Fetching trend data…</span>
+      </div>
+
+      <!-- DEPT CHART ZONE -->
+      <div id="trendDeptZone">
+        <div class="trend-chart-wrap">
+          <canvas id="trendChart"></canvas>
+          <!-- animated crosshair cursor line -->
+          <div class="trend-cursor" id="trendCursor"></div>
+          <!-- peak annotation -->
+          <div class="trend-peak-pin" id="trendPeakPin" style="display:none">
+            <div class="peak-pin-dot"></div>
+            <div class="peak-pin-label" id="trendPeakLabel"></div>
+          </div>
+        </div>
+
+        <!-- Rich legend with dept sparklines -->
+        <div class="trend-legend-rich" id="trendLegRow"></div>
+      </div>
+
+      <!-- HEATMAP ZONE -->
+      <div id="trendQueueZone" style="display:none">
+        <div class="heatmap-header-row">
+          <span class="heatmap-hint">Each cell = jobs on that day · Hover for details · Colour intensity = volume</span>
+        </div>
+        <div class="trend-hm-scroll"><div class="trend-hm-grid" id="trendHmGrid"></div></div>
+        <div class="trend-leg-row" id="trendHmLeg"></div>
+      </div>
+
+      <!-- insight footer -->
+      <div class="trend-insight-bar" id="trendInsightBar"></div>
     </div>
 
-  </div><!-- /#app -->
+  </div>
+
+  <!-- ══════ TAB: COMPARE ══════ -->
+  <div id="compareTab" class="tab-content" style="display:none">
+    <div class="compare-tab-wrap">
+      <div class="comp-picker-row">
+        <div class="comp-picker-label">Compare up to 5 dates</div>
+        <div class="comp-picker-inputs" id="compDateInputs">
+          <div class="comp-date-slot">
+            <div class="comp-slot-lbl">Date 1</div>
+            <div class="comp-date-inner"><div class="comp-dot" style="background:#38bdf8"></div><input type="date" class="comp-date-input" id="compDate0"></div>
+          </div>
+          <div class="comp-date-slot">
+            <div class="comp-slot-lbl">Date 2</div>
+            <div class="comp-date-inner"><div class="comp-dot" style="background:#a78bfa"></div><input type="date" class="comp-date-input" id="compDate1"></div>
+          </div>
+          <div class="comp-date-slot">
+            <div class="comp-slot-lbl">Date 3 <span class="opt">(opt)</span></div>
+            <div class="comp-date-inner"><div class="comp-dot" style="background:#22d3ee;opacity:.6"></div><input type="date" class="comp-date-input" id="compDate2"></div>
+          </div>
+          <div class="comp-date-slot">
+            <div class="comp-slot-lbl">Date 4 <span class="opt">(opt)</span></div>
+            <div class="comp-date-inner"><div class="comp-dot" style="background:#fb923c;opacity:.45"></div><input type="date" class="comp-date-input" id="compDate3"></div>
+          </div>
+          <div class="comp-date-slot">
+            <div class="comp-slot-lbl">Date 5 <span class="opt">(opt)</span></div>
+            <div class="comp-date-inner"><div class="comp-dot" style="background:#4ade80;opacity:.45"></div><input type="date" class="comp-date-input" id="compDate4"></div>
+          </div>
+        </div>
+        <div class="comp-picker-actions">
+          <button class="btn-compare" onclick="runComparison()">Run Comparison</button>
+          <button class="btn-clear" onclick="resetComparison()">Clear</button>
+        </div>
+      </div>
+      <div id="compKpiGrid" class="comp-kpi-grid"></div>
+      <div class="comp-chart-card" id="compChartCard" style="display:none">
+        <div class="panel-head">
+          <span class="panel-title">Department Totals</span>
+          <span id="compInsight" class="insight-pill"></span>
+        </div>
+        <div class="comp-multi-chart-wrap"><canvas id="compMultiChart"></canvas></div>
+      </div>
+      <div id="compDeptGrid" class="comp-dept-grid"></div>
+    </div>
+  </div>
+
+</main>
 
 <script src="incoming.js"></script>
+
+<!-- Patch JS: new features wired to new HTML elements -->
+<script>
+/* ── QUEUE SEARCH ── */
+function filterQueues(val) {
+  const v = val.toLowerCase();
+  document.querySelectorAll('.queue-row').forEach(r => {
+    const lbl = r.querySelector('.q-label')?.textContent?.toLowerCase() || '';
+    r.style.display = (!v || lbl.includes(v)) ? '' : 'none';
+  });
+}
+
+/* ── CHART TYPE TOGGLE ── */
+let _chartTypeOverride = 'bar';
+function setChartType(type) {
+  _chartTypeOverride = type;
+  document.querySelectorAll('.ctype-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('ctype' + type.charAt(0).toUpperCase() + type.slice(1))?.classList.add('active');
+  if (lastData) { if(chart){chart.destroy();chart=null;} buildHourlyChart(lastData); }
+}
+
+/* ── DONUT CHART ── */
+let donutChart = null;
+function buildDonut(data, grandTotal) {
+  const canvas = document.getElementById('donutChart');
+  const totalEl = document.getElementById('donutTotal');
+  if (!canvas) return;
+  if (totalEl) totalEl.textContent = grandTotal.toLocaleString();
+
+  const depts = Object.keys(data).filter(d => d !== '_total');
+  const vals  = depts.map(d => data[d]._total ?? 0);
+  const cols  = depts.map(d => ({
+    Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa',
+    Surface:'#38bdf8', 'Frame Only':'#fb923c'
+  }[d] || '#818cf8'));
+
+  if (donutChart) { donutChart.destroy(); donutChart = null; }
+  donutChart = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: depts, datasets: [{ data: vals, backgroundColor: cols.map(c=>c+'cc'), borderColor: cols, borderWidth: 2, hoverOffset: 8 }] },
+    options: {
+      responsive: true, maintainAspectRatio: true, cutout: '70%',
+      animation: { duration: 900, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor:'rgba(4,8,20,.96)', borderColor:'rgba(56,189,248,.25)', borderWidth:1,
+          titleColor:'#c8daf0', bodyColor:'#f0f6ff', padding: 10,
+          titleFont:{family:"'Space Mono',monospace",size:10},
+          bodyFont:{family:"'Inter',sans-serif",size:12},
+          callbacks: { label: i => ` ${i.label}: ${i.raw.toLocaleString()} (${grandTotal>0?((i.raw/grandTotal)*100).toFixed(1):0}%)` }
+        }
+      }
+    }
+  });
+
+  /* Dept list */
+  const listEl = document.getElementById('deptList');
+  if (listEl) {
+    listEl.innerHTML = depts.map((d,i) => `
+      <div class="dept-row">
+        <span class="dept-row-dot" style="background:${cols[i]}"></span>
+        <span class="dept-row-name">${d}</span>
+        <span class="dept-row-val" style="color:${cols[i]}">${vals[i].toLocaleString()}</span>
+        <span class="dept-row-pct">${grandTotal>0?((vals[i]/grandTotal)*100).toFixed(0):0}%</span>
+      </div>`).join('');
+  }
+
+  /* Pct stack bar */
+  const stackEl = document.getElementById('pctStack');
+  if (stackEl && grandTotal > 0) {
+    stackEl.innerHTML = depts.map((d,i) => {
+      const pct = (vals[i]/grandTotal*100).toFixed(1);
+      return `<div class="pct-seg" style="width:${pct}%;background:${cols[i]}" title="${d}: ${pct}%"></div>`;
+    }).join('');
+    /* animate in */
+    requestAnimationFrame(()=>{
+      stackEl.querySelectorAll('.pct-seg').forEach((s,i)=>{
+        const w=s.style.width; s.style.width='0';
+        setTimeout(()=>{s.style.transition='width .8s cubic-bezier(.4,0,.2,1)';s.style.width=w;},i*80+100);
+      });
+    });
+  }
+}
+
+/* ── VELOCITY STRIP ── */
+function buildVelocityStrip(data) {
+  const strip = document.getElementById('velocityStrip');
+  const velDepts = document.getElementById('velDepts');
+  const velNum = document.getElementById('velTotalNum');
+  if (!strip || !velDepts) return;
+
+  const now = new Date();
+  const h12 = now.getHours() % 12 === 0 ? 12 : now.getHours() % 12;
+  const ampm = now.getHours() < 12 ? 'AM' : 'PM';
+  const curHr = `${h12}:00 ${ampm}`;
+
+  const deptCols = { Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa', Surface:'#38bdf8', 'Frame Only':'#fb923c' };
+  let total = 0;
+  const parts = [];
+
+  Object.keys(data).forEach(dept => {
+    if (dept === '_total') return;
+    let dTotal = 0;
+    Object.keys(data[dept]).forEach(q => {
+      if (q === '_total') return;
+      const hrs = data[dept][q].hours || {};
+      if (hrs[curHr]) hrs[curHr].forEach(e => { dTotal += e.value || 0; });
+    });
+    total += dTotal;
+    parts.push({ dept, val: dTotal, col: deptCols[dept] || '#38bdf8' });
+  });
+
+  if (!total) { strip.style.display = 'none'; return; }
+  strip.style.display = 'flex';
+
+  velDepts.innerHTML = parts.map(p => `
+    <div class="vel-dept">
+      <span class="vel-dept-dot" style="background:${p.col}"></span>
+      <span class="vel-dept-name">${p.dept}</span>
+      <span class="vel-dept-val" style="color:${p.col}">+${p.val}</span>
+    </div>`).join('');
+
+  if (velNum) {
+    const obj = { val: 0 };
+    gsap.to(obj, { val: total, duration: 1.2, ease: 'power2.out', onUpdate: () => { velNum.textContent = '+' + Math.round(obj.val).toLocaleString(); }});
+  }
+}
+
+/* ── LIVE TICKER ── */
+function buildTicker(data) {
+  const el = document.getElementById('tickerItems');
+  if (!el) return;
+  const deptCols = { Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa', Surface:'#38bdf8', 'Frame Only':'#fb923c' };
+  const items = [];
+  Object.keys(data).forEach(dept => {
+    if (dept === '_total') return;
+    const col = deptCols[dept] || '#38bdf8';
+    const total = data[dept]._total ?? 0;
+    Object.keys(data[dept]).forEach(q => {
+      if (q === '_total') return;
+      const val = data[dept][q].total;
+      if (val > 0) items.push(`<span class="tick-item"><span class="tick-dot" style="background:${col}"></span>${q} <strong style="color:${col}">${val}</strong></span>`);
+    });
+  });
+  if (!items.length) return;
+  /* duplicate for seamless loop */
+  el.innerHTML = [...items, ...items].join('');
+  const totalW = el.scrollWidth / 2;
+  gsap.to(el, { x: -totalW, duration: items.length * 3, ease: 'none', repeat: -1, modifiers: { x: gsap.utils.unitize(v => parseFloat(v) % totalW) } });
+}
+
+/* ── TREND MINI KPIS ── */
+function buildTrendKpis(trend) {
+  const el = document.getElementById('trendKpis');
+  if (!el || !trend.length) return;
+  const totals = trend.map(d => d.total);
+  const latest = totals[totals.length - 1];
+  const prev   = totals[totals.length - 2] || latest;
+  const peak   = Math.max(...totals);
+  const avg    = Math.round(totals.reduce((a,b)=>a+b,0) / totals.length);
+  const chg    = prev > 0 ? ((latest - prev) / prev * 100).toFixed(1) : '0.0';
+  const chgCls = Number(chg) >= 0 ? 'up' : 'down';
+  const cards  = [
+    { lbl: 'Latest Day', val: latest.toLocaleString(), sub: `${Number(chg)>=0?'↑':'↓'} ${Math.abs(chg)}% vs prev`, cls: chgCls },
+    { lbl: 'Period Peak', val: peak.toLocaleString(), sub: trend.reduce((b,d)=>d.total>b.total?d:b,trend[0]).date, cls: '' },
+    { lbl: 'Daily Avg', val: avg.toLocaleString(), sub: `over ${trend.length} days`, cls: '' },
+    { lbl: 'Period Total', val: totals.reduce((a,b)=>a+b,0).toLocaleString(), sub: `${trend[0].date} → ${trend[trend.length-1].date}`, cls: '' },
+  ];
+  el.innerHTML = cards.map(c => `
+    <div class="trend-kpi-card">
+      <div class="trend-kpi-lbl">${c.lbl}</div>
+      <div class="trend-kpi-val">${c.val}</div>
+      <div class="trend-kpi-sub ${c.cls}">${c.sub}</div>
+    </div>`).join('');
+}
+
+/* ── HOOK INTO renderAll ── */
+const _origRenderAll = renderAll;
+renderAll = function(data, total, yesterdayData) {
+  _origRenderAll(data, total, yesterdayData);
+  buildDonut(data, total);
+  buildVelocityStrip(data);
+  buildTicker(data);
+  /* GSAP entrance for KPI cards */
+  gsap.fromTo('.kpi-card', { opacity:0, y:22 }, { opacity:1, y:0, stagger:.09, duration:.55, ease:'power3.out', delay:.1 });
+  /* GSAP entrance for panels */
+  gsap.fromTo('.queue-panel', { opacity:0, x:-16 }, { opacity:1, x:0, duration:.5, ease:'power3.out', delay:.3 });
+  gsap.fromTo('.center-col', { opacity:0, y:16 }, { opacity:1, y:0, duration:.5, ease:'power3.out', delay:.35 });
+  gsap.fromTo('.right-panel', { opacity:0, x:16 }, { opacity:1, x:0, duration:.5, ease:'power3.out', delay:.4 });
+};
+
+/* ── buildTrendKpis hook — handled by the trend upgrade script below ── */
+/* loadTrend is patched once in the trend upgrade block, not here */
+
+/* ── PATCH buildHourlyChart to respect chart type ── */
+const _origBuildHourly = buildHourlyChart;
+buildHourlyChart = function(data) {
+  if (_chartTypeOverride !== 'bar' && !selectedQueues.length) {
+    /* custom area/line render */
+    const canvas = document.getElementById('hourlyChart');
+    if (!canvas) return;
+    if (chart) { chart.destroy(); chart = null; }
+    const hourMap = {};
+    HOUR_ORDER.forEach(h => { hourMap[h] = 0; });
+    Object.keys(data).forEach(dept => {
+      if (dept === '_total') return;
+      Object.keys(data[dept]).forEach(q => {
+        if (q === '_total') return;
+        Object.keys(data[dept][q].hours || {}).forEach(h => {
+          data[dept][q].hours[h].forEach(e => { hourMap[h] = (hourMap[h]||0) + e.value; });
+        });
+      });
+    });
+    const labels = HOUR_ORDER.filter(h => hourMap[h] > 0);
+    const values = labels.map(h => hourMap[h]);
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0,0,0,260);
+    grad.addColorStop(0,'rgba(56,189,248,.45)'); grad.addColorStop(1,'rgba(56,189,248,.0)');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets: [{
+        data: values,
+        borderColor: '#38bdf8', backgroundColor: _chartTypeOverride === 'area' ? grad : 'transparent',
+        borderWidth: 2.5, tension: .45, fill: _chartTypeOverride === 'area',
+        pointRadius: 3, pointBackgroundColor: '#38bdf8', pointBorderColor: '#020408', pointBorderWidth: 2,
+        pointHoverRadius: 6
+      }]},
+      options: {
+        responsive:true, maintainAspectRatio:false, animation:{duration:500,easing:'easeOutQuart'},
+        onClick:(evt,els,ci)=>{ const pts=ci.getElementsAtEventForMode(evt,'index',{intersect:false},true); if(pts.length) showHourBreakdown(ci.data.labels[pts[0].index]); },
+        plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'rgba(4,8,20,.96)', borderColor:'rgba(56,189,248,.25)', borderWidth:1, titleColor:'#c8daf0', bodyColor:'#f0f6ff', padding:10, titleFont:{family:"'Space Mono',monospace",size:10}, bodyFont:{family:"'Inter',sans-serif",size:12}, callbacks:{ title:i=>i[0].label, label:i=>` ${i.raw.toLocaleString()} jobs` } } },
+        scales:{ x:{ grid:{color:'rgba(56,120,255,.05)'}, ticks:{color:'#8aaac8',font:{family:"'Inter',sans-serif",size:11},maxRotation:40} }, y:{ grid:{color:'rgba(56,120,255,.07)'}, ticks:{color:'#8aaac8',font:{family:"'Inter',sans-serif",size:11},callback:v=>v.toLocaleString()} } }
+      }
+    });
+  } else {
+    _origBuildHourly(data);
+  }
+};
+
+
+
+/* ════════════════════════════════════════════════════════════════
+   FIX: KPI HOUR BADGE
+   - Uses current hour, falls back to previous hour if current = 0
+   - Compares to same hour yesterday to show delta
+   - Replaces the static "+N received this hour" with real context
+════════════════════════════════════════════════════════════════ */
+(function() {
+  /* Intercept renderKPI — patch the hour badge after cards render */
+  const _origRenderKPI = renderKPI;
+  renderKPI = function(data, grandTotal, yesterdayData) {
+    _origRenderKPI(data, grandTotal, yesterdayData);
+    /* After cards are built, replace hour badges with smart version */
+    _patchHourBadges(data, yesterdayData);
+  };
+})();
+
+function _patchHourBadges(data, yesterdayData) {
+  const now   = new Date();
+  const h     = now.getHours();
+  const h12   = h % 12 === 0 ? 12 : h % 12;
+  const ampm  = h < 12 ? 'AM' : 'PM';
+  const curHr = `${h12}:00 ${ampm}`;
+
+  /* Previous hour */
+  const ph    = h === 0 ? 23 : h - 1;
+  const ph12  = ph % 12 === 0 ? 12 : ph % 12;
+  const pampm = ph < 12 ? 'AM' : 'PM';
+  const prevHr = `${ph12}:00 ${pampm}`;
+
+  Object.keys(data).forEach(dept => {
+    if (dept === '_total') return;
+
+    /* Sum current hour */
+    let curTotal = 0;
+    Object.keys(data[dept]).forEach(q => {
+      if (q === '_total') return;
+      const hrs = data[dept][q].hours || {};
+      if (hrs[curHr]) hrs[curHr].forEach(e => { curTotal += e.value || 0; });
+    });
+
+    /* Sum previous hour */
+    let prevTotal = 0;
+    Object.keys(data[dept]).forEach(q => {
+      if (q === '_total') return;
+      const hrs = data[dept][q].hours || {};
+      if (hrs[prevHr]) hrs[prevHr].forEach(e => { prevTotal += e.value || 0; });
+    });
+
+    /* Decide which hour to display */
+    const useHr    = curTotal > 0 ? curHr  : prevHr;
+    const useTotal = curTotal > 0 ? curTotal : prevTotal;
+    const isLive   = curTotal > 0;
+
+    /* Same hour yesterday for comparison */
+    let yestSameHr = 0;
+    if (yesterdayData?.[dept]) {
+      Object.keys(yesterdayData[dept]).forEach(q => {
+        if (q === '_total') return;
+        const hrs = yesterdayData[dept][q].hours || {};
+        const key = isLive ? curHr : prevHr;
+        if (hrs[key]) hrs[key].forEach(e => { yestSameHr += e.value || 0; });
+      });
+    }
+
+    /* Build badge HTML */
+    let badgeHtml = '';
+    if (useTotal > 0) {
+      const label = isLive ? `+${useTotal} this hour` : `+${useTotal} last hour (${useHr})`;
+      let vsHtml  = '';
+      if (yestSameHr > 0) {
+        const diff = useTotal - yestSameHr;
+        const pct  = ((diff / yestSameHr) * 100).toFixed(0);
+        const cls  = diff >= 0 ? 'badge-vs-up' : 'badge-vs-down';
+        vsHtml = ` <span class="${cls}">${diff >= 0 ? '▲' : '▼'} ${Math.abs(pct)}% vs yest</span>`;
+      }
+      badgeHtml = `<div class="kpi-hour-smart visible">${label}${vsHtml}</div>`;
+    } else {
+      badgeHtml = `<div class="kpi-hour-smart dim">No jobs yet this hour</div>`;
+    }
+
+    /* Find the card and replace its hour badge */
+    const card = document.querySelector(`.kpi-card[data-dept="${dept}"]`);
+    if (!card) return;
+    const existing = card.querySelector('.kpi-hour-badge, .kpi-hour-smart');
+    if (existing) existing.outerHTML = badgeHtml;
+    else card.insertAdjacentHTML('beforeend', badgeHtml);
+
+    /* Animate in */
+    const badge = card.querySelector('.kpi-hour-smart');
+    if (badge && window.gsap) {
+      gsap.fromTo(badge, { opacity:0, y:4 }, { opacity:1, y:0, duration:.4, ease:'power2.out', delay:.3 });
+    }
+  });
+}
+
+/* ── TAB INDICATOR SLIDE ── */
+function updateTabIndicator() {
+  const active = document.querySelector('.tab-btn.active');
+  const bar    = document.getElementById('tabIndicator');
+  if (!active || !bar) return;
+  const tb = document.querySelector('.tab-bar').getBoundingClientRect();
+  const ab = active.getBoundingClientRect();
+  bar.style.left  = (ab.left - tb.left) + 'px';
+  bar.style.width = ab.width + 'px';
+}
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => setTimeout(updateTabIndicator, 10)));
+setTimeout(updateTabIndicator, 200);
+window.addEventListener('resize', updateTabIndicator);
+</script>
+
+</body>
+</html>
+
+<!-- ═══════════════════════════════════════════
+     TREND PAGE — COMPLETE UPGRADE
+     Real animation. New chart config. GSAP.
+     Overlay toggles. Replay. Animated heatmap.
+═══════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────────────────────────────────
+   OVERLAY STATE — which lines are visible on the trend chart
+───────────────────────────────────────────────────────────── */
+const _trendOverlays = { total: true, avg: true, area: false };
+
+function toggleTrendOverlay(key) {
+  _trendOverlays[key] = !_trendOverlays[key];
+  const btn = document.getElementById('overlay' + key.charAt(0).toUpperCase() + key.slice(1));
+  if (btn) btn.classList.toggle('active', _trendOverlays[key]);
+  if (trendData) _rebuildTrendChart(trendData);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   REPLAY — destroys chart and rebuilds with full animation
+───────────────────────────────────────────────────────────── */
+function replayTrendChart() {
+  if (!trendData) return;
+  const btn = document.getElementById('replayBtn');
+  if (btn) { btn.classList.add('spinning'); setTimeout(()=>btn.classList.remove('spinning'), 700); }
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  _rebuildTrendChart(trendData);
+  /* also re-animate stat cards */
+  _animateTrendKpis();
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SHOW / HIDE TREND LOADING STATE
+───────────────────────────────────────────────────────────── */
+function _showTrendLoading(show) {
+  const el = document.getElementById('trendLoading');
+  const dz = document.getElementById('trendDeptZone');
+  const qz = document.getElementById('trendQueueZone');
+  if (!el) return;
+  el.style.display = show ? 'flex' : 'none';
+  /* Use opacity only — NOT display:none — so canvas keeps its dimensions
+     and Chart.js can still measure/render correctly while "hidden" */
+  if (dz) dz.style.opacity = show ? '0.15' : '1';
+  if (qz) qz.style.opacity = show ? '0.15' : '1';
+  /* Pointer-events off while loading so user can't click mid-render */
+  if (dz) dz.style.pointerEvents = show ? 'none' : '';
+  if (qz) qz.style.pointerEvents = show ? 'none' : '';
+}
+
+/* ─────────────────────────────────────────────────────────────
+   GSAP ANIMATE TREND KPI CARDS — count up + slide in
+───────────────────────────────────────────────────────────── */
+function _animateTrendKpis() {
+  const cards = document.querySelectorAll('.trend-kpi-card');
+  if (!cards.length) return;
+
+  gsap.fromTo(cards,
+    { opacity: 0, y: 18, scale: 0.96 },
+    { opacity: 1, y: 0, scale: 1, stagger: 0.1, duration: 0.5, ease: 'power3.out' }
+  );
+
+  /* Count up the numbers inside each card */
+  cards.forEach(card => {
+    const valEl = card.querySelector('.trend-kpi-val');
+    if (!valEl) return;
+    const raw = valEl.textContent.replace(/,/g, '');
+    const num = parseInt(raw);
+    if (isNaN(num)) return;
+    const obj = { v: 0 };
+    gsap.to(obj, {
+      v: num, duration: 1.4, delay: 0.3, ease: 'power2.out',
+      onUpdate: () => { valEl.textContent = Math.round(obj.v).toLocaleString(); }
+    });
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAIN TREND CHART — rebuilt with better animation + overlays
+───────────────────────────────────────────────────────────── */
+function _rebuildTrendChart(trend) {
+  const canvas = document.getElementById('trendChart');
+  if (!canvas) return;
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+
+  const labels = trend.map(d => d.date);
+  const totals = trend.map(d => d.total);
+  const avgV   = Math.round(totals.reduce((a,b)=>a+b,0) / totals.length);
+  const n      = labels.length;
+
+  const ctx = canvas.getContext('2d');
+
+  /* Build per-dept gradient fills */
+  const deptGrads = TREND_DEPT_CFG.map(d => {
+    const g = ctx.createLinearGradient(0, 0, 0, 320);
+    const base = d.alpha.replace(/[\d.]+\)$/, '');
+    g.addColorStop(0, d.alpha);
+    g.addColorStop(1, d.color + '08');
+    return g;
+  });
+
+  /* Area gradient under total line */
+  const totalGrad = ctx.createLinearGradient(0, 0, 0, 320);
+  totalGrad.addColorStop(0, 'rgba(241,245,249,.18)');
+  totalGrad.addColorStop(1, 'rgba(241,245,249,.0)');
+
+  const datasets = [
+    /* Dept stacked bars */
+    ...TREND_DEPT_CFG.map((d, i) => ({
+      type: 'bar',
+      label: d.label,
+      data: trend.map(r => r.departments?.[d.key] || 0),
+      backgroundColor: deptGrads[i],
+      borderColor: d.color,
+      borderWidth: 1,
+      borderRadius: { topLeft: 4, topRight: 4 },
+      borderSkipped: false,
+      order: 3,
+    })),
+    /* Total line — only if overlay enabled */
+    ..._trendOverlays.total ? [{
+      type: 'line',
+      label: 'Total',
+      data: totals,
+      borderColor: '#f1f5f9',
+      backgroundColor: _trendOverlays.area ? totalGrad : 'transparent',
+      fill: _trendOverlays.area,
+      borderWidth: 2.5,
+      tension: 0.45,
+      pointRadius: n > 20 ? 0 : 5,
+      pointBackgroundColor: '#f1f5f9',
+      pointBorderColor: '#01040d',
+      pointBorderWidth: 2,
+      pointHoverRadius: 7,
+      pointHoverBackgroundColor: '#fff',
+      order: 1,
+    }] : [],
+    /* Avg dashed line — only if overlay enabled */
+    ..._trendOverlays.avg ? [{
+      type: 'line',
+      label: 'Avg',
+      data: Array(n).fill(avgV),
+      borderColor: '#facc15',
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [6, 5],
+      pointRadius: 0,
+      tension: 0,
+      order: 2,
+    }] : [],
+  ];
+
+  trendChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      /* Dramatic entrance — bars grow from bottom, line draws from left */
+      animation: {
+        duration: 900,
+        easing: 'easeOutQuart',
+        delay: ctx => ctx.type === 'data' && ctx.mode === 'default'
+          ? ctx.dataIndex * 35
+          : 0,
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          backgroundColor: 'rgba(2,5,16,.97)',
+          borderColor: 'rgba(56,189,248,.3)',
+          borderWidth: 1,
+          titleColor: '#7dd3fc',
+          bodyColor: '#c8daf0',
+          footerColor: '#f0f6ff',
+          padding: 14,
+          caretSize: 6,
+          titleFont: { family: "'Space Mono',monospace", size: 11, weight: 'bold' },
+          bodyFont:  { family: "'Inter',sans-serif", size: 12 },
+          footerFont:{ family: "'Inter',sans-serif", size: 12, weight: 'bold' },
+          callbacks: {
+            title: items => items[0].label,
+            label: item => {
+              if (['Total','Avg'].includes(item.dataset.label)) return null;
+              return `  ${item.dataset.label}: ${item.raw.toLocaleString()}`;
+            },
+            footer: items => {
+              const tot = items
+                .filter(i => !['Total','Avg'].includes(i.dataset.label))
+                .reduce((s,i) => s+(i.raw||0), 0);
+              return `  Total: ${tot.toLocaleString()}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: false,
+          grid: { color: 'rgba(56,120,255,.04)', drawTicks: false },
+          border: { color: 'rgba(56,120,255,.08)' },
+          ticks: {
+            color: '#7a9bbe',
+            font: { family: "'Inter',sans-serif", size: 11 },
+            maxTicksLimit: 10,
+            maxRotation: 40,
+          },
+        },
+        y: {
+          grid: { color: 'rgba(56,120,255,.06)', drawTicks: false },
+          border: { color: 'transparent' },
+          ticks: {
+            color: '#7a9bbe',
+            font: { family: "'Inter',sans-serif", size: 11 },
+            callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v,
+            padding: 8,
+          },
+        },
+      },
+    },
+  });
+
+  /* Peak pin — find peak bar and place an annotation above it */
+  const peakIdx  = totals.indexOf(Math.max(...totals));
+  const peakPin  = document.getElementById('trendPeakPin');
+  const peakLbl  = document.getElementById('trendPeakLabel');
+  if (peakPin && peakLbl) {
+    peakLbl.textContent = `Peak: ${labels[peakIdx]} · ${totals[peakIdx].toLocaleString()}`;
+    /* Position it after chart renders */
+    setTimeout(() => {
+      try {
+        const meta = trendChart.getDatasetMeta(0);
+        const bar  = meta.data[peakIdx];
+        if (bar) {
+          const rect = canvas.getBoundingClientRect();
+          const wrap = canvas.closest('.trend-chart-wrap');
+          const wRect = wrap.getBoundingClientRect();
+          peakPin.style.left   = (bar.x - wRect.left - bar.width/2 - 8) + 'px';
+          peakPin.style.top    = Math.max(4, bar.y - wRect.top - 36) + 'px';
+          peakPin.style.display = 'flex';
+          gsap.fromTo(peakPin, { opacity:0, y: 8 }, { opacity:1, y:0, duration:.4, ease:'power3.out', delay:.8 });
+        }
+      } catch(e) { peakPin.style.display = 'none'; }
+    }, 1000);
+  }
+
+  /* Build rich legend with dept sparklines */
+  _buildRichLegend(trend, avgV);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   RICH LEGEND — dept color swatches + sparkline mini bars + avg
+───────────────────────────────────────────────────────────── */
+function _buildRichLegend(trend, avgV) {
+  const el = document.getElementById('trendLegRow');
+  if (!el) return;
+
+  const deptItems = TREND_DEPT_CFG.map(d => {
+    const vals = trend.map(r => r.departments?.[d.key] || 0);
+    const max  = Math.max(...vals, 1);
+    const sparkBars = vals.map(v =>
+      `<span class="leg-spark-bar" style="height:${Math.max(2,Math.round((v/max)*16))}px;background:${d.color}"></span>`
+    ).join('');
+    const total = vals.reduce((a,b)=>a+b,0);
+    return `
+      <div class="leg-dept-item" data-dept="${d.key}">
+        <span class="leg-dept-swatch" style="background:${d.alpha};border:1px solid ${d.color}"></span>
+        <span class="leg-dept-name">${d.label}</span>
+        <div class="leg-sparkrow">${sparkBars}</div>
+        <span class="leg-dept-total" style="color:${d.color}">${total.toLocaleString()}</span>
+      </div>`;
+  }).join('');
+
+  const overlayItems = `
+    <div class="leg-divider"></div>
+    <div class="leg-overlay-item ${_trendOverlays.total ? '' : 'dim'}">
+      <span class="leg-line-swatch" style="background:#f1f5f9"></span>
+      <span>Total</span>
+    </div>
+    <div class="leg-overlay-item ${_trendOverlays.avg ? '' : 'dim'}">
+      <span class="leg-line-swatch dashed" style="border-top:2px dashed #facc15"></span>
+      <span style="color:#facc15">Avg ${avgV.toLocaleString()}</span>
+    </div>`;
+
+  el.innerHTML = deptItems + overlayItems;
+
+  /* Animate legend in */
+  gsap.fromTo(el.querySelectorAll('.leg-dept-item, .leg-overlay-item'),
+    { opacity: 0, x: -10 },
+    { opacity: 1, x: 0, stagger: 0.07, duration: 0.4, ease: 'power2.out', delay: 0.5 }
+  );
+
+  /* Stagger sparkline bar heights */
+  el.querySelectorAll('.leg-spark-bar').forEach((b, i) => {
+    const finalH = b.style.height;
+    b.style.height = '0';
+    setTimeout(() => {
+      b.style.transition = 'height .35s ease';
+      b.style.height = finalH;
+    }, 600 + i * 20);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HEATMAP — animated waterfall reveal, hover state, tooltip
+───────────────────────────────────────────────────────────── */
+function _animatedHmRow(grid, row, n) {
+  const lbl = document.createElement('div');
+  lbl.className = 'trend-hm-lbl';
+  lbl.textContent = row.label;
+  lbl.title = row.label;
+  grid.appendChild(lbl);
+
+  const rowMax = Math.max(...row.vals, 1);
+  const rowMin = Math.min(...row.vals);
+
+  row.vals.forEach((v, ci) => {
+    const t    = (v - rowMin) / (rowMax - rowMin || 1);
+    const cell = document.createElement('div');
+    cell.className = 'trend-hm-cell';
+    cell.style.background = row.color;
+    cell.style.opacity     = '0'; /* start invisible — GSAP will reveal */
+    cell.style.transform   = 'scale(0.6)';
+    cell.title             = `${row.label}: ${v.toLocaleString()}`;
+    cell.textContent       = v === 0 ? '—' : v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toLocaleString();
+
+    /* Store target opacity for animation */
+    const targetOpacity = v === 0 ? 0.06 : 0.18 + t * 0.76;
+    cell.dataset.targetOpacity = targetOpacity;
+
+    /* Hover: brighten + show tooltip-like ring */
+    cell.addEventListener('mouseenter', () => {
+      gsap.to(cell, { opacity: 1, scale: 1.08, duration: .15, ease: 'power2.out' });
+    });
+    cell.addEventListener('mouseleave', () => {
+      gsap.to(cell, { opacity: targetOpacity, scale: 1, duration: .2, ease: 'power2.out' });
+    });
+
+    grid.appendChild(cell);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   OVERRIDE buildTrendHeatmap — adds waterfall animation
+───────────────────────────────────────────────────────────── */
+const _origBuildTrendHeatmap = buildTrendHeatmap;
+buildTrendHeatmap = function(trend) {
+  /* Run original to build the grid structure */
+  _origBuildTrendHeatmap(trend);
+
+  /* Now animate all cells in with a waterfall stagger */
+  const cells = document.querySelectorAll('.trend-hm-cell');
+  cells.forEach(cell => {
+    cell.style.opacity  = '0';
+    cell.style.transform = 'scale(0.7)';
+  });
+
+  /* Column-first stagger: left columns appear first */
+  const grid    = document.getElementById('trendHmGrid');
+  const cols    = trend.length + 1; /* +1 for label col */
+  const totalCells = cells.length;
+
+  cells.forEach((cell, i) => {
+    /* Estimate column index from position */
+    const col = i % cols;
+    const delay = col * 0.04 + Math.floor(i / cols) * 0.015;
+    const targetOpacity = parseFloat(cell.dataset.targetOpacity || cell.style.opacity) || 0.5;
+
+    gsap.to(cell, {
+      opacity: targetOpacity || parseFloat(cell.style.opacity) || 0.45,
+      scale: 1,
+      duration: 0.35,
+      delay: 0.1 + delay,
+      ease: 'back.out(1.4)',
+    });
+  });
+
+  /* Animate the legend in */
+  const leg = document.getElementById('trendHmLeg');
+  if (leg) {
+    gsap.fromTo(leg, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .4, delay: .6, ease: 'power2.out' });
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   OVERRIDE buildTrendDeptChart — use our new version
+───────────────────────────────────────────────────────────── */
+buildTrendDeptChart = function(trend) {
+  _rebuildTrendChart(trend);
+};
+
+/* ─────────────────────────────────────────────────────────────
+   OVERRIDE loadTrend — loading state + animations
+   NOTE: Never set trend-panel or canvas parent to opacity:0
+   because Chart.js measures canvas dimensions on render.
+   Use visibility/pointer-events instead for hiding.
+───────────────────────────────────────────────────────────── */
+const _origLoadTrendV2 = loadTrend;
+loadTrend = async function(days) {
+  _showTrendLoading(true);
+
+  /* Dim stat cards while loading — do NOT touch the chart panel */
+  gsap.to('.trend-kpi-card', { opacity: 0.3, y: -4, stagger: 0.04, duration: .2, ease: 'power2.in' });
+
+  try {
+    await _origLoadTrendV2(days);
+  } finally {
+    _showTrendLoading(false);
+
+    /* Animate the chart zone in AFTER chart is built */
+    const zone = document.getElementById(trendView === 'dept' ? 'trendDeptZone' : 'trendQueueZone');
+    if (zone) {
+      /* Use clip/translate only — never opacity on the canvas parent */
+      gsap.fromTo(zone, { y: 10 }, { y: 0, duration: .4, ease: 'power3.out' });
+      /* Fade in separately so canvas dimensions are already computed */
+      gsap.fromTo(zone, { opacity: 0.4 }, { opacity: 1, duration: .35, ease: 'power2.out' });
+    }
+
+    /* Re-animate stat cards */
+    if (trendData) {
+      buildTrendKpis(trendData);
+      setTimeout(_animateTrendKpis, 80);
+    }
+  }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   CROSSHAIR CURSOR on trend chart
+───────────────────────────────────────────────────────────── */
+(function() {
+  const wrap   = document.querySelector('.trend-chart-wrap');
+  const cursor = document.getElementById('trendCursor');
+  if (!wrap || !cursor) return;
+
+  wrap.addEventListener('mousemove', e => {
+    const rect = wrap.getBoundingClientRect();
+    const x    = e.clientX - rect.left;
+    cursor.style.opacity    = '1';
+    cursor.style.transform  = `translateX(${x}px)`;
+  });
+  wrap.addEventListener('mouseleave', () => {
+    cursor.style.opacity = '0';
+  });
+})();
+
+/* ─────────────────────────────────────────────────────────────
+   TREND TAB ENTRANCE — GSAP when tab is clicked
+───────────────────────────────────────────────────────────── */
+document.getElementById('tabTrendBtn')?.addEventListener('click', () => {
+  setTimeout(() => {
+    /* Stat cards */
+    gsap.fromTo('.trend-kpi-card',
+      { opacity: 0, y: 18, scale: 0.95 },
+      { opacity: 1, y: 0, scale: 1, stagger: 0.09, duration: .5, ease: 'power3.out' }
+    );
+    /* Main panel — y only, never opacity:0 on canvas parent */
+    gsap.fromTo('.trend-panel',
+      { y: 20 },
+      { y: 0, duration: .55, delay: .15, ease: 'power3.out' }
+    );
+    /* Header controls */
+    gsap.fromTo('.trend-header',
+      { opacity: 0 },
+      { opacity: 1, duration: .35, delay: .1, ease: 'power2.out' }
+    );
+  }, 50);
+});
+</script>
+
+<style>
+/* ════════════════════════════════════════
+   TREND PAGE — NEW CSS
+   All new elements that didn't exist before
+════════════════════════════════════════ */
+
+/* ── TREND HEADER LAYOUT ── */
+.trend-panel { padding-bottom: 0; }
+.trend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.trend-header-left  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.trend-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* view toggle icons */
+.trend-view-tab {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none;
+  color: var(--t3); font-size: 11px; font-weight: 600;
+  padding: 6px 13px; border-radius: 7px; cursor: pointer;
+  transition: all .18s; font-family: var(--font-ui);
+  border: 1px solid transparent;
+}
+.trend-view-tab svg { flex-shrink: 0; transition: color .18s; }
+.trend-view-tab:hover { color: var(--t2); background: rgba(56,189,248,.06); }
+.trend-view-tab.active-dept  { background: rgba(34,211,238,.12); color: var(--cyan); border-color: rgba(34,211,238,.22); }
+.trend-view-tab.active-queue { background: rgba(251,146,60,.12);  color: var(--orange); border-color: rgba(251,146,60,.22); }
+
+/* day range buttons */
+.trend-controls { display: inline-flex; background: rgba(2,5,14,.8); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; }
+.trend-btn { background: none; border: none; color: var(--t3); padding: 5px 14px; border-radius: 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; transition: all .2s; letter-spacing: .04em; }
+.trend-btn:hover { color: var(--t2); }
+.trend-btn.active { color: var(--blue); background: rgba(56,189,248,.14); box-shadow: 0 0 0 1px rgba(56,189,248,.25); }
+
+/* overlay toggles */
+.trend-overlay-toggles { display: flex; align-items: center; gap: 4px; background: rgba(2,5,14,.7); border: 1px solid var(--border); border-radius: 7px; padding: 3px; }
+.overlay-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: transparent; border: 1px solid transparent;
+  color: var(--t3); font-size: 10px; font-weight: 600;
+  padding: 4px 10px; border-radius: 5px; cursor: pointer;
+  transition: all .18s; font-family: var(--font-ui);
+  opacity: .5;
+}
+.overlay-btn.active { opacity: 1; color: var(--t2); background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.08); }
+.overlay-btn:hover { opacity: 1; color: var(--t1); }
+.overlay-swatch { width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0; border-style: solid; border-width: 0; }
+.overlay-btn:nth-child(3) .overlay-swatch { height: 8px; border-radius: 2px; }
+
+/* replay button */
+.replay-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(56,189,248,.07); border: 1px solid rgba(56,189,248,.18);
+  color: var(--t3); font-size: 10px; font-weight: 600;
+  padding: 6px 13px; border-radius: 7px; cursor: pointer;
+  transition: all .22s; font-family: var(--font-ui);
+}
+.replay-btn:hover { background: rgba(56,189,248,.14); color: var(--blue); border-color: rgba(56,189,248,.35); }
+.replay-btn svg { transition: transform .6s; }
+.replay-btn.spinning svg { animation: spin360 .7s cubic-bezier(.4,0,.2,1); }
+@keyframes spin360 { to { transform: rotate(360deg); } }
+
+/* ── TREND CHART WRAP — position relative for overlay elements ── */
+.trend-chart-wrap {
+  position: relative;
+  height: 300px;
+  padding: 8px 20px 4px;
+}
+
+/* Crosshair cursor line */
+.trend-cursor {
+  position: absolute; top: 8px; bottom: 4px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(56,189,248,.5), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 5;
+  transform: translateX(0);
+  will-change: transform;
+}
+
+/* Peak pin annotation */
+.trend-peak-pin {
+  position: absolute;
+  display: flex; align-items: center; gap: 6px;
+  z-index: 6; pointer-events: none;
+}
+.peak-pin-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 8px rgba(250,204,21,.7);
+  flex-shrink: 0;
+  animation: peak-pulse 2s ease-in-out infinite;
+}
+@keyframes peak-pulse {
+  0%,100% { box-shadow: 0 0 4px rgba(250,204,21,.5); }
+  50%      { box-shadow: 0 0 16px rgba(250,204,21,.9); }
+}
+.peak-pin-label {
+  background: rgba(2,5,16,.94);
+  border: 1px solid rgba(250,204,21,.4);
+  color: var(--yellow);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+
+/* ── LOADING STATE ── */
+.trend-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 60px 20px;
+}
+.trend-loading-bars {
+  display: flex; align-items: flex-end; gap: 5px; height: 50px;
+}
+.tl-bar {
+  width: 10px; border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, var(--blue), rgba(56,189,248,.2));
+  animation: tl-dance 1.2s ease-in-out infinite;
+}
+.tl-bar:nth-child(1){animation-delay:0s;height:20px}
+.tl-bar:nth-child(2){animation-delay:.1s;height:35px}
+.tl-bar:nth-child(3){animation-delay:.2s;height:50px}
+.tl-bar:nth-child(4){animation-delay:.3s;height:28px}
+.tl-bar:nth-child(5){animation-delay:.4s;height:42px}
+.tl-bar:nth-child(6){animation-delay:.5s;height:18px}
+.tl-bar:nth-child(7){animation-delay:.6s;height:38px}
+.tl-bar:nth-child(8){animation-delay:.7s;height:25px}
+@keyframes tl-dance {
+  0%,100% { transform: scaleY(1); opacity: .7; }
+  50%      { transform: scaleY(1.4); opacity: 1; }
+}
+.trend-loading-lbl { font-family: var(--font-mono); font-size: 10px; color: var(--t3); letter-spacing: .12em; }
+
+/* ── TREND STAT CARDS ── */
+.trend-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.trend-kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+  position: relative; overflow: hidden;
+}
+.trend-kpi-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, var(--blue), transparent 60%);
+  opacity: .5;
+}
+.trend-kpi-card:hover {
+  border-color: rgba(56,189,248,.25);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(0,0,0,.3);
+}
+.trend-kpi-lbl { font-family: var(--font-mono); font-size: 8px; letter-spacing: .14em; text-transform: uppercase; color: var(--t3); margin-bottom: 7px; }
+.trend-kpi-val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--t1); letter-spacing: -.03em; line-height: 1; margin-bottom: 5px; }
+.trend-kpi-sub { font-size: 10px; color: var(--t3); }
+.trend-kpi-sub.up   { color: var(--green); }
+.trend-kpi-sub.down { color: var(--red); }
+
+/* ── RICH LEGEND ── */
+.trend-legend-rich {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 10px 20px 14px;
+  border-top: 1px solid var(--border);
+}
+.leg-dept-item {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 12px;
+  cursor: default;
+  transition: all .2s;
+}
+.leg-dept-item:hover {
+  background: rgba(56,189,248,.06);
+  border-color: rgba(56,189,248,.2);
+}
+.leg-dept-swatch { width: 12px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.leg-dept-name   { font-size: 11px; font-weight: 500; color: var(--t2); }
+.leg-sparkrow    { display: flex; align-items: flex-end; gap: 1.5px; height: 16px; }
+.leg-spark-bar   { width: 3px; border-radius: 1px 1px 0 0; min-height: 2px; transition: height .35s ease; }
+.leg-dept-total  { font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+
+.leg-divider { width: 1px; height: 28px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
+.leg-overlay-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; color: var(--t3);
+  padding: 4px 8px;
+  transition: opacity .2s;
+}
+.leg-overlay-item.dim { opacity: .35; }
+.leg-line-swatch { width: 20px; height: 0; border-top: 2px solid currentColor; flex-shrink: 0; }
+.leg-line-swatch.dashed { border-style: dashed; }
+
+/* ── HEATMAP UPGRADES ── */
+.heatmap-header-row {
+  padding: 10px 20px 6px;
+  display: flex; align-items: center;
+}
+.heatmap-hint { font-family: var(--font-mono); font-size: 9px; color: var(--t3); letter-spacing: .08em; }
+.trend-hm-scroll { overflow-x: auto; padding: 0 20px 4px; }
+.trend-hm-grid   { display: grid; gap: 3px; min-width: 500px; }
+.trend-hm-header { height: 22px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: var(--t2); font-family: var(--font-ui); }
+.trend-hm-dept-lbl { height: 28px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.trend-hm-lbl { height: 28px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; font-weight: 500; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trend-hm-cell {
+  height: 28px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: rgba(255,255,255,.9);
+  cursor: default;
+  font-family: var(--font-ui); letter-spacing: .01em;
+  text-shadow: 0 1px 3px rgba(0,0,0,.7);
+  will-change: opacity, transform;
+  /* transition handled by GSAP */
+}
+.trend-hm-gap { height: 5px; }
+.trend-leg-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 20px 14px; font-size: 11px; color: var(--t2); }
+.trend-leg-item { display: flex; align-items: center; gap: 5px; }
+.trend-leg-sq   { width: 11px; height: 8px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+.trend-leg-dot  { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* ── INSIGHT BAR ── */
+.trend-insight-bar {
+  display: flex; flex-wrap: wrap; gap: 20px;
+  background: rgba(2,5,14,.5);
+  border-top: 1px solid var(--border);
+  padding: 10px 20px;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+.trend-insight-item { font-size: 12px; color: var(--t2); display: flex; align-items: center; gap: 5px; }
+.trend-insight-val  { font-weight: 700; color: var(--t1); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .trend-kpis { grid-template-columns: repeat(2,1fr); }
+  .trend-header { flex-direction: column; align-items: flex-start; }
+  .trend-header-right { flex-wrap: wrap; gap: 6px; }
+}
+@media (max-width: 560px) {
+  .trend-kpis { grid-template-columns: 1fr 1fr; }
+  .trend-overlay-toggles { display: none; }
+}
+</style>
 </body>
 </html>

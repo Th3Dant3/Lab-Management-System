@@ -2,6 +2,157 @@
    INCOMING JOBS — OPTION B: SPLIT PANEL  (UI IMPROVED)
    ============================================================ */
 
+/* ============================================================
+   LIVE REFRESH ANIMATIONS
+   ============================================================ */
+
+const _sparkHistory = [];
+const _SPARK_MAX = 14;
+
+function _pushSparkValue(total) {
+  _sparkHistory.push(total);
+  if (_sparkHistory.length > _SPARK_MAX) _sparkHistory.shift();
+  _renderTopbarSparkline();
+}
+
+function _renderTopbarSparkline() {
+  const el = document.getElementById('topbarSparkline');
+  if (!el || _sparkHistory.length < 2) return;
+  const max = Math.max(..._sparkHistory, 1);
+  el.innerHTML = '';
+  _sparkHistory.forEach((v, i) => {
+    const b = document.createElement('div');
+    b.className = 'tb-sp-bar' + (i === _sparkHistory.length - 1 ? ' sp-latest' : '');
+    b.style.height = Math.max(3, Math.round((v / max) * 22)) + 'px';
+    el.appendChild(b);
+  });
+}
+
+function _morphTotal(newTotal, delta) {
+  const el = document.getElementById('totalJobs');
+  if (!el) return;
+  /* Only morph if we have a real number — skip the initial '--' state */
+  if (newTotal <= 0) return;
+  const str = newTotal.toLocaleString();
+  el.style.display = 'flex';
+  el.style.overflow = 'hidden';
+  el.innerHTML = str.split('').map((ch, i) =>
+    `<span class="dig morph-in" style="display:inline-block;animation-delay:${i * 0.04}s">${ch}</span>`
+  ).join('');
+  if (delta > 0) {
+    const badge = document.getElementById('totalTrendBadge');
+    if (badge) {
+      badge.textContent = '+' + delta;
+      badge.classList.remove('show');
+      void badge.offsetWidth;
+      badge.classList.add('show');
+    }
+  }
+}
+
+function _fireTopbarSweep() {
+  const el = document.getElementById('topbarSweep');
+  if (!el) return;
+  el.classList.remove('run');
+  void el.offsetWidth;
+  el.classList.add('run');
+}
+
+function _injectKpiAnimEls(card) {
+  if (card.querySelector('.kpi-scan-beam')) return;
+  ['kpi-scan-beam','kpi-scan-glow'].forEach(cls => {
+    const d = document.createElement('div'); d.className = cls; card.appendChild(d);
+  });
+  const tag = document.createElement('div'); tag.className = 'kpi-scan-tag'; tag.textContent = 'SCAN'; card.appendChild(tag);
+}
+
+function _scanAllKpiCards() {
+  const cards = document.querySelectorAll('.kpi-card');
+  cards.forEach((card, i) => {
+    _injectKpiAnimEls(card);
+    setTimeout(() => {
+      card.classList.remove('scanning');
+      void card.offsetWidth;
+      card.classList.add('scanning');
+      setTimeout(() => card.classList.remove('scanning'), 900);
+    }, i * 160);
+  });
+}
+
+function _flipKpiNumbers(data) {
+  const cards = document.querySelectorAll('.kpi-card');
+  const changed = [];
+  cards.forEach(card => {
+    const dept = card.dataset.dept;
+    if (!dept || !data[dept]) return;
+    const newVal = data[dept]._total ?? 0;
+    const oldVal = prevDeptTotals[dept] ?? null;
+    if (oldVal !== null && newVal !== oldVal) changed.push({ card, dept, newVal, oldVal });
+  });
+  changed.slice(0, 2).forEach(({ card, newVal, oldVal }) => {
+    /* Find the number el — either the live .kpi-num or the one inside a wrap */
+    const numEl = card.querySelector('.kpi-num-wrap .kpi-num:not(.flip-in)') || card.querySelector('.kpi-num');
+    if (!numEl) return;
+
+    /* If already wrapped, just retrigger */
+    const existingWrap = card.querySelector('.kpi-num-wrap');
+    if (existingWrap) {
+      const flipOut = existingWrap.querySelector('.flip-out');
+      const flipIn  = existingWrap.querySelector('.flip-in');
+      if (flipOut && flipIn) {
+        flipOut.classList.remove('flip-out'); void flipOut.offsetWidth;
+        flipOut.textContent = oldVal.toLocaleString(); flipOut.classList.add('flip-out');
+        flipIn.classList.remove('flip-in');   void flipIn.offsetWidth;
+        flipIn.textContent  = newVal.toLocaleString(); flipIn.classList.add('flip-in');
+      }
+    } else {
+      /* First time: wrap the existing .kpi-num — preserve its color style */
+      const wrap = document.createElement('div');
+      wrap.className = 'kpi-num-wrap';
+      const colorStyle = numEl.style.color || '';
+      const oldClone = numEl.cloneNode(true);
+      oldClone.className = 'kpi-num flip-out';
+      oldClone.textContent = oldVal.toLocaleString();
+      const newClone = numEl.cloneNode(true);
+      newClone.className = 'kpi-num flip-in';
+      newClone.textContent = newVal.toLocaleString();
+      wrap.appendChild(oldClone);
+      wrap.appendChild(newClone);
+      numEl.replaceWith(wrap);
+    }
+
+    /* Delta badge — floats top-right, never affects layout */
+    const delta = newVal - oldVal;
+    if (delta > 0) {
+      let badge = card.querySelector('.kpi-delta-badge');
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'kpi-delta-badge';
+        card.appendChild(badge);
+      }
+      badge.textContent = '+' + delta;
+      badge.classList.remove('show'); void badge.offsetWidth; badge.classList.add('show');
+    }
+  });
+}
+
+
+let _prevTotal = null;
+
+function fireRefreshAnimations(data, total) {
+  const delta = _prevTotal !== null ? Math.max(0, total - _prevTotal) : 0;
+  _prevTotal = total;
+  _fireTopbarSweep();
+  _pushSparkValue(total);
+  _scanAllKpiCards();
+  setTimeout(() => _flipKpiNumbers(data), 700);
+  setTimeout(() => _morphTotal(total, delta), 750);
+}
+
+/* ============================================================
+   END ANIMATIONS
+   ============================================================ */
+
 const API_URL = "https://script.google.com/macros/s/AKfycbyI2YqO9wXZ4-v34OXqqxD-yCYe3Dnly1-d_cf9mYtkcVkZoXeWhgQ8u6WbgY-lvIQQjg/exec";
 
 let chart           = null;
@@ -101,14 +252,96 @@ function showSkeleton() {
   }
 }
 
+/* ===== ARC LOADER ===== */
+const LO_STAGES = [
+  "Connecting to Sheet API…",
+  "Fetching scan records…",
+  "Building queue index…",
+  "Rendering dashboard…",
+  "Ready!"
+];
+const LO_DASHARRAY = 345;
+
+function createLoader() {
+  const el = document.createElement("div");
+  el.id = "loaderOverlay";
+  el.innerHTML = `
+    <div class="lo-scan"></div>
+    <div class="lo-live"><div class="lo-live-dot"></div>LIVE</div>
+    <div class="lo-arc-wrap">
+      <div class="lo-pulse"></div>
+      <div class="lo-pulse2"></div>
+      <svg viewBox="0 0 110 110">
+        <circle class="lo-track" cx="55" cy="55" r="46"/>
+        <circle class="lo-glow"  cx="55" cy="55" r="46" stroke-dasharray="${LO_DASHARRAY}" stroke-dashoffset="${LO_DASHARRAY}" id="loArcGlow"/>
+        <circle class="lo-fill"  cx="55" cy="55" r="46" stroke-dasharray="${LO_DASHARRAY}" stroke-dashoffset="${LO_DASHARRAY}" id="loArcFill"/>
+      </svg>
+      <div class="lo-center">
+        <div class="lo-num"  id="loNum">0</div>
+        <div class="lo-pct">PCT</div>
+      </div>
+    </div>
+    <div class="lo-brand">INCOMING JOBS</div>
+    <div class="lo-stage" id="loStage">${LO_STAGES[0]}</div>
+    <div class="lo-ticks" id="loTicks">
+      ${Array(5).fill('<div class="lo-tick"></div>').join("")}
+    </div>`;
+  document.body.prepend(el);
+}
+
+function setLoaderProgress(pct) {
+  const numEl   = document.getElementById("loNum");
+  const stageEl = document.getElementById("loStage");
+  const fillEl  = document.getElementById("loArcFill");
+  const glowEl  = document.getElementById("loArcGlow");
+  const ticks   = document.querySelectorAll(".lo-tick");
+  if (!numEl) return;
+  const clamped = Math.min(100, Math.max(0, pct));
+  numEl.textContent = Math.round(clamped);
+  const offset = LO_DASHARRAY - (LO_DASHARRAY * clamped / 100);
+  if (fillEl) fillEl.setAttribute("stroke-dashoffset", offset);
+  if (glowEl) glowEl.setAttribute("stroke-dashoffset", offset);
+  const si = Math.min(LO_STAGES.length - 1, Math.floor(clamped / 25));
+  if (stageEl) stageEl.textContent = LO_STAGES[si];
+  ticks.forEach((t, i) => {
+    const threshold = (i + 1) * 20;
+    t.classList.remove("done", "active");
+    if (clamped >= threshold)            t.classList.add("done");
+    else if (clamped >= threshold - 20)  t.classList.add("active");
+  });
+}
+
+function hideLoader() {
+  setLoaderProgress(100);
+  setTimeout(() => {
+    const el = document.getElementById("loaderOverlay");
+    if (el) el.classList.add("hidden");
+  }, 500);
+}
+
 /* ===== INIT ===== */
 document.addEventListener("DOMContentLoaded", () => {
+  createLoader();
+
   const today = getLocalDate();
   document.getElementById("dateFilter").value = today;
   currentDate = today;
   startLiveClock();
   showSkeleton();
-  loadData();
+
+  /* Animate loader progress while real fetch runs — crawls to 85%, then waits for data */
+  let loaderPct = 0;
+  const loaderTick = setInterval(() => {
+    const step = loaderPct < 40 ? 6 : loaderPct < 70 ? 3 : loaderPct < 85 ? 1 : 0;
+    loaderPct = Math.min(85, loaderPct + step);
+    setLoaderProgress(loaderPct);
+  }, 80);
+
+  loadData().finally(() => {
+    clearInterval(loaderTick);
+    hideLoader();
+  });
+
   setInterval(() => {
     if (currentDate === getLocalDate()) loadData();
   }, 60_000);
@@ -272,18 +505,119 @@ async function loadData() {
   }
 }
 
+/* ── Topbar dept stats ── */
+function _updateTopbarDepts(data, yesterdayData) {
+  const deptMap  = { 'Finish':'Finish','Speciality':'Speciality','Specialty':'Speciality','Surface':'Surface','Frame Only':'FrameOnly' };
+  const colorMap = { 'Finish':'#22d3ee','Speciality':'#a78bfa','Specialty':'#a78bfa','Surface':'#38bdf8','Frame Only':'#fb923c' };
+
+  /* Build current hour key in exact HOUR_ORDER format e.g. "3:00 PM" */
+  const now = new Date();
+  const h   = now.getHours();
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const currentHourKey = `${h12}:00 ${ampm}`;   /* matches "1:00 AM", "12:00 PM" etc. */
+
+  let shown = 0;
+  Object.keys(data).forEach(dept => {
+    if (dept === '_total') return;
+    const key   = deptMap[dept] || dept.replace(/\s/g,'');
+    const valEl = document.getElementById(`tbv${key}`);
+    const hourEl= document.getElementById(`tbh${key}`);
+    const blkEl = document.getElementById(`tbDept${key}`);
+    const sepEl = document.getElementById(`tbsep${shown+1}`);
+    if (!valEl || !blkEl) return;
+
+    const todayVal = data[dept]._total ?? 0;
+    valEl.textContent = todayVal.toLocaleString();
+    valEl.style.color = colorMap[dept] || '#38bdf8';
+
+    /* Sum all queue entries for the current hour */
+    if (hourEl) {
+      let hourTotal = 0;
+      Object.keys(data[dept]).forEach(q => {
+        if (q === '_total') return;
+        const hrs = data[dept][q].hours || {};
+        if (hrs[currentHourKey]) {
+          hrs[currentHourKey].forEach(e => { hourTotal += e.value || 0; });
+        }
+      });
+      hourEl.textContent = hourTotal > 0 ? `+${hourTotal} this hr` : '+0 this hr';
+    }
+
+    blkEl.style.display = 'flex';
+    if (sepEl) sepEl.style.display = 'block';
+    shown++;
+  });
+}
+
 function renderAll(data, total, yesterdayData) {
   const el = document.getElementById("totalJobs");
   if (el) el.textContent = total.toLocaleString();
   renderKPI(data, total, yesterdayData);
+  _updateTopbarDepts(data, yesterdayData);
   currentHour ? showHourBreakdown(currentHour, data) : renderQueueBars(data, total);
   buildHourlyChart(data);
   setChartInsight(data);
   buildComparisonChart(data, yesterdayData || {});
   lastData = data;
+  fireRefreshAnimations(data, total);
 }
 
-/* ===== KPI CARDS — with % arc ring SVG ===== */
+/* ===== GEOMETRIC KPI CARD SHAPES ===== */
+const KPI_GEO_TYPES = { 'Finish':'squares','Speciality':'triangles','Specialty':'triangles','Surface':'diamonds','Frame Only':'hexagons' };
+
+function makeKpiGeo(col, type) {
+  const shapes = {
+    squares: `<svg width="100%" height="100%" viewBox="0 0 160 160" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(138,120)">
+        <rect x="-38" y="-38" width="76" height="76" fill="none" stroke="${col}" stroke-width="1" rx="2" opacity=".55">
+          <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="20s" repeatCount="indefinite"/>
+        </rect>
+        <rect x="-24" y="-24" width="48" height="48" fill="none" stroke="${col}" stroke-width="1" rx="2" opacity=".4">
+          <animateTransform attributeName="transform" type="rotate" from="45" to="405" dur="15s" repeatCount="indefinite"/>
+        </rect>
+        <rect x="-12" y="-12" width="24" height="24" fill="${col}" fill-opacity=".1" stroke="${col}" stroke-width=".8" rx="1" opacity=".6">
+          <animateTransform attributeName="transform" type="rotate" from="0" to="-360" dur="10s" repeatCount="indefinite"/>
+        </rect>
+        <circle r="2.5" fill="${col}" opacity=".6"><animate attributeName="opacity" values=".3;.8;.3" dur="3s" repeatCount="indefinite"/></circle>
+      </g></svg>`,
+    triangles: `<svg width="100%" height="100%" viewBox="0 0 160 160" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(132,118)">
+        <polygon points="0,-40 35,20 -35,20" fill="none" stroke="${col}" stroke-width="1" opacity=".5">
+          <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="24s" repeatCount="indefinite"/>
+        </polygon>
+        <polygon points="0,-24 21,12 -21,12" fill="${col}" fill-opacity=".07" stroke="${col}" stroke-width=".8" opacity=".65">
+          <animateTransform attributeName="transform" type="rotate" from="60" to="-300" dur="17s" repeatCount="indefinite"/>
+        </polygon>
+        <circle r="3" fill="${col}" opacity=".5"><animate attributeName="opacity" values=".25;.75;.25" dur="2.8s" repeatCount="indefinite"/></circle>
+      </g></svg>`,
+    diamonds: `<svg width="100%" height="100%" viewBox="0 0 160 160" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(134,118)">
+        <rect x="-32" y="-32" width="64" height="64" fill="none" stroke="${col}" stroke-width="1" opacity=".5" transform="rotate(45)">
+          <animate attributeName="opacity" values=".25;.6;.25" dur="4s" repeatCount="indefinite"/>
+        </rect>
+        <rect x="-19" y="-19" width="38" height="38" fill="${col}" fill-opacity=".08" stroke="${col}" stroke-width=".8" transform="rotate(45)">
+          <animateTransform attributeName="transform" type="rotate" from="45" to="405" dur="13s" repeatCount="indefinite"/>
+        </rect>
+        <rect x="-8" y="-8" width="16" height="16" fill="${col}" fill-opacity=".2" transform="rotate(45)">
+          <animateTransform attributeName="transform" type="rotate" from="45" to="-315" dur="8s" repeatCount="indefinite"/>
+        </rect>
+      </g></svg>`,
+    hexagons: `<svg width="100%" height="100%" viewBox="0 0 160 160" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <g transform="translate(133,117)">
+        <polygon points="0,-38 33,19 33,-19 0,38 -33,19 -33,-19" fill="none" stroke="${col}" stroke-width="1" opacity=".5">
+          <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="26s" repeatCount="indefinite"/>
+        </polygon>
+        <polygon points="0,-22 19,11 19,-11 0,22 -19,11 -19,-11" fill="${col}" fill-opacity=".07" stroke="${col}" stroke-width=".8" opacity=".65">
+          <animateTransform attributeName="transform" type="rotate" from="30" to="-330" dur="19s" repeatCount="indefinite"/>
+        </polygon>
+        <polygon points="0,-10 9,5 9,-5 0,10 -9,5 -9,-5" fill="${col}" fill-opacity=".2"/>
+      </g></svg>`
+  };
+  return `<div class="kpi-geo-shape" style="position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.5">${shapes[type] || shapes.squares}</div>`;
+}
+
+/* ===== KPI CARDS — with geometric shapes ===== */
 function renderKPI(data, grandTotal, yesterdayData) {
   const grid = document.getElementById("kpiGrid");
   if (!grid) return;
@@ -291,18 +625,39 @@ function renderKPI(data, grandTotal, yesterdayData) {
   sparklineCharts = {};
   grid.innerHTML = "";
 
+  /* Build current hour key matching HOUR_ORDER format e.g. "3:00 PM" */
+  const _now   = new Date();
+  const _h12   = _now.getHours() % 12 === 0 ? 12 : _now.getHours() % 12;
+  const _ampm  = _now.getHours() < 12 ? 'AM' : 'PM';
+  const _curHr = `${_h12}:00 ${_ampm}`;
+
   Object.keys(data).forEach(dept => {
     if (dept === "_total") return;
-    const todayVal = data[dept]._total ?? 0;
+    const todayVal     = data[dept]._total ?? 0;
     const yesterdayVal = yesterdayData?.[dept]?._total ?? null;
-    const pct = grandTotal > 0 ? ((todayVal / grandTotal)*100).toFixed(1) : "0.0";
-    const isAlert = prevDeptTotals[dept] != null && todayVal > prevDeptTotals[dept] * 1.25;
-    const deptColor = getDeptColor(dept);
+    const isAlert      = prevDeptTotals[dept] != null && todayVal > prevDeptTotals[dept] * 1.25;
+    const deptColor    = getDeptColor(dept);
+
+    /* +N received this hour */
+    let thisHourTotal = 0;
+    Object.keys(data[dept]).forEach(q => {
+      if (q === '_total') return;
+      const hrs = data[dept][q].hours || {};
+      if (hrs[_curHr]) hrs[_curHr].forEach(e => { thisHourTotal += e.value || 0; });
+    });
+    const hourHtml = `<div class="kpi-hour-badge visible">+${thisHourTotal} received this hour</div>`;
+
+    /* Delta since last refresh */
+    const prevVal  = prevDeptTotals[dept] ?? null;
+    const delta    = prevVal !== null ? todayVal - prevVal : null;
+    const deltaHtml = delta !== null && delta !== 0
+      ? `<div class="kpi-hour-badge refresh" id="khb-${dept.replace(/\s/g,"-")}">${delta > 0 ? '+' : ''}${delta} since last refresh</div>`
+      : `<div class="kpi-hour-badge" id="khb-${dept.replace(/\s/g,"-")}"></div>`;
 
     let chgHtml = "";
     if (yesterdayVal !== null && yesterdayVal > 0) {
-      const chg = ((todayVal - yesterdayVal) / yesterdayVal * 100).toFixed(1);
-      const cls = chg > 0 ? "up" : chg < 0 ? "down" : "flat";
+      const chg  = ((todayVal - yesterdayVal) / yesterdayVal * 100).toFixed(1);
+      const cls  = chg > 0 ? "up" : chg < 0 ? "down" : "flat";
       const icon = chg > 0 ? "↑" : chg < 0 ? "↓" : "—";
       const yesterdayDate = (() => {
         const base = currentDate || getLocalDate();
@@ -313,19 +668,26 @@ function renderKPI(data, grandTotal, yesterdayData) {
       chgHtml = `<div class="kpi-chg ${cls}">${icon} ${Math.abs(chg)}% vs ${yesterdayDate}</div>`;
     }
 
-    const circ = 81.7;
+    const circ   = 81.7;
     const arcLen = grandTotal > 0 ? ((todayVal / grandTotal) * circ).toFixed(1) : "0.0";
     const arcGap = (circ - parseFloat(arcLen)).toFixed(1);
+
+    const geoType  = KPI_GEO_TYPES[dept] || 'squares';
+    const geoHtml  = makeKpiGeo(deptColor, geoType);
 
     const card = document.createElement("div");
     card.className = "kpi-card" + (isAlert ? " alert" : "");
     card.dataset.dept = dept;
+    card.style.opacity = '0';
+    card.style.animation = 'kpiCardIn .5s ease forwards';
     card.innerHTML = `
-      <div class="kpi-lbl">${dept}</div>
+      ${geoHtml}
+      <div class="kpi-lbl" style="position:relative;z-index:2">${dept}</div>
       ${isAlert ? `<div class="kpi-alert-badge">↑ Spike</div>` : ""}
-      <div class="kpi-num" id="kv-${dept.replace(/\s/g,"-")}">0</div>
-      <div class="kpi-pct">${pct}% of total</div>
+      <div class="kpi-num" id="kv-${dept.replace(/\s/g,"-")}" style="position:relative;z-index:2">0</div>
+      ${hourHtml}
       ${chgHtml}
+      ${deltaHtml}
       <canvas class="kpi-sparkline" id="sp-${dept.replace(/\s/g,"-")}"></canvas>
       <svg class="kpi-ring" viewBox="0 0 34 34">
         <circle fill="none" cx="17" cy="17" r="13" stroke="rgba(90,160,255,.08)" stroke-width="3"/>
@@ -335,6 +697,10 @@ function renderKPI(data, grandTotal, yesterdayData) {
       </svg>
     `;
     grid.appendChild(card);
+
+    /* stagger entrance animation */
+    const cardIndex = grid.children.length - 1;
+    card.style.animationDelay = `${cardIndex * 0.1}s`;
 
     animateCount(document.getElementById(`kv-${dept.replace(/\s/g,"-")}`), todayVal);
     drawSparkline(`sp-${dept.replace(/\s/g,"-")}`, buildDeptHourly(data[dept]), deptColor);
