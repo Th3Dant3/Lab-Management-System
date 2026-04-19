@@ -707,6 +707,105 @@ function _patchHourBadges(data, yesterdayData) {
   });
 }
 
+
+/* ════════════════════════════════════════════════════════════════
+   DATE TRANSITION OVERLAY
+   Shows a slim overlay with mode label when switching
+   Live → History or History → Live
+════════════════════════════════════════════════════════════════ */
+
+/* Create the transition overlay element once */
+(function() {
+  const el = document.createElement('div');
+  el.id = 'dateTransitionOverlay';
+  el.innerHTML = `
+    <div class="dto-inner">
+      <div class="dto-ring">
+        <svg viewBox="0 0 60 60">
+          <circle class="dto-track" cx="30" cy="30" r="24"/>
+          <circle class="dto-arc"   cx="30" cy="30" r="24"/>
+        </svg>
+        <div class="dto-icon" id="dtoIcon">📅</div>
+      </div>
+      <div class="dto-mode" id="dtoMode">Loading…</div>
+      <div class="dto-date" id="dtoDate"></div>
+      <div class="dto-sub"  id="dtoSub">Fetching data</div>
+    </div>`;
+  document.body.appendChild(el);
+})();
+
+/* Show the transition overlay */
+function _showDateTransition(toMode, dateLabel) {
+  const overlay = document.getElementById('dateTransitionOverlay');
+  const modeEl  = document.getElementById('dtoMode');
+  const dateEl  = document.getElementById('dtoDate');
+  const subEl   = document.getElementById('dtoSub');
+  const iconEl  = document.getElementById('dtoIcon');
+  if (!overlay) return;
+
+  const isHistory = toMode === 'history';
+  modeEl.textContent  = isHistory ? 'Loading History' : 'Going Live';
+  dateEl.textContent  = dateLabel || '';
+  subEl.textContent   = isHistory ? 'Fetching historical data…' : 'Connecting to live feed…';
+  iconEl.textContent  = isHistory ? '📅' : '⚡';
+  modeEl.style.color  = isHistory ? '#facc15' : '#4ade80';
+
+  overlay.className = 'dto-show';
+  /* start arc spin */
+  overlay.querySelector('.dto-arc').style.animationPlayState = 'running';
+}
+
+/* Hide the transition overlay */
+function _hideDateTransition() {
+  const overlay = document.getElementById('dateTransitionOverlay');
+  if (!overlay) return;
+  overlay.className = 'dto-hide';
+  /* auto-clean class after animation */
+  setTimeout(() => { if (overlay.className === 'dto-hide') overlay.className = ''; }, 500);
+}
+
+/* Patch applyDateFilter — show transition before loadData */
+const _origApplyDateFilter = applyDateFilter;
+applyDateFilter = function() {
+  const val = document.getElementById('dateFilter')?.value;
+  if (!val) return;
+  const today = getLocalDate();
+  const isHistory = val !== today;
+  const label = new Date(val + 'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+  _showDateTransition(isHistory ? 'history' : 'live', label);
+  /* small delay so overlay is visible before fetch starts */
+  setTimeout(() => {
+    _origApplyDateFilter();
+  }, 120);
+};
+
+/* Patch resetDateFilter — show "Going Live" transition */
+const _origResetDateFilter = resetDateFilter;
+resetDateFilter = function() {
+  const today = getLocalDate();
+  const label = new Date(today + 'T00:00:00').toLocaleDateString([], { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+  _showDateTransition('live', label);
+  setTimeout(() => {
+    _origResetDateFilter();
+  }, 120);
+};
+
+/* Patch loadData — hide overlay when done */
+const _origLoadDataForTransition = loadData;
+loadData = async function() {
+  try {
+    await _origLoadDataForTransition(...arguments);
+  } finally {
+    _hideDateTransition();
+    /* Flash the status pill to draw attention */
+    const pill = document.getElementById('refreshStatus');
+    if (pill) {
+      pill.classList.add('pill-flash');
+      setTimeout(() => pill.classList.remove('pill-flash'), 800);
+    }
+  }
+};
+
 /* ── TAB INDICATOR SLIDE ── */
 function updateTabIndicator() {
   const active = document.querySelector('.tab-btn.active');

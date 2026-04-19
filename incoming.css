@@ -547,3 +547,141 @@ body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:no
   background: rgba(248,113,113,.15);
   padding: 1px 5px; border-radius: 3px;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   DATE TRANSITION OVERLAY
+   Shown when switching Live ↔ History
+════════════════════════════════════════════════════════════════ */
+#dateTransitionOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(1, 3, 12, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease;
+}
+/* scan-line texture on overlay */
+#dateTransitionOverlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,.10) 2px, rgba(0,0,0,.10) 4px
+  );
+}
+/* visible state */
+#dateTransitionOverlay.dto-show {
+  opacity: 1;
+  pointer-events: all;
+  animation: dto-in .25s cubic-bezier(.4,0,.2,1) forwards;
+}
+/* hiding state */
+#dateTransitionOverlay.dto-hide {
+  animation: dto-out .4s cubic-bezier(.4,0,.2,1) forwards;
+  pointer-events: none;
+}
+@keyframes dto-in  { from { opacity:0; backdrop-filter:blur(0px); } to { opacity:1; backdrop-filter:blur(18px); } }
+@keyframes dto-out { from { opacity:1; } to { opacity:0; } }
+
+.dto-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+/* spinning ring */
+.dto-ring {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+.dto-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.dto-track {
+  fill: none;
+  stroke: rgba(56,189,248,.1);
+  stroke-width: 3;
+}
+.dto-arc {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 30 121;
+  animation: dto-spin 1.1s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes dto-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+/* icon in ring center */
+.dto-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  animation: dto-icon-pulse 1.4s ease-in-out infinite;
+}
+@keyframes dto-icon-pulse {
+  0%,100% { transform: scale(1);    opacity: .9; }
+  50%      { transform: scale(1.12); opacity: 1;  }
+}
+
+/* text */
+.dto-mode {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.dto-date {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t1);
+  letter-spacing: .02em;
+}
+.dto-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--t3);
+  letter-spacing: .1em;
+  animation: dto-sub-blink 1.6s ease-in-out infinite;
+}
+@keyframes dto-sub-blink {
+  0%,100% { opacity: .5; }
+  50%      { opacity: 1; }
+}
+
+/* Status pill flash when data lands */
+.status-pill.pill-flash {
+  animation: pill-flash .8s cubic-bezier(.4,0,.2,1);
+}
+@keyframes pill-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(74,222,128,.0); }
+  30%  { box-shadow: 0 0 0 8px rgba(74,222,128,.3); transform: scale(1.06); }
+  100% { box-shadow: 0 0 0 0 rgba(74,222,128,.0); transform: scale(1); }
+}
