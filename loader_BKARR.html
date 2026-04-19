@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0f1208;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── BACKGROUND — forest dark green + amber ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 40%, rgba(80,130,30,.22) 0%,transparent 65%),
+    radial-gradient(ellipse 100% 30% at 50% 100%, rgba(200,140,0,.18) 0%,transparent 55%),
+    radial-gradient(ellipse 60% 40% at 20% 30%, rgba(50,80,15,.15) 0%,transparent 55%),
+    #0f1208;
+  animation:bgp 5s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.85}50%{opacity:1}}
+
+/* ── Forest tree silhouettes ── */
+.trees{
+  position:fixed;bottom:0;left:0;right:0;
+  height:130px;pointer-events:none;z-index:2;
+}
+
+/* ── Fireflies ── */
+.fly{
+  position:fixed;border-radius:50%;
+  background:#d4a84b;
+  animation:fw 4s ease-in-out infinite;opacity:.6;
+  pointer-events:none;z-index:2;
+}
+@keyframes fw{0%,100%{opacity:.1;transform:translate(0,0)}50%{opacity:.7;transform:translate(var(--mx),var(--my))}}
+
+/* ── F1 speed lines ── */
+.speedlines{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1;}
+.sline{
+  position:absolute;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(220,40,40,.35),rgba(255,60,60,.4),transparent);
+  animation:sl 2.8s linear infinite;
+}
+@keyframes sl{from{left:-60%;width:50%}to{left:110%;width:50%}}
+
+/* ── Crosshair rotating bg ── */
+.xhair{
+  position:fixed;top:50%;left:50%;
+  width:500px;height:500px;
+  transform:translate(-50%,-50%);
+  pointer-events:none;z-index:1;opacity:.06;
+  animation:xr 20s linear infinite;
+}
+@keyframes xr{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+/* Scan line */
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(180,120,0,.2),transparent);animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+/* ── PAGE ── */
+.page{
+  position:fixed;inset:0;bottom:130px;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:5px;
+}
+
+.welcome-txt{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:15px;letter-spacing:8px;
+  color:#ffffff;
+  text-transform:uppercase;
+  animation:fu .4s .3s ease both;
+}
+.fullname{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:68px;color:#ffffff;
+  letter-spacing:5px;line-height:1;
+  animation:nameIn .6s .4s ease both;
+  text-shadow:0 0 30px rgba(180,120,0,.4),0 2px 0 rgba(0,0,0,.8);
+}
+@keyframes nameIn{from{opacity:0;letter-spacing:18px}to{opacity:1;letter-spacing:5px}}
+
+/* ── Three passion badges ── */
+.passions{
+  display:flex;align-items:center;gap:0;
+  border:1px solid rgba(210,160,40,.6);
+  background:rgba(0,0,0,.5);
+  margin-top:4px;
+  animation:fu .4s .55s ease both;
+}
+.passion{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 20px;
+  border-right:1px solid rgba(210,160,40,.4);
+}
+.passion:last-child{border-right:none;}
+.passion-icon{font-size:18px;line-height:1;}
+.passion-txt{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;letter-spacing:3px;
+  color:#ffffff;
+  text-transform:uppercase;font-weight:600;
+}
+
+/* Role */
+.role-badge{
+  display:inline-flex;align-items:center;gap:10px;
+  border:2px solid rgba(210,160,40,.8);
+  background:rgba(120,80,0,.25);
+  padding:6px 22px;
+  animation:fu .4s .7s ease both;
+}
+.role-badge span{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:15px;letter-spacing:4px;
+  color:#ffffff;text-transform:uppercase;font-weight:600;
+}
+
+/* Progress */
+.pbar-wrap{width:320px;margin-top:12px;animation:fu .4s .85s ease both;}
+.pbar-top{
+  display:flex;justify-content:space-between;
+  font-family:'DM Mono',monospace;
+  font-size:11px;letter-spacing:2px;
+  color:#ffffff;
+  text-transform:uppercase;margin-bottom:6px;
+}
+.pbar-track{width:100%;height:5px;background:rgba(180,120,0,.25);border:1px solid rgba(210,160,40,.5);overflow:hidden;}
+.pbar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#4a3000,#b07000,#d4a84b,#f0c060);
+  animation:pf 6s .9s ease forwards;position:relative;
+}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:16px;height:100%;background:rgba(255,200,80,.6);filter:blur(3px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+
+.sys-txt{
+  font-family:'DM Mono',monospace;
+  font-size:11px;letter-spacing:2px;
+  color:rgba(255,255,255,.7);
+  text-transform:uppercase;
+  margin-top:5px;
+  animation:fu .4s 1s ease both;
+}
+@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── F1 CAR CSS — races across above trees ── */
+.f1-scene{
+  position:fixed;bottom:128px;left:0;right:0;
+  height:60px;pointer-events:none;z-index:6;overflow:hidden;
+}
+.f1-ride{
+  position:absolute;bottom:0;
+  animation:f1Ride 3s cubic-bezier(.3,.1,.3,1) infinite;
+}
+@keyframes f1Ride{0%{left:-260px;opacity:0;}5%{opacity:1;}92%{opacity:1;}100%{left:110vw;opacity:0;}}
+.f1-rock{animation:f1Rock .2s ease-in-out infinite alternate;transform-origin:center bottom;}
+@keyframes f1Rock{from{transform:rotate(-.5deg)}to{transform:rotate(.5deg) translateY(-1px)}}
+
+/* F1 car body */
+.f1-body{
+  position:absolute;bottom:8px;left:20px;
+  width:180px;height:22px;
+  background:linear-gradient(135deg,#cc0000,#990000,#cc0000);
+  border-radius:2px 20px 2px 2px;
+  border:1px solid rgba(255,80,80,.3);
+}
+.f1-body::before{/* sidepod */
+  content:'';position:absolute;
+  top:4px;left:20px;width:80px;height:14px;
+  background:linear-gradient(90deg,#880000,#aa0000);
+  border-radius:2px;
+}
+.f1-body::after{/* cockpit */
+  content:'';position:absolute;
+  top:-12px;left:70px;width:40px;height:16px;
+  background:linear-gradient(160deg,#111,#1a1a1a);
+  border-radius:4px 6px 0 0;
+  border:1px solid rgba(255,80,80,.2);
+}
+/* Halo */
+.f1-halo{
+  position:absolute;bottom:28px;left:72px;
+  width:44px;height:8px;
+  background:#1a1a1a;border-radius:2px;
+  border:1px solid #333;
+}
+/* Front wing */
+.f1-fw{
+  position:absolute;bottom:4px;right:4px;
+  width:48px;height:5px;
+  background:linear-gradient(90deg,#cc0000,#880000);
+  border-radius:1px;
+}
+.f1-fw::before{/* front wing endplate */
+  content:'';position:absolute;
+  right:0;top:-6px;width:4px;height:12px;
+  background:#cc0000;border-radius:1px;
+}
+/* Rear wing */
+.f1-rw{
+  position:absolute;bottom:22px;left:10px;
+  width:32px;height:5px;
+  background:linear-gradient(90deg,#880000,#cc0000);
+  border-radius:1px;
+}
+.f1-rw::before{
+  content:'';position:absolute;
+  left:2px;top:-8px;width:28px;height:5px;
+  background:#cc0000;border-radius:1px;
+}
+/* Wheels */
+.f1-wl,.f1-wr,.f1-wfl,.f1-wfr{
+  position:absolute;bottom:0;
+  width:18px;height:18px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35%35%,#2a2a2a,#0d0d0d);
+  border:3px solid #1a1a1a;
+}
+.f1-wl{left:14px;}
+.f1-wr{left:28px;}
+.f1-wfl{right:18px;}
+.f1-wfr{right:4px;}
+/* Wheel spin */
+.f1-wl::before,.f1-wr::before,.f1-wfl::before,.f1-wfr::before{
+  content:'';position:absolute;inset:1px;border-radius:50%;
+  border:2px solid transparent;
+  border-top-color:rgba(255,80,80,.5);
+  animation:wspoke .15s linear infinite;
+}
+@keyframes wspoke{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+/* DRS exhaust/diffuser glow */
+.f1-drs{
+  position:absolute;bottom:8px;left:2px;
+  width:12px;height:6px;
+  background:rgba(255,80,0,.2);
+  border-radius:2px;
+  box-shadow:0 0 8px rgba(255,60,0,.4);
+  animation:drsGlow .3s ease-in-out infinite alternate;
+}
+@keyframes drsGlow{from{opacity:.5}to{opacity:1}}
+/* Headlight */
+.f1-hl{
+  position:absolute;bottom:10px;right:0;
+  width:6px;height:6px;
+  background:rgba(255,220,150,.9);
+  border-radius:1px;
+  box-shadow:0 0 10px rgba(255,220,150,.8);
+}
+/* F1 beam */
+.f1-beam{
+  position:absolute;bottom:12px;right:-70px;
+  width:80px;height:16px;
+  background:linear-gradient(90deg,rgba(255,220,150,.2),transparent);
+  border-radius:0 50% 50% 0;
+}
+/* F1 shadow */
+.f1-shadow{
+  position:absolute;bottom:-4px;left:10px;
+  width:200px;height:8px;
+  background:radial-gradient(ellipse,rgba(0,0,0,.4) 0%,transparent 70%);
+  border-radius:50%;
+}
+/* Exhaust glow trails */
+.f1-trail{
+  position:absolute;bottom:10px;left:-30px;
+  width:32px;height:4px;
+  background:linear-gradient(90deg,transparent,rgba(255,80,0,.3));
+  border-radius:2px;
+  animation:trailFlicker .2s ease-in-out infinite alternate;
+}
+@keyframes trailFlicker{from{opacity:.5;width:28px}to{opacity:.9;width:36px}}
+
+/* F1 streak lines */
+.f1-streak{
+  position:fixed;border-radius:1px;
+  background:linear-gradient(90deg,rgba(200,30,30,.4),rgba(255,60,60,.1),transparent);
+  animation:f1StreakFly 3s cubic-bezier(.3,.1,.3,1) infinite;
+}
+@keyframes f1StreakFly{0%{left:-60%;opacity:0}5%{opacity:.7}92%{opacity:.5}100%{left:110%;opacity:0}}
+
+/* ── TREES SVG ── */
+.corner{position:fixed;font-family:'Barlow Condensed',sans-serif;font-size:10px;color:rgba(255,255,255,.25);letter-spacing:1px;z-index:1;}
+.ctop{top:18px;left:22px;} .cbot{bottom:18px;right:22px;}
+
+/* ── VISIBLE ROAD ── */
+.road-strip{
+  position:fixed;bottom:130px;left:0;right:0;
+  height:36px;
+  background:linear-gradient(180deg,#1a1508,#120f05);
+  border-top:3px solid rgba(210,160,40,.7);
+  border-bottom:1px solid rgba(180,120,0,.2);
+  z-index:3;pointer-events:none;
+}
+.road-strip::before{
+  content:'';position:absolute;
+  top:-3px;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,transparent,#d4a020,#f0c040,#d4a020,transparent);
+  box-shadow:0 0 14px rgba(210,160,0,.7),0 0 28px rgba(180,120,0,.35);
+}
+/* Dashed center line */
+.road-strip::after{
+  content:'';position:absolute;
+  top:15px;left:0;right:0;height:2px;
+  background:repeating-linear-gradient(90deg,transparent 0,transparent 40px,rgba(210,160,40,.5) 40px,rgba(210,160,40,.5) 80px);
+  animation:roadMove .7s linear infinite;
+}
+@keyframes roadMove{from{background-position:0 0}to{background-position:-80px 0}}
+
+/* ── DEER TROPHY SVG ── */
+.deer-trophy{
+  position:fixed;
+  top:50%;right:30px;
+  transform:translateY(-50%);
+  opacity:.35;
+  pointer-events:none;
+  z-index:2;
+  animation:deerPulse 4s ease-in-out infinite;
+}
+@keyframes deerPulse{0%,100%{opacity:.3;transform:translateY(-50%) scale(1)}50%{opacity:.42;transform:translateY(-50%) scale(1.03)}}
+
+/* Deer trophy shield front center */
+
+
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="scan"></div>
+
+<!-- Crosshair bg -->
+<!-- xhair removed --><svg style="display:none" viewBox="0 0 500 500" fill="none">
+  <circle cx="250" cy="250" r="240" stroke="rgba(180,120,0,.8)" stroke-width="1"/>
+  <circle cx="250" cy="250" r="180" stroke="rgba(180,120,0,.6)" stroke-width=".5" stroke-dasharray="4 6"/>
+  <circle cx="250" cy="250" r="100" stroke="rgba(180,120,0,.5)" stroke-width=".5"/>
+  <line x1="250" y1="10"  x2="250" y2="70"  stroke="rgba(180,120,0,.8)" stroke-width="1.5"/>
+  <line x1="250" y1="430" x2="250" y2="490" stroke="rgba(180,120,0,.8)" stroke-width="1.5"/>
+  <line x1="10"  y1="250" x2="70"  y2="250" stroke="rgba(180,120,0,.8)" stroke-width="1.5"/>
+  <line x1="430" y1="250" x2="490" y2="250" stroke="rgba(180,120,0,.8)" stroke-width="1.5"/>
+  <circle cx="250" cy="250" r="8" stroke="rgba(180,120,0,.8)" stroke-width="1.5"/>
+</svg>
+
+<!-- Speed lines -->
+<div class="speedlines">
+  <div class="sline" style="top:18%;animation-delay:0s;"></div>
+  <div class="sline" style="top:32%;animation-delay:.15s;opacity:.6;"></div>
+  <div class="sline" style="top:46%;animation-delay:.3s;"></div>
+  <div class="sline" style="top:60%;animation-delay:.45s;opacity:.7;"></div>
+  <div class="sline" style="top:74%;animation-delay:.6s;opacity:.5;"></div>
+</div>
+
+<!-- Fireflies -->
+<div class="fly" style="width:3px;height:3px;left:8%;top:25%;--mx:8px;--my:-10px;animation-delay:0s;animation-duration:4s;"></div>
+<div class="fly" style="width:2px;height:2px;left:18%;top:42%;--mx:-5px;--my:-12px;animation-delay:.8s;animation-duration:4.5s;"></div>
+<div class="fly" style="width:3px;height:3px;left:82%;top:20%;--mx:6px;--my:-8px;animation-delay:1.6s;animation-duration:3.8s;"></div>
+<div class="fly" style="width:2px;height:2px;left:88%;top:55%;--mx:-7px;--my:-10px;animation-delay:.4s;animation-duration:4.2s;"></div>
+<div class="fly" style="width:2px;height:2px;left:70%;top:32%;--mx:5px;--my:-11px;animation-delay:1.2s;animation-duration:4.6s;"></div>
+<div class="fly" style="width:3px;height:3px;left:25%;top:65%;--mx:-4px;--my:-9px;animation-delay:2s;animation-duration:3.9s;"></div>
+
+<!-- F1 streaks -->
+<div class="f1-streak" style="bottom:172px;height:2px;width:45%;animation-delay:0s;"></div>
+<div class="f1-streak" style="bottom:158px;height:1px;width:40%;animation-delay:.2s;opacity:.5;"></div>
+<div class="f1-streak" style="bottom:185px;height:1px;width:38%;animation-delay:.5s;opacity:.4;"></div>
+<div class="f1-streak" style="bottom:145px;height:2px;width:42%;animation-delay:.9s;opacity:.5;"></div>
+<div class="f1-streak" style="bottom:198px;height:1px;width:35%;animation-delay:1.4s;opacity:.35;"></div>
+
+<!-- F1 car -->
+<div class="f1-scene">
+  <div class="f1-ride">
+    <div class="f1-rock">
+      <div class="f1-shadow"></div>
+      <div class="f1-body">
+        <div class="f1-halo"></div>
+        <div class="f1-fw"></div>
+        <div class="f1-rw"></div>
+        <div class="f1-drs"></div>
+        <div class="f1-hl"></div>
+        <div class="f1-beam"></div>
+        <div class="f1-trail"></div>
+      </div>
+      <div class="f1-wl"></div>
+      <div class="f1-wr"></div>
+      <div class="f1-wfl"></div>
+      <div class="f1-wfr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tree silhouettes -->
+<div class="trees">
+  <svg width="100%" height="130" viewBox="0 0 1400 130" preserveAspectRatio="xMidYMax slice" fill="none">
+    <!-- Left trees -->
+    <polygon points="30,130 55,55 80,130"  fill="rgba(8,14,4,.95)"/>
+    <polygon points="65,130 95,35 125,130" fill="rgba(6,12,3,.98)"/>
+    <polygon points="110,130 132,65 154,130" fill="rgba(8,14,4,.92)"/>
+    <polygon points="145,130 170,30 195,130" fill="rgba(6,12,3,.96)"/>
+    <polygon points="185,130 205,72 225,130" fill="rgba(8,14,4,.9)"/>
+    <polygon points="215,130 240,42 265,130" fill="rgba(7,12,3,.94)"/>
+    <polygon points="255,130 272,68 290,130" fill="rgba(8,14,4,.92)"/>
+    <!-- Right trees -->
+    <polygon points="1110,130 1132,68 1154,130" fill="rgba(8,14,4,.92)"/>
+    <polygon points="1148,130 1174,38 1200,130" fill="rgba(6,12,3,.96)"/>
+    <polygon points="1195,130 1218,60 1242,130" fill="rgba(8,14,4,.9)"/>
+    <polygon points="1236,130 1260,32 1284,130" fill="rgba(7,12,3,.94)"/>
+    <polygon points="1278,130 1298,70 1318,130" fill="rgba(8,14,4,.92)"/>
+    <polygon points="1310,130 1340,45 1370,130" fill="rgba(6,12,3,.98)"/>
+    <polygon points="1355,130 1378,62 1400,130" fill="rgba(8,14,4,.95)"/>
+    <!-- Ground -->
+    <rect x="0" y="118" width="1400" height="12" fill="rgba(6,10,3,.98)"/>
+    <!-- Ground glow line -->
+    <line x1="0" y1="118" x2="1400" y2="118" stroke="rgba(180,120,0,.25)" stroke-width="1"/>
+  </svg>
+</div>
+
+<div class="corner ctop">ZENNI LMS · PRODUCTION MANAGEMENT</div>
+<div class="corner cbot">SESSION ACTIVE</div>
+
+<!-- Main content -->
+<div class="page">
+  <div class="welcome-txt">Welcome back</div>
+  <div class="fullname" id="displayName">Bobby Karr</div>
+
+  <!-- Three passions -->
+  <div class="passions">
+    <div class="passion">
+      <span class="passion-icon">🎯</span>
+      <span class="passion-txt">Production</span>
+    </div>
+    <div class="passion">
+      <span class="passion-icon">🏎️</span>
+      <span class="passion-txt">Manager</span>
+    </div>
+
+  </div>
+
+  <div class="role-badge">
+    <span id="displayRole">Manager · Production</span>
+  </div>
+
+  <div class="pbar-wrap">
+    <div class="pbar-top">
+      <span>Loading Dashboard</span>
+      <span id="pct">0%</span>
+    </div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+  </div>
+  <div class="sys-txt" id="sysTxt">Preparing your workspace...</div>
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Bobby Karr";
+  const r=sessionStorage.getItem("lms_role")||"Manager";
+  const s=sessionStorage.getItem("lms_subrole")||"Production";
+  document.getElementById("displayName").textContent=n;
+  document.getElementById("displayRole").textContent=r+" · "+s;
+
+  let p=0;
+  const pEl=document.getElementById("pct");
+  const sysEl=document.getElementById("sysTxt");
+  const msgs=["Preparing your workspace...","Loading production data...","Syncing inventory...","Almost ready...","Loading dashboard..."];
+
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);
+    pEl.textContent=p+"%";
+    if(p<25)sysEl.textContent=msgs[0];
+    else if(p<50)sysEl.textContent=msgs[1];
+    else if(p<70)sysEl.textContent=msgs[2];
+    else if(p<90)sysEl.textContent=msgs[3];
+    else sysEl.textContent=msgs[4];
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  const MIN_TIME=6000;
+  const startTime=Date.now();
+  const preload=document.createElement("link");
+  preload.rel="prefetch";preload.href="index.html";
+  document.head.appendChild(preload);
+
+  function goToDashboard(){
+    const elapsed=Date.now()-startTime;
+    const remaining=Math.max(0,MIN_TIME-elapsed);
+    setTimeout(()=>{
+      p=100;pEl.textContent="100%";
+      clearInterval(iv);
+      setTimeout(()=>{ window.location.replace("index.html"); },400);
+    },remaining);
+  }
+
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>goToDashboard()).catch(()=>goToDashboard());
+  setTimeout(()=>{ window.location.replace("index.html"); },10000);
+</script>
+
+<!-- Road strip -->
+<div class="road-strip"></div>
+
+
+
+<!-- Large faded deer trophy SVG watermark -->
+<div class="deer-trophy">
+  <svg width="280" height="300" viewBox="0 0 280 300" fill="none">
+    <!-- ═══ LEFT ANTLER ═══ -->
+    <!-- Main beam — thick filled shape -->
+    <path d="M128 270 Q118 240 108 205 Q96 168 80 138 Q66 112 50 88 Q36 66 22 44"
+          stroke="rgba(210,160,40,1)" stroke-width="9" stroke-linecap="round" fill="none"/>
+    <!-- Main beam inner highlight -->
+    <path d="M126 270 Q116 240 106 205 Q94 168 78 138 Q64 112 48 88 Q34 66 20 44"
+          stroke="rgba(255,210,80,.35)" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+    <!-- Left brow tine — long and thick -->
+    <path d="M108 205 Q90 192 76 182 Q64 174 54 168"
+          stroke="rgba(210,160,40,1)" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <path d="M106 205 Q88 192 74 182 Q62 174 52 168"
+          stroke="rgba(255,210,80,.3)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+
+    <!-- Left G2 tine -->
+    <path d="M96 175 Q78 162 64 152 Q52 144 42 138"
+          stroke="rgba(210,160,40,.95)" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M94 175 Q76 162 62 152"
+          stroke="rgba(255,210,80,.28)" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+    <!-- Left G3 tine -->
+    <path d="M80 140 Q64 128 50 118 Q38 110 28 104"
+          stroke="rgba(210,160,40,.92)" stroke-width="5.5" stroke-linecap="round" fill="none"/>
+
+    <!-- Left G4 tine -->
+    <path d="M64 110 Q50 100 38 88 Q28 78 22 68"
+          stroke="rgba(210,160,40,.9)" stroke-width="5" stroke-linecap="round" fill="none"/>
+
+    <!-- Left top fork A -->
+    <path d="M22 44 Q10 28 6 14 Q4 6 6 2"
+          stroke="rgba(210,160,40,.88)" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <!-- Left top fork B -->
+    <path d="M22 44 Q28 26 36 14 Q42 6 44 2"
+          stroke="rgba(210,160,40,.88)" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <!-- Left top fork C -->
+    <path d="M36 22 Q46 12 50 4"
+          stroke="rgba(210,160,40,.8)" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+    <!-- ═══ RIGHT ANTLER ═══ -->
+    <!-- Main beam -->
+    <path d="M152 270 Q162 240 172 205 Q184 168 200 138 Q214 112 230 88 Q244 66 258 44"
+          stroke="rgba(210,160,40,1)" stroke-width="9" stroke-linecap="round" fill="none"/>
+    <path d="M154 270 Q164 240 174 205 Q186 168 202 138 Q216 112 232 88 Q246 66 260 44"
+          stroke="rgba(255,210,80,.35)" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+    <!-- Right brow tine -->
+    <path d="M172 205 Q190 192 204 182 Q216 174 226 168"
+          stroke="rgba(210,160,40,1)" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <path d="M174 205 Q192 192 206 182"
+          stroke="rgba(255,210,80,.3)" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+
+    <!-- Right G2 tine -->
+    <path d="M184 175 Q202 162 216 152 Q228 144 238 138"
+          stroke="rgba(210,160,40,.95)" stroke-width="6" stroke-linecap="round" fill="none"/>
+
+    <!-- Right G3 tine -->
+    <path d="M200 140 Q216 128 230 118 Q242 110 252 104"
+          stroke="rgba(210,160,40,.92)" stroke-width="5.5" stroke-linecap="round" fill="none"/>
+
+    <!-- Right G4 tine -->
+    <path d="M216 110 Q230 100 242 88 Q252 78 258 68"
+          stroke="rgba(210,160,40,.9)" stroke-width="5" stroke-linecap="round" fill="none"/>
+
+    <!-- Right top fork A -->
+    <path d="M258 44 Q270 28 274 14 Q276 6 274 2"
+          stroke="rgba(210,160,40,.88)" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <!-- Right top fork B -->
+    <path d="M258 44 Q252 26 244 14 Q238 6 236 2"
+          stroke="rgba(210,160,40,.88)" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <!-- Right top fork C -->
+    <path d="M244 22 Q234 12 230 4"
+          stroke="rgba(210,160,40,.8)" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+    <!-- ═══ SKULL MOUNT ═══ -->
+    <path d="M116 278 Q104 284 100 292 L180 292 Q176 284 164 278 Q152 272 140 272 Q128 272 116 278 Z"
+          fill="rgba(140,100,20,.25)" stroke="rgba(210,160,40,.8)" stroke-width="2"/>
+    <!-- Center line -->
+    <line x1="140" y1="272" x2="140" y2="292" stroke="rgba(210,160,40,.4)" stroke-width="1"/>
+    <!-- Trophy plaque -->
+    <rect x="100" y="292" width="80" height="8" rx="2" fill="rgba(140,100,20,.2)" stroke="rgba(210,160,40,.5)" stroke-width="1.5"/>
+  </svg>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=Raleway:wght@300;400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0a0005;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── Macedonia flag colors: red + yellow sun ── */
+.bg-base{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 100% 25% at 50% 0%,   rgba(206,17,38,.18) 0%,transparent 70%),
+    radial-gradient(ellipse 100% 25% at 50% 100%,  rgba(206,17,38,.14) 0%,transparent 70%),
+    radial-gradient(ellipse 70%  55% at 50% 50%,   rgba(252,209,22,.06) 0%,transparent 65%),
+    #080005;
+  animation:bgp 5s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.8}50%{opacity:1}}
+
+/* ── Red horizontal stripes (MK flag) ── */
+.stripe{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(206,17,38,.2),transparent);animation:st 5s ease-in-out infinite;pointer-events:none;}
+@keyframes st{0%,100%{opacity:0}50%{opacity:1}}
+
+/* ── Vergina Sun — large, dominant ── */
+.sun-outer{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;z-index:1;
+}
+/* Rotating rays */
+.sun-rotate{
+  position:absolute;
+  width:600px;height:600px;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  opacity:.07;
+  animation:sunSpin 30s linear infinite;
+}
+@keyframes sunSpin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+/* Pulsing core */
+.sun-core{
+  position:absolute;
+  width:80px;height:80px;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(252,209,22,.3),rgba(252,209,22,.05));
+  animation:corePulse 3s ease-in-out infinite;
+}
+@keyframes corePulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.4}50%{transform:translate(-50%,-50%) scale(1.3);opacity:.8}}
+
+/* ── Scan line ── */
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(252,209,22,.12),transparent);animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+/* ── Gold star particles ── */
+.gstar{position:fixed;color:rgba(252,209,22,.22);font-size:10px;animation:gsf 4s ease-in-out infinite;user-select:none;z-index:2;}
+@keyframes gsf{0%,100%{opacity:.1;transform:translateY(0) rotate(0deg)}50%{opacity:.6;transform:translateY(-12px) rotate(180deg)}}
+
+/* ── Red particles ── */
+.redp{position:fixed;width:2px;height:2px;border-radius:50%;background:rgba(206,17,38,.4);animation:redFly 4s ease-in-out infinite;pointer-events:none;z-index:2;}
+@keyframes redFly{0%,100%{opacity:0;transform:translateY(0)}50%{opacity:.6;transform:translateY(-20px)}}
+
+/* ══════════ PAGE ══════════ */
+.page{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:0;
+}
+
+/* ── REAL MK FLAG ── */
+.mk-flag{
+  width:88px;height:52px;
+  background:#ce1126;
+  border-radius:3px;
+  border:2px solid rgba(252,209,22,.3);
+  position:relative;
+  margin-bottom:16px;
+  animation:flagIn .8s ease both;
+  box-shadow:0 0 20px rgba(206,17,38,.35),0 0 40px rgba(252,209,22,.1);
+  overflow:hidden;
+}
+@keyframes flagIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+/* Flag wave shimmer */
+.mk-flag::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.06) 40%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.06) 60%,transparent 100%);
+  animation:flagWave 2.5s ease-in-out infinite;
+}
+@keyframes flagWave{0%,100%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+
+/* Vergina Sun on flag — 8 rays + center */
+.flag-sun{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:32px;height:32px;
+  animation:flagSunSpin 8s linear infinite;
+}
+@keyframes flagSunSpin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+/* ── HEADER ── */
+.country-name{
+  font-family:'Cinzel Decorative',serif;
+  font-size:13px;font-weight:900;
+  letter-spacing:8px;
+  color:#ffd700;
+  text-transform:uppercase;
+  margin-bottom:6px;
+  animation:fu .5s .35s ease both;
+  text-shadow:0 0 20px rgba(255,215,0,.8),0 0 40px rgba(255,215,0,.3);
+}
+.country-mk{
+  font-family:'Cinzel',serif;
+  font-size:10px;letter-spacing:5px;
+  color:rgba(252,209,22,.75);
+  margin-bottom:10px;
+  animation:fu .4s .45s ease both;
+}
+
+.welcome{
+  font-family:'Raleway',sans-serif;
+  font-size:11px;letter-spacing:6px;
+  color:rgba(255,160,160,.7);
+  text-transform:uppercase;
+  margin-bottom:6px;
+  animation:fu .4s .55s ease both;
+}
+.fullname{
+  font-family:'Cinzel Decorative',serif;
+  font-size:22px;font-weight:700;
+  color:#ffffff;letter-spacing:3px;
+  margin-bottom:4px;
+  animation:nameReveal .7s .65s ease both;
+  text-shadow:0 0 20px rgba(252,209,22,.2);
+  line-height:1.2;
+}
+@keyframes nameReveal{
+  from{opacity:0;clip-path:polygon(0 0,0 0,0 100%,0 100%)}
+  to{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}
+}
+
+/* ── WORK TITLE ── */
+.work-title{
+  font-family:'Cinzel',serif;
+  font-size:11px;letter-spacing:4px;
+  color:#fcd116;
+  text-transform:uppercase;
+  margin-bottom:4px;
+  animation:fu .4s .78s ease both;
+  text-shadow:0 0 12px rgba(252,209,22,.6);
+}
+.work-dept{
+  font-family:'Raleway',sans-serif;
+  font-size:10px;letter-spacing:3px;
+  color:rgba(252,209,22,.75);
+  text-transform:uppercase;
+  margin-bottom:14px;
+  animation:fu .4s .88s ease both;
+}
+
+/* ── MACEDONIAN QUOTE ── */
+.mk-quote-wrap{
+  display:flex;flex-direction:column;align-items:center;
+  margin-bottom:16px;
+  animation:fu .5s .96s ease both;
+}
+.mk-quote-line{
+  width:160px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(252,209,22,.4),transparent);
+  margin-bottom:8px;
+}
+.mk-quote{
+  font-family:'Cinzel',serif;
+  font-size:11px;letter-spacing:3px;
+  color:rgba(252,209,22,.85);
+  text-align:center;
+  line-height:1.8;
+  font-style:italic;
+  padding:0 20px;
+}
+.mk-quote-sub{
+  font-family:'Raleway',sans-serif;
+  font-size:9px;letter-spacing:2px;
+  color:rgba(255,180,180,.6);
+  text-transform:uppercase;
+  margin-top:6px;
+}
+.mk-quote-line2{
+  width:160px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(252,209,22,.4),transparent);
+  margin-top:8px;
+}
+
+/* ── PROGRESS ── */
+.pbar-wrap{width:240px;margin-bottom:4px;animation:fu .4s 1.08s ease both;}
+.pbar-lbl{display:flex;justify-content:space-between;font-family:'Raleway',sans-serif;font-size:10px;color:rgba(255,180,180,.6);letter-spacing:2px;margin-bottom:4px;}
+.pbar-track{width:100%;height:3px;background:rgba(206,17,38,.1);border:1px solid rgba(206,17,38,.15);overflow:hidden;position:relative;}
+.pbar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#8a0010,#ce1126,#fcd116,#ce1126);
+  background-size:200% 100%;
+  animation:pf 2.5s 1.15s ease forwards, pshift 2s 1.15s linear infinite;
+  position:relative;
+}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:10px;height:100%;background:rgba(252,209,22,.5);filter:blur(2px);}
+@keyframes pf{0%{width:0%}55%{width:64%}80%{width:84%}100%{width:100%}}
+@keyframes pshift{0%{background-position:0% 0}100%{background-position:200% 0}}
+
+.sys{font-family:'Cinzel',serif;font-size:9px;color:rgba(255,180,180,.55);letter-spacing:3px;text-transform:uppercase;margin-top:8px;animation:fu .4s 2.9s ease both;}
+
+@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.corner{position:fixed;font-family:'Cinzel',serif;font-size:8px;color:rgba(255,180,180,.35);letter-spacing:1px;z-index:1;}
+.ctop{top:18px;left:22px;} .cbot{bottom:18px;right:22px;}
+</style>
+</head>
+<body>
+
+<div class="bg-base"></div>
+<div class="stripe" style="top:20%;animation-delay:0s;"></div>
+<div class="stripe" style="top:40%;animation-delay:.8s;"></div>
+<div class="stripe" style="top:60%;animation-delay:1.6s;"></div>
+<div class="stripe" style="top:80%;animation-delay:2.4s;"></div>
+<div class="scan"></div>
+
+<!-- Large rotating sun background -->
+<div class="sun-outer">
+  <div class="sun-core"></div>
+  <svg class="sun-rotate" viewBox="0 0 600 600" fill="none">
+    <circle cx="300" cy="300" r="30" fill="rgba(252,209,22,.3)" stroke="rgba(252,209,22,.5)" stroke-width="1.5"/>
+    <!-- 16 rays -->
+    <line x1="300" y1="270" x2="300" y2="40"  stroke="rgba(252,209,22,.55)" stroke-width="2.5"/>
+    <line x1="300" y1="330" x2="300" y2="560" stroke="rgba(252,209,22,.55)" stroke-width="2.5"/>
+    <line x1="270" y1="300" x2="40"  y2="300" stroke="rgba(252,209,22,.55)" stroke-width="2.5"/>
+    <line x1="330" y1="300" x2="560" y2="300" stroke="rgba(252,209,22,.55)" stroke-width="2.5"/>
+    <line x1="279" y1="279" x2="98"  y2="98"  stroke="rgba(252,209,22,.45)" stroke-width="2"/>
+    <line x1="321" y1="321" x2="502" y2="502" stroke="rgba(252,209,22,.45)" stroke-width="2"/>
+    <line x1="321" y1="279" x2="502" y2="98"  stroke="rgba(252,209,22,.45)" stroke-width="2"/>
+    <line x1="279" y1="321" x2="98"  y2="502" stroke="rgba(252,209,22,.45)" stroke-width="2"/>
+    <line x1="285" y1="271" x2="196" y2="48"  stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <line x1="315" y1="329" x2="404" y2="552" stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <line x1="271" y1="285" x2="48"  y2="196" stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <line x1="329" y1="315" x2="552" y2="404" stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <line x1="329" y1="285" x2="552" y2="196" stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <line x1="271" y1="315" x2="48"  y2="404" stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <line x1="315" y1="271" x2="404" y2="48"  stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <line x1="285" y1="329" x2="196" y2="552" stroke="rgba(252,209,22,.32)" stroke-width="1.5"/>
+    <circle cx="300" cy="300" r="260" fill="none" stroke="rgba(252,209,22,.06)" stroke-width="1"/>
+    <circle cx="300" cy="300" r="200" fill="none" stroke="rgba(206,17,38,.04)" stroke-width="1"/>
+  </svg>
+</div>
+
+<!-- Gold stars -->
+<div class="gstar" style="left:8%;top:18%;animation-delay:0s;">✦</div>
+<div class="gstar" style="left:88%;top:14%;animation-delay:1s;">✦</div>
+<div class="gstar" style="left:5%;top:65%;animation-delay:2s;">★</div>
+<div class="gstar" style="left:92%;top:62%;animation-delay:.6s;">✦</div>
+<div class="gstar" style="left:48%;top:8%;animation-delay:1.5s;">✦</div>
+<div class="gstar" style="left:15%;top:85%;animation-delay:2.5s;">★</div>
+<div class="gstar" style="left:82%;top:82%;animation-delay:.3s;">✦</div>
+
+<!-- Red particles -->
+<div class="redp" style="left:20%;top:30%;animation-delay:0s;animation-duration:3.8s;"></div>
+<div class="redp" style="left:75%;top:25%;animation-delay:1s;animation-duration:4.2s;"></div>
+<div class="redp" style="left:35%;top:70%;animation-delay:2s;animation-duration:3.5s;"></div>
+<div class="redp" style="left:65%;top:72%;animation-delay:.5s;animation-duration:4.5s;"></div>
+
+<div class="corner ctop">ZENNI LMS · МАКЕДОНИЈА</div>
+<div class="corner cbot">SESSION ACTIVE</div>
+
+<div class="page">
+
+  <!-- Real Macedonia flag with Vergina Sun SVG -->
+  <div class="mk-flag">
+    <svg class="flag-sun" viewBox="0 0 32 32" fill="none">
+      <!-- Sun center -->
+      <circle cx="16" cy="16" r="4" fill="#fcd116"/>
+      <!-- 8 main rays -->
+      <line x1="16" y1="12" x2="16" y2="1"  stroke="#fcd116" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="16" y1="20" x2="16" y2="31" stroke="#fcd116" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="12" y1="16" x2="1"  y2="16" stroke="#fcd116" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="20" y1="16" x2="31" y2="16" stroke="#fcd116" stroke-width="1.8" stroke-linecap="round"/>
+      <line x1="13.2" y1="13.2" x2="5.5" y2="5.5"  stroke="#fcd116" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="18.8" y1="18.8" x2="26.5" y2="26.5" stroke="#fcd116" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="18.8" y1="13.2" x2="26.5" y2="5.5"  stroke="#fcd116" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="13.2" y1="18.8" x2="5.5" y2="26.5"  stroke="#fcd116" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <div class="country-name">Македонија</div>
+  <div class="country-mk">Macedonia · Македонија</div>
+
+  <div class="welcome">Welcome back</div>
+  <div class="fullname" id="displayName">Aleks Ivanovski</div>
+
+  <!-- Work title -->
+  <div class="work-title" id="displayRole">Supervisor</div>
+  <div class="work-dept">Distribution &amp; Inventory</div>
+
+  <!-- Macedonian positive quote -->
+  <div class="mk-quote-wrap">
+    <div class="mk-quote-line"></div>
+    <div class="mk-quote">
+      Силата е во единството<br>
+      <span style="font-size:9px;letter-spacing:2px;color:rgba(252,209,22,.75);font-style:normal;">"Strength is in unity"</span>
+    </div>
+    <div class="mk-quote-sub">Македонска мудрост · Macedonian wisdom</div>
+    <div class="mk-quote-line2"></div>
+  </div>
+
+  <div class="pbar-wrap">
+    <div class="pbar-lbl"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+  </div>
+  <div class="sys">Подготвување на работното место...</div>
+
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Aleks Ivanovski";
+  const r=sessionStorage.getItem("lms_role")||"Supervisor";
+  const s=sessionStorage.getItem("lms_subrole")||"DC & Inventory";
+  document.getElementById("displayName").textContent=n;
+  document.getElementById("displayRole").textContent=r;
+  document.querySelector(".work-dept").textContent=s;
+  const n2=sessionStorage.getItem("lms_fullname")||"Aleks Ivanovski";
+  const r2=sessionStorage.getItem("lms_role")||"Supervisor";
+  const s2=sessionStorage.getItem("lms_subrole")||"DC & Inventory";
+  document.getElementById("displayName").textContent=n2;
+  document.getElementById("displayRole").textContent=r2;
+  document.querySelector(".work-dept").textContent=s2;
+
+  // Percentage counter — slow and steady
+  let p=0;
+  const pEl=document.getElementById("pct");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);
+    pEl.textContent=p+"%";
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  // Minimum 6 seconds on screen
+  const MIN_TIME=6000;
+  const startTime=Date.now();
+
+  // Preload dashboard in background
+  const preload=document.createElement("link");
+  preload.rel="prefetch";
+  preload.href="index.html";
+  document.head.appendChild(preload);
+
+  function goToDashboard(){
+    const elapsed=Date.now()-startTime;
+    const remaining=Math.max(0,MIN_TIME-elapsed);
+    setTimeout(()=>{
+      p=100;pEl.textContent="100%";
+      clearInterval(iv);
+      setTimeout(()=>{ window.location.replace("index.html"); },400);
+    },remaining);
+  }
+
+  fetch("index.html",{method:"GET",cache:"force-cache"})
+    .then(()=>goToDashboard())
+    .catch(()=>goToDashboard());
+
+  // Hard fallback — 10 seconds max
+  setTimeout(()=>{ window.location.replace("index.html"); },10000);
+</script>
+</body>
+</html>

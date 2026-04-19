@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#06100a;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── Dark green spreadsheet bg ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 40%, rgba(20,120,60,.16) 0%,transparent 65%),
+    radial-gradient(ellipse 100% 30% at 50% 100%, rgba(10,80,40,.12) 0%,transparent 55%),
+    #06100a;
+  animation:bgp 5s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.85}50%{opacity:1}}
+
+/* ── Spreadsheet grid bg ── */
+.sheet-grid{
+  position:fixed;inset:0;pointer-events:none;z-index:1;
+  background-image:
+    linear-gradient(rgba(20,180,80,.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(20,180,80,.06) 1px,transparent 1px);
+  background-size:52px 28px;
+  animation:gridScroll 12s linear infinite;
+}
+@keyframes gridScroll{from{background-position:0 0}to{background-position:52px 28px}}
+
+/* ── Scan ── */
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(20,180,80,.15),transparent);animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+/* ── Floating formula chips ── */
+.formula{
+  position:fixed;
+  font-family:'DM Mono',monospace;
+  font-size:11px;letter-spacing:1px;
+  color:rgba(20,200,80,.35);
+  animation:formulaDrift linear infinite;
+  pointer-events:none;z-index:2;
+  white-space:nowrap;
+}
+@keyframes formulaDrift{
+  0%{transform:translateY(0);opacity:0;}
+  10%{opacity:.7;}
+  85%{opacity:.5;}
+  100%{transform:translateY(-80px);opacity:0;}
+}
+
+/* ── PAGE ── */
+.page{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:5px;
+}
+
+.welcome-txt{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:15px;letter-spacing:8px;color:#ffffff;
+  text-transform:uppercase;animation:fu .4s .3s ease both;
+}
+.fullname{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:68px;color:#ffffff;letter-spacing:5px;line-height:1;
+  animation:nameIn .6s .4s ease both;
+  text-shadow:0 0 30px rgba(20,180,80,.4),0 2px 0 rgba(0,0,0,.8);
+}
+@keyframes nameIn{from{opacity:0;letter-spacing:18px}to{opacity:1;letter-spacing:5px}}
+
+/* ── Live spreadsheet widget ── */
+.sheet-widget{
+  background:rgba(0,0,0,.55);
+  border:1px solid rgba(20,180,80,.4);
+  margin-top:6px;
+  animation:fu .5s .55s ease both;
+  width:380px;
+}
+/* Sheet tab bar */
+.sheet-tabs{
+  display:flex;border-bottom:1px solid rgba(20,180,80,.3);
+  background:rgba(0,0,0,.3);
+}
+.sheet-tab{
+  font-family:'DM Mono',monospace;
+  font-size:9px;letter-spacing:2px;
+  padding:4px 12px;
+  color:rgba(255,255,255,.4);
+  text-transform:uppercase;
+  border-right:1px solid rgba(20,180,80,.2);
+}
+.sheet-tab.active{
+  color:#ffffff;
+  background:rgba(20,180,80,.15);
+  border-bottom:2px solid #14b450;
+}
+/* Column headers */
+.sheet-headers{
+  display:grid;
+  grid-template-columns:80px 1fr 70px 70px;
+  border-bottom:1px solid rgba(20,180,80,.25);
+  background:rgba(20,180,80,.08);
+}
+.sh{
+  font-family:'DM Mono',monospace;
+  font-size:9px;letter-spacing:1px;
+  color:rgba(20,200,80,.7);
+  padding:4px 8px;
+  border-right:1px solid rgba(20,180,80,.15);
+  text-transform:uppercase;
+}
+/* Data rows */
+.sheet-row{
+  display:grid;
+  grid-template-columns:80px 1fr 70px 70px;
+  border-bottom:1px solid rgba(20,180,80,.1);
+  animation:rowFadeIn .3s ease both;
+}
+.sheet-row:hover{background:rgba(20,180,80,.06);}
+.sc{
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+  color:#ffffff;
+  padding:5px 8px;
+  border-right:1px solid rgba(20,180,80,.1);
+  white-space:nowrap;overflow:hidden;
+}
+.sc.sku{color:rgba(20,200,80,.8);}
+.sc.qty{color:#ffffff;text-align:right;padding-right:12px;}
+.sc.status-ok{color:#34d399;}
+.sc.status-low{color:#fbbf24;}
+.sc.status-out{color:#f87171;}
+@keyframes rowFadeIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
+
+/* Formula bar */
+.formula-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:5px 10px;
+  background:rgba(20,180,80,.06);
+  border-top:1px solid rgba(20,180,80,.2);
+}
+.formula-label{
+  font-family:'DM Mono',monospace;
+  font-size:9px;color:rgba(20,200,80,.6);
+  letter-spacing:1px;white-space:nowrap;
+}
+.formula-val{
+  font-family:'DM Mono',monospace;
+  font-size:10px;color:#60d080;
+  letter-spacing:.5px;
+}
+.formula-cursor{
+  display:inline-block;width:6px;height:12px;
+  background:#14b450;
+  animation:blink .8s step-end infinite;
+  vertical-align:middle;margin-left:2px;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* Role */
+.role-badge{
+  display:inline-flex;align-items:center;gap:10px;
+  border:2px solid rgba(20,180,80,.6);
+  background:rgba(10,80,40,.2);
+  padding:6px 22px;margin-top:4px;
+  animation:fu .4s .7s ease both;
+}
+.role-badge span{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:15px;letter-spacing:4px;
+  color:#ffffff;text-transform:uppercase;font-weight:600;
+}
+
+/* Progress */
+.pbar-wrap{width:320px;margin-top:10px;animation:fu .4s .85s ease both;}
+.pbar-top{
+  display:flex;justify-content:space-between;
+  font-family:'DM Mono',monospace;font-size:11px;
+  letter-spacing:2px;color:#ffffff;
+  text-transform:uppercase;margin-bottom:6px;
+}
+.pbar-track{width:100%;height:5px;background:rgba(20,180,80,.15);border:1px solid rgba(20,180,80,.4);overflow:hidden;}
+.pbar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#064020,#14b450,#34d399,#60d080);
+  animation:pf 6s .9s ease forwards;position:relative;
+}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:14px;height:100%;background:rgba(100,255,160,.6);filter:blur(3px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+.sys-txt{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.65);text-transform:uppercase;margin-top:5px;animation:fu .4s 1s ease both;}
+
+@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* Stats row */
+.stats{
+  display:flex;align-items:center;gap:0;
+  border:1px solid rgba(20,180,80,.3);
+  background:rgba(0,0,0,.4);
+  margin-top:4px;
+  animation:fu .4s .65s ease both;
+}
+.stat{
+  padding:7px 18px;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  border-right:1px solid rgba(20,180,80,.2);
+}
+.stat:last-child{border-right:none;}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:26px;color:#34d399;letter-spacing:1px;line-height:1;text-shadow:0 0 10px rgba(20,180,80,.5);}
+.stat-unit{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.6);text-transform:uppercase;}
+
+.corner{position:fixed;font-family:'DM Mono',monospace;font-size:9px;color:rgba(20,180,80,.25);letter-spacing:1px;z-index:1;}
+.ctop{top:18px;left:22px;} .cbot{bottom:18px;right:22px;}
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="sheet-grid"></div>
+<div class="scan"></div>
+
+<!-- Floating formulas -->
+<div class="formula" style="left:6%;top:70%;animation-duration:8s;animation-delay:0s;">=SUMIF(A:A,"SKU-001",C:C)</div>
+<div class="formula" style="left:55%;top:75%;animation-duration:10s;animation-delay:1.5s;">=VLOOKUP(B2,Sheet2!A:D,3,0)</div>
+<div class="formula" style="left:20%;top:65%;animation-duration:7s;animation-delay:3s;">=COUNTIF(D:D,"Low Stock")</div>
+<div class="formula" style="left:70%;top:72%;animation-duration:9s;animation-delay:.8s;">=INDEX(MATCH(...))</div>
+<div class="formula" style="left:38%;top:80%;animation-duration:8.5s;animation-delay:2.2s;">=IFERROR(A1/B1,0)</div>
+<div class="formula" style="left:82%;top:68%;animation-duration:7.5s;animation-delay:4s;">=PIVOT(inventory)</div>
+
+<div class="corner ctop">ZENNI LMS · DISTRIBUTION &amp; INVENTORY</div>
+<div class="corner cbot">SESSION ACTIVE</div>
+
+<div class="page">
+  <div class="welcome-txt">Welcome back</div>
+  <div class="fullname" id="displayName">Scott Anderson</div>
+
+  <!-- Live spreadsheet widget -->
+  <div class="sheet-widget">
+    <div class="sheet-tabs">
+      <div class="sheet-tab active">Inventory</div>
+      <div class="sheet-tab">Receiving</div>
+      <div class="sheet-tab">Orders</div>
+    </div>
+    <div class="sheet-headers">
+      <div class="sh">SKU</div>
+      <div class="sh">Description</div>
+      <div class="sh">QTY</div>
+      <div class="sh">Status</div>
+    </div>
+    <div class="sheet-row" style="animation-delay:.8s;">
+      <div class="sc sku">LNS-4420</div>
+      <div class="sc">Progressive Lens</div>
+      <div class="sc qty">1,240</div>
+      <div class="sc status-ok">✓ In Stock</div>
+    </div>
+    <div class="sheet-row" style="animation-delay:1s;">
+      <div class="sc sku">FRM-2210</div>
+      <div class="sc">Frame Assembly</div>
+      <div class="sc qty">386</div>
+      <div class="sc status-low">⚠ Low</div>
+    </div>
+    <div class="sheet-row" style="animation-delay:1.2s;">
+      <div class="sc sku">COT-0815</div>
+      <div class="sc">Anti-Reflective</div>
+      <div class="sc qty">2,104</div>
+      <div class="sc status-ok">✓ In Stock</div>
+    </div>
+    <div class="sheet-row" style="animation-delay:1.4s;">
+      <div class="sc sku">BLK-1190</div>
+      <div class="sc">Blocking Compound</div>
+      <div class="sc qty">0</div>
+      <div class="sc status-out">✗ Out</div>
+    </div>
+    <!-- Formula bar -->
+    <div class="formula-bar">
+      <div class="formula-label">fx</div>
+      <div class="formula-val" id="fxBar">=SUMIF(Status,"In Stock",QTY)</div>
+      <span class="formula-cursor"></span>
+    </div>
+  </div>
+
+  <!-- Live stats -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val" id="statTotal">--</div>
+      <div class="stat-unit">Total SKUs</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="statIn">--</div>
+      <div class="stat-unit">In Stock</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="statLow">--</div>
+      <div class="stat-unit">Alerts</div>
+    </div>
+  </div>
+
+  <div class="role-badge">
+    <span id="displayRole">SR Manager · DC &amp; Inventory</span>
+  </div>
+
+  <div class="pbar-wrap">
+    <div class="pbar-top"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+  </div>
+  <div class="sys-txt" id="sysTxt">Syncing inventory data...</div>
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Scott Anderson";
+  const r=sessionStorage.getItem("lms_role")||"SR Manager";
+  const s=sessionStorage.getItem("lms_subrole")||"DC & Inventory";
+  document.getElementById("displayName").textContent=n;
+  document.getElementById("displayRole").textContent=r+" · "+s;
+
+  // Animate stats counting up
+  setTimeout(()=>{ animateCount("statTotal",0,142,1200); },800);
+  setTimeout(()=>{ animateCount("statIn",0,118,1400); },1000);
+  setTimeout(()=>{ animateCount("statLow",0,3,800); },1200);
+
+  function animateCount(id,from,to,dur){
+    const el=document.getElementById(id);
+    if(!el)return;
+    const steps=30;const inc=(to-from)/steps;
+    let cur=from;let i=0;
+    const iv=setInterval(()=>{
+      cur+=inc;i++;
+      el.textContent=Math.round(cur);
+      if(i>=steps){el.textContent=to;clearInterval(iv);}
+    },dur/steps);
+  }
+
+  // Cycle formula bar
+  const formulas=[
+    '=SUMIF(Status,"In Stock",QTY)',
+    '=VLOOKUP(SKU,PriceList,2,0)',
+    '=COUNTIF(D:D,"Low Stock")',
+    '=INDEX(MATCH(B2,Sheet2!A:A,0))',
+    '=IFERROR(SUM(C2:C100),0)',
+  ];
+  let fi=0;
+  setInterval(()=>{
+    fi=(fi+1)%formulas.length;
+    const el=document.getElementById("fxBar");
+    if(el)el.textContent=formulas[fi];
+  },2000);
+
+  const msgs=["Syncing inventory data...","Loading SKU database...","Checking stock levels...","Calculating reorder points...","Finalizing dashboard..."];
+  let p=0;
+  const pEl=document.getElementById("pct");
+  const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);
+    pEl.textContent=p+"%";
+    if(p<20)sysEl.textContent=msgs[0];
+    else if(p<40)sysEl.textContent=msgs[1];
+    else if(p<60)sysEl.textContent=msgs[2];
+    else if(p<80)sysEl.textContent=msgs[3];
+    else sysEl.textContent=msgs[4];
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  const MIN_TIME=6000;
+  const startTime=Date.now();
+  const preload=document.createElement("link");
+  preload.rel="prefetch";preload.href="index.html";
+  document.head.appendChild(preload);
+
+  function goToDashboard(){
+    const elapsed=Date.now()-startTime;
+    const remaining=Math.max(0,MIN_TIME-elapsed);
+    setTimeout(()=>{
+      p=100;pEl.textContent="100%";
+      clearInterval(iv);
+      setTimeout(()=>{ window.location.replace("index.html"); },400);
+    },remaining);
+  }
+
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>goToDashboard()).catch(()=>goToDashboard());
+  setTimeout(()=>{ window.location.replace("index.html"); },10000);
+</script>
+</body>
+</html>
