@@ -160,6 +160,18 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
   </button>
 
+  <button class="nav-item nav-item--anim" data-tab="inventory">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-inv" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M5 8h14M5 8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/>
+        </svg>
+        <span>Inventory</span>
+      </div>
+    </div>
+  </button>
+
 </div>
 
 <!-- ============================================================
@@ -337,13 +349,24 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
         </div>
       </div>
 
-      <div id="incoming-card" class="card" data-gated>
-        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#64a0dc"></canvas>
+    </div>
+  </section>
+
+  <!-- INVENTORY TAB -->
+  <section id="inventory" class="tab-content">
+    <div class="module-head">
+      <div class="module-label">Inventory Modules</div>
+    </div>
+    <div class="cards-grid">
+
+      <div id="incoming-card" class="card card--inventory" data-gated>
+        <canvas class="card-bg-canvas" data-anim="inventory-flow" data-color="#3fd189"></canvas>
+        <div class="card-accent card-accent--green"></div>
         <div class="card-inner">
           <div class="card-top">
             <div class="card-title-row">
               <h3 class="card-title">Incoming Jobs Dashboard</h3>
-              <span class="badge badge--lms">Inventory</span>
+              <span class="badge badge--inventory">Inventory</span>
             </div>
             <p class="card-desc">Live queue volume and hourly flow metrics</p>
           </div>
@@ -353,7 +376,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
             <span class="tag">Surface</span>
             <span class="tag">Frame</span>
           </div>
-          <button class="card-btn" onclick="openPage('incoming.html')">
+          <button class="card-btn card-btn--green" onclick="openPage('incoming.html')">
             Open Dashboard
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </button>

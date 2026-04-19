@@ -473,6 +473,25 @@ body.lms-hidden { visibility: hidden; }
 }
 .card-accent--cyan   { background: linear-gradient(90deg, var(--accent-cyan,#30e8c0), var(--steel)); }
 .card-accent--violet { background: linear-gradient(90deg, var(--violet), #c084fc); }
+.card-accent--green  { background: linear-gradient(90deg, var(--green), #a8f0cc); }
+
+/* Inventory card */
+.card--inventory { border-color: rgba(63,209,137,0.22); }
+.card--inventory:hover { border-color: rgba(63,209,137,0.5); }
+
+.badge--inventory {
+  background: rgba(63,209,137,0.12);
+  color: var(--green);
+  border: 1px solid rgba(63,209,137,0.28);
+}
+
+.card-btn--green {
+  background: linear-gradient(135deg, var(--green), #22c97a);
+  color: #001a0d;
+}
+.card-btn--green:hover {
+  box-shadow: 0 8px 24px rgba(63,209,137,0.4);
+}
 
 .card-inner {
   padding: 22px 24px 22px;

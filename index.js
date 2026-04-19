@@ -152,38 +152,126 @@ function initNavAnimations() {
   animOps(document.getElementById("nav-canvas-ops"));
   animProd(document.getElementById("nav-canvas-prod"));
   animSys(document.getElementById("nav-canvas-sys"));
+  animInv(document.getElementById("nav-canvas-inv"));
 }
 
-/* Operations — equalizer bar wave */
+/* Inventory nav — stacked bar chart filling up like stock levels */
+function animInv(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const GREEN = "#3fd189";
+  const cols = 8;
+  const bars = Array.from({ length: cols }, (_, i) => ({
+    x: 6 + i * ((W - 12) / cols),
+    fill: 0.3 + Math.random() * 0.7,
+    target: 0.3 + Math.random() * 0.7,
+    speed: 0.008 + Math.random() * 0.006,
+  }));
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const bw = ((W - 12) / cols) - 4;
+
+    bars.forEach(b => {
+      /* drift toward new target */
+      b.fill += (b.target - b.fill) * b.speed;
+      if (Math.abs(b.fill - b.target) < 0.01) {
+        b.target = 0.2 + Math.random() * 0.75;
+      }
+
+      const bh = b.fill * (H - 8);
+      const alpha = 0.35 + b.fill * 0.55;
+
+      /* empty track */
+      ctx.fillStyle = `rgba(63,209,137,0.08)`;
+      ctx.beginPath();
+      ctx.roundRect(b.x, 4, bw, H - 8, 2);
+      ctx.fill();
+
+      /* filled portion */
+      ctx.fillStyle = `rgba(63,209,137,${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(b.x, H - 4 - bh, bw, bh, 2);
+      ctx.fill();
+
+      /* top cap glow */
+      ctx.fillStyle = GREEN;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.roundRect(b.x, H - 4 - bh, bw, 2, 1);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* Operations — LMS scanning beam animation */
 function animOps(canvas) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
-  const GOLD = "#f5c842", GOLD_DIM = "rgba(245,200,66,0.18)";
-  const barCount = 16;
-  const bars = Array.from({ length: barCount }, (_, i) => ({
-    x: 6 + i * ((W - 12) / barCount),
-    phase: Math.random() * Math.PI * 2,
-    speed: 0.045 + Math.random() * 0.03,
-    base: 6 + Math.random() * 10,
+  const GOLD = "#f5c842";
+
+  /* Horizontal scan lines */
+  const scanLines = Array.from({ length: 5 }, (_, i) => ({
+    y:     (i / 4) * H,
+    speed: 0.6 + i * 0.25,
+    x:     Math.random() * W,
+    len:   20 + Math.random() * 40,
+    alpha: 0.3 + Math.random() * 0.4,
   }));
+
+  /* Small blip dots */
+  const blips = Array.from({ length: 8 }, () => ({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.04 + Math.random() * 0.03,
+  }));
+
+  /* Vertical sweep beam */
+  let beamX = 0;
+  const beamSpeed = 0.8;
+
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    bars.forEach(b => {
-      b.phase += b.speed;
-      const h = b.base + Math.abs(Math.sin(b.phase)) * (H * 0.62);
-      const alpha = 0.35 + 0.65 * Math.abs(Math.sin(b.phase));
-      ctx.fillStyle = `rgba(245,200,66,${alpha})`;
-      const bw = 6, rx = 2;
-      const y = H - h;
+
+    /* Sweep beam */
+    beamX = (beamX + beamSpeed) % W;
+    ctx.fillStyle = `rgba(245,200,66,0.06)`;
+    ctx.fillRect(beamX - 12, 0, 24, H);
+    ctx.fillStyle = `rgba(245,200,66,0.25)`;
+    ctx.fillRect(beamX - 1, 0, 2, H);
+
+    /* Horizontal scan lines scrolling right */
+    scanLines.forEach(l => {
+      l.x = (l.x + l.speed) % (W + l.len);
       ctx.beginPath();
-      ctx.roundRect(b.x, y, bw, h, rx);
-      ctx.fill();
-      ctx.fillStyle = `rgba(245,200,66,${alpha * 0.15})`;
-      ctx.beginPath();
-      ctx.roundRect(b.x, H, bw, -(h * 0.25), rx);
-      ctx.fill();
+      ctx.moveTo(l.x - l.len, l.y);
+      ctx.lineTo(l.x, l.y);
+      ctx.strokeStyle = GOLD;
+      ctx.globalAlpha = l.alpha;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     });
+
+    /* Blips */
+    blips.forEach(b => {
+      b.phase += b.speed;
+      const a = 0.2 + 0.8 * Math.abs(Math.sin(b.phase));
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = GOLD;
+      ctx.globalAlpha = a;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
     requestAnimationFrame(draw);
   }
   draw();
@@ -306,8 +394,9 @@ function initCardCanvases() {
   document.querySelectorAll(".card-bg-canvas").forEach(canvas => {
     const anim  = canvas.dataset.anim;
     const color = canvas.dataset.color || "#64a0dc";
-    if (anim === "pulse-dots")  cardAnimDots(canvas, color);
-    if (anim === "flow-lines")  cardAnimLines(canvas, color);
+    if (anim === "pulse-dots")    cardAnimDots(canvas, color);
+    if (anim === "flow-lines")    cardAnimLines(canvas, color);
+    if (anim === "inventory-flow") cardAnimInventory(canvas, color);
   });
 }
 
@@ -408,6 +497,61 @@ function cardAnimLines(canvas, color) {
   }
   tick();
 }
+
+/* Inventory card — falling particles like stock dropping into bins */
+function cardAnimInventory(canvas, color) {
+  const card = canvas.parentElement;
+  function resize() {
+    canvas.width  = card.offsetWidth;
+    canvas.height = card.offsetHeight;
+  }
+  resize();
+  new ResizeObserver(resize).observe(card);
+
+  const ctx = canvas.getContext("2d");
+  const cols = 6;
+  const particles = Array.from({ length: 24 }, (_, i) => ({
+    col:   i % cols,
+    y:     Math.random(),
+    speed: 0.0008 + Math.random() * 0.001,
+    size:  2 + Math.random() * 3,
+    alpha: 0.15 + Math.random() * 0.3,
+  }));
+
+  function tick() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const colW = W / cols;
+
+    /* faint column guides */
+    for (let i = 1; i < cols; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * colW, 0);
+      ctx.lineTo(i * colW, H);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.04;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    particles.forEach(p => {
+      const px = (p.col + 0.5) * colW;
+      p.y += p.speed;
+      if (p.y > 1.05) { p.y = -0.05; p.alpha = 0.1 + Math.random() * 0.3; }
+      ctx.beginPath();
+      ctx.arc(px, p.y * H, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = p.alpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
 function countUp(id, target, duration, suffix) {
   const el = document.getElementById(id);
   if (!el || !target) return;
@@ -644,6 +788,7 @@ const TAB_ANIMS = {
   operations: "anim-slide-up",
   production: "anim-slide-left",
   system:     "anim-scale-up",
+  inventory:  "anim-slide-up",
 };
 
 function animateTab(tabId) {
