@@ -7,39 +7,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
-
-/* ── DMC dark base ── */
-.bg-base{
-  position:fixed;inset:0;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(180,0,20,.15) 0%,transparent 65%),
-    radial-gradient(ellipse 60% 40% at 20% 50%,  rgba(100,0,10,.1)  0%,transparent 55%),
-    radial-gradient(ellipse 50% 40% at 80% 30%,  rgba(0,30,180,.06) 0%,transparent 55%),
-    #050008;
-  animation:bgp 5s ease-in-out infinite;
-}
+.bg-base{position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 100%,rgba(180,0,20,.15) 0%,transparent 65%),radial-gradient(ellipse 60% 40% at 20% 50%,rgba(100,0,10,.1) 0%,transparent 55%),radial-gradient(ellipse 50% 40% at 80% 30%,rgba(0,30,180,.06) 0%,transparent 55%),#050008;animation:bgp 5s ease-in-out infinite;}
 @keyframes bgp{0%,100%{opacity:.8}50%{opacity:1}}
-
-/* ── PR flag animated stripes across full background ── */
-.pr-bg-stripes{
-  position:fixed;inset:0;pointer-events:none;z-index:1;
-  display:flex;flex-direction:column;
-}
+.pr-bg-stripes{position:fixed;inset:0;pointer-events:none;z-index:1;display:flex;flex-direction:column;}
 .pr-stripe{flex:1;}
 .pr-s1{background:rgba(200,0,40,.07);}
 .pr-s2{background:rgba(255,255,255,.025);}
 .pr-s3{background:rgba(200,0,40,.07);}
 .pr-s4{background:rgba(255,255,255,.025);}
 .pr-s5{background:rgba(200,0,40,.07);}
-/* Animated shine across stripes */
-.pr-bg-stripes::after{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.04) 40%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.04) 60%,transparent 100%);
-  animation:prShine 4s ease-in-out infinite;
-}
+.pr-bg-stripes::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.04) 40%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.04) 60%,transparent 100%);animation:prShine 4s ease-in-out infinite;}
 @keyframes prShine{0%,100%{transform:translateX(-100%)}50%{transform:translateX(200%)}}
-
-/* ── DMC slash lines ── */
 .slashes{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1;}
 .sl{position:absolute;width:1px;height:200%;background:linear-gradient(180deg,transparent,rgba(200,0,30,.1),transparent);animation:sa 4s ease-in-out infinite;}
 .sl:nth-child(1){left:10%;transform:rotate(20deg);animation-delay:0s;}
@@ -48,211 +26,65 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
 .sl:nth-child(4){left:72%;transform:rotate(20deg);animation-delay:1.8s;}
 .sl:nth-child(5){left:90%;transform:rotate(20deg);animation-delay:2.4s;}
 @keyframes sa{0%,100%{opacity:0}50%{opacity:1}}
-
-/* ── Blue PR triangle glow (left side) ── */
-.pr-triangle{
-  position:fixed;
-  top:0;bottom:0;left:0;
-  width:0;
-  border-top:50vh solid transparent;
-  border-bottom:50vh solid transparent;
-  border-left:35vw solid rgba(0,40,180,.08);
-  pointer-events:none;z-index:1;
-  animation:triGlow 4s ease-in-out infinite;
-}
+.pr-triangle{position:fixed;top:0;bottom:0;left:0;width:0;border-top:50vh solid transparent;border-bottom:50vh solid transparent;border-left:35vw solid rgba(0,40,180,.08);pointer-events:none;z-index:1;animation:triGlow 4s ease-in-out infinite;}
 @keyframes triGlow{0%,100%{opacity:.6}50%{opacity:1}}
-
-/* ── Rotating DMC pentagram ── */
 .penta{position:fixed;top:50%;left:50%;width:500px;height:500px;transform:translate(-50%,-50%);opacity:.04;animation:pr 28s linear infinite;pointer-events:none;z-index:1;}
 @keyframes pr{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
-
-/* ── Red sparks ── */
 .sparks{position:fixed;inset:0;pointer-events:none;z-index:2;}
 .sp{position:absolute;width:2px;height:2px;border-radius:50%;background:#c8001a;animation:sf 3s ease-out infinite;}
 @keyframes sf{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(0)}}
-
-/* ── Scan line ── */
 .scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(200,0,30,.2),transparent);animation:sc 5s linear infinite;pointer-events:none;z-index:2;}
 @keyframes sc{from{top:0}to{top:100vh}}
-
-/* ══════════ PAGE ══════════ */
-.page{
-  position:fixed;inset:0;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  z-index:10;
-}
-
-/* ── DMC emblem ── */
+.page{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;}
 .emblem{width:90px;height:90px;margin-bottom:18px;animation:emIn .9s cubic-bezier(.17,.67,.3,1.4) both;}
 @keyframes emIn{from{opacity:0;transform:scale(0) rotate(-180deg)}to{opacity:1;transform:scale(1) rotate(0deg)}}
-.em-outer{
-  width:90px;height:90px;border-radius:50%;
-  border:2px solid #b0001a;
-  display:flex;align-items:center;justify-content:center;
-  position:relative;
-  animation:emG 2.5s 1s ease-in-out infinite;
-}
-@keyframes emG{
-  0%,100%{box-shadow:0 0 12px rgba(180,0,26,.4)}
-  50%{box-shadow:0 0 35px rgba(180,0,26,.9),0 0 70px rgba(180,0,26,.25)}
-}
+.em-outer{width:90px;height:90px;border-radius:50%;border:2px solid #b0001a;display:flex;align-items:center;justify-content:center;position:relative;animation:emG 2.5s 1s ease-in-out infinite;}
+@keyframes emG{0%,100%{box-shadow:0 0 12px rgba(180,0,26,.4)}50%{box-shadow:0 0 35px rgba(180,0,26,.9),0 0 70px rgba(180,0,26,.25)}}
 .em-ring1{position:absolute;inset:-8px;border-radius:50%;border:1px solid transparent;border-top-color:rgba(200,0,26,.8);border-right-color:rgba(200,0,26,.2);animation:ro1 3s linear infinite;}
 .em-ring2{position:absolute;inset:-16px;border-radius:50%;border:1px solid transparent;border-bottom-color:rgba(0,40,200,.35);animation:ro2 5s linear infinite;}
 @keyframes ro1{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes ro2{from{transform:rotate(0deg)}to{transform:rotate(-360deg)}}
 .em-D{font-family:'Cinzel',serif;font-size:40px;font-weight:900;color:#b0001a;text-shadow:0 0 18px rgba(180,0,26,.8);line-height:1;}
-
-/* ── DMC rank ── */
-.dmc-rank{
-  font-family:'Cinzel',serif;
-  font-size:10px;letter-spacing:5px;
-  color:#b0001a;text-transform:uppercase;
-  margin-bottom:8px;
-  animation:fu .4s .4s ease both;
-  text-shadow:0 0 10px rgba(180,0,26,.6);
-}
-
-/* ── PR flag animated ── */
-.pr-flag-wrap{
-  position:relative;
-  width:72px;height:44px;
-  margin-bottom:14px;
-  animation:flagIn .6s .5s ease both;
-  border-radius:2px;
-  overflow:hidden;
-  box-shadow:0 0 16px rgba(200,0,40,.4),0 0 30px rgba(200,0,40,.15);
-  border:1px solid rgba(200,0,40,.3);
-}
+.dmc-rank{font-family:'Cinzel',serif;font-size:10px;letter-spacing:5px;color:#b0001a;text-transform:uppercase;margin-bottom:8px;animation:fu .4s .4s ease both;text-shadow:0 0 10px rgba(180,0,26,.6);}
+.pr-flag-wrap{position:relative;width:72px;height:44px;margin-bottom:14px;animation:flagIn .6s .5s ease both;border-radius:2px;overflow:hidden;box-shadow:0 0 16px rgba(200,0,40,.4),0 0 30px rgba(200,0,40,.15);border:1px solid rgba(200,0,40,.3);}
 @keyframes flagIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
-
-/* Flag stripes */
-.pr-flag-inner{
-  width:100%;height:100%;
-  display:flex;flex-direction:column;
-  position:relative;
-}
+.pr-flag-inner{width:100%;height:100%;display:flex;flex-direction:column;position:relative;}
 .fst{flex:1;}
 .fst.r{background:#ce1126;}
 .fst.w{background:#f0f0f0;}
-
-/* Blue triangle */
-.pr-flag-tri{
-  position:absolute;
-  top:0;bottom:0;left:0;
-  width:0;
-  border-top:22px solid transparent;
-  border-bottom:22px solid transparent;
-  border-left:38px solid #002868;
-}
-/* White star in triangle */
-.pr-star{
-  position:absolute;
-  top:50%;left:10px;
-  transform:translateY(-50%);
-  color:#f0f0f0;
-  font-size:12px;
-  line-height:1;
-  z-index:2;
-  text-shadow:0 0 4px rgba(255,255,255,.8);
-  animation:starPulse 1.5s ease-in-out infinite;
-}
+.pr-flag-tri{position:absolute;top:0;bottom:0;left:0;width:0;border-top:22px solid transparent;border-bottom:22px solid transparent;border-left:38px solid #002868;}
+.pr-star{position:absolute;top:50%;left:10px;transform:translateY(-50%);color:#f0f0f0;font-size:12px;line-height:1;z-index:2;text-shadow:0 0 4px rgba(255,255,255,.8);animation:starPulse 1.5s ease-in-out infinite;}
 @keyframes starPulse{0%,100%{opacity:.9}50%{opacity:1;text-shadow:0 0 8px rgba(255,255,255,1);}}
-/* Flag wave shine */
-.pr-flag-wrap::after{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);
-  animation:flagWave 2.5s ease-in-out infinite;
-  border-radius:2px;
-}
+.pr-flag-wrap::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);animation:flagWave 2.5s ease-in-out infinite;border-radius:2px;}
 @keyframes flagWave{0%{transform:translateX(-150%)}100%{transform:translateX(250%)}}
-
-/* ── Text ── */
 .welcome{font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:5px;color:rgba(200,100,100,.7);text-transform:uppercase;margin-bottom:6px;animation:fu .4s .65s ease both;}
-.fullname{
-  font-family:'Cinzel',serif;font-size:28px;font-weight:700;
-  color:#ede0e0;letter-spacing:2px;margin-bottom:5px;
-  animation:nameSlash .7s .78s ease both;
-  text-shadow:0 0 16px rgba(180,0,26,.2);line-height:1.1;
-}
+.fullname{font-family:'Cinzel',serif;font-size:28px;font-weight:700;color:#ede0e0;letter-spacing:2px;margin-bottom:5px;animation:nameSlash .7s .78s ease both;text-shadow:0 0 16px rgba(180,0,26,.2);line-height:1.1;}
 @keyframes nameSlash{from{opacity:0;clip-path:polygon(0 0,0 0,0 100%,0 100%)}to{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}}
-
-/* ── Wise Man title ── */
-.wise-man{
-  font-family:'Cinzel',serif;
-  font-size:11px;letter-spacing:4px;
-  color:rgba(255,200,200,.75);
-  text-transform:uppercase;
-  margin-bottom:4px;
-  animation:fu .4s .9s ease both;
-}
-.tribal-note{
-  font-family:'Rajdhani',sans-serif;
-  font-size:11px;letter-spacing:3px;
-  color:rgba(255,150,150,.5);
-  text-transform:uppercase;
-  margin-bottom:4px;
-  animation:fu .4s .98s ease both;
-}
-
-/* Boricua line */
-.boricua{
-  font-family:'Rajdhani',sans-serif;
-  font-size:12px;letter-spacing:4px;
-  color:rgba(255,255,255,.35);
-  margin-bottom:14px;
-  animation:fu .4s 1.05s ease both;
-}
-
-/* Role tag */
-.role-tag{
-  display:inline-flex;align-items:center;gap:8px;
-  border:1px solid rgba(180,0,26,.35);
-  background:rgba(180,0,26,.07);
-  padding:5px 18px;margin-bottom:26px;
-  animation:fu .4s 1.12s ease both;
-}
+.wise-man{font-family:'Cinzel',serif;font-size:11px;letter-spacing:4px;color:rgba(255,200,200,.75);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .9s ease both;}
+.tribal-note{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,150,150,.5);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .98s ease both;}
+.boricua{font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:4px;color:rgba(255,255,255,.35);margin-bottom:14px;animation:fu .4s 1.05s ease both;}
+.role-tag{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(180,0,26,.35);background:rgba(180,0,26,.07);padding:5px 18px;margin-bottom:26px;animation:fu .4s 1.12s ease both;}
 .role-tag span{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:#b0001a;text-transform:uppercase;}
-
-/* Progress */
 .pbar-wrap{width:250px;margin-bottom:5px;animation:fu .4s 1.2s ease both;}
 .pbar-lbl{display:flex;justify-content:space-between;font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(200,100,100,.6);letter-spacing:2px;margin-bottom:5px;}
 .pbar-track{width:100%;height:4px;background:rgba(180,0,26,.12);overflow:hidden;}
-.pbar-fill{
-  height:100%;width:0%;
-  background:linear-gradient(90deg,#00006a,#ce1126,#ffffff,#ce1126);
-  background-size:300% 100%;
-  animation:pf 2.5s 1.25s ease forwards, pshift 3s 1.25s linear infinite;
-  position:relative;
-}
+.pbar-fill{height:100%;width:0%;background:linear-gradient(90deg,#00006a,#ce1126,#ffffff,#ce1126);background-size:300% 100%;animation:pf 5s 1.25s ease forwards,pshift 3s 1.25s linear infinite;position:relative;}
 .pbar-fill::after{content:'';position:absolute;right:0;top:0;width:14px;height:100%;background:rgba(255,255,255,.4);filter:blur(3px);}
-@keyframes pf{0%{width:0%}55%{width:68%}80%{width:86%}100%{width:100%}}
+@keyframes pf{0%{width:0%}40%{width:55%}70%{width:78%}90%{width:92%}100%{width:100%}}
 @keyframes pshift{0%{background-position:0% 0}100%{background-position:300% 0}}
-
 .sys{font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(180,80,80,.5);letter-spacing:2px;text-transform:uppercase;margin-top:8px;animation:fu .4s 2.9s ease both;}
-
+.sys-status{font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(200,150,150,.4);letter-spacing:1px;margin-top:4px;animation:fu .4s 3.2s ease both;min-height:14px;}
 @keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-
-/* ── OTC badge top right ── */
-.otc-badge{
-  position:fixed;top:18px;right:22px;
-  display:flex;align-items:center;gap:6px;
-  z-index:20;animation:fu .5s .6s ease both;
-}
+.otc-badge{position:fixed;top:18px;right:22px;display:flex;align-items:center;gap:6px;z-index:20;animation:fu .5s .6s ease both;}
 .otc-finger{font-size:22px;animation:fingerUp 2s ease-in-out infinite;}
 @keyframes fingerUp{0%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
 .otc-txt{font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:rgba(180,0,26,.7);text-transform:uppercase;}
-
-/* ── Bloodline corner ── */
 .corner{position:fixed;font-family:'Rajdhani',sans-serif;font-size:9px;color:rgba(180,50,50,.3);letter-spacing:1px;z-index:1;}
 .ctop{top:18px;left:22px;} .cbot{bottom:18px;right:22px;}
 </style>
 </head>
 <body>
-
 <div class="bg-base"></div>
-
-<!-- PR flag background stripes -->
 <div class="pr-bg-stripes">
   <div class="pr-stripe pr-s1"></div>
   <div class="pr-stripe pr-s2"></div>
@@ -260,24 +92,17 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
   <div class="pr-stripe pr-s4"></div>
   <div class="pr-stripe pr-s5"></div>
 </div>
-
 <div class="pr-triangle"></div>
-
-<!-- DMC elements -->
 <div class="slashes">
   <div class="sl"></div><div class="sl"></div><div class="sl"></div>
   <div class="sl"></div><div class="sl"></div>
 </div>
-
 <svg class="penta" viewBox="0 0 200 200" fill="none">
   <polygon points="100,10 40,180 190,70 10,70 160,180" fill="none" stroke="#b0001a" stroke-width="1"/>
   <circle cx="100" cy="100" r="95" fill="none" stroke="#b0001a" stroke-width=".5"/>
-  <circle cx="100" cy="100" r="70"  fill="none" stroke="rgba(0,40,200,.3)" stroke-width=".5" stroke-dasharray="3 5"/>
+  <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(0,40,200,.3)" stroke-width=".5" stroke-dasharray="3 5"/>
 </svg>
-
 <div class="scan"></div>
-
-<!-- Red sparks -->
 <div class="sparks">
   <div class="sp" style="left:49%;top:58%;--dx:42px;--dy:-88px;animation-delay:0s;"></div>
   <div class="sp" style="left:51%;top:60%;--dx:-36px;--dy:-74px;animation-delay:.35s;background:#ff2030;"></div>
@@ -285,19 +110,13 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
   <div class="sp" style="left:48%;top:61%;--dx:-52px;--dy:-62px;animation-delay:1.05s;"></div>
   <div class="sp" style="left:52%;top:58%;--dx:58px;--dy:-78px;animation-delay:1.4s;background:#fff;width:1px;height:1px;"></div>
 </div>
-
-<!-- OTC badge -->
 <div class="otc-badge">
   <span class="otc-finger">☝️</span>
   <span class="otc-txt">Wise Man</span>
 </div>
-
 <div class="corner ctop">THE BLOODLINE · WISE MAN</div>
 <div class="corner cbot">ZENNI LMS · SESSION ACTIVE</div>
-
 <div class="page">
-
-  <!-- DMC emblem -->
   <div class="emblem">
     <div class="em-outer">
       <div class="em-ring1"></div>
@@ -305,10 +124,7 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
       <span class="em-D">D</span>
     </div>
   </div>
-
-  <div class="dmc-rank">✦ LMS ADMIN ✦</div>
-
-  <!-- Animated PR flag -->
+  <div class="dmc-rank">✦ Lab Management System Administrator ✦</div>
   <div class="pr-flag-wrap">
     <div class="pr-flag-inner">
       <div class="fst r"></div>
@@ -320,35 +136,88 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
     <div class="pr-flag-tri"></div>
     <div class="pr-star">★</div>
   </div>
-
   <div class="welcome">Welcome back</div>
   <div class="fullname" id="displayName">Brian Lopez Cabrera</div>
-
   <div class="wise-man">Wise Man</div>
-  <div class="tribal-note">The Wiseman · OTC ☝️</div>
+  <div class="tribal-note">The Bloodline · OTC ☝️</div>
   <div class="boricua">🇵🇷 &nbsp; Boricua · Puerto Rico &nbsp; 🇵🇷</div>
-
   <div class="role-tag">
-    <span id="displayRole">Lab Management System · Administrator</span>
+    <span id="displayRole">LMS · Admin</span>
   </div>
-
   <div class="pbar-wrap">
     <div class="pbar-lbl"><span>Loading Dashboard</span><span id="pct">0%</span></div>
-    <div class="pbar-track"><div class="pbar-fill"></div></div>
+    <div class="pbar-track"><div class="pbar-fill" id="pbar"></div></div>
   </div>
   <div class="sys">Initializing systems...</div>
-
+  <div class="sys-status" id="sysStatus"></div>
 </div>
 
 <script>
-  const n=sessionStorage.getItem("lms_fullname")||"Brian Lopez Cabrera";
-  const r=sessionStorage.getItem("lms_role")||"LMS";
-  const s=sessionStorage.getItem("lms_subrole")||"Admin";
-  document.getElementById("displayName").textContent=n;
-  document.getElementById("displayRole").textContent=r+" · "+s;
-  let p=0;const pEl=document.getElementById("pct");
-  const iv=setInterval(()=>{p=Math.min(100,p+Math.floor(Math.random()*4)+1);pEl.textContent=p+"%";if(p>=100)clearInterval(iv);},60);
-  setTimeout(()=>{window.location.replace("index.html");},3600);
+  // Set name and role from session
+  const n = sessionStorage.getItem("lms_fullname") || "Brian Lopez Cabrera";
+  const r = sessionStorage.getItem("lms_role")     || "LMS";
+  const s = sessionStorage.getItem("lms_subrole")  || "Admin";
+  document.getElementById("displayName").textContent  = n;
+  document.getElementById("displayRole").textContent  = r + " · " + s;
+
+  // Percentage counter
+  let p = 0;
+  const pEl     = document.getElementById("pct");
+  const statusEl = document.getElementById("sysStatus");
+
+  const messages = [
+    "Authenticating credentials...",
+    "Loading visibility settings...",
+    "Syncing production data...",
+    "Preparing your workspace...",
+    "Almost ready..."
+  ];
+
+  const iv = setInterval(() => {
+    p = Math.min(99, p + Math.floor(Math.random() * 3) + 1);
+    pEl.textContent = p + "%";
+    // Cycle status messages based on progress
+    if      (p < 20)  statusEl.textContent = messages[0];
+    else if (p < 40)  statusEl.textContent = messages[1];
+    else if (p < 60)  statusEl.textContent = messages[2];
+    else if (p < 80)  statusEl.textContent = messages[3];
+    else              statusEl.textContent = messages[4];
+    if (p >= 99) clearInterval(iv);
+  }, 80);
+
+  // Minimum display time — 6 seconds
+  const MIN_TIME = 6000;
+  const startTime = Date.now();
+
+  // Preload dashboard in background
+  const preload = document.createElement("link");
+  preload.rel  = "prefetch";
+  preload.href = "index.html";
+  document.head.appendChild(preload);
+
+  function goToDashboard() {
+    const elapsed   = Date.now() - startTime;
+    const remaining = Math.max(0, MIN_TIME - elapsed);
+    setTimeout(() => {
+      p = 100;
+      pEl.textContent = "100%";
+      statusEl.textContent = "Welcome!";
+      clearInterval(iv);
+      setTimeout(() => {
+        window.location.replace("index.html");
+      }, 400);
+    }, remaining);
+  }
+
+  // Also fetch index.html in background to warm it up
+  fetch("index.html", { method: "GET", cache: "force-cache" })
+    .then(() => goToDashboard())
+    .catch(() => goToDashboard()); // fallback if fetch fails
+
+  // Hard fallback — never stay longer than 10 seconds
+  setTimeout(() => {
+    window.location.replace("index.html");
+  }, 10000);
 </script>
 </body>
 </html>
