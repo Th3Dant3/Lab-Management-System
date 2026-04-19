@@ -12,6 +12,88 @@
 </head>
 <body>
 
+<!-- POWER ANALYSIS LOADING SPLASH -->
+<div class="pa-splash" id="loadingOverlay">
+
+  <!-- animated background grid -->
+  <div class="pa-grid-bg"></div>
+
+  <!-- top-left brand mark -->
+  <div class="pa-brand">
+    <div class="pa-brand-icon">
+      <svg width="16" height="16" viewBox="0 0 12 12" fill="currentColor"><path d="M6 0v4h3L6 12V8H3L6 0z"/></svg>
+    </div>
+    <span>Surface Flow</span>
+    <span class="pa-brand-sep">/</span>
+    <span class="pa-brand-sub">Power Analysis</span>
+  </div>
+
+  <!-- centre content -->
+  <div class="pa-center">
+
+    <!-- big bolt icon with orbit ring -->
+    <div class="pa-icon-wrap">
+      <div class="pa-orbit"></div>
+      <div class="pa-orbit pa-orbit-2"></div>
+      <div class="pa-icon-core">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+          <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z"
+                fill="currentColor" opacity="0.9"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- title -->
+    <div class="pa-title">Power Analysis</div>
+    <div class="pa-subtitle">Breakage Intelligence Dashboard</div>
+
+    <!-- progress bar -->
+    <div class="pa-progress-wrap">
+      <div class="pa-progress-track">
+        <div class="pa-progress-bar" id="paProgressBar"></div>
+      </div>
+      <div class="pa-progress-label" id="paProgressLabel">Connecting…</div>
+    </div>
+
+    <!-- step checklist -->
+    <div class="pa-steps">
+      <div class="pa-step" id="ls-brk">
+        <div class="pa-step-icon">
+          <svg class="pa-step-check" width="10" height="10" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          <div class="pa-step-spinner"></div>
+        </div>
+        <span>Breakage summary</span>
+      </div>
+      <div class="pa-step" id="ls-reason">
+        <div class="pa-step-icon">
+          <svg class="pa-step-check" width="10" height="10" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          <div class="pa-step-spinner"></div>
+        </div>
+        <span>Reason summary</span>
+      </div>
+      <div class="pa-step" id="ls-research">
+        <div class="pa-step-icon">
+          <svg class="pa-step-check" width="10" height="10" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          <div class="pa-step-spinner"></div>
+        </div>
+        <span>Research data</span>
+      </div>
+      <div class="pa-step" id="ls-anom">
+        <div class="pa-step-icon">
+          <svg class="pa-step-check" width="10" height="10" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          <div class="pa-step-spinner"></div>
+        </div>
+        <span>Anomalies &amp; alerts</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- bottom tagline -->
+  <div class="pa-footer">Surface Flow · Lens Manufacturing Intelligence</div>
+
+</div>
+
 <!-- TOP NAV -->
 <header class="nav">
   <div class="nav-brand">
@@ -42,6 +124,10 @@
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L2 14h12L8 2z"/><path d="M8 7v3M8 11.5v.5" stroke-linecap="round"/></svg>
       <span>Alerts</span>
     </button>
+    <button class="tab-btn" onclick="sw('summary',this)" id="summaryTabBtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4" stroke-linecap="round"/></svg>
+      <span>Summary</span>
+    </button>
   </div>
   <div class="nav-right">
     <div class="live-badge">
@@ -64,6 +150,20 @@
 
   <!-- ════ OVERVIEW ════ -->
   <section class="tab active" id="t-overview">
+
+    <!-- Single date filter -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Date</label>
+        <input type="date" id="dateSingle" onchange="applyDateFilter()"/>
+      </div>
+      <button class="date-clear-btn" onclick="clearDateFilter()">✕ Live</button>
+      <div class="date-mode-badge" id="dateModeBadge" style="display:none">
+        <span class="live-dot" style="background:var(--peri);animation:none"></span>
+        <span id="dateModeLabel">Historical</span>
+      </div>
+      <div class="flow-count" style="margin-left:auto"><span id="dateFilterCount">--</span> jobs</div>
+    </div>
 
     <!-- KPI Strip (horizontal, concept 2 style) -->
     <div class="kpi-strip">
@@ -140,6 +240,14 @@
         <label>AR41</label>
         <select id="filterAR41" onchange="renderFlow()"><option value="">All AR41</option></select>
       </div>
+      <div class="filter-group">
+        <label>From date</label>
+        <input type="date" id="flowDateFrom" onchange="renderFlow()"/>
+      </div>
+      <div class="filter-group">
+        <label>To date</label>
+        <input type="date" id="flowDateTo" onchange="renderFlow()"/>
+      </div>
       <div class="filter-legend">
         <span class="fleg-item"><span class="fleg-sq peach"></span>Source → AR41</span>
         <span class="fleg-item"><span class="fleg-sq peri"></span>AR41 → Breakage</span>
@@ -173,6 +281,24 @@
       <div class="filter-group">
         <label>Material</label>
         <select id="resMaterial" onchange="renderResearch()"><option value="">All materials</option></select>
+      </div>
+      <div class="filter-group">
+        <label>From date</label>
+        <input type="date" id="resDateFrom" onchange="renderResearch()"/>
+      </div>
+      <div class="filter-group">
+        <label>To date</label>
+        <input type="date" id="resDateTo" onchange="renderResearch()"/>
+      </div>
+      <div class="export-btn-group">
+        <button class="export-btn csv" onclick="exportResearchCSV()" title="Export filtered table to CSV">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12l5 3 5-3M3 8l5 3 5-3M8 2v9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          CSV
+        </button>
+        <button class="export-btn xlsx" onclick="exportResearchXLSX()" title="Export filtered table to Excel">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12l5 3 5-3M3 8l5 3 5-3M8 2v9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Excel
+        </button>
       </div>
     </div>
 
@@ -280,9 +406,95 @@
 
   </section>
 
-</div>
+  <!-- ════ WEEKLY SUMMARY ════ -->
+  <section class="tab" id="t-summary">
 
-<div class="gantt-tip" id="ganttTip"></div>
+    <!-- Week selector bar -->
+    <div class="filter-bar" id="summaryFilterBar">
+      <div class="filter-group">
+        <label>Week ending (Sunday)</label>
+        <select id="weekSelect" onchange="onWeekChange()"></select>
+      </div>
+      <div class="sum-week-range" id="sumWeekRange">—</div>
+      <button class="export-btn xlsx" style="margin-left:auto" onclick="exportSummaryTXT()" id="sumExportBtn" disabled>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12l5 3 5-3M3 8l5 3 5-3M8 2v9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Export .txt
+      </button>
+    </div>
+
+    <!-- Stat cards row -->
+    <div class="sum-stat-row" id="sumStatRow">
+      <div class="sum-stat-card">
+        <div class="sum-stat-num c-peach" id="ss-jobs">--</div>
+        <div class="sum-stat-label">Jobs</div>
+      </div>
+      <div class="sum-stat-card">
+        <div class="sum-stat-num c-peri" id="ss-lens">--</div>
+        <div class="sum-stat-label">Lenses broken</div>
+      </div>
+      <div class="sum-stat-card">
+        <div class="sum-stat-num c-teal" id="ss-power">--</div>
+        <div class="sum-stat-label">S-Power events</div>
+      </div>
+      <div class="sum-stat-card">
+        <div class="sum-stat-num c-white" id="ss-axis">--</div>
+        <div class="sum-stat-label">S-Axis events</div>
+      </div>
+      <div class="sum-stat-card">
+        <div class="sum-stat-num c-peach" id="ss-ar41">--</div>
+        <div class="sum-stat-label">Avg AR41→Brk</div>
+      </div>
+      <div class="sum-stat-card">
+        <div class="sum-stat-num c-peri" id="ss-proc">--</div>
+        <div class="sum-stat-label">Avg Brk→Proc</div>
+      </div>
+    </div>
+
+    <!-- AI narrative panel -->
+    <div class="panel" id="sumNarrativePanel">
+      <div class="panel-head" style="justify-content:space-between">
+        <span class="panel-title">Weekly breakage report</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="panel-hint" id="sumGenHint">Generated by AI · for review before sharing</span>
+          <button class="sum-gen-btn" id="sumGenBtn" onclick="generateSummary()">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 0v4h3L6 12V8H3L6 0z" fill="currentColor" stroke="none"/></svg>
+            Generate report
+          </button>
+        </div>
+      </div>
+
+      <!-- Empty / loading state -->
+      <div id="sumEmpty" class="sum-empty-state">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 8h8M8 12h6M8 16h4"/></svg>
+        <div>Select a week, then click <strong>Generate report</strong> to build the summary.</div>
+      </div>
+
+      <!-- AI typing indicator -->
+      <div id="sumTyping" class="sum-typing" style="display:none">
+        <div class="sum-typing-dots"><span></span><span></span><span></span></div>
+        <span>Analysing breakage data…</span>
+      </div>
+
+      <!-- The rendered narrative -->
+      <div id="sumNarrative" class="sum-narrative" style="display:none"></div>
+
+    </div>
+
+    <!-- Machine + material breakdown side-by-side -->
+    <div class="grid-equal" id="sumBreakdownGrid" style="display:none">
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">Breakage by machine</span></div>
+        <div class="bar-list" id="sumMachineList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">Breakage by material</span></div>
+        <div class="bar-list" id="sumMaterialList"></div>
+      </div>
+    </div>
+
+  </section>
+
+</div>
 <script src="power.js"></script>
 </body>
 </html>
