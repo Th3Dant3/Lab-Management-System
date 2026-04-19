@@ -1,10 +1,26 @@
 const AUTH_API =
   "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
 
+/**************************************************
+ * LOADER MAP — routes each user to their screen
+ **************************************************/
+const LOADER_MAP = {
+  "BLOPEZ":        "loader_BLOPEZ.html",
+  "MLITTLE":       "loader_MLITTLE.html",
+  "JBOOMERSHINE":  "loader_JBOOMERSHINE.html",
+  "BKARR":         "loader_BKARR.html",
+  "RTATE":         "loader_RTATE.html",
+  "AIVANOVSKI":    "loader_AIVANOVSKI.html",
+  "SANDERSON":     "loader_SANDERSON.html"
+};
+
+/**************************************************
+ * INIT
+ **************************************************/
 document.addEventListener("DOMContentLoaded", () => {
-  const userEl = document.getElementById("username");
+  const userEl     = document.getElementById("username");
   const passwordEl = document.getElementById("password");
-  const toggleBtn = document.getElementById("togglePassword");
+  const toggleBtn  = document.getElementById("togglePassword");
 
   if (userEl) {
     userEl.addEventListener("input", () => {
@@ -15,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (toggleBtn && passwordEl) {
     toggleBtn.addEventListener("click", () => {
       const isPassword = passwordEl.type === "password";
-      passwordEl.type = isPassword ? "text" : "password";
+      passwordEl.type  = isPassword ? "text" : "password";
       toggleBtn.textContent = isPassword ? "Hide" : "Show";
     });
   }
@@ -25,23 +41,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+/**************************************************
+ * UI HELPERS
+ **************************************************/
 function setMessage(text, type = "warning") {
   const wrap = document.getElementById("messageWrap");
-  const el = document.getElementById("message");
+  const el   = document.getElementById("message");
   if (!wrap || !el) return;
-
   wrap.classList.remove("warning", "success", "error");
   wrap.classList.add(type);
   el.textContent = text;
 }
 
 function setLoading(isLoading) {
-  const btn = document.getElementById("loginBtn");
+  const btn     = document.getElementById("loginBtn");
   const btnText = document.getElementById("loginBtnText");
-
   if (!btn || !btnText) return;
-
-  btn.disabled = isLoading;
+  btn.disabled      = isLoading;
   btnText.textContent = isLoading ? "Signing In..." : "Sign In";
 }
 
@@ -50,6 +66,9 @@ function setProgress(pct) {
   if (prog) prog.style.width = `${pct}%`;
 }
 
+/**************************************************
+ * LOGIN
+ **************************************************/
 async function login() {
   const usernameEl = document.getElementById("username");
   const passwordEl = document.getElementById("password");
@@ -73,9 +92,8 @@ async function login() {
     `&password=${encodeURIComponent(password)}`;
 
   try {
-    const res = await fetch(url);
+    const res  = await fetch(url);
     const data = await res.json();
-
     setProgress(70);
     await handleLoginResponse(data, password);
   } catch (err) {
@@ -87,6 +105,9 @@ async function login() {
   }
 }
 
+/**************************************************
+ * HANDLE RESPONSE
+ **************************************************/
 async function handleLoginResponse(data, originalPassword) {
   if (!data || !data.status) {
     setMessage("Invalid server response.", "error");
@@ -108,21 +129,34 @@ async function handleLoginResponse(data, originalPassword) {
   }
 
   if (data.status === "SUCCESS") {
-    sessionStorage.setItem("lms_logged_in", "true");
-    sessionStorage.setItem("lms_user", data.username);
-    sessionStorage.setItem("lms_role", data.role || "");
-    sessionStorage.setItem("lms_subrole", data.subRole || "");
-    sessionStorage.setItem("lms_visibility", JSON.stringify(data.visibility || {}));
+
+    // Build full name from firstName + lastName returned by API
+    const fullName = ((data.firstName || "") + " " + (data.lastName || "")).trim()
+                     || data.username;
+
+    // Save everything to sessionStorage
+    sessionStorage.setItem("lms_logged_in",  "true");
+    sessionStorage.setItem("lms_user",        data.username);
+    sessionStorage.setItem("lms_role",        data.role    || "");
+    sessionStorage.setItem("lms_subrole",     data.subRole || "");
+    sessionStorage.setItem("lms_fullname",    fullName);
+    sessionStorage.setItem("lms_visibility",  JSON.stringify(data.visibility || {}));
 
     setProgress(100);
     setMessage("Access granted. Redirecting...", "success");
 
+    // Route to personal loader or fall back to index
+    const loader = LOADER_MAP[data.username] || "index.html";
+
     setTimeout(() => {
-      window.location.replace("index.html");
-    }, 500);
+      window.location.replace(loader);
+    }, 400);
   }
 }
 
+/**************************************************
+ * SET PASSWORD (first login)
+ **************************************************/
 async function setPassword(username, password) {
   const url =
     `${AUTH_API}?action=setPassword` +
@@ -130,7 +164,7 @@ async function setPassword(username, password) {
     `&password=${encodeURIComponent(password)}`;
 
   try {
-    const res = await fetch(url);
+    const res  = await fetch(url);
     const data = await res.json();
 
     if (data.status !== "PASSWORD_SET") {
@@ -147,10 +181,10 @@ async function setPassword(username, password) {
       `&username=${encodeURIComponent(username)}` +
       `&password=${encodeURIComponent(password)}`;
 
-    const res2 = await fetch(fullUrl);
+    const res2  = await fetch(fullUrl);
     const data2 = await res2.json();
-
     await handleLoginResponse(data2, password);
+
   } catch (err) {
     console.error("Password setup error:", err);
     setMessage("Password setup failed.", "error");
