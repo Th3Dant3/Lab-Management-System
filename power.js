@@ -1039,30 +1039,18 @@ function buildWeekOptions() {
   const sel = document.getElementById('weekSelect');
   if (!sel) return;
 
-  const weekSet = {};
-  _allBrk.forEach(r => {
-    const ds = r.AR41ScanTime || r.BrkTableScanTime;
-    if (!ds) return;
-    const d = new Date(ds);
-    if (isNaN(d)) return;
-    const mon = getMondayOf(d);
-    const key = mon.toISOString().slice(0, 10);
-    if (!weekSet[key]) weekSet[key] = mon;
-  });
+  // Generate last 12 weeks (Mon–Sun) going back from current week
+  // This ensures past weeks with BREAKAGE_HISTORY data are always available
+  const today = new Date();
+  const thisMonday = getMondayOf(today);
 
-  _sumWeeks = Object.entries(weekSet)
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([, mon]) => {
-      const sun = getSundayOf(mon);
-      return { label: fmtWeekLabel(mon, sun), from: mon, to: sun };
-    });
-
-  if (_sumWeeks.length === 0) {
-    const today = new Date();
-    const mon   = getMondayOf(today);
-    mon.setDate(mon.getDate() - 7);
+  _sumWeeks = [];
+  for (let i = 0; i < 12; i++) {
+    const mon = new Date(thisMonday);
+    mon.setDate(mon.getDate() - (i * 7));
+    mon.setHours(0,0,0,0);
     const sun = getSundayOf(mon);
-    _sumWeeks = [{ label: fmtWeekLabel(mon, sun), from: mon, to: sun }];
+    _sumWeeks.push({ label: fmtWeekLabel(mon, sun), from: mon, to: sun });
   }
 
   while (sel.options.length) sel.remove(0);
@@ -1071,11 +1059,14 @@ function buildWeekOptions() {
     o.value = i; o.textContent = w.label; sel.appendChild(o);
   });
 
-  sel.value = 0;
+  // Default to most recent complete week (index 1 = last full Mon–Sun)
+  // Index 0 is current week (may be partial), index 1 is last completed week
+  const todayDay = today.getDay(); // 0=Sun
+  sel.value = todayDay === 0 ? 0 : 1; // if today IS Sunday, current week just ended
   onWeekChange(/*silent=*/true);
 }
 
-function onWeekChange(silent) {
+async function onWeekChange(silent) {
   const sel  = document.getElementById('weekSelect');
   const idx  = parseInt(sel.value);
   const week = _sumWeeks[idx];
@@ -1084,18 +1075,43 @@ function onWeekChange(silent) {
   const rangeEl = document.getElementById('sumWeekRange');
   if (rangeEl) rangeEl.textContent = `${fmtShortDate(week.from)} → ${fmtShortDate(week.to)}`;
 
-  const wBrk = _allBrk.filter(r => {
-    const ds = r.AR41ScanTime || r.BrkTableScanTime;
-    if (!ds) return false;
-    const d = new Date(ds);
-    return !isNaN(d) && d >= week.from && d <= week.to;
-  });
-  const wRes = _allResearch.filter(r => {
-    const ds = r.ORBScanTime || r.OTBScanTime;
-    if (!ds) return false;
-    const d = new Date(ds);
-    return !isNaN(d) && d >= week.from && d <= week.to;
-  });
+  // Determine if this week is the current live week or a past week
+  const todayStr = new Date().toISOString().slice(0,10);
+  const weekEnd  = week.to.toISOString().slice(0,10);
+  const isPast   = weekEnd < todayStr;
+
+  // Format dates for API
+  const startStr = week.from.toISOString().slice(0,10);
+  const endStr   = week.to.toISOString().slice(0,10);
+
+  let wBrk = [];
+
+  if (isPast) {
+    // Fetch from BREAKAGE_HISTORY for this date range
+    const genBtn = document.getElementById('sumGenBtn');
+    if (genBtn) genBtn.disabled = true;
+
+    // Show loading state in stat cards
+    ['ss-jobs','ss-lens','ss-power','ss-axis','ss-ar41','ss-proc']
+      .forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '…'; });
+
+    try {
+      const raw = await fetchTab('breakageSummary', startStr, endStr);
+      wBrk = (Array.isArray(raw) ? raw : []).map(normalizeRow);
+    } catch(e) {
+      console.error('Summary week fetch error:', e);
+      wBrk = [];
+    }
+    if (genBtn) genBtn.disabled = false;
+  } else {
+    // Current week — filter from live data already loaded
+    wBrk = _allBrk.filter(r => {
+      const ds = r.AR41ScanTime || r.BrkTableScanTime;
+      if (!ds) return false;
+      const d = new Date(ds);
+      return !isNaN(d) && d >= week.from && d <= week.to;
+    });
+  }
 
   const totalJobs = wBrk.length;
   const totalLens = wBrk.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
@@ -1104,7 +1120,7 @@ function onWeekChange(silent) {
   const avgAR41   = avgArr(wBrk.map(r => r.AR41_to_Breakage_Min));
   const avgProc   = avgArr(wBrk.map(r => r.Breakage_to_Processed_Min));
 
-  _sumCurrentStats = { week, wBrk, wRes, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc };
+  _sumCurrentStats = { week, wBrk, wRes: [], totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc };
 
   document.getElementById('ss-jobs').textContent  = totalJobs  || '--';
   document.getElementById('ss-lens').textContent  = totalLens  || '--';
@@ -1155,7 +1171,7 @@ function buildSummaryPayload(stats) {
   return { weekLabel: week.label, totalJobs, totalLens, sPower, sAxis, avgAR41_min: Math.round(avgAR41), avgProc_min: Math.round(avgProc), reasonBreakdown: reasonAgg, machineBreakdown: machAgg, materialBreakdown: matAgg, worstJobs: worst };
 }
 
-async function generateSummary() {
+function generateSummary() {
   if (!_sumCurrentStats) return;
 
   const genBtn = document.getElementById('sumGenBtn');
@@ -1164,77 +1180,182 @@ async function generateSummary() {
   document.getElementById('sumNarrative').style.display = 'none';
   document.getElementById('sumTyping').style.display    = 'flex';
 
-  const payload = buildSummaryPayload(_sumCurrentStats);
+  // Small timeout so the typing indicator renders before we do the work
+  setTimeout(() => {
+    try {
+      const html = buildDataReport(_sumCurrentStats);
+      _sumCurrentNarrative = html;
 
-  const systemPrompt = `You are a production analyst writing internal weekly breakage reports for a lens manufacturing operation.
-Write in clear, professional but plain English — like a knowledgeable floor supervisor briefing the team.
-Avoid jargon fluff. Be specific and factual. Use the data provided.
-Use these HTML tags only: <h2> for section headings, <p> for paragraphs, <ul>/<li> for bullet lists, <strong> for key numbers/names, <em> for secondary emphasis.
-You may also use <span class="sum-highlight">value</span> for inline metric callouts and <div class="sum-callout">text</div> for key takeaways or action items.
-Do NOT use markdown. Do NOT add any preamble like "Sure!" or "Here is the report". Just output the report HTML directly.`;
+      document.getElementById('sumTyping').style.display    = 'none';
+      const narEl = document.getElementById('sumNarrative');
+      narEl.innerHTML     = html;
+      narEl.style.display = '';
 
-  const userPrompt = `Write a weekly breakage report for the week of ${payload.weekLabel}.
+      const exportBtn = document.getElementById('sumExportBtn');
+      if (exportBtn) exportBtn.disabled = false;
 
-DATA:
-- Total breakage jobs: ${payload.totalJobs}
-- Total lenses broken: ${payload.totalLens}
-- S-Power events: ${payload.sPower}
-- S-Axis events: ${payload.sAxis}
-- Avg time from AR41 scan to Breakage entry: ${payload.avgAR41_min} minutes
-- Avg time from Breakage entry to Processed: ${payload.avgProc_min} minutes
+      const hint = document.getElementById('sumGenHint');
+      const now  = new Date();
+      if (hint) hint.textContent = `Generated ${now.getMonth()+1}/${now.getDate()} at ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} · Auto-generated from breakage data`;
 
-REASON BREAKDOWN:
-${Object.entries(payload.reasonBreakdown).map(([r, c]) => `  ${r}: ${c} jobs`).join('\n')}
+    } catch(err) {
+      console.error('Summary build error:', err);
+      document.getElementById('sumTyping').style.display    = 'none';
+      document.getElementById('sumNarrative').innerHTML     = '<p style="color:var(--peach)">Failed to build report.</p>';
+      document.getElementById('sumNarrative').style.display = '';
+    } finally {
+      genBtn.disabled = false;
+    }
+  }, 200);
+}
 
-MACHINE BREAKDOWN (by source machine):
-${Object.entries(payload.machineBreakdown).map(([m, c]) => `  ${m}: ${c} jobs`).join('\n')}
+/* ── Pure data-driven report builder — no API needed ── */
+function buildDataReport(stats) {
+  const { week, wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc } = stats;
 
-MATERIAL BREAKDOWN (lenses broken by material):
-${Object.entries(payload.materialBreakdown).map(([m, c]) => `  ${m}: ${c} lenses`).join('\n')}
-
-WORST DELAY JOBS (longest AR41 to Breakage time):
-${payload.worstJobs.map(j => `  RX ${j.rx} — ${j.machine || '?'} — ${j.reason || '?'} — ${Math.round(j.min)} min`).join('\n')}
-
-Write 4 sections:
-1. "Week at a Glance" — 2-3 sentence overview of volume and severity
-2. "Breakage Reasons" — what drove the breakage, which reasons dominated, notable patterns
-3. "Machines & Materials" — which machines and materials had the most issues, what stands out
-4. "Key Observations & Recommendations" — 3-5 actionable bullet points the team should act on or watch
-
-Keep the tone factual and direct. Mention specific numbers. If a value is 0 or very low, note that as a positive. If delays are long, flag them.`;
-
-  try {
-    // Use GET instead of POST — Apps Script doGet has CORS configured,
-    // doPost does not work from browser cross-origin without extra headers.
-    // Encode the prompts as base64 to safely pass them as URL params.
-    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify({ systemPrompt, userPrompt }))));
-    const response = await fetch(`${API}?tab=generateSummary&payload=${encodeURIComponent(encoded)}`);
-
-    const data = await response.json();
-    if (data.status === 'error') throw new Error(data.message);
-    const html = data.html || '<p>Could not generate summary.</p>';
-    _sumCurrentNarrative = html;
-
-    document.getElementById('sumTyping').style.display    = 'none';
-    const narEl = document.getElementById('sumNarrative');
-    narEl.innerHTML     = html;
-    narEl.style.display = '';
-
-    const exportBtn = document.getElementById('sumExportBtn');
-    if (exportBtn) exportBtn.disabled = false;
-
-    const hint = document.getElementById('sumGenHint');
-    const now  = new Date();
-    if (hint) hint.textContent = `Generated ${now.getMonth()+1}/${now.getDate()} at ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} · AI-assisted · review before sharing`;
-
-  } catch (err) {
-    console.error('Summary generation error:', err);
-    document.getElementById('sumTyping').style.display    = 'none';
-    document.getElementById('sumNarrative').innerHTML     = '<p style="color:var(--peach)">Failed to generate report. Check your connection and try again.</p>';
-    document.getElementById('sumNarrative').style.display = '';
-  } finally {
-    genBtn.disabled = false;
+  if (totalJobs === 0) {
+    return `<h2>Week at a Glance</h2><p>No breakage events recorded for the week of <strong>${week.label}</strong>. Clean week — no action required.</p>`;
   }
+
+  // ── Aggregations ──────────────────────────────────────────
+  const reasonAgg = {};
+  wBrk.forEach(r => { const k = r.BrkReason || 'Unknown'; reasonAgg[k] = (reasonAgg[k] || 0) + 1; });
+  const reasonList = Object.entries(reasonAgg).sort((a,b) => b[1]-a[1]);
+  const topReason  = reasonList[0];
+
+  const machAgg = {};
+  wBrk.forEach(r => { const m = r.BrkSourceMachine || 'Unknown'; machAgg[m] = (machAgg[m] || 0) + 1; });
+  const machList = Object.entries(machAgg).sort((a,b) => b[1]-a[1]);
+  const topMach  = machList[0];
+
+  const matAgg = {};
+  wBrk.forEach(r => { const m = r.Material || 'Unknown'; matAgg[m] = (matAgg[m] || 0) + (parseInt(r.LensesBroken)||0); });
+  const matList = Object.entries(matAgg).sort((a,b) => b[1]-a[1]);
+  const topMat  = matList[0];
+
+  const worst = [...wBrk]
+    .map(r => ({ rx: r.RxNumber, machine: r.BrkSourceMachine, reason: r.BrkReason, min: parseFloat(r.AR41_to_Breakage_Min)||0 }))
+    .sort((a,b) => b.min - a.min)
+    .slice(0, 5);
+
+  const avgAR41Fmt = fmtMin(avgAR41);
+  const avgProcFmt = fmtMin(avgProc);
+
+  // ── Threshold flags ────────────────────────────────────────
+  const ar41Flag  = avgAR41 > 480;   // > 8 hours is notable
+  const procFlag  = avgProc > 120;   // > 2 hours is notable
+  const highVol   = totalJobs >= 20;
+  const lowVol    = totalJobs <= 3;
+  const powerPct  = totalJobs > 0 ? Math.round(sPower / totalJobs * 100) : 0;
+  const axisPct   = totalJobs > 0 ? Math.round(sAxis  / totalJobs * 100) : 0;
+
+  // ── Section 1: Week at a Glance ───────────────────────────
+  let glance = `<h2>Week at a Glance</h2>`;
+  glance += `<p>The week of <strong>${week.label}</strong> recorded <strong>${totalJobs} breakage job${totalJobs!==1?'s':''}</strong> with a total of <strong>${totalLens} lens${totalLens!==1?'es':''} broken</strong>. `;
+
+  if (lowVol) {
+    glance += `This was a light week with minimal breakage activity. `;
+  } else if (highVol) {
+    glance += `This was a high-volume breakage week that warrants close review. `;
+  } else {
+    glance += `Volume was within normal range. `;
+  }
+
+  if (ar41Flag) {
+    glance += `Average time from AR41 scan to Breakage entry was <strong>${avgAR41Fmt}</strong> — notably long and worth investigating for process delays.`;
+  } else {
+    glance += `Average AR41→Breakage time was <strong>${avgAR41Fmt}</strong> and processing time averaged <strong>${avgProcFmt}</strong>.`;
+  }
+  glance += `</p>`;
+
+  // ── Section 2: Breakage Reasons ───────────────────────────
+  let reasons = `<h2>Breakage Reasons</h2>`;
+  if (reasonList.length === 1) {
+    reasons += `<p>All <strong>${totalJobs} jobs</strong> were attributed to <strong>${topReason[0]}</strong> this week.</p>`;
+  } else {
+    reasons += `<p><strong>${topReason[0]}</strong> was the leading cause with <strong>${topReason[1]} job${topReason[1]!==1?'s':''}</strong> (${Math.round(topReason[1]/totalJobs*100)}% of total). `;
+    if (reasonList.length > 1) {
+      const second = reasonList[1];
+      reasons += `<strong>${second[0]}</strong> accounted for <strong>${second[1]} job${second[1]!==1?'s':''}</strong> (${Math.round(second[1]/totalJobs*100)}%).`;
+    }
+    reasons += `</p>`;
+  }
+
+  reasons += `<ul>`;
+  reasonList.forEach(([reason, count]) => {
+    const pct = Math.round(count/totalJobs*100);
+    reasons += `<li><strong>${reason}</strong> — ${count} job${count!==1?'s':''} · ${count > 1 ? parseInt(wBrk.filter(r=>r.BrkReason===reason).reduce((s,r)=>s+(parseInt(r.LensesBroken)||0),0)) + ' lenses broken' : '1 lens broken'} (${pct}%)</li>`;
+  });
+  reasons += `</ul>`;
+
+  if (sPower === 0) reasons += `<div class="sum-callout">✓ No S-Power events this week — positive result.</div>`;
+  if (sAxis  === 0) reasons += `<div class="sum-callout">✓ No S-Axis events this week — positive result.</div>`;
+
+  // ── Section 3: Machines & Materials ───────────────────────
+  let machines = `<h2>Machines &amp; Materials</h2>`;
+  machines += `<p><strong>${topMach[0]}</strong> had the most breakage events this week with <strong>${topMach[1]} job${topMach[1]!==1?'s':''}</strong>`;
+  if (machList.length > 1) {
+    machines += `, followed by <strong>${machList[1][0]}</strong> (${machList[1][1]} job${machList[1][1]!==1?'s':''})`;
+  }
+  machines += `.</p>`;
+
+  machines += `<p>By material, <strong>${topMat[0]}</strong> accounted for the most broken lenses (<strong>${topMat[1]}</strong>)`;
+  if (matList.length > 1) {
+    machines += `, followed by ${matList.slice(1,3).map(([m,c])=>`<strong>${m}</strong> (${c})`).join(' and ')}`;
+  }
+  machines += `.</p>`;
+
+  if (machList.length > 1) {
+    machines += `<ul>`;
+    machList.forEach(([m, c]) => {
+      machines += `<li><strong>${m}</strong> — ${c} job${c!==1?'s':''}</li>`;
+    });
+    machines += `</ul>`;
+  }
+
+  // ── Section 4: Observations & Recommendations ─────────────
+  let obs = `<h2>Key Observations &amp; Recommendations</h2><ul>`;
+
+  // Volume flag
+  if (highVol) {
+    obs += `<li><strong>High breakage volume</strong> — ${totalJobs} jobs this week is elevated. Review if any process changes coincide with this period.</li>`;
+  } else if (lowVol) {
+    obs += `<li><strong>Low breakage volume</strong> — only ${totalJobs} job${totalJobs!==1?'s':''} this week. No major concerns.</li>`;
+  } else {
+    obs += `<li><strong>Normal volume</strong> — ${totalJobs} jobs is within expected range.</li>`;
+  }
+
+  // AR41 delay flag
+  if (ar41Flag) {
+    obs += `<li><strong>AR41→Breakage time is high</strong> — averaging ${avgAR41Fmt}. Investigate queuing or staffing delays between AR41 and the breakage table.</li>`;
+  } else {
+    obs += `<li><strong>AR41→Breakage timing is acceptable</strong> — averaging ${avgAR41Fmt}.</li>`;
+  }
+
+  // Processing delay flag
+  if (procFlag) {
+    obs += `<li><strong>Breakage→Processed time is elevated</strong> — averaging ${avgProcFmt}. Check if breakage processing is being completed promptly.</li>`;
+  }
+
+  // Top machine flag
+  if (machList.length > 0 && topMach[1] > 1) {
+    obs += `<li><strong>Monitor ${topMach[0]}</strong> — led all machines with ${topMach[1]} breakage events. Consider a check of machine calibration or process parameters.</li>`;
+  }
+
+  // Worst delay jobs
+  if (worst.length > 0 && worst[0].min > 60) {
+    obs += `<li><strong>Longest delay job</strong> — RX <strong>${worst[0].rx}</strong> on ${worst[0].machine||'?'} had an AR41→Breakage time of <strong>${fmtMin(worst[0].min)}</strong>. `;
+    obs += `Review this job for root cause.</li>`;
+  }
+
+  // S-Power dominant
+  if (powerPct >= 70) {
+    obs += `<li><strong>S-Power dominated</strong> at ${powerPct}% of all breakage. Focus troubleshooting on power-related process steps.</li>`;
+  }
+
+  obs += `</ul>`;
+
+  return glance + reasons + machines + obs;
 }
 
 function exportSummaryTXT() {
