@@ -307,10 +307,6 @@
       <div class="kpi-cell"><div class="kpi-num c-peach" id="res-jobs">--</div><div class="kpi-label">Filtered jobs</div></div>
       <div class="kpi-div"></div>
       <div class="kpi-cell"><div class="kpi-num c-peri" id="res-lens">--</div><div class="kpi-label">Lenses broken</div></div>
-      <div class="kpi-div"></div>
-      <div class="kpi-cell"><div class="kpi-num c-teal" id="res-rsph">--</div><div class="kpi-label">Avg R Sph</div></div>
-      <div class="kpi-div"></div>
-      <div class="kpi-cell"><div class="kpi-num c-white" id="res-lsph">--</div><div class="kpi-label">Avg L Sph</div></div>
     </div>
 
     <!-- Inner tabs for Sph / Cyl -->
@@ -322,20 +318,24 @@
 
     <!-- SPH section -->
     <div class="inner-section active" id="is-sph">
+      <div id="rxHistoricalNote" class="rx-historical-note" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3M8 10.5v.5" stroke-linecap="round"/></svg>
+        Prescription data (Sph / Cyl) is not stored in history. Showing breakage records only — switch to live mode for full Rx detail.
+      </div>
       <div class="grid-equal">
         <div class="panel">
           <div class="panel-head">
             <span class="panel-title">R Sph distribution</span>
             <span class="panel-hint">periwinkle = negative · teal = positive</span>
           </div>
-          <div class="chart-wrap h220"><canvas id="rsphC" role="img" aria-label="R Sph distribution"></canvas></div>
+          <div class="chart-wrap h220" data-canvas="rsphC"><canvas id="rsphC" role="img" aria-label="R Sph distribution"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-head">
             <span class="panel-title">L Sph distribution</span>
             <span class="panel-hint">periwinkle = negative · teal = positive</span>
           </div>
-          <div class="chart-wrap h220"><canvas id="lsphC" role="img" aria-label="L Sph distribution"></canvas></div>
+          <div class="chart-wrap h220" data-canvas="lsphC"><canvas id="lsphC" role="img" aria-label="L Sph distribution"></canvas></div>
         </div>
       </div>
     </div>
@@ -348,14 +348,14 @@
             <span class="panel-title">R Cyl distribution</span>
             <span class="panel-hint">peach = negative · teal = positive</span>
           </div>
-          <div class="chart-wrap h220"><canvas id="rcylC" role="img" aria-label="R Cyl distribution"></canvas></div>
+          <div class="chart-wrap h220" data-canvas="rcylC"><canvas id="rcylC" role="img" aria-label="R Cyl distribution"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-head">
             <span class="panel-title">L Cyl distribution</span>
             <span class="panel-hint">peach = negative · teal = positive</span>
           </div>
-          <div class="chart-wrap h220"><canvas id="lcylC" role="img" aria-label="L Cyl distribution"></canvas></div>
+          <div class="chart-wrap h220" data-canvas="lcylC"><canvas id="lcylC" role="img" aria-label="L Cyl distribution"></canvas></div>
         </div>
       </div>
     </div>

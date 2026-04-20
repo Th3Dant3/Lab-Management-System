@@ -266,10 +266,10 @@ function populateFlowFilters() {
 
 /* ── Tooltip ── */
 const tip = document.getElementById('ganttTip');
-function showTip(e, html) { tip.innerHTML = html; tip.style.display = 'block'; moveTip(e); }
-function moveTip(e) { tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; }
-function hideTip() { tip.style.display = 'none'; }
-document.addEventListener('mousemove', e => { if (tip.style.display === 'block') moveTip(e); });
+function showTip(e, html) { if(!tip) return; tip.innerHTML = html; tip.style.display = 'block'; moveTip(e); }
+function moveTip(e) { if(!tip) return; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; }
+function hideTip() { if(!tip) return; tip.style.display = 'none'; }
+document.addEventListener('mousemove', e => { if (tip && tip.style.display === 'block') moveTip(e); });
 
 /* ============================================================
    RENDER FLOW
@@ -330,10 +330,23 @@ function renderFlow() {
    RESEARCH FILTERS
 ============================================================ */
 function populateResearchFilters() {
+  const isHistorical = (document.getElementById('dateSingle')?.value || '') !== '';
+  const orbVals = isHistorical
+    ? _research.map(r => r.BrkSourceMachine || r.ORBMachine)
+    : _research.map(r => r.ORBMachine);
+
+  // Enrich Material from _brk so the Material dropdown is populated
+  const brkMatMap = {};
+  _brk.forEach(r => { if (r.RxNumber && r.Material && r.Material !== 'Unknown') brkMatMap[String(r.RxNumber)] = r.Material; });
+  const matVals = _research.map(r => {
+    if (r.Material && r.Material !== 'Unknown') return r.Material;
+    return brkMatMap[String(r.RxNumber)] || '';
+  });
+
   [
-    ['resORB',      _research.map(r => r.ORBMachine)],
+    ['resORB',      orbVals],
     ['resReason',   _research.map(r => r.BrkReason)],
-    ['resMaterial', _research.map(r => r.Material)],
+    ['resMaterial', matVals],
   ].forEach(([id, vals]) => {
     const el = document.getElementById(id);
     while (el.options.length > 1) el.remove(1);
@@ -396,59 +409,113 @@ function renderResearch() {
   const fO   = document.getElementById('resORB').value;
   const fR   = document.getElementById('resReason').value;
   const fM   = document.getElementById('resMaterial').value;
-  const from = parseDateInput('resDateFrom');
-  const to   = parseDateInput('resDateTo');
+
+  // In historical mode _research === _brk so global date already applied.
+  // Only apply the Research sub-date-filters in live mode.
+  const isHistorical = (document.getElementById('dateSingle')?.value || '') !== '';
+  const from = isHistorical ? null : parseDateInput('resDateFrom');
+  const to   = isHistorical ? null : parseDateInput('resDateTo');
 
   let data = [..._research];
-  if (fO) data = data.filter(r => r.ORBMachine === fO);
+  if (fO) data = data.filter(r => (r.BrkSourceMachine || r.ORBMachine) === fO);
   if (fR) data = data.filter(r => r.BrkReason === fR);
-  if (fM) data = data.filter(r => r.Material === fM);
   if (from || to) data = data.filter(r => inDateRange(r.ORBScanTime || r.OTBScanTime, from, to));
 
+  // Build Material lookup from _brk — BreakageSummary always has Material populated
+  const brkMaterialMap = {};
+  _brk.forEach(r => {
+    if (r.RxNumber && r.Material && r.Material !== 'Unknown')
+      brkMaterialMap[String(r.RxNumber)] = r.Material;
+  });
+
+  // Enrich rows where Material is missing, then apply material filter
+  data = data.map(r => {
+    if (r.Material && r.Material !== 'Unknown') return r;
+    const mat = brkMaterialMap[String(r.RxNumber)];
+    return mat ? { ...r, Material: mat } : r;
+  });
+  if (fM) data = data.filter(r => r.Material === fM);
+
   const totalLens = data.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
-  const avgRSph   = avgArr(data.map(r => parseFloat(r.R_Sph)));
-  const avgLSph   = avgArr(data.map(r => parseFloat(r.L_Sph)));
 
   document.getElementById('res-jobs').textContent  = data.length;
   document.getElementById('res-lens').textContent  = totalLens;
-  document.getElementById('res-rsph').textContent  = avgRSph ? avgRSph.toFixed(2) : '--';
-  document.getElementById('res-lsph').textContent  = avgLSph ? avgLSph.toFixed(2) : '--';
 
-  const rsph = sphBuckets(data.map(r => parseFloat(r.R_Sph)));
-  mkChart('rsphC', 'bar', Object.keys(rsph), [{ data: Object.values(rsph), backgroundColor: sphColors(Object.keys(rsph)), borderWidth: 0, borderRadius: 4 }], {});
+  // Sph/Cyl charts — show "no Rx data" note in historical mode
+  const noRxData = isHistorical && data.every(r => !r.R_Sph && !r.L_Sph);
 
-  const lsph = sphBuckets(data.map(r => parseFloat(r.L_Sph)));
-  mkChart('lsphC', 'bar', Object.keys(lsph), [{ data: Object.values(lsph), backgroundColor: sphColors(Object.keys(lsph)), borderWidth: 0, borderRadius: 4 }], {});
+  ['rsphC','lsphC','rcylC','lcylC'].forEach(id => {
+    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  });
 
-  const rcyl = cylBuckets(data.map(r => parseFloat(r.R_Cyl)));
-  mkChart('rcylC', 'bar', Object.keys(rcyl), [{ data: Object.values(rcyl), backgroundColor: cylColors(Object.keys(rcyl)), borderWidth: 0, borderRadius: 4 }], {});
+  // Show/hide historical note and handle Sph/Cyl charts
+  const rxNote = document.getElementById('rxHistoricalNote');
+  if (rxNote) rxNote.style.display = noRxData ? 'flex' : 'none';
 
-  const lcyl = cylBuckets(data.map(r => parseFloat(r.L_Cyl)));
-  mkChart('lcylC', 'bar', Object.keys(lcyl), [{ data: Object.values(lcyl), backgroundColor: cylColors(Object.keys(lcyl)), borderWidth: 0, borderRadius: 4 }], {});
+  if (noRxData) {
+    // Destroy any existing charts and show empty placeholder message
+    ['rsphC','lsphC','rcylC','lcylC'].forEach(id => {
+      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+      const wrap = document.querySelector(`[data-canvas="${id}"]`);
+      if (wrap) wrap.innerHTML = `<div class="empty" style="height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;opacity:0.4">No prescription data in history</div>`;
+    });
+  } else {
+    // Restore canvas elements if they were replaced by the empty message
+    ['rsphC','lsphC','rcylC','lcylC'].forEach(id => {
+      const wrap = document.querySelector(`[data-canvas="${id}"]`);
+      if (wrap && !document.getElementById(id)) {
+        wrap.innerHTML = '';
+        const c = document.createElement('canvas');
+        c.id = id; wrap.appendChild(c);
+      }
+    });
+
+    const rsph = sphBuckets(data.map(r => parseFloat(r.R_Sph)));
+    mkChart('rsphC','bar',Object.keys(rsph),[{data:Object.values(rsph),backgroundColor:sphColors(Object.keys(rsph)),borderWidth:0,borderRadius:4}],{});
+
+    const lsph = sphBuckets(data.map(r => parseFloat(r.L_Sph)));
+    mkChart('lsphC','bar',Object.keys(lsph),[{data:Object.values(lsph),backgroundColor:sphColors(Object.keys(lsph)),borderWidth:0,borderRadius:4}],{});
+
+    const rcyl = cylBuckets(data.map(r => parseFloat(r.R_Cyl)));
+    mkChart('rcylC','bar',Object.keys(rcyl),[{data:Object.values(rcyl),backgroundColor:cylColors(Object.keys(rcyl)),borderWidth:0,borderRadius:4}],{});
+
+    const lcyl = cylBuckets(data.map(r => parseFloat(r.L_Cyl)));
+    mkChart('lcylC','bar',Object.keys(lcyl),[{data:Object.values(lcyl),backgroundColor:cylColors(Object.keys(lcyl)),borderWidth:0,borderRadius:4}],{});
+  }
 
   function pp(v) {
     const n = parseFloat(v);
-    if (isNaN(n)) return `<span class="px-zero">—</span>`;
+    if (isNaN(n) || v === '' || v === null || v === undefined) return `<span class="px-zero">—</span>`;
     if (n === 0)  return `<span class="px-zero">0</span>`;
     return n > 0 ? `<span class="px-pos">+${n}</span>` : `<span class="px-neg">${n}</span>`;
   }
 
+  // In historical mode show AR41 machine instead of ORB (ORBMachine not in history)
+  const orbCol = isHistorical ? 'AR41' : 'ORB';
+
   document.getElementById('resTable').innerHTML = `
     <table class="res-table">
       <thead><tr>
-        <th>RX</th><th>ORB</th><th>BrkSrc</th><th>Reason</th>
-        <th>Material</th><th>Option</th><th>Curve</th>
-        <th>R Sph</th><th>L Sph</th><th>R Cyl</th><th>L Cyl</th>
-        <th>Add</th><th>Broken</th>
+        <th>RX</th><th>${orbCol}</th><th>BrkSrc</th><th>Reason</th>
+        <th>Material</th>
+        ${isHistorical ? '' : '<th>Option</th><th>Curve</th><th>R Sph</th><th>L Sph</th><th>R Cyl</th><th>L Cyl</th><th>Add</th>'}
+        <th>Broken</th><th>AR41→Brk</th><th>Brk→Proc</th>
       </tr></thead>
       <tbody>${data.map(r => `
         <tr>
-          <td>${r.RxNumber}</td><td>${r.ORBMachine || '--'}</td><td>${r.BrkSourceMachine || '--'}</td>
+          <td>${r.RxNumber || '--'}</td>
+          <td>${isHistorical ? (r.AR41Machine || '--') : (r.ORBMachine || '--')}</td>
+          <td>${r.BrkSourceMachine || '--'}</td>
           <td><span class="reason-pill ${reasonPillClass(r.BrkReason)}">${r.BrkReason || '--'}</span></td>
-          <td>${r.Material || '--'}</td><td>${r.LensOption || '--'}</td><td>${r.BaseCurve || '--'}</td>
+          <td>${r.Material || '--'}</td>
+          ${isHistorical ? '' : `
+          <td>${r.LensOption || '--'}</td><td>${r.BaseCurve || '--'}</td>
           <td>${pp(r.R_Sph)}</td><td>${pp(r.L_Sph)}</td>
           <td>${pp(r.R_Cyl)}</td><td>${pp(r.L_Cyl)}</td>
-          <td>${r.R_AddPower || '—'}</td><td>${r.LensesBroken || '1'}</td>
+          <td>${r.R_AddPower || '—'}</td>`}
+          <td>${r.LensesBroken || '1'}</td>
+          <td style="color:var(--peri)">${fmtMin(r.AR41_to_Breakage_Min)}</td>
+          <td style="color:var(--teal)">${fmtMin(r.Breakage_to_Processed_Min)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -665,8 +732,9 @@ function normalizeRow(r) {
     OTBMachine:       fv(r, 'OTBMachine',        'OTB Blocker Scan Point'),
 
     // ── Reason / Material ──────────────────────────────────────
+    // Live sheets use 'Material'; BREAKAGE_HISTORY uses 'Lens Material'
     BrkReason:    fv(r, 'BrkReason',    'Brk Reason'),
-    Material:     fv(r, 'Material',     'material') || 'Unknown',
+    Material:     fv(r, 'Material', 'Lens Material', 'material') || 'Unknown',
     LensesBroken: parseFloat(fv(r, 'LensesBroken', 'Lenses Broken')) || 0,
 
     // ── Times ──────────────────────────────────────────────────
@@ -681,13 +749,14 @@ function normalizeRow(r) {
     Breakage_to_Processed_Min: brkToProcessed,
 
     // ── Research / Rx fields ──────────────────────────────────
+    // BREAKAGE_HISTORY: 'Lens Material'=Material, 'Lens Option'=LensOption, 'Base Curve'=BaseCurve
     LensOption: fv(r, 'LensOption', 'Lens Option'),
     BaseCurve:  fv(r, 'BaseCurve',  'Base Curve'),
     R_Sph:      fv(r, 'R_Sph', 'R Sph'),
     L_Sph:      fv(r, 'L_Sph', 'L Sph'),
     R_Cyl:      fv(r, 'R_Cyl', 'R Cyl'),
     L_Cyl:      fv(r, 'L_Cyl', 'L Cyl'),
-    R_AddPower: fv(r, 'R_AddPower', 'R Add Power'),
+    R_AddPower: fv(r, 'R_AddPower', 'R AddPower', 'R Add Power'),
   };
 }
 
@@ -727,8 +796,12 @@ async function applyDateFilter() {
     // Normalize all rows so field names are consistent regardless of source
     _brk      = (Array.isArray(brk)      ? brk      : []).map(normalizeRow);
     _reason   = Array.isArray(reason)   ? reason   : [];  // already aggregated by Apps Script
-    _research = (Array.isArray(research) ? research : []).map(normalizeRow);
     _anom     = (Array.isArray(anom)     ? anom     : []).map(normalizeRow);
+
+    // BREAKAGE_HISTORY has no Rx prescription fields (R_Sph, L_Sph, etc.)
+    // For historical Research tab, reuse _brk rows — they have machine/reason/material
+    // Rx charts will show empty (no prescription data in history) but table will work
+    _research = _brk;
 
     document.getElementById('dateFilterCount').textContent = _brk.length;
     buildOverview();
@@ -768,13 +841,26 @@ function getFilteredResearchData() {
   const fO   = document.getElementById('resORB').value;
   const fR   = document.getElementById('resReason').value;
   const fM   = document.getElementById('resMaterial').value;
-  const from = parseDateInput('resDateFrom');
-  const to   = parseDateInput('resDateTo');
-  let data   = [..._research];
-  if (fO) data = data.filter(r => r.ORBMachine === fO);
+  const isHistorical = (document.getElementById('dateSingle')?.value || '') !== '';
+  const from = isHistorical ? null : parseDateInput('resDateFrom');
+  const to   = isHistorical ? null : parseDateInput('resDateTo');
+
+  let data = [..._research];
+  if (fO) data = data.filter(r => (r.BrkSourceMachine || r.ORBMachine) === fO);
   if (fR) data = data.filter(r => r.BrkReason === fR);
-  if (fM) data = data.filter(r => r.Material === fM);
   if (from || to) data = data.filter(r => inDateRange(r.ORBScanTime || r.OTBScanTime, from, to));
+
+  // Enrich Material from _brk (BreakageSummary has Material; PowerResearch may not)
+  const brkMatMap = {};
+  _brk.forEach(r => { if (r.RxNumber && r.Material && r.Material !== 'Unknown') brkMatMap[String(r.RxNumber)] = r.Material; });
+  data = data.map(r => {
+    if (r.Material && r.Material !== 'Unknown') return r;
+    const mat = brkMatMap[String(r.RxNumber)];
+    return mat ? { ...r, Material: mat } : r;
+  });
+
+  // Apply material filter after enrichment so it works correctly
+  if (fM) data = data.filter(r => r.Material === fM);
   return data;
 }
 
@@ -1118,13 +1204,11 @@ Write 4 sections:
 Keep the tone factual and direct. Mention specific numbers. If a value is 0 or very low, note that as a positive. If delays are long, flag them.`;
 
   try {
-    // Route through Apps Script to avoid CORS block when running from file://
-    // The Apps Script acts as a server-side proxy to the Anthropic API.
-    const response = await fetch(`${API}?tab=generateSummary`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ systemPrompt, userPrompt }),
-    });
+    // Use GET instead of POST — Apps Script doGet has CORS configured,
+    // doPost does not work from browser cross-origin without extra headers.
+    // Encode the prompts as base64 to safely pass them as URL params.
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify({ systemPrompt, userPrompt }))));
+    const response = await fetch(`${API}?tab=generateSummary&payload=${encodeURIComponent(encoded)}`);
 
     const data = await response.json();
     if (data.status === 'error') throw new Error(data.message);

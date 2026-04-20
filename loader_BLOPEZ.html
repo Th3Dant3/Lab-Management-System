@@ -57,29 +57,29 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
 @keyframes starPulse{0%,100%{opacity:.9}50%{opacity:1;text-shadow:0 0 8px rgba(255,255,255,1);}}
 .pr-flag-wrap::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);animation:flagWave 2.5s ease-in-out infinite;border-radius:2px;}
 @keyframes flagWave{0%{transform:translateX(-150%)}100%{transform:translateX(250%)}}
-.welcome{font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:5px;color:rgba(200,100,100,.7);text-transform:uppercase;margin-bottom:6px;animation:fu .4s .65s ease both;}
+.welcome{font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:5px;color:#ffffff;text-transform:uppercase;margin-bottom:6px;animation:fu .4s .65s ease both;}
 .fullname{font-family:'Cinzel',serif;font-size:28px;font-weight:700;color:#ede0e0;letter-spacing:2px;margin-bottom:5px;animation:nameSlash .7s .78s ease both;text-shadow:0 0 16px rgba(180,0,26,.2);line-height:1.1;}
 @keyframes nameSlash{from{opacity:0;clip-path:polygon(0 0,0 0,0 100%,0 100%)}to{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}}
-.wise-man{font-family:'Cinzel',serif;font-size:11px;letter-spacing:4px;color:rgba(255,200,200,.75);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .9s ease both;}
-.tribal-note{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,150,150,.5);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .98s ease both;}
+.wise-man{font-family:'Cinzel',serif;font-size:11px;letter-spacing:4px;color:#ffffff;text-transform:uppercase;margin-bottom:4px;animation:fu .4s .9s ease both;}
+.tribal-note{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.7);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .98s ease both;}
 .boricua{font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:4px;color:rgba(255,255,255,.35);margin-bottom:14px;animation:fu .4s 1.05s ease both;}
-.role-tag{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(180,0,26,.35);background:rgba(180,0,26,.07);padding:5px 18px;margin-bottom:26px;animation:fu .4s 1.12s ease both;}
-.role-tag span{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:#b0001a;text-transform:uppercase;}
+.role-tag{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);padding:5px 18px;margin-bottom:26px;animation:fu .4s 1.12s ease both;}
+.role-tag span{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:#ffffff;text-transform:uppercase;}
 .pbar-wrap{width:250px;margin-bottom:5px;animation:fu .4s 1.2s ease both;}
-.pbar-lbl{display:flex;justify-content:space-between;font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(200,100,100,.6);letter-spacing:2px;margin-bottom:5px;}
+.pbar-lbl{display:flex;justify-content:space-between;font-family:'Rajdhani',sans-serif;font-size:10px;color:#ffffff;letter-spacing:2px;margin-bottom:5px;}
 .pbar-track{width:100%;height:4px;background:rgba(180,0,26,.12);overflow:hidden;}
 .pbar-fill{height:100%;width:0%;background:linear-gradient(90deg,#00006a,#ce1126,#ffffff,#ce1126);background-size:300% 100%;animation:pf 5s 1.25s ease forwards,pshift 3s 1.25s linear infinite;position:relative;}
 .pbar-fill::after{content:'';position:absolute;right:0;top:0;width:14px;height:100%;background:rgba(255,255,255,.4);filter:blur(3px);}
 @keyframes pf{0%{width:0%}40%{width:55%}70%{width:78%}90%{width:92%}100%{width:100%}}
 @keyframes pshift{0%{background-position:0% 0}100%{background-position:300% 0}}
-.sys{font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(180,80,80,.5);letter-spacing:2px;text-transform:uppercase;margin-top:8px;animation:fu .4s 2.9s ease both;}
+.sys{font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(255,255,255,.65);letter-spacing:2px;text-transform:uppercase;margin-top:8px;animation:fu .4s 2.9s ease both;}
 .sys-status{font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(200,150,150,.4);letter-spacing:1px;margin-top:4px;animation:fu .4s 3.2s ease both;min-height:14px;}
 @keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .otc-badge{position:fixed;top:18px;right:22px;display:flex;align-items:center;gap:6px;z-index:20;animation:fu .5s .6s ease both;}
 .otc-finger{font-size:22px;animation:fingerUp 2s ease-in-out infinite;}
 @keyframes fingerUp{0%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
-.otc-txt{font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:rgba(180,0,26,.7);text-transform:uppercase;}
-.corner{position:fixed;font-family:'Rajdhani',sans-serif;font-size:9px;color:rgba(180,50,50,.3);letter-spacing:1px;z-index:1;}
+.otc-txt{font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:rgba(255,180,180,.8);text-transform:uppercase;}
+.corner{position:fixed;font-family:'Rajdhani',sans-serif;font-size:9px;color:rgba(255,255,255,.22);letter-spacing:1px;z-index:1;}
 .ctop{top:18px;left:22px;} .cbot{bottom:18px;right:22px;}
 </style>
 </head>
@@ -124,7 +124,7 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
       <span class="em-D">D</span>
     </div>
   </div>
-  <div class="dmc-rank">✦ Lab Management System Administrator ✦</div>
+  <div class="dmc-rank">✦ Executive Access ✦</div>
   <div class="pr-flag-wrap">
     <div class="pr-flag-inner">
       <div class="fst r"></div>
@@ -138,7 +138,7 @@ body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
   </div>
   <div class="welcome">Welcome back</div>
   <div class="fullname" id="displayName">Brian Lopez Cabrera</div>
-  <div class="wise-man">Wise Man</div>
+  <div class="wise-man">Wise Man of the Tribal Chief</div>
   <div class="tribal-note">The Bloodline · OTC ☝️</div>
   <div class="boricua">🇵🇷 &nbsp; Boricua · Puerto Rico &nbsp; 🇵🇷</div>
   <div class="role-tag">
