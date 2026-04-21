@@ -8,96 +8,73 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* ── CRITICAL INLINE: Loading screen + cursor (renders before coating.css) ── */
+    /* ══════════════════════════════════════════════════
+       CRITICAL INLINE — Loading Screen + Cursor
+       Renders immediately before coating.css loads
+    ══════════════════════════════════════════════════ */
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:#040c0b;cursor:none;}
+    body{background:#030a09;cursor:none;}
 
-    /* Custom cursor */
-    .custom-cursor{
-      position:fixed;width:14px;height:14px;border-radius:50%;
-      background:#20a091;pointer-events:none;z-index:99999;
-      transform:translate(-50%,-50%);
-      box-shadow:0 0 12px #20a091,0 0 24px rgba(32,160,145,0.4);
-      mix-blend-mode:screen;transition:width .15s,height .15s;
-    }
-    .cursor-trail{
-      position:fixed;width:36px;height:36px;border-radius:50%;
-      border:1px solid rgba(32,160,145,0.35);pointer-events:none;
-      z-index:99998;transform:translate(-50%,-50%);
-      transition:left .12s ease-out,top .12s ease-out;
-    }
+    /* ── Custom cursor ── */
+    .custom-cursor{position:fixed;width:14px;height:14px;border-radius:50%;background:#20a091;pointer-events:none;z-index:99999;transform:translate(-50%,-50%);box-shadow:0 0 12px #20a091,0 0 24px rgba(32,160,145,0.4);mix-blend-mode:screen;transition:width .15s,height .15s;}
+    .cursor-trail{position:fixed;width:36px;height:36px;border-radius:50%;border:1px solid rgba(32,160,145,0.35);pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:left .12s ease-out,top .12s ease-out;}
 
-    /* Loading screen */
-    .loading-screen{
-      position:fixed;inset:0;background:#040c0b;z-index:99990;
-      display:flex;align-items:center;justify-content:center;
-      flex-direction:column;overflow:hidden;
-    }
-    .loading-screen.fade-out{
-      animation:loadFadeOut 0.6s ease forwards;
-    }
-    @keyframes loadFadeOut{
-      0%{opacity:1;transform:scale(1);}
-      100%{opacity:0;transform:scale(1.03);pointer-events:none;}
-    }
-    .loading-content{
-      display:flex;flex-direction:column;align-items:center;gap:36px;
-      position:relative;z-index:2;
-      animation:loadContentIn 0.7s ease;
-    }
-    @keyframes loadContentIn{
-      from{opacity:0;transform:translateY(16px);}
-      to{opacity:1;transform:translateY(0);}
-    }
-    .loading-logo{text-align:center;}
-    .loading-eyebrow{
-      font-family:'Space Grotesk',sans-serif;
-      font-size:11px;font-weight:600;letter-spacing:3px;
-      text-transform:uppercase;color:#20a091;margin-bottom:10px;opacity:0.8;
-    }
-    .loading-title{
-      font-family:'Space Grotesk',sans-serif;
-      font-size:42px;font-weight:700;letter-spacing:-1px;
-      color:#ffffff;line-height:1;
-    }
-    .loading-title span{color:#20a091;}
-    .loading-bar-wrap{
-      width:320px;display:flex;flex-direction:column;gap:10px;align-items:center;
-    }
-    .loading-bar-track{
-      width:100%;height:3px;background:rgba(32,160,145,0.12);
-      border-radius:2px;overflow:hidden;
-    }
-    .loading-bar-fill{
-      height:100%;width:0%;
-      background:linear-gradient(90deg,#20a091,#4ade80);
-      border-radius:2px;box-shadow:0 0 10px #20a091;
-      transition:width 0.4s ease;
-    }
-    .loading-status{
-      font-family:'JetBrains Mono',monospace;
-      font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:0.5px;
-    }
-    .loading-orbs{
-      position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1;
-    }
-    .loading-orb{position:absolute;border-radius:50%;animation:orbFloat 6s ease-in-out infinite;}
-    .orb1{
-      width:500px;height:500px;top:-150px;left:-100px;animation-duration:7s;
-      background:radial-gradient(circle,rgba(32,160,145,0.07) 0%,transparent 70%);
-    }
-    .orb2{
-      width:400px;height:400px;bottom:-100px;right:-80px;animation-delay:-3s;
-      background:radial-gradient(circle,rgba(74,222,128,0.05) 0%,transparent 70%);
-    }
-    .orb3{
-      width:300px;height:300px;top:50%;left:60%;animation-delay:-1.5s;
-      background:radial-gradient(circle,rgba(32,160,145,0.06) 0%,transparent 70%);
-    }
-    @keyframes orbFloat{
-      0%,100%{transform:translate(0,0) scale(1);}
-      50%{transform:translate(20px,-20px) scale(1.08);}
-    }
+    /* ── Loading screen shell ── */
+    .loading-screen{position:fixed;inset:0;background:#030a09;z-index:99990;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+    .loading-screen.fade-out{animation:lsFadeOut 0.7s cubic-bezier(.4,0,.2,1) forwards;}
+    @keyframes lsFadeOut{0%{opacity:1;transform:scale(1);}100%{opacity:0;transform:scale(1.04);pointer-events:none;}}
+
+    /* ── Grid scan lines background ── */
+    .ls-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(32,160,145,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(32,160,145,0.04) 1px,transparent 1px);background-size:48px 48px;animation:lsGridScroll 12s linear infinite;}
+    @keyframes lsGridScroll{from{background-position:0 0;}to{background-position:0 48px;}}
+
+    /* ── Ambient glow blobs ── */
+    .ls-blob{position:absolute;border-radius:50%;filter:blur(80px);animation:lsBlobPulse 5s ease-in-out infinite;}
+    .ls-blob1{width:600px;height:600px;top:-200px;left:-200px;background:radial-gradient(circle,rgba(32,160,145,0.12),transparent 70%);animation-delay:0s;}
+    .ls-blob2{width:500px;height:500px;bottom:-180px;right:-150px;background:radial-gradient(circle,rgba(74,222,128,0.08),transparent 70%);animation-delay:-2.5s;}
+    .ls-blob3{width:350px;height:350px;top:40%;left:55%;background:radial-gradient(circle,rgba(32,160,145,0.07),transparent 70%);animation-delay:-1.2s;}
+    @keyframes lsBlobPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+
+    /* ── Scan line sweep ── */
+    .ls-scanline{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(32,160,145,0.6),transparent);animation:lsScan 3s linear infinite;pointer-events:none;}
+    @keyframes lsScan{from{top:-2px;}to{top:100%}}
+
+    /* ── Center content ── */
+    .ls-center{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;gap:40px;animation:lsCenterIn 0.8s cubic-bezier(.22,1,.36,1);}
+    @keyframes lsCenterIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+
+    /* ── Logo ── */
+    .ls-logo{text-align:center;}
+    .ls-eyebrow{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#20a091;margin-bottom:12px;opacity:0.75;}
+    .ls-title{font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:700;letter-spacing:-2px;color:#fff;line-height:1;}
+    .ls-title span{color:#20a091;text-shadow:0 0 40px rgba(32,160,145,0.5);}
+    .ls-subtitle{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;margin-top:10px;text-transform:uppercase;}
+
+    /* ── Stats preview strip (fills with data) ── */
+    .ls-stats{display:flex;gap:1px;background:rgba(32,160,145,0.1);border:1px solid rgba(32,160,145,0.18);border-radius:10px;overflow:hidden;opacity:0;animation:lsStatsFade 0.4s 0.5s ease forwards;}
+    @keyframes lsStatsFade{to{opacity:1;}}
+    .ls-stat{padding:12px 24px;text-align:center;background:rgba(4,12,11,0.8);flex:1;}
+    .ls-stat:not(:last-child){border-right:1px solid rgba(32,160,145,0.12);}
+    .ls-stat-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:5px;}
+    .ls-stat-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;color:rgba(255,255,255,0.2);}
+    .ls-stat-val.ready{color:#ffffff;transition:color 0.4s ease;text-shadow:0 0 20px rgba(32,160,145,0.4);}
+    .ls-stat-val.green{color:#4ade80!important;text-shadow:0 0 16px rgba(74,222,128,0.4)!important;}
+    .ls-stat-val.yellow{color:#fbbf24!important;text-shadow:0 0 16px rgba(251,191,36,0.4)!important;}
+    .ls-stat-val.red{color:#f87171!important;text-shadow:0 0 16px rgba(248,113,113,0.4)!important;}
+    .ls-stat-val.teal{color:#20a091!important;text-shadow:0 0 16px rgba(32,160,145,0.5)!important;}
+
+    /* ── Progress ── */
+    .ls-progress-wrap{width:380px;display:flex;flex-direction:column;gap:8px;align-items:center;}
+    .ls-bar-track{width:100%;height:2px;background:rgba(32,160,145,0.1);border-radius:2px;overflow:hidden;}
+    .ls-bar-fill{height:100%;width:0%;background:linear-gradient(90deg,#20a091,#4ade80,#20a091);background-size:200% 100%;border-radius:2px;box-shadow:0 0 12px rgba(32,160,145,0.7);transition:width 0.5s cubic-bezier(.22,1,.36,1);animation:lsBarShimmer 1.5s linear infinite;}
+    @keyframes lsBarShimmer{0%{background-position:100% 0;}100%{background-position:-100% 0;}}
+    .ls-step-row{display:flex;align-items:center;gap:10px;width:100%;}
+    .ls-steps{display:flex;gap:6px;flex:1;}
+    .ls-step{height:2px;flex:1;background:rgba(32,160,145,0.12);border-radius:2px;transition:background 0.3s ease;}
+    .ls-step.done{background:#20a091;box-shadow:0 0 6px rgba(32,160,145,0.5);}
+    .ls-step.active{background:rgba(32,160,145,0.5);animation:lsStepPulse 0.8s ease infinite;}
+    @keyframes lsStepPulse{0%,100%{opacity:0.5;}50%{opacity:1;}}
+    .ls-status{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:0.3px;min-height:18px;transition:opacity 0.2s;}
   </style>
 </head>
 <body>
@@ -108,21 +85,58 @@
 
 <!-- LOADING SCREEN -->
 <div id="loadingScreen" class="loading-screen">
-  <div class="loading-content">
-    <div class="loading-logo">
-      <div class="loading-eyebrow">Production · Optical · Zenni Lab</div>
-      <div class="loading-title">Coating <span>Flow</span> Tracker</div>
+  <div class="ls-grid"></div>
+  <div class="ls-blob ls-blob1"></div>
+  <div class="ls-blob ls-blob2"></div>
+  <div class="ls-blob ls-blob3"></div>
+  <div class="ls-scanline"></div>
+
+  <div class="ls-center">
+    <!-- Logo -->
+    <div class="ls-logo">
+      <div class="ls-eyebrow">Production · Optical · Zenni Lab</div>
+      <div class="ls-title">Coating <span>Flow</span> Tracker</div>
+      <div class="ls-subtitle">Real-time Breakage &amp; Flow Intelligence</div>
     </div>
-    <div class="loading-bar-wrap">
-      <div class="loading-bar-track">
-        <div class="loading-bar-fill" id="loadingBarFill"></div>
+
+    <!-- Live stats preview — fills in as data loads -->
+    <div class="ls-stats">
+      <div class="ls-stat">
+        <div class="ls-stat-label">Coating Jobs</div>
+        <div class="ls-stat-val teal" id="lsJobs">—</div>
       </div>
-      <div class="loading-status" id="loadingStatus">Connecting to data source...</div>
+      <div class="ls-stat">
+        <div class="ls-stat-label">Total Lenses</div>
+        <div class="ls-stat-val" id="lsLenses">—</div>
+      </div>
+      <div class="ls-stat">
+        <div class="ls-stat-label">Lenses Broken</div>
+        <div class="ls-stat-val" id="lsBroken">—</div>
+      </div>
+      <div class="ls-stat">
+        <div class="ls-stat-label">Breakage %</div>
+        <div class="ls-stat-val" id="lsPct">—</div>
+      </div>
+      <div class="ls-stat">
+        <div class="ls-stat-label">Peak Hour</div>
+        <div class="ls-stat-val yellow" id="lsPeak">—</div>
+      </div>
     </div>
-    <div class="loading-orbs">
-      <div class="loading-orb orb1"></div>
-      <div class="loading-orb orb2"></div>
-      <div class="loading-orb orb3"></div>
+
+    <!-- Progress -->
+    <div class="ls-progress-wrap">
+      <div class="ls-bar-track">
+        <div class="ls-bar-fill" id="loadingBarFill"></div>
+      </div>
+      <div class="ls-step-row">
+        <div class="ls-steps">
+          <div class="ls-step active" id="lsStep0"></div>
+          <div class="ls-step" id="lsStep1"></div>
+          <div class="ls-step" id="lsStep2"></div>
+          <div class="ls-step" id="lsStep3"></div>
+        </div>
+      </div>
+      <div class="ls-status" id="loadingStatus">Initializing...</div>
     </div>
   </div>
 </div>
@@ -191,6 +205,8 @@
       <button class="tab" onclick="showTab('reasons',this)">Top Reasons</button>
       <button class="tab" onclick="showTab('machines',this)">Machine Analysis</button>
       <button class="tab" onclick="showTab('compare',this)">Date Comparison</button>
+      <button class="tab" onclick="showTab('daily',this)">Daily Summary</button>
+      <button class="tab" onclick="showTab('weekly',this)">Weekly Summary</button>
     </div>
     <div class="tabs-actions">
       <button class="btn-export-csv" onclick="exportCSV()">⬇ Export CSV</button>
@@ -251,6 +267,7 @@
               <th>Hour</th>
               <th>Total Lenses Broken</th>
               <th>Coating Jobs</th>
+              <th>Flow Breakdown</th>
               <th>Breakage by Machine</th>
               <th>Primary Driver</th>
             </tr>
@@ -343,6 +360,99 @@
       <div class="compare-empty">Select dates above and click Compare.</div>
     </div>
 
+  </div>
+
+  <!-- ══ DAILY SUMMARY ══ -->
+  <div id="daily" class="tab-content">
+    <div id="dailyLoader" class="summary-loader" style="display:none;">
+      <div class="sl-spinner"></div>
+      <div class="sl-text">Building Daily Summary...</div>
+    </div>
+    <div class="summary-header-row">
+      <div class="section-label">Daily Summary</div>
+      <div class="summary-date-badge" id="dailySummaryDate">—</div>
+    </div>
+
+    <!-- Scorecard row -->
+    <div class="summary-scorecard" id="dailyScorecard">
+      <div class="sc-card sc-jobs"><div class="sc-icon">⚙</div><div class="sc-label">Coating Jobs</div><div class="sc-val teal" id="scJobs">—</div></div>
+      <div class="sc-card sc-lenses"><div class="sc-icon">🔬</div><div class="sc-label">Total Lenses</div><div class="sc-val" id="scLenses">—</div></div>
+      <div class="sc-card sc-broken"><div class="sc-icon">💔</div><div class="sc-label">Lenses Broken</div><div class="sc-val" id="scBroken">—</div></div>
+      <div class="sc-card sc-pct"><div class="sc-icon">📊</div><div class="sc-label">Breakage Rate</div><div class="sc-val" id="scPct">—</div></div>
+      <div class="sc-card sc-peak"><div class="sc-icon">⏰</div><div class="sc-label">Peak Hour</div><div class="sc-val yellow" id="scPeak">—</div></div>
+      <div class="sc-card sc-flow"><div class="sc-icon">🌊</div><div class="sc-label">Avg Flow Time</div><div class="sc-val" id="scFlow">—</div></div>
+    </div>
+
+    <!-- Flow health row -->
+    <div class="summary-section-title">Flow Health Distribution</div>
+    <div class="summary-flow-health" id="dailyFlowHealth"></div>
+
+    <!-- Top machines + reasons side by side -->
+    <div class="summary-split">
+      <div class="summary-panel">
+        <div class="summary-panel-title">Top Machines by Breakage</div>
+        <div id="dailyMachinesPanel" class="summary-panel-body"></div>
+      </div>
+      <div class="summary-panel">
+        <div class="summary-panel-title">Top Breakage Reasons</div>
+        <div id="dailyReasonsPanel" class="summary-panel-body"></div>
+      </div>
+    </div>
+
+    <!-- Hourly performance timeline -->
+    <div class="summary-section-title">Hourly Performance Timeline</div>
+    <div id="dailyTimeline" class="summary-timeline"></div>
+
+    <!-- Narrative -->
+    <div class="summary-narrative" id="dailyNarrative"></div>
+  </div>
+
+  <!-- ══ WEEKLY SUMMARY ══ -->
+  <div id="weekly" class="tab-content">
+    <div id="weeklyLoader" class="summary-loader" style="display:none;">
+      <div class="sl-spinner"></div>
+      <div class="sl-text">Fetching week data...</div>
+    </div>
+    <div class="summary-header-row">
+      <div class="section-label">Weekly Summary</div>
+      <div class="summary-week-picker">
+        <label class="filter-label" style="font-size:12px;">Week ending</label>
+        <input type="date" id="weekEndDate" class="date-input" />
+        <button class="btn-apply" onclick="showSummaryLoader('weekly');buildWeeklySummary().finally(()=>hideSummaryLoader('weekly'))">Load Week</button>
+        <span class="summary-week-hint" id="weekRangeLabel">—</span>
+      </div>
+    </div>
+
+    <!-- Weekly totals -->
+    <div class="summary-scorecard" id="weeklyScorecard">
+      <div class="sc-card"><div class="sc-icon">📅</div><div class="sc-label">Days w/ Data</div><div class="sc-val teal" id="wcDays">—</div></div>
+      <div class="sc-card"><div class="sc-icon">⚙</div><div class="sc-label">Total Jobs</div><div class="sc-val" id="wcJobs">—</div></div>
+      <div class="sc-card"><div class="sc-icon">💔</div><div class="sc-label">Total Broken</div><div class="sc-val" id="wcBroken">—</div></div>
+      <div class="sc-card"><div class="sc-icon">📊</div><div class="sc-label">Avg Brkg %</div><div class="sc-val" id="wcPct">—</div></div>
+      <div class="sc-card"><div class="sc-icon">🌊</div><div class="sc-label">Avg Flow Time</div><div class="sc-val" id="wcFlow">—</div></div>
+      <div class="sc-card"><div class="sc-icon">🏆</div><div class="sc-label">Best Day</div><div class="sc-val green" id="wcBest">—</div></div>
+      <div class="sc-card"><div class="sc-icon">⚠</div><div class="sc-label">Worst Day</div><div class="sc-val red" id="wcWorst">—</div></div>
+    </div>
+
+    <!-- Day-by-day breakdown -->
+    <div class="summary-section-title">Day-by-Day Breakdown</div>
+    <div id="weeklyDayGrid" class="weekly-day-grid"></div>
+
+    <!-- Weekly machine leaderboard -->
+    <div class="summary-split">
+      <div class="summary-panel">
+        <div class="summary-panel-title">Machine Leaderboard (Week)</div>
+        <div id="weeklyMachinesPanel" class="summary-panel-body"></div>
+      </div>
+      <div class="summary-panel">
+        <div class="summary-panel-title">Top Reasons This Week</div>
+        <div id="weeklyReasonsPanel" class="summary-panel-body"></div>
+      </div>
+    </div>
+
+    <!-- Weekly trend sparkline -->
+    <div class="summary-section-title">Daily Breakage Trend</div>
+    <div class="chart-card" style="height:220px;"><canvas id="weeklyTrendChart"></canvas></div>
   </div>
 
 </div>

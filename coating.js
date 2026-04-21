@@ -401,7 +401,6 @@ function showTab(tabId, button) {
       if (dashboardProcessed) buildFlowChart(dashboardProcessed);
     }, 100);
   }
-  // Always rebuild these — they may have been destroyed on data reload
   if (tabId === "reasons") {
     if (reasonChart) { reasonChart.destroy(); reasonChart = null; }
     setTimeout(() => buildReasonChart(dashboardData), 80);
@@ -411,9 +410,26 @@ function showTab(tabId, button) {
     setTimeout(() => buildMachineChart(dashboardMachine || dashboardData), 80);
   }
   if (tabId === "compare") {
-    // Init the comparison picker if not already done
     const inp = document.getElementById("compareDateInputs");
     if (inp && inp.children.length === 0) compareInit();
+  }
+  if (tabId === "daily") {
+    showSummaryLoader("daily");
+    setTimeout(() => {
+      buildDailySummary(dashboardData);
+      hideSummaryLoader("daily");
+    }, 80);
+  }
+  if (tabId === "weekly") {
+    const we = document.getElementById("weekEndDate");
+    if (we && !we.value) {
+      const today = new Date();
+      we.value = today.toISOString().slice(0,10);
+    }
+    showSummaryLoader("weekly");
+    setTimeout(() => {
+      buildWeeklySummary().finally(() => hideSummaryLoader("weekly"));
+    }, 80);
   }
 }
 
@@ -440,6 +456,11 @@ async function loadDashboard() {
   buildInsights(dashboardProcessed);
   updateReportDateDisplay(dashboardProcessed);
   checkSpikeAlert(dashboardData.hourly || []);
+
+  // Push live stats to loading screen preview while it's still visible
+  if (typeof window._updateLoadingStats === "function") {
+    window._updateLoadingStats(summary);
+  }
 
   // ── Animate KPI values ──
   const brokenVal = summary.totalBreakLenses || 0;
@@ -503,6 +524,10 @@ async function loadDashboard() {
   if (document.getElementById("flowChart")) buildFlowChart(dashboardProcessed);
 
   updateStatusBadge(currentDate === null ? "live" : "history");
+  // Refresh Daily Summary if it's visible, and invalidate weekly cache for today
+  buildDailySummary(dashboardData);
+  const todayKey = (() => { const n=new Date(); return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`; })();
+  if (currentDate === null && weeklyCache) weeklyCache[todayKey] = dashboardData;
   console.log("Load time (ms):", Math.round(performance.now() - startTime));
 }
 
@@ -632,35 +657,92 @@ document.addEventListener("DOMContentLoaded", () => {
   const barFill    = document.getElementById("loadingBarFill");
   const statusEl   = document.getElementById("loadingStatus");
 
-  const steps = [
-    { pct: 20, msg: "Connecting to data source..." },
-    { pct: 45, msg: "Fetching processed scan data..." },
-    { pct: 70, msg: "Loading machine metrics..." },
-    { pct: 90, msg: "Building dashboard..." },
+  const lsSteps = [
+    { pct: 15,  msg: "Connecting to data source...",  step: 0 },
+    { pct: 40,  msg: "Fetching processed scan data...",step: 1 },
+    { pct: 65,  msg: "Loading machine metrics...",     step: 2 },
+    { pct: 85,  msg: "Building dashboard...",          step: 3 },
   ];
+
+  function setLsStep(idx) {
+    for (let i = 0; i < 4; i++) {
+      const el = document.getElementById("lsStep" + i);
+      if (!el) continue;
+      el.className = "ls-step" + (i < idx ? " done" : i === idx ? " active" : "");
+    }
+  }
+
   let stepIdx = 0;
   const stepInterval = setInterval(() => {
-    if (stepIdx < steps.length) {
-      const s = steps[stepIdx++];
+    if (stepIdx < lsSteps.length) {
+      const s = lsSteps[stepIdx];
       if (barFill) barFill.style.width = s.pct + "%";
       if (statusEl) statusEl.textContent = s.msg;
+      setLsStep(s.step);
+      stepIdx++;
     } else {
       clearInterval(stepInterval);
     }
-  }, 380);
+  }, 420);
 
-  window._dismissLoadingScreen = function() {
-    clearInterval(stepInterval);
-    if (barFill)  barFill.style.width = "100%";
-    if (statusEl) statusEl.textContent = "Ready.";
-    setTimeout(() => {
-      if (loadScreen) {
-        loadScreen.classList.add("fade-out");
-        setTimeout(() => { loadScreen.style.display = "none"; }, 620);
-      }
-    }, 300);
-  };
+  // stepInterval and setLsStep defined inside DOMContentLoaded, but we need refs outside
+  // The actual dismiss/stats functions are now defined at module level below
 });
+
+// ── Module-level loading screen functions ──
+// Must be defined HERE (not inside DOMContentLoaded) so loadDashboard() can call them
+// even if the API responds before DOMContentLoaded fires.
+
+window._updateLoadingStats = function(summary) {
+  const statsStrip = document.querySelector(".ls-stats");
+  if (statsStrip) {
+    statsStrip.style.animation = "none";
+    statsStrip.style.opacity   = "1";
+  }
+  const brokenVal = summary.totalBreakLenses || 0;
+  const pctVal    = parseFloat(summary.breakPercent) || 0;
+
+  const lsJobs = document.getElementById("lsJobs");
+  const lsLen  = document.getElementById("lsLenses");
+  const lsBrk  = document.getElementById("lsBroken");
+  const lsPct  = document.getElementById("lsPct");
+  const lsPk   = document.getElementById("lsPeak");
+
+  if (lsJobs) { lsJobs.textContent = (summary.totalJobs ?? 0).toLocaleString(); lsJobs.classList.add("ready"); }
+  if (lsLen)  { lsLen.textContent  = (summary.totalLenses ?? 0).toLocaleString(); lsLen.classList.add("ready"); }
+  if (lsBrk)  {
+    lsBrk.textContent = brokenVal;
+    lsBrk.classList.add("ready");
+    lsBrk.classList.remove("green","yellow","red");
+    lsBrk.classList.add(brokenVal === 0 ? "green" : brokenVal <= 20 ? "yellow" : "red");
+  }
+  if (lsPct)  {
+    lsPct.textContent = pctVal.toFixed(2) + "%";
+    lsPct.classList.add("ready");
+    lsPct.classList.remove("green","yellow","red");
+    lsPct.classList.add(pctVal < 2 ? "green" : pctVal < 4 ? "yellow" : "red");
+  }
+  if (lsPk) { lsPk.textContent = summary.peakHour ?? "—"; lsPk.classList.add("ready"); }
+};
+
+window._dismissLoadingScreen = function() {
+  // Mark all steps done
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById("lsStep" + i);
+    if (el) el.className = "ls-step done";
+  }
+  const barFill  = document.getElementById("loadingBarFill");
+  const statusEl = document.getElementById("loadingStatus");
+  if (barFill)  barFill.style.width = "100%";
+  if (statusEl) statusEl.textContent = "Dashboard ready ✓";
+  const loadScreen = document.getElementById("loadingScreen");
+  setTimeout(() => {
+    if (loadScreen) {
+      loadScreen.classList.add("fade-out");
+      setTimeout(() => { loadScreen.style.display = "none"; }, 720);
+    }
+  }, 900);
+};
 
 loadDashboard().then(() => {
   if (typeof window._dismissLoadingScreen === "function") window._dismissLoadingScreen();
@@ -849,10 +931,12 @@ function buildFlowChart(data) {
   const hours  = filtered.map(h => h.hour);
   const chartH = canvas.clientHeight || 420;
 
+  // Cap at 360m (6h) — anything over is "Overnight" and excluded from avg calculations
+  // This prevents single outlier jobs (e.g. 857m) from blowing the broken avg line off the chart
   function sanitize(v) {
     if (v === null || v === undefined) return null;
     const n = Number(v);
-    return n > 500 ? null : n;
+    return n > 360 ? null : n;
   }
 
   // ── MACHINE MODE — smooth curves per machine ──
@@ -939,29 +1023,32 @@ function buildFlowChart(data) {
     : 60;
   const yAxisMax = Math.max(60, Math.ceil(p95 * 1.25 / 10) * 10);
 
-  // Avg flow time per bucket per hour
+  // Avg flow time per bucket per hour — also store job counts
   const bucketDatasets = bucketDefs.map(b => {
     const isOvernight = b.label.includes("Overnight");
     const vals = filtered.map(h => {
       const pts = (h.flowPoints || []).filter(b.filter);
       if (!pts.length) return null;
       const avg = Math.round(pts.reduce((s, p) => s + p.flow, 0) / pts.length);
-      // Cap overnight on main axis so it doesn't blow the scale
       return isOvernight ? Math.min(avg, yAxisMax) : avg;
     });
+    // Store count per hour index for tooltip use
+    const counts = filtered.map(h => (h.flowPoints || []).filter(b.filter).length);
     const fill = ctx.createLinearGradient(0, 0, 0, chartH);
     fill.addColorStop(0,   b.color + "22");
     fill.addColorStop(1,   b.color + "00");
     return {
       label              : b.label,
       data               : vals,
+      _counts            : counts,
       borderColor        : b.color,
       backgroundColor    : fill,
-      borderWidth        : 2,
+      borderWidth        : 2.5,
       tension            : 0.42,
       fill               : true,
-      pointRadius        : vals.map(v => v === null ? 0 : 3),
-      pointHoverRadius   : 7,
+      pointRadius        : vals.map(v => v === null ? 0 : 4),
+      pointHoverRadius   : 10,
+      pointHitRadius     : 16,
       pointBackgroundColor: b.color,
       pointBorderColor   : "rgba(5,8,16,0.7)",
       pointBorderWidth   : 1.5,
@@ -972,10 +1059,20 @@ function buildFlowChart(data) {
   });
 
   // Broken jobs avg flow — dashed violet line
-  const brokenAvgVals = filtered.map(h => sanitize(h.avgFlowBroken));
+  // Recalculate from flowPoints (broken flag, ≤360m) to exclude overnight outliers like 857m
+  // Falls back to h.avgFlowBroken if flowPoints don't have a .broken flag
+  const brokenAvgVals = filtered.map(h => {
+    const brokenPts = (h.flowPoints || []).filter(p => p.broken && p.flow > 0 && p.flow <= 360);
+    if (brokenPts.length) {
+      return Math.round(brokenPts.reduce((s, p) => s + p.flow, 0) / brokenPts.length);
+    }
+    return sanitize(h.avgFlowBroken); // fallback to API value (already capped at 360 by sanitize)
+  });
+  const brokenCounts = filtered.map(h => h.totalBroken || 0);
   bucketDatasets.push({
     label              : "Broken Jobs Avg",
     data               : brokenAvgVals,
+    _counts            : brokenCounts,
     borderColor        : "rgba(192,166,255,0.75)",
     backgroundColor    : "transparent",
     borderWidth        : 1.5,
@@ -991,10 +1088,16 @@ function buildFlowChart(data) {
   });
 
   // Breakage events — placed on chart via custom plugin
+  // Y position = avg flow of BROKEN jobs excluding overnight outliers (≤360m)
   const breakageDots = filtered.map((h, i) => {
     const count = h.totalBroken || 0;
     if (!count) return null;
-    return { x: hours[i], y: sanitize(h.avgFlowBroken) || 10, count, hour: h.hour };
+    // Recalculate avg from flowPoints for broken jobs only, capping overnight
+    const brokenPts = (h.flowPoints || []).filter(p => p.broken && p.flow > 0 && p.flow <= 360);
+    const dotY = brokenPts.length
+      ? Math.round(brokenPts.reduce((s, p) => s + p.flow, 0) / brokenPts.length)
+      : sanitize(h.avgFlowBroken) || 10;
+    return { x: hours[i], y: dotY || 10, count, hour: h.hour };
   }).filter(Boolean);
 
   // ── THRESHOLD BAND PLUGIN ──
@@ -1083,7 +1186,7 @@ function buildFlowChart(data) {
       responsive         : true,
       maintainAspectRatio: false,
       animation          : { duration: 600, easing: "easeOutQuart" },
-      interaction        : { mode: "index", intersect: false },
+      interaction        : { mode: "nearest", intersect: true },
 
       plugins: {
         legend: {
@@ -1126,22 +1229,45 @@ function buildFlowChart(data) {
         },
         tooltip: {
           ...GLASS_TOOLTIP,
-          titleFont       : { family: CHART_FONT, size: 15, weight: "700" },
-          bodyFont        : { family: CHART_MONO, size: 13 },
+          titleFont : { family: CHART_FONT, size: 15, weight: "700" },
+          bodyFont  : { family: CHART_MONO, size: 13 },
           callbacks: {
-            title: items => `  ${items[0].label}`,
+            title: items => {
+              if (!items.length) return "";
+              const hourIdx = items[0].dataIndex;
+              const h       = filtered[hourIdx];
+              const jobs    = h?.coatingJobs || 0;
+              // Show the line name + hour + total jobs that hour
+              const lineName = items[0].dataset.label || "";
+              return [`  ${items[0].label}`, `  ${lineName}   ·   ${jobs} jobs ran`];
+            },
             label: ctx => {
-              const v = ctx.raw;
+              const v       = ctx.raw;
+              const hourIdx = ctx.dataIndex;
+              const count   = ctx.dataset._counts?.[hourIdx] ?? 0;
               if (v === null || v === undefined) return null;
-              // Only show Broken Jobs Avg in the tooltip body lines
-              if (ctx.dataset.label === "Broken Jobs Avg") return `  Broken avg: ${v}m`;
-              // Hide all bucket lines (Healthy / Watch / Delayed / Overnight) from tooltip
-              return null;
+
+              if (ctx.dataset.label === "Broken Jobs Avg") {
+                if (!count) return `  Avg flow of broken jobs: ${v}m`;
+                return `  Avg flow: ${v}m  ·  ${count} lenses broken`;
+              }
+
+              // Bucket line — show this line's job count + avg flow
+              const h   = filtered[hourIdx];
+              const pct = count > 0 && (h?.coatingJobs || 0) > 0
+                ? ` (${((count / (h.coatingJobs)) * 100).toFixed(0)}% of jobs)`
+                : "";
+              return count > 0
+                ? `  ${count} jobs this hour · avg ${v}m${pct}`
+                : `  No jobs in this range this hour`;
             },
             afterBody: items => {
-              const hour  = items[0]?.label;
+              if (!items.length) return [];
+              const hour  = items[0].label;
               const brkPt = breakageDots.find(d => d.hour === hour);
-              return brkPt ? ["", `  🔴 Breakage: ${brkPt.count} lenses this hour`] : [];
+              // Only show breakage line if hovering Broken Jobs Avg or if there's breakage
+              if (!brkPt) return [];
+              return ["", `  🔴 ${brkPt.count} lenses broken this hour`];
             },
           },
         },
@@ -1270,8 +1396,8 @@ function buildHourlyTable(hourly) {
     else if (broken >= 4) brkClass = "brk-mid";
     else if (broken > 0)  brkClass = "brk-low";
 
-    let primaryDriverHTML = "<span style='color:var(--text-dim)'>—</span>";
-    let topAccessPointHTML = "<span style='color:var(--text-dim)'>—</span>";
+    let primaryDriverHTML  = "<span style='color:rgba(255,255,255,0.3)'>—</span>";
+    let topAccessPointHTML = "<span style='color:rgba(255,255,255,0.3)'>—</span>";
 
     if (broken > 0 && row.machines) {
       let topMachine = null, topMachineTotal = 0;
@@ -1286,19 +1412,50 @@ function buildHourlyTable(hourly) {
         primaryDriverHTML = `<div class="primary-driver"><div class="driver-machine">${formatMachineLabel(topMachine)}</div><div class="driver-reason">${topReason || ""}</div></div>`;
       }
 
-      // Access point: list all machines that had breakage this hour
       const brkMachines = Object.entries(row.machines)
         .filter(([, s]) => (s.total || 0) > 0)
         .sort(([, a], [, b]) => (b.total || 0) - (a.total || 0))
-        .map(([m, s]) => `<span style="color:#38bdf8;font-family:'JetBrains Mono',monospace;font-size:11px;">${formatMachineLabel(m)}</span><span style="color:var(--text-dim);font-size:11px;"> ×${s.total}</span>`)
+        .map(([m, s]) => `<span style="color:#38bdf8;font-family:'JetBrains Mono',monospace;font-size:11px;">${formatMachineLabel(m)}</span><span style="color:rgba(255,255,255,0.4);font-size:11px;"> ×${s.total}</span>`)
         .join("<br>");
       if (brkMachines) topAccessPointHTML = brkMachines;
     }
 
+    // ── Flow Breakdown ──
+    const flowPts   = row.flowPoints || [];
+    const totalFlow = flowPts.length;
+    let flowHTML    = `<span style="color:rgba(255,255,255,0.3)">—</span>`;
+
+    if (totalFlow > 0) {
+      const buckets = [
+        { label: "H",  color: "#4ade80", pts: flowPts.filter(p => p.flow > 0  && p.flow <= 15)  },
+        { label: "W",  color: "#fbbf24", pts: flowPts.filter(p => p.flow > 15 && p.flow <= 30)  },
+        { label: "D",  color: "#f87171", pts: flowPts.filter(p => p.flow > 30 && p.flow <= 360) },
+        { label: "ON", color: "#38bdf8", pts: flowPts.filter(p => p.flow > 360)                 },
+      ];
+
+      const pills = buckets
+        .filter(b => b.pts.length > 0)
+        .map(b => {
+          const avg = Math.round(b.pts.reduce((s, p) => s + p.flow, 0) / b.pts.length);
+          return `<span class="flow-pill" style="--pill-color:${b.color}">
+            <span class="fp-label">${b.label}</span>
+            <span class="fp-count">${b.pts.length}</span>
+            <span class="fp-avg">${avg}m avg</span>
+          </span>`;
+        })
+        .join("");
+
+      flowHTML = `<div class="flow-breakdown-cell">
+        <div class="flow-total-jobs">${totalFlow} flow records</div>
+        <div class="flow-pills">${pills}</div>
+      </div>`;
+    }
+
     tr.innerHTML = `
       <td>${row.hour}</td>
-      <td class="${brkClass}">${broken > 0 ? broken : '<span style="color:var(--text-dim)">0</span>'}</td>
+      <td class="${brkClass}">${broken > 0 ? broken : '<span style="color:rgba(255,255,255,0.3)">0</span>'}</td>
       <td>${row.coatingJobs || 0}</td>
+      <td>${flowHTML}</td>
       <td>${topAccessPointHTML}</td>
       <td>${primaryDriverHTML}</td>`;
     tr.addEventListener("click", () => showHourDetails(row));
@@ -1642,6 +1799,466 @@ function buildInsights(data) {
     : "<span style='color:var(--text-dim);font-size:13px;'>No insights available</span>";
 }
 
+/* =====================================================
+   SUMMARY TAB LOADERS
+===================================================== */
+
+function showSummaryLoader(tab) {
+  const el = document.getElementById(tab + "Loader");
+  if (!el) return;
+  el.style.display = "flex";
+  // Update text based on tab
+  const textEl = el.querySelector(".sl-text");
+  if (textEl) textEl.textContent = tab === "weekly" ? "Fetching week data..." : "Building Daily Summary...";
+}
+
+function hideSummaryLoader(tab) {
+  const el = document.getElementById(tab + "Loader");
+  if (el) el.style.display = "none";
+}
+
+/* =====================================================
+/* =====================================================
+   DAILY SUMMARY
+===================================================== */
+
+function buildDailySummary(data) {
+  if (!data) return;
+  const summary       = data.summary       || {};
+  const hourly        = data.hourly        || [];
+  const machineTotals = data.machineTotals || {};
+  const topReasons    = data.topReasons    || {};
+
+  // ── Date badge ──
+  const dateBadge = document.getElementById("dailySummaryDate");
+  if (dateBadge) {
+    dateBadge.textContent = currentDate
+      ? "📅 " + currentDate
+      : "📅 Today · Live";
+  }
+
+  // ── Scorecard ──
+  const brokenVal = summary.totalBreakLenses || 0;
+  const pctVal    = parseFloat(summary.breakPercent) || 0;
+  const avgHrs    = parseFloat(summary.avgBreakTimeHours) || 0;
+  const allFlowPts = hourly.flatMap(h => (h.flowPoints||[]).filter(p => p.flow > 0 && p.flow <= 360));
+  const avgFlowMins = allFlowPts.length
+    ? Math.round(allFlowPts.reduce((s,p)=>s+p.flow,0)/allFlowPts.length)
+    : null;
+
+  function setSc(id, val, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (cls) el.className = "sc-val " + cls;
+  }
+  setSc("scJobs",   summary.totalJobs ?? "—", "teal");
+  setSc("scLenses", (summary.totalLenses||0).toLocaleString(), "");
+  setSc("scBroken", brokenVal, brokenVal === 0 ? "green" : brokenVal <= 20 ? "yellow" : "red");
+  setSc("scPct",    pctVal.toFixed(2) + "%", pctVal < 2 ? "green" : pctVal < 4 ? "yellow" : "red");
+  setSc("scPeak",   summary.peakHour ?? "—", "yellow");
+  setSc("scFlow",   avgFlowMins !== null ? avgFlowMins + "m avg" : "—", avgFlowMins === null ? "" : avgFlowMins <= 15 ? "green" : avgFlowMins <= 30 ? "yellow" : "red");
+
+  // ── Flow Health Bar ──
+  const fhEl = document.getElementById("dailyFlowHealth");
+  if (fhEl && summary.flowHealth) {
+    const fh = summary.flowHealth;
+    const total = (fh.healthy||0) + (fh.watch||0) + (fh.delayed||0) + (fh.overnight||0) || 1;
+    const pH = ((fh.healthy||0)/total*100).toFixed(1);
+    const pW = ((fh.watch||0)/total*100).toFixed(1);
+    const pD = ((fh.delayed||0)/total*100).toFixed(1);
+    const pO = ((fh.overnight||0)/total*100).toFixed(1);
+    fhEl.innerHTML = `
+      <div class="fh-bar-wrap">
+        <div class="fh-segment" style="flex:${pH};background:#4ade80;"></div>
+        <div class="fh-segment" style="flex:${pW};background:#fbbf24;"></div>
+        <div class="fh-segment" style="flex:${pD};background:#f87171;"></div>
+        <div class="fh-segment" style="flex:${pO};background:#38bdf8;"></div>
+      </div>
+      <div class="fh-labels">
+        <span class="fh-label"><span class="fh-dot" style="background:#4ade80"></span>Healthy <span class="fh-count" style="color:#4ade80">${fh.healthy||0}</span></span>
+        <span class="fh-label"><span class="fh-dot" style="background:#fbbf24"></span>Watch <span class="fh-count" style="color:#fbbf24">${fh.watch||0}</span></span>
+        <span class="fh-label"><span class="fh-dot" style="background:#f87171"></span>Delayed <span class="fh-count" style="color:#f87171">${fh.delayed||0}</span></span>
+        <span class="fh-label"><span class="fh-dot" style="background:#38bdf8"></span>Overnight <span class="fh-count" style="color:#38bdf8">${fh.overnight||0}</span></span>
+        <span class="fh-label" style="margin-left:auto;color:rgba(255,255,255,0.35);font-size:11px;">${total} total flow records</span>
+      </div>`;
+  }
+
+  // ── Top Machines ──
+  const machEl = document.getElementById("dailyMachinesPanel");
+  if (machEl) {
+    const machEntries = Object.entries(machineTotals)
+      .map(([m,s]) => ({ m, broken: s.breakLenses||0, jobs: s.jobs||0 }))
+      .filter(e => e.broken > 0)
+      .sort((a,b) => b.broken - a.broken)
+      .slice(0, 8);
+    const maxBrk = machEntries[0]?.broken || 1;
+    machEl.innerHTML = machEntries.length
+      ? machEntries.map((e,i) => {
+          const col = e.broken >= 10 ? "#f87171" : e.broken >= 4 ? "#fbbf24" : "#4ade80";
+          return `<div class="summary-row">
+            <span class="summary-row-rank">${i+1}</span>
+            <span class="summary-row-name" style="color:${col}">${formatMachineLabel(e.m)}</span>
+            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(e.broken/maxBrk*100).toFixed(1)}%;background:${col};"></div></div>
+            <span class="summary-row-val" style="color:${col}">${e.broken}</span>
+          </div>`;
+        }).join("")
+      : `<div style="padding:16px;color:rgba(255,255,255,0.3);font-size:13px;">No breakage recorded</div>`;
+  }
+
+  // ── Top Reasons ──
+  const resEl = document.getElementById("dailyReasonsPanel");
+  if (resEl) {
+    const resEntries = Object.entries(topReasons)
+      .map(([r,s]) => ({ r, total: s.total||0 }))
+      .filter(e => e.total > 0)
+      .sort((a,b) => b.total - a.total)
+      .slice(0, 8);
+    const maxRes = resEntries[0]?.total || 1;
+    resEl.innerHTML = resEntries.length
+      ? resEntries.map((e,i) => {
+          const col = BREAKAGE_COLOR_MAP[e.r] || GC.blue;
+          return `<div class="summary-row">
+            <span class="summary-row-rank">${i+1}</span>
+            <span class="summary-row-name">${e.r}</span>
+            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(e.total/maxRes*100).toFixed(1)}%;background:${col};"></div></div>
+            <span class="summary-row-val" style="color:${col}">${e.total}</span>
+          </div>`;
+        }).join("")
+      : `<div style="padding:16px;color:rgba(255,255,255,0.3);font-size:13px;">No breakage recorded</div>`;
+  }
+
+  // ── Hourly Timeline ──
+  const tlEl = document.getElementById("dailyTimeline");
+  if (tlEl) {
+    const sorted = [...hourly].sort((a,b) => new Date("1/1/2000 "+a.hour) - new Date("1/1/2000 "+b.hour));
+    const maxJobs = Math.max(...sorted.map(h => h.coatingJobs||0), 1);
+    tlEl.innerHTML = sorted.map(h => {
+      const brk   = h.totalBroken || 0;
+      const jobs  = h.coatingJobs || 0;
+      const cls   = jobs === 0 ? "tl-empty" : brk === 0 ? "tl-ok" : brk <= 3 ? "tl-warn" : "tl-danger";
+      const brkTxt = brk > 0 ? `<div class="tl-brk">🔴 ${brk} broken</div>` : `<div class="tl-brk" style="color:rgba(74,222,128,0.5)">✓ clean</div>`;
+      return `<div class="tl-cell ${cls}">
+        <div class="tl-hour">${h.hour}</div>
+        <div class="tl-jobs">${jobs}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:2px;">jobs</div>
+        ${brkTxt}
+      </div>`;
+    }).join("") || `<div style="color:rgba(255,255,255,0.3);padding:16px;">No hourly data</div>`;
+  }
+
+  // ── Narrative ──
+  const narEl = document.getElementById("dailyNarrative");
+  if (narEl) {
+    const totalJobs    = summary.totalJobs || 0;
+    const totalLenses  = summary.totalLenses || 0;
+    const flowHealth   = summary.flowHealth || {};
+    const healthyPct   = totalJobs > 0 ? ((flowHealth.healthy||0)/totalJobs*100).toFixed(0) : 0;
+    const delayedCount = flowHealth.delayed || 0;
+    const overnightCount = flowHealth.overnight || 0;
+
+    // Find peak hour
+    let peakHour = "—", peakBrk = 0;
+    hourly.forEach(h => { if ((h.totalBroken||0) > peakBrk) { peakBrk = h.totalBroken||0; peakHour = h.hour; } });
+
+    // Find busiest hour
+    let busiestHour = "—", busiestJobs = 0;
+    hourly.forEach(h => { if ((h.coatingJobs||0) > busiestJobs) { busiestJobs = h.coatingJobs||0; busiestHour = h.hour; } });
+
+    // Top machine
+    let topMach = null, topMachBrk = 0;
+    Object.entries(machineTotals).forEach(([m,s]) => { if ((s.breakLenses||0) > topMachBrk) { topMachBrk = s.breakLenses||0; topMach = m; } });
+
+    const statusWord = pctVal === 0 ? `<span class="nar-good">zero breakage</span>`
+      : pctVal < 2 ? `<span class="nar-good">healthy breakage rate of ${pctVal.toFixed(2)}%</span>`
+      : pctVal < 4 ? `<span class="nar-warn">elevated breakage rate of ${pctVal.toFixed(2)}%</span>`
+      : `<span class="nar-danger">high breakage rate of ${pctVal.toFixed(2)}%</span>`;
+
+    narEl.innerHTML = `
+      <strong>Summary:</strong> ${totalJobs.toLocaleString()} coating jobs processed across ${totalLenses.toLocaleString()} lenses with ${statusWord}.
+      ${brokenVal > 0 ? `<strong>${brokenVal} lenses were broken</strong>, peaking at <strong>${peakHour}</strong> (${peakBrk} lenses).` : ""}
+      The busiest hour was <strong>${busiestHour}</strong> with <strong>${busiestJobs} jobs</strong>.
+      ${topMach && topMachBrk > 0 ? `Top breakage machine was <strong style="color:#38bdf8">${formatMachineLabel(topMach)}</strong> with ${topMachBrk} lenses.` : ""}
+      Flow health: <span class="nar-good">${flowHealth.healthy||0} healthy</span> ·
+      <span class="nar-warn">${flowHealth.watch||0} watch</span> ·
+      ${delayedCount > 0 ? `<span class="nar-danger">${delayedCount} delayed</span>` : `<span class="nar-good">0 delayed</span>`}
+      ${overnightCount > 0 ? ` · <span style="color:#38bdf8">${overnightCount} overnight carryover</span>.` : "."}
+      ${avgFlowMins !== null ? `Average detaper-to-coater flow time was <strong>${avgFlowMins} minutes</strong>.` : ""}`;
+  }
+}
+
+/* =====================================================
+   WEEKLY SUMMARY
+===================================================== */
+
+let weeklyTrendChart = null;
+const weeklyCache    = {};  // "M/D/YYYY" → data
+
+async function buildWeeklySummary() {
+  const weEl = document.getElementById("weekEndDate");
+  if (!weEl || !weEl.value) return;
+
+  const endDate  = new Date(weEl.value + "T00:00:00");
+  const rangeEl  = document.getElementById("weekRangeLabel");
+
+  // Build array of 7 days ending on selected date
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(endDate);
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+
+  const startLabel = days[0].toLocaleDateString("en-US", { month:"short", day:"numeric" });
+  const endLabel   = days[6].toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+  if (rangeEl) rangeEl.textContent = startLabel + " – " + endLabel;
+
+  // Convert to API date strings
+  const apiDates = days.map(d => `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`);
+  const todayApi = (() => { const n = new Date(); return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`; })();
+
+  // Show loading state
+  document.getElementById("weeklyDayGrid").innerHTML    = `<div style="color:rgba(255,255,255,0.35);font-size:13px;padding:12px;">Loading week data...</div>`;
+  document.getElementById("weeklyMachinesPanel").innerHTML = "";
+  document.getElementById("weeklyReasonsPanel").innerHTML  = "";
+
+  // Fetch missing days
+  await Promise.all(apiDates.map(async apiDate => {
+    if (weeklyCache[apiDate]) return;
+    if (apiDate === todayApi && dashboardData) { weeklyCache[apiDate] = dashboardData; return; }
+    try {
+      const res = await fetch(`${API_URL}?mode=processed&date=${encodeURIComponent(apiDate)}`);
+      weeklyCache[apiDate] = await res.json();
+    } catch(e) { weeklyCache[apiDate] = null; }
+  }));
+
+  // Aggregate weekly totals
+  let wJobs = 0, wLenses = 0, wBroken = 0, wFlowSum = 0, wFlowCount = 0;
+  let bestDay = null, bestPct = Infinity, worstDay = null, worstPct = -1;
+  const machWeekly = {};
+  const resWeekly  = {};
+  let daysWithData = 0;
+  const dailyBreakage = [];
+
+  apiDates.forEach((apiDate, idx) => {
+    const d    = days[idx];
+    const data = weeklyCache[apiDate];
+    if (!data?.summary) { dailyBreakage.push(null); return; }
+    daysWithData++;
+    const s = data.summary;
+    wJobs   += s.totalJobs   || 0;
+    wLenses += s.totalLenses || 0;
+    wBroken += s.totalBreakLenses || 0;
+
+    // Collect flow for weekly avg
+    (data.hourly || []).forEach(h => {
+      (h.flowPoints||[]).forEach(p => {
+        if (p.flow > 0 && p.flow <= 360) { wFlowSum += p.flow; wFlowCount++; }
+      });
+    });
+
+    const pct = parseFloat(s.breakPercent) || 0;
+    dailyBreakage.push({ date: d, apiDate, pct, broken: s.totalBreakLenses||0, jobs: s.totalJobs||0, lenses: s.totalLenses||0, summary: s });
+    if (pct < bestPct)  { bestPct  = pct;  bestDay  = idx; }
+    if (pct > worstPct) { worstPct = pct;  worstDay = idx; }
+
+    // Accumulate machine totals
+    Object.entries(data.machineTotals || {}).forEach(([m,ms]) => {
+      if (!machWeekly[m]) machWeekly[m] = { broken: 0, jobs: 0 };
+      machWeekly[m].broken += ms.breakLenses || 0;
+      machWeekly[m].jobs   += ms.jobs || 0;
+    });
+
+    // Accumulate reason totals
+    Object.entries(data.topReasons || {}).forEach(([r,rs]) => {
+      if (!resWeekly[r]) resWeekly[r] = 0;
+      resWeekly[r] += rs.total || 0;
+    });
+  });
+
+  const wAvgPct  = wLenses > 0 ? ((wBroken / wLenses) * 100).toFixed(2) : "0.00";
+  const wAvgFlow = wFlowCount > 0 ? Math.round(wFlowSum / wFlowCount) : null;
+
+  // ── Weekly scorecard ──
+  function setWc(id, val, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (cls) el.className = "sc-val " + cls;
+  }
+  setWc("wcDays",   daysWithData, "teal");
+  setWc("wcJobs",   wJobs.toLocaleString(), "");
+  setWc("wcBroken", wBroken, wBroken === 0 ? "green" : wBroken <= 50 ? "yellow" : "red");
+  setWc("wcPct",    wAvgPct + "%", parseFloat(wAvgPct) < 2 ? "green" : parseFloat(wAvgPct) < 4 ? "yellow" : "red");
+  setWc("wcFlow",   wAvgFlow !== null ? wAvgFlow + "m" : "—", wAvgFlow===null?"":wAvgFlow<=15?"green":wAvgFlow<=30?"yellow":"red");
+  if (bestDay !== null && dailyBreakage[bestDay]) {
+    const bd = dailyBreakage[bestDay];
+    setWc("wcBest", bd.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " · " + bd.pct.toFixed(2) + "%", "green");
+  }
+  if (worstDay !== null && dailyBreakage[worstDay]) {
+    const wd2 = dailyBreakage[worstDay];
+    setWc("wcWorst", wd2.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " · " + wd2.pct.toFixed(2) + "%", "red");
+  }
+
+  // ── Day-by-day grid ──
+  const gridEl = document.getElementById("weeklyDayGrid");
+  if (gridEl) {
+    const maxBrk = Math.max(...dailyBreakage.filter(Boolean).map(d => d.broken), 1);
+    const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    gridEl.innerHTML = dailyBreakage.map((d, i) => {
+      if (!d) {
+        return `<div class="wd-card wd-nodata">
+          <div class="wd-dow">${DOW[days[i].getDay()]}</div>
+          <div class="wd-date">${days[i].toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.25);margin-top:8px;">No data</div>
+        </div>`;
+      }
+      const isBest  = i === bestDay;
+      const isWorst = i === worstDay && d.broken > 0;
+      const pctCol  = d.pct < 2 ? "#4ade80" : d.pct < 4 ? "#fbbf24" : "#f87171";
+      const fillPct = (d.broken / maxBrk * 100).toFixed(1);
+      return `<div class="wd-card${isBest?" wd-best":isWorst?" wd-worst":""}">
+        ${isBest  ? `<div class="wd-badge best">Best</div>`  : ""}
+        ${isWorst ? `<div class="wd-badge worst">Worst</div>` : ""}
+        <div class="wd-dow">${DOW[d.date.getDay()]}</div>
+        <div class="wd-date">${d.date.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+        <div class="wd-stat-row" style="margin-top:8px;">
+          <div><div class="wd-stat-label">Jobs</div><div class="wd-stat-val">${d.jobs}</div></div>
+          <div><div class="wd-stat-label">Broken</div><div class="wd-stat-val" style="color:${d.broken>0?pctCol:"#4ade80"}">${d.broken}</div></div>
+          <div><div class="wd-stat-label">Brkg%</div><div class="wd-stat-val" style="color:${pctCol}">${d.pct.toFixed(2)}%</div></div>
+        </div>
+        <div class="wd-pct-bar"><div class="wd-pct-fill" style="width:${fillPct}%;background:${pctCol};"></div></div>
+      </div>`;
+    }).join("");
+  }
+
+  // ── Weekly machines leaderboard ──
+  const wMachEl = document.getElementById("weeklyMachinesPanel");
+  if (wMachEl) {
+    const entries = Object.entries(machWeekly)
+      .map(([m,s]) => ({ m, broken: s.broken }))
+      .filter(e => e.broken > 0)
+      .sort((a,b) => b.broken - a.broken)
+      .slice(0,8);
+    const maxB = entries[0]?.broken || 1;
+    wMachEl.innerHTML = entries.length
+      ? entries.map((e,i) => {
+          const col = e.broken >= 20 ? "#f87171" : e.broken >= 8 ? "#fbbf24" : "#4ade80";
+          return `<div class="summary-row">
+            <span class="summary-row-rank">${i+1}</span>
+            <span class="summary-row-name" style="color:${col}">${formatMachineLabel(e.m)}</span>
+            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(e.broken/maxB*100).toFixed(1)}%;background:${col};"></div></div>
+            <span class="summary-row-val" style="color:${col}">${e.broken}</span>
+          </div>`;
+        }).join("")
+      : `<div style="padding:16px;color:rgba(255,255,255,0.3);font-size:13px;">No breakage this week</div>`;
+  }
+
+  // ── Weekly reasons leaderboard ──
+  const wResEl = document.getElementById("weeklyReasonsPanel");
+  if (wResEl) {
+    const entries = Object.entries(resWeekly)
+      .filter(([,v]) => v > 0)
+      .sort(([,a],[,b]) => b - a)
+      .slice(0,8);
+    const maxR = entries[0]?.[1] || 1;
+    wResEl.innerHTML = entries.length
+      ? entries.map(([r,v],i) => {
+          const col = BREAKAGE_COLOR_MAP[r] || GC.blue;
+          return `<div class="summary-row">
+            <span class="summary-row-rank">${i+1}</span>
+            <span class="summary-row-name">${r}</span>
+            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(v/maxR*100).toFixed(1)}%;background:${col};"></div></div>
+            <span class="summary-row-val" style="color:${col}">${v}</span>
+          </div>`;
+        }).join("")
+      : `<div style="padding:16px;color:rgba(255,255,255,0.3);font-size:13px;">No breakage this week</div>`;
+  }
+
+  // ── Weekly sparkline trend chart ──
+  const tCanvas = document.getElementById("weeklyTrendChart");
+  if (tCanvas) {
+    if (weeklyTrendChart) { weeklyTrendChart.destroy(); weeklyTrendChart = null; }
+    const labels  = days.map(d => d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}));
+    const brkData = dailyBreakage.map(d => d ? d.broken : null);
+    const pctData = dailyBreakage.map(d => d ? parseFloat(d.pct) : null);
+    const jobData = dailyBreakage.map(d => d ? d.jobs : null);
+    const ctx2    = tCanvas.getContext("2d");
+    const chartH  = tCanvas.clientHeight || 200;
+
+    weeklyTrendChart = new Chart(ctx2, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label           : "Lenses Broken",
+            type            : "bar",
+            data            : brkData,
+            backgroundColor : brkData.map(v => v === null ? "transparent" : v === 0 ? "rgba(74,222,128,0.5)" : v <= 5 ? "rgba(251,191,36,0.6)" : "rgba(248,113,113,0.65)"),
+            borderColor     : brkData.map(v => v === null ? "transparent" : v === 0 ? "#4ade80" : v <= 5 ? "#fbbf24" : "#f87171"),
+            borderWidth     : 1,
+            borderRadius    : { topLeft: 5, topRight: 5 },
+            yAxisID         : "yBrk",
+            order           : 2,
+          },
+          {
+            label           : "Coating Jobs",
+            type            : "line",
+            data            : jobData,
+            borderColor     : "rgba(251,191,36,0.45)",
+            backgroundColor : "transparent",
+            borderWidth     : 1.5,
+            borderDash      : [4,4],
+            tension         : 0.35,
+            pointRadius     : 3,
+            pointBackgroundColor: "#fbbf24",
+            fill            : false,
+            yAxisID         : "yJobs",
+            order           : 1,
+          },
+        ],
+      },
+      options: {
+        responsive          : true,
+        maintainAspectRatio : false,
+        animation           : { duration: 600, easing: "easeOutQuart" },
+        interaction         : { mode: "index", intersect: false },
+        plugins: {
+          legend : GLASS_LEGEND,
+          tooltip: {
+            ...GLASS_TOOLTIP,
+            callbacks: {
+              title : items => `  ${items[0].label}`,
+              label : ctx  => {
+                if (ctx.dataset.label === "Coating Jobs") return `  Jobs: ${ctx.raw ?? "—"}`;
+                const v = ctx.raw;
+                if (v === null) return null;
+                return `  Broken: ${v}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { ...axisStyle(), ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 12 }, maxRotation: 0 }, grid: GLASS_GRID },
+          yBrk: {
+            type: "linear", position: "left", beginAtZero: true,
+            ticks: { color: "#f87171", font: { family: CHART_FONT, size: 12 }, stepSize: 1 },
+            grid: { ...GLASS_GRID, color: "rgba(248,113,113,0.05)" },
+            title: { display: true, text: "Broken", color: "#f87171", font: { family: CHART_FONT, size: 12, weight:"700" } },
+          },
+          yJobs: {
+            type: "linear", position: "right", beginAtZero: true,
+            ticks: { color: "#fbbf24", font: { family: CHART_FONT, size: 12 } },
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: "Jobs", color: "#fbbf24", font: { family: CHART_FONT, size: 12, weight:"700" } },
+          },
+        },
+      },
+      plugins: [GLOW_PLUGIN],
+    });
+  }
+}
 /* =====================================================
    REBUILD ALL CHARTS
 ===================================================== */
