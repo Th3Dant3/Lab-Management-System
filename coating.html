@@ -185,9 +185,8 @@
   <div class="header-right">
     <label class="filter-label">Date</label>
     <div class="date-wrap">
-      <input type="date" id="historyDate" class="date-input" />
+      <input type="date" id="historyDate" class="date-input" onchange="applyDateFilter()" />
     </div>
-    <button onclick="applyDateFilter()" class="btn-apply">Apply</button>
     <button id="liveBtn" onclick="resetToToday()" class="btn-today">Today</button>
     <div class="header-divider"></div>
     <span id="refreshTimer" class="refresh-timer">Loading...</span>

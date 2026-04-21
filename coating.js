@@ -2093,11 +2093,11 @@ async function buildWeeklySummary() {
   setWc("wcFlow",   wAvgFlow !== null ? wAvgFlow + "m" : "—", wAvgFlow===null?"":wAvgFlow<=15?"green":wAvgFlow<=30?"yellow":"red");
   if (bestDay !== null && dailyBreakage[bestDay]) {
     const bd = dailyBreakage[bestDay];
-    setWc("wcBest", bd.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " · " + bd.pct.toFixed(2) + "%", "green");
+    setWc("wcBest", bd.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + "\n" + bd.pct.toFixed(2) + "%", "green");
   }
   if (worstDay !== null && dailyBreakage[worstDay]) {
     const wd2 = dailyBreakage[worstDay];
-    setWc("wcWorst", wd2.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + " · " + wd2.pct.toFixed(2) + "%", "red");
+    setWc("wcWorst", wd2.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + "\n" + wd2.pct.toFixed(2) + "%", "red");
   }
 
   // ── Day-by-day grid ──

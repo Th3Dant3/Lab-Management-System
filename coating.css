@@ -1423,8 +1423,8 @@ tbody tr:last-child td { border-bottom: none; }
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 600;
-  color: var(--teal);
-  background: var(--teal-bg);
+  color: #ffffff;
+  background: rgba(255,255,255,0.06);
   border: 1px solid var(--teal-bd);
   padding: 5px 14px;
   border-radius: 999px;
@@ -1437,8 +1437,13 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .summary-week-hint {
   font-family: var(--mono);
-  font-size: 11px;
-  color: rgba(255,255,255,0.4);
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border2);
+  padding: 4px 12px;
+  border-radius: 999px;
 }
 
 /* ── Scorecard ── */
@@ -1482,12 +1487,19 @@ tbody tr:last-child td { border-bottom: none; }
   font-size: 26px;
   font-weight: 700;
   color: var(--white);
-  line-height: 1;
+  line-height: 1.2;
 }
 .sc-val.teal   { color: var(--teal); }
 .sc-val.green  { color: var(--green); }
 .sc-val.yellow { color: var(--yellow); }
 .sc-val.red    { color: var(--red); }
+/* Best/Worst day values are longer strings — shrink them */
+#wcBest, #wcWorst {
+  font-size: 16px;
+  line-height: 1.4;
+  white-space: pre-line;
+  word-break: break-word;
+}
 
 /* ── Section titles ── */
 .summary-section-title {
