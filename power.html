@@ -240,26 +240,55 @@
         <label>AR41</label>
         <select id="filterAR41" onchange="renderFlow()"><option value="">All AR41</option></select>
       </div>
-      <div class="filter-group">
-        <label>From date</label>
-        <input type="date" id="flowDateFrom" onchange="renderFlow()"/>
-      </div>
-      <div class="filter-group">
-        <label>To date</label>
-        <input type="date" id="flowDateTo" onchange="renderFlow()"/>
-      </div>
-      <div class="filter-legend">
-        <span class="fleg-item"><span class="fleg-sq peach"></span>Source → AR41</span>
-        <span class="fleg-item"><span class="fleg-sq peri"></span>AR41 → Breakage</span>
-        <span class="fleg-item"><span class="fleg-sq teal"></span>Brk → Processed</span>
-      </div>
       <div class="flow-count"><span id="flowCount">--</span> jobs</div>
+    </div>
+
+    <!-- Professional Flow Legend -->
+    <div class="flow-legend-panel">
+      <div class="flow-legend-title">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 8h14M9 4l4 4-4 4" stroke-linecap="round"/></svg>
+        RX BREAKAGE JOURNEY — UNDERSTANDING THE FLOW
+      </div>
+      <div class="flow-legend-body">
+
+        <div class="flow-legend-stage">
+          <div class="flow-legend-seg seg-1"></div>
+          <div class="flow-legend-info">
+            <div class="flow-legend-stage-name">① Job in Transit — Source to AR41</div>
+            <div class="flow-legend-stage-desc">The RX job has been scanned out of the ORB or OTB source machine and is now moving through the lab toward the AR41 inspection station. This segment measures total travel and queue time — from the moment the source machine releases the job to the moment the operator picks it up at AR41.</div>
+          </div>
+        </div>
+
+        <div class="flow-legend-arrow">→</div>
+
+        <div class="flow-legend-stage">
+          <div class="flow-legend-seg seg-2"></div>
+          <div class="flow-legend-info">
+            <div class="flow-legend-stage-name">② Breakage Identified — AR41 Scan to Breakage Table</div>
+            <div class="flow-legend-stage-desc">The operator has scanned the job at AR41 and a power or axis defect has been detected. This segment captures how long it took from that initial scan until the breakage was formally recorded at the breakage table — the window in which the failure was confirmed and logged.</div>
+          </div>
+        </div>
+
+        <div class="flow-legend-arrow">→</div>
+
+        <div class="flow-legend-stage">
+          <div class="flow-legend-seg seg-3"></div>
+          <div class="flow-legend-info">
+            <div class="flow-legend-stage-name">③ Breakage Processing — Table Scan to Reorder</div>
+            <div class="flow-legend-stage-desc">The breakage has been logged and the job is now being analyzed, documented, and closed out. This segment reflects how long it took the lab to complete the full breakage workflow — from table entry through final disposition — so the job can be reprocessed or sent back for reorder.</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="flow-legend-footer">
+        Each bar represents one RX job. Width is proportional to time in each phase. Hover any segment for exact timestamps, operator ID, and machine details.
+      </div>
     </div>
 
     <div class="panel">
       <div class="panel-head">
         <span class="panel-title">RX breakage journey</span>
-        <span class="panel-hint">hover any segment for exact times</span>
+        <span class="panel-hint">hover any segment — source machine · AR41 · operator scan · processing</span>
       </div>
       <div id="flowList"><div class="empty">Loading...</div></div>
     </div>
@@ -281,14 +310,6 @@
       <div class="filter-group">
         <label>Material</label>
         <select id="resMaterial" onchange="renderResearch()"><option value="">All materials</option></select>
-      </div>
-      <div class="filter-group">
-        <label>From date</label>
-        <input type="date" id="resDateFrom" onchange="renderResearch()"/>
-      </div>
-      <div class="filter-group">
-        <label>To date</label>
-        <input type="date" id="resDateTo" onchange="renderResearch()"/>
       </div>
       <div class="export-btn-group">
         <button class="export-btn csv" onclick="exportResearchCSV()" title="Export filtered table to CSV">
@@ -406,14 +427,22 @@
 
   </section>
 
-  <!-- ════ WEEKLY SUMMARY ════ -->
+  <!-- ════ SUMMARY — V3 SIGNAL BOARD ════ -->
   <section class="tab" id="t-summary">
 
-    <!-- Week selector bar -->
+    <!-- Top control bar: mode toggle + selectors + export -->
     <div class="filter-bar" id="summaryFilterBar">
-      <div class="filter-group">
+      <div class="sum-mode-toggle">
+        <button class="sum-mode-btn active" id="sumModeWeek" onclick="setSumMode('week')">Weekly</button>
+        <button class="sum-mode-btn" id="sumModeDay" onclick="setSumMode('day')">Daily</button>
+      </div>
+      <div class="filter-group" id="sumWeekGroup">
         <label>Week ending (Sunday)</label>
         <select id="weekSelect" onchange="onWeekChange()"></select>
+      </div>
+      <div class="filter-group" id="sumDayGroup" style="display:none">
+        <label>Select date</label>
+        <input type="date" id="daySelect" onchange="onDayChange()"/>
       </div>
       <div class="sum-week-range" id="sumWeekRange">—</div>
       <button class="export-btn xlsx" style="margin-left:auto" onclick="exportSummaryTXT()" id="sumExportBtn" disabled>
@@ -422,79 +451,141 @@
       </button>
     </div>
 
-    <!-- Stat cards row -->
-    <div class="sum-stat-row" id="sumStatRow">
-      <div class="sum-stat-card">
-        <div class="sum-stat-num c-peach" id="ss-jobs">--</div>
-        <div class="sum-stat-label">Jobs</div>
-      </div>
-      <div class="sum-stat-card">
-        <div class="sum-stat-num c-peri" id="ss-lens">--</div>
-        <div class="sum-stat-label">Lenses broken</div>
-      </div>
-      <div class="sum-stat-card">
-        <div class="sum-stat-num c-teal" id="ss-power">--</div>
-        <div class="sum-stat-label">S-Power events</div>
-      </div>
-      <div class="sum-stat-card">
-        <div class="sum-stat-num c-white" id="ss-axis">--</div>
-        <div class="sum-stat-label">S-Axis events</div>
-      </div>
-      <div class="sum-stat-card">
-        <div class="sum-stat-num c-peach" id="ss-ar41">--</div>
-        <div class="sum-stat-label">Avg AR41→Brk</div>
-      </div>
-      <div class="sum-stat-card">
-        <div class="sum-stat-num c-peri" id="ss-proc">--</div>
-        <div class="sum-stat-label">Avg Brk→Proc</div>
-      </div>
-    </div>
+    <!-- Signal Board shell -->
+    <div class="sb-shell">
 
-    <!-- AI narrative panel -->
-    <div class="panel" id="sumNarrativePanel">
-      <div class="panel-head" style="justify-content:space-between">
-        <span class="panel-title">Weekly breakage report</span>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span class="panel-hint" id="sumGenHint">Generated by AI · for review before sharing</span>
-          <button class="sum-gen-btn" id="sumGenBtn" onclick="generateSummary()">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 0v4h3L6 12V8H3L6 0z" fill="currentColor" stroke="none"/></svg>
-            Generate report
-          </button>
+      <!-- LEFT SIDEBAR: nav -->
+      <div class="sb-sidebar">
+        <div class="sb-sidebar-header">
+          <div class="sb-sidebar-eyebrow" id="sbModeLabel">Weekly</div>
+          <div class="sb-sidebar-date" id="sbDateLabel">—</div>
+        </div>
+        <nav class="sb-nav">
+          <div class="sb-nav-item active" id="sbn-overview"  onclick="sbNav('overview',this)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+            Overview
+          </div>
+          <div class="sb-nav-item" id="sbn-machines" onclick="sbNav('machines',this)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="12" height="8" rx="1"/><path d="M5 4V3M11 4V3M2 8h12" stroke-linecap="round"/></svg>
+            Machines
+          </div>
+          <div class="sb-nav-item" id="sbn-materials" onclick="sbNav('materials',this)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 2" stroke-linecap="round"/></svg>
+            Materials
+          </div>
+          <div class="sb-nav-item" id="sbn-timing" onclick="sbNav('timing',this)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 8h14M9 4l4 4-4 4" stroke-linecap="round"/></svg>
+            Timing
+          </div>
+          <div class="sb-nav-item" id="sbn-report" onclick="sbNav('report',this)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4" stroke-linecap="round"/></svg>
+            Report
+          </div>
+        </nav>
+        <!-- hidden stat cards kept for JS compatibility -->
+        <div style="display:none">
+          <span id="ss-jobs"></span><span id="ss-lens"></span>
+          <span id="ss-power"></span><span id="ss-axis"></span>
+          <span id="ss-ar41"></span><span id="ss-proc"></span>
         </div>
       </div>
 
-      <!-- Empty / loading state -->
-      <div id="sumEmpty" class="sum-empty-state">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 8h8M8 12h6M8 16h4"/></svg>
-        <div>Select a week, then click <strong>Generate report</strong> to build the summary.</div>
+      <!-- RIGHT CONTENT PANES -->
+      <div class="sb-content">
+
+        <!-- ── OVERVIEW ── -->
+        <div class="sb-pane active" id="sbp-overview">
+          <div class="sb-pane-title">Overview</div>
+          <div class="sb-ticker-grid">
+            <div class="sb-ticker">
+              <div class="sb-ticker-val c-peach" id="sbt-jobs">--</div>
+              <div class="sb-ticker-lbl">Total jobs</div>
+            </div>
+            <div class="sb-ticker">
+              <div class="sb-ticker-val c-peri" id="sbt-lens">--</div>
+              <div class="sb-ticker-lbl">Lenses broken</div>
+            </div>
+            <div class="sb-ticker">
+              <div class="sb-ticker-val c-peach" id="sbt-power">--</div>
+              <div class="sb-ticker-lbl">S-Power events</div>
+            </div>
+            <div class="sb-ticker">
+              <div class="sb-ticker-val c-teal" id="sbt-axis">--</div>
+              <div class="sb-ticker-lbl">S-Axis events</div>
+            </div>
+          </div>
+          <div class="sb-section-hd">Breakage by reason</div>
+          <div class="sb-bar-list" id="sbReasonBars"><div class="empty">Loading…</div></div>
+        </div>
+
+        <!-- ── MACHINES ── -->
+        <div class="sb-pane" id="sbp-machines">
+          <div class="sb-pane-title">Jobs by source machine</div>
+          <div class="sb-bar-list" id="sbMachineList"><div class="empty">Loading…</div></div>
+        </div>
+
+        <!-- ── MATERIALS ── -->
+        <div class="sb-pane" id="sbp-materials">
+          <div class="sb-pane-title">Lenses broken by material</div>
+          <div class="sb-bar-list" id="sumMaterialList"><div class="empty">Loading…</div></div>
+        </div>
+
+        <!-- ── TIMING ── -->
+        <div class="sb-pane" id="sbp-timing">
+          <div class="sb-pane-title">Processing times</div>
+          <div class="sb-ticker-grid" style="margin-bottom:20px">
+            <div class="sb-ticker">
+              <div class="sb-ticker-val" id="sbt-ar41">--</div>
+              <div class="sb-ticker-lbl">Avg AR41 → Breakage</div>
+            </div>
+            <div class="sb-ticker">
+              <div class="sb-ticker-val" id="sbt-proc">--</div>
+              <div class="sb-ticker-lbl">Avg Brk → Processed</div>
+            </div>
+          </div>
+          <div class="sb-section-hd">Timing by reason</div>
+          <div class="sb-bar-list" id="sbTimingList"><div class="empty">Loading…</div></div>
+        </div>
+
+        <!-- ── REPORT ── -->
+        <div class="sb-pane" id="sbp-report">
+          <div class="sb-pane-title" id="sumReportTitle">Breakage report</div>
+
+          <div id="sumEmpty" class="sum-empty-state">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 8h8M8 12h6M8 16h4"/></svg>
+            <div id="sumEmptyMsg">Click <strong>Generate report</strong> to build the summary.</div>
+          </div>
+
+          <div id="sumTyping" class="sum-typing" style="display:none">
+            <div class="sum-typing-dots"><span></span><span></span><span></span></div>
+            <span>Analysing breakage data…</span>
+          </div>
+
+          <div id="sumNarrative" class="sum-narrative" style="display:none"></div>
+
+          <div class="sb-report-actions">
+            <span class="panel-hint" id="sumGenHint">Auto-generated from breakage data</span>
+            <button class="sum-gen-btn" id="sumGenBtn" onclick="generateSummary()">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 0v4h3L6 12V8H3L6 0z" fill="currentColor" stroke="none"/></svg>
+              Generate report
+            </button>
+          </div>
+        </div>
+
       </div>
-
-      <!-- AI typing indicator -->
-      <div id="sumTyping" class="sum-typing" style="display:none">
-        <div class="sum-typing-dots"><span></span><span></span><span></span></div>
-        <span>Analysing breakage data…</span>
-      </div>
-
-      <!-- The rendered narrative -->
-      <div id="sumNarrative" class="sum-narrative" style="display:none"></div>
-
     </div>
 
-    <!-- Machine + material breakdown side-by-side -->
-    <div class="grid-equal" id="sumBreakdownGrid" style="display:none">
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">Breakage by machine</span></div>
-        <div class="bar-list" id="sumMachineList"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">Breakage by material</span></div>
-        <div class="bar-list" id="sumMaterialList"></div>
-      </div>
+    <!-- hidden for JS compat -->
+    <div style="display:none">
+      <div id="sumMachineList"></div>
+      <div id="sumBreakdownGrid"></div>
+      <div id="sumStatRow"></div>
     </div>
 
   </section>
 
 </div>
+<div class="gantt-tip" id="ganttTip"></div>
 <script src="power.js"></script>
 </body>
 </html>

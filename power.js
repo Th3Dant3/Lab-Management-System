@@ -267,7 +267,15 @@ function populateFlowFilters() {
 /* ── Tooltip ── */
 const tip = document.getElementById('ganttTip');
 function showTip(e, html) { if(!tip) return; tip.innerHTML = html; tip.style.display = 'block'; moveTip(e); }
-function moveTip(e) { if(!tip) return; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; }
+function moveTip(e) {
+  if(!tip) return;
+  const x = e.clientX + 16;
+  const y = e.clientY + 16;
+  const w = tip.offsetWidth || 280;
+  const h = tip.offsetHeight || 160;
+  tip.style.left = (x + w > window.innerWidth  ? e.clientX - w - 10 : x) + 'px';
+  tip.style.top  = (y + h > window.innerHeight ? e.clientY - h - 10 : y) + 'px';
+}
 function hideTip() { if(!tip) return; tip.style.display = 'none'; }
 document.addEventListener('mousemove', e => { if (tip && tip.style.display === 'block') moveTip(e); });
 
@@ -278,14 +286,11 @@ function renderFlow() {
   const fR   = document.getElementById('filterReason').value;
   const fS   = document.getElementById('filterSource').value;
   const fA   = document.getElementById('filterAR41').value;
-  const from = parseDateInput('flowDateFrom');
-  const to   = parseDateInput('flowDateTo');
 
   let data = [..._brk];
   if (fR) data = data.filter(r => r.BrkReason === fR);
   if (fS) data = data.filter(r => r.BrkSourceMachine === fS);
   if (fA) data = data.filter(r => r.AR41Machine === fA);
-  if (from || to) data = data.filter(r => inDateRange(r.AR41ScanTime || r.BrkTableScanTime, from, to));
 
   document.getElementById('flowCount').textContent = data.length;
   if (!data.length) {
@@ -308,16 +313,59 @@ function renderFlow() {
     const p1    = Math.max(d1 > 0 ? 1 : 0, Math.round(d1 / total * 100));
     const p2    = Math.max(1, Math.round(d2 / total * 100));
     const p3    = Math.max(1, 100 - p1 - p2);
-    const t1    = `<b>Source → AR41</b><br>${r.BrkSourceMachine || '?'}: ${fmtDate(srcTime)}<br>AR41: ${fmtDate(r.AR41ScanTime)}<br>Duration: ${fmtMin(d1)}`;
-    const t2    = `<b>AR41 → Breakage</b><br>AR41: ${fmtDate(r.AR41ScanTime)}<br>Brk Table: ${fmtDate(r.BrkTableScanTime)}<br>Duration: ${fmtMin(d2)}`;
-    const t3    = `<b>Breakage → Processed</b><br>Brk Table: ${fmtDate(r.BrkTableScanTime)}<br>Processed: ${fmtDate(r.BreakageProcessedTime)}<br>Duration: ${fmtMin(d3)}`;
+
+    // Source machine name
+    const srcMachine  = r.BrkSourceMachine || res?.ORBMachine || '?';
+    const ar41Machine = r.AR41Machine || '?';
+    const srcLabel    = src.includes('ORB') ? `ORB — ${srcMachine}` : (src.includes('OTB') ? `OTB — ${srcMachine}` : srcMachine);
+
+    // Operator Scan:
+    // • Historical mode: lives on the _brk row (BREAKAGE_HISTORY col "Operator Scan")
+    // • Live mode S-Power/S-Axis: lives on the PowerResearch row (res.OperatorScan)
+    // • Live mode other reasons: not available in BreakageSummary — would need sheet change
+    const operatorScan = r.OperatorScan || res?.OperatorScan || '—';
+
+    // Build rich tooltip HTML per segment
+    function makeTip(segClass, headerLabel, rows, durationLabel, durationVal, durClass) {
+      const rowsHtml = rows.map(([lbl, val]) =>
+        `<div class="tip-row"><div class="tip-row-label">${lbl}</div><div class="tip-row-val">${val}</div></div>`
+      ).join('<div class="tip-divider"></div>');
+      return `<div class="tip-header ${segClass}">${headerLabel}</div>
+              <div class="tip-body">${rowsHtml}</div>
+              <div class="tip-duration">
+                <span class="tip-duration-label">${durationLabel}</span>
+                <span class="tip-duration-val ${durClass}">${durationVal}</span>
+              </div>`;
+    }
+
+    const t1 = d1 > 0 ? makeTip('seg-peach', '① JOB IN TRANSIT — SOURCE TO AR41', [
+      ['Source Machine', srcLabel],
+      ['Departed Source', fmtDate(srcTime)],
+      ['Arrived AR41', fmtDate(r.AR41ScanTime)],
+      ['AR41 Machine', ar41Machine],
+    ], 'Transit Time', fmtMin(d1), 'seg-peach') : null;
+
+    const t2 = makeTip('seg-peri', '② BREAKAGE IDENTIFIED — AR41 TO TABLE', [
+      ['AR41 Machine', ar41Machine],
+      ['AR41 Scan Time', fmtDate(r.AR41ScanTime)],
+      ['Operator Scan', operatorScan],
+      ['Scan to Breakage Table', fmtDate(r.BrkTableScanTime)],
+    ], 'Identification Time', fmtMin(d2), 'seg-peri');
+
+    const t3 = makeTip('seg-teal', '③ BREAKAGE PROCESSING — TABLE TO REORDER', [
+      ['Operator Scan', operatorScan],
+      ['Breakage Table Scan', fmtDate(r.BrkTableScanTime)],
+      ['Breakage Processed', fmtDate(r.BreakageProcessedTime)],
+      ['Breakage Reason', r.BrkReason || '—'],
+    ], 'Processing Time', fmtMin(d3), 'seg-teal');
+
     return `
       <div class="gantt-row">
         <div class="gantt-rx" title="${r.RxNumber}">${r.RxNumber}</div>
         <div class="gantt-bar">
-          ${d1 > 0 ? `<div class="gantt-seg seg-1" style="width:${p1}%;min-width:2px" data-tip="${t1}" onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p1 > 10 ? fmtMin(d1) : ''}</div>` : ''}
-          <div class="gantt-seg seg-2" style="width:${p2}%;min-width:4px" data-tip="${t2}" onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p2 > 10 ? fmtMin(d2) : ''}</div>
-          <div class="gantt-seg seg-3" style="width:${p3}%;min-width:4px" data-tip="${t3}" onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p3 > 10 ? fmtMin(d3) : ''}</div>
+          ${d1 > 0 && t1 ? `<div class="gantt-seg seg-1" style="width:${p1}%;min-width:2px" data-tip='${t1.replace(/'/g,"&#39;")}' onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p1 > 10 ? fmtMin(d1) : ''}</div>` : ''}
+          <div class="gantt-seg seg-2" style="width:${p2}%;min-width:4px" data-tip='${t2.replace(/'/g,"&#39;")}' onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p2 > 10 ? fmtMin(d2) : ''}</div>
+          <div class="gantt-seg seg-3" style="width:${p3}%;min-width:4px" data-tip='${t3.replace(/'/g,"&#39;")}' onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p3 > 10 ? fmtMin(d3) : ''}</div>
         </div>
         <span class="reason-pill ${reasonPillClass(r.BrkReason)}">${r.BrkReason || '--'}</span>
         <div class="gantt-total">${fmtMin(total)}</div>
@@ -406,20 +454,13 @@ function cylColors(keys) {
    RENDER RESEARCH
 ============================================================ */
 function renderResearch() {
-  const fO   = document.getElementById('resORB').value;
-  const fR   = document.getElementById('resReason').value;
-  const fM   = document.getElementById('resMaterial').value;
-
-  // In historical mode _research === _brk so global date already applied.
-  // Only apply the Research sub-date-filters in live mode.
-  const isHistorical = (document.getElementById('dateSingle')?.value || '') !== '';
-  const from = isHistorical ? null : parseDateInput('resDateFrom');
-  const to   = isHistorical ? null : parseDateInput('resDateTo');
+  const fO = document.getElementById('resORB').value;
+  const fR = document.getElementById('resReason').value;
+  const fM = document.getElementById('resMaterial').value;
 
   let data = [..._research];
   if (fO) data = data.filter(r => (r.BrkSourceMachine || r.ORBMachine) === fO);
   if (fR) data = data.filter(r => r.BrkReason === fR);
-  if (from || to) data = data.filter(r => inDateRange(r.ORBScanTime || r.OTBScanTime, from, to));
 
   // Build Material lookup from _brk — BreakageSummary always has Material populated
   const brkMaterialMap = {};
@@ -442,6 +483,7 @@ function renderResearch() {
   document.getElementById('res-lens').textContent  = totalLens;
 
   // Sph/Cyl charts — show "no Rx data" note in historical mode
+  const isHistorical = (document.getElementById('dateSingle')?.value || '') !== '';
   const noRxData = isHistorical && data.every(r => !r.R_Sph && !r.L_Sph);
 
   ['rsphC','lsphC','rcylC','lcylC'].forEach(id => {
@@ -677,10 +719,13 @@ function inDateRange(dateStr, from, to) {
    RxNumber | AR41Machine | AR41ScanTime | BrkTableScanTime
    BrkSourceMachine | BrkReason | BreakageProcessedTime | LensesBroken
    Material | AR41_to_Breakage_Min | Breakage_to_Processed_Min | Status
+   NOTE: BreakageSummary does NOT include Operator Scan in live mode.
+         Operator Scan is available via PowerResearch (S-Power/S-Axis only)
+         and via BREAKAGE_HISTORY in historical mode.
 
    Live PowerResearch columns:
    RxNumber | OTBMachine | OTBScanTime | ORBMachine | ORBScanTime
-   AR41Machine | AR41ScanTime | BrkSourceMachine | BrkReason | Material
+   AR41Machine | AR41ScanTime | OperatorScan | BrkSourceMachine | BrkReason | Material
    LensOption | BaseCurve | R_Sph | L_Sph | R_Cyl | L_Cyl | R_AddPower ...
 ============================================================ */
 function fv(row, ...keys) {
@@ -747,6 +792,10 @@ function normalizeRow(r) {
     // ── Calculated timing ─────────────────────────────────────
     AR41_to_Breakage_Min:      ar41ToBreakage,
     Breakage_to_Processed_Min: brkToProcessed,
+
+    // ── Operator ──────────────────────────────────────────────
+    // Sheet column "Operator Scan" = the AR41 operator who scanned this job
+    OperatorScan: fv(r, 'OperatorScan', 'Operator Scan'),
 
     // ── Research / Rx fields ──────────────────────────────────
     // BREAKAGE_HISTORY: 'Lens Material'=Material, 'Lens Option'=LensOption, 'Base Curve'=BaseCurve
@@ -999,7 +1048,6 @@ function pingWarm() {
 
 pingWarm();
 setInterval(pingWarm, 4 * 60 * 1000);
-setInterval(loadAll, 5 * 60 * 1000);
 loadAll();
 
 /* ============================================================
@@ -1033,6 +1081,114 @@ function fmtWeekLabel(monday, sunday) {
 
 function fmtShortDate(d) {
   return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+/* ============================================================
+   SUMMARY MODE — Weekly / Daily
+============================================================ */
+let _sumMode = 'week'; // 'week' | 'day'
+
+function setSumMode(mode) {
+  _sumMode = mode;
+
+  document.getElementById('sumModeWeek').classList.toggle('active', mode === 'week');
+  document.getElementById('sumModeDay').classList.toggle('active', mode === 'day');
+  document.getElementById('sumWeekGroup').style.display = mode === 'week' ? '' : 'none';
+  document.getElementById('sumDayGroup').style.display  = mode === 'day'  ? '' : 'none';
+
+  const modeLabel = document.getElementById('sbModeLabel');
+  if (modeLabel) modeLabel.textContent = mode === 'week' ? 'Weekly' : 'Daily';
+  const dateLabel = document.getElementById('sbDateLabel');
+  if (dateLabel) dateLabel.textContent = '—';
+
+  // Update report title
+  const title = document.getElementById('sumReportTitle');
+  if (title) title.textContent = mode === 'week' ? 'Weekly breakage report' : 'Daily breakage report';
+
+  // Reset report state
+  _sumCurrentNarrative = '';
+  _sumCurrentStats = null;
+  document.getElementById('sumEmpty').style.display     = '';
+  document.getElementById('sumTyping').style.display    = 'none';
+  document.getElementById('sumNarrative').style.display = 'none';
+  document.getElementById('sumNarrative').innerHTML     = '';
+  document.getElementById('sumBreakdownGrid').style.display = 'none';
+  document.getElementById('sumExportBtn').disabled = true;
+  document.getElementById('sumWeekRange').textContent = '—';
+  ['ss-jobs','ss-lens','ss-power','ss-axis','ss-ar41','ss-proc']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '--'; });
+
+  // If switching to day, default to today
+  if (mode === 'day') {
+    const dayInput = document.getElementById('daySelect');
+    if (dayInput && !dayInput.value) {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+      dayInput.value = today;
+    }
+    onDayChange(/*silent=*/true);
+  } else {
+    onWeekChange(/*silent=*/true);
+  }
+}
+
+async function onDayChange(silent) {
+  const dateVal = document.getElementById('daySelect').value;
+  if (!dateVal) return;
+
+  const d = new Date(dateVal + 'T00:00:00');
+  const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const rangeEl = document.getElementById('sumWeekRange');
+  if (rangeEl) rangeEl.textContent = label;
+
+  const genBtn = document.getElementById('sumGenBtn');
+  if (genBtn) genBtn.disabled = true;
+  ['ss-jobs','ss-lens','ss-power','ss-axis','ss-ar41','ss-proc']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '…'; });
+
+  let dBrk = [];
+  const todayStr = new Date().toLocaleDateString('en-CA');
+
+  try {
+    if (dateVal === todayStr) {
+      // Live data for today
+      dBrk = _allBrk.filter(r => {
+        const ds = r.AR41ScanTime || r.BrkTableScanTime;
+        if (!ds) return false;
+        const rd = new Date(ds).toLocaleDateString('en-CA');
+        return rd === todayStr;
+      });
+    } else {
+      const raw = await fetchTab('breakageSummary', dateVal, dateVal);
+      dBrk = (Array.isArray(raw) ? raw : []).map(normalizeRow);
+    }
+  } catch(e) {
+    console.error('Daily summary fetch error:', e);
+    dBrk = [];
+  }
+
+  if (genBtn) genBtn.disabled = false;
+
+  const totalJobs = dBrk.length;
+  const totalLens = dBrk.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
+  const sPower    = dBrk.filter(r => (r.BrkReason || '').toLowerCase().includes('power')).length;
+  const sAxis     = dBrk.filter(r => (r.BrkReason || '').toLowerCase().includes('axis')).length;
+  const avgAR41   = avgArr(dBrk.map(r => r.AR41_to_Breakage_Min));
+  const avgProc   = avgArr(dBrk.map(r => r.Breakage_to_Processed_Min));
+
+  _sumCurrentStats = { week: { label }, wBrk: dBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, isDaily: true, dateLabel: label };
+
+  buildSBPanes({ wBrk: dBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, periodLabel: label });
+
+  if (!silent) {
+    _sumCurrentNarrative = '';
+    document.getElementById('sumEmpty').style.display     = '';
+    document.getElementById('sumTyping').style.display    = 'none';
+    document.getElementById('sumNarrative').style.display = 'none';
+    document.getElementById('sumNarrative').innerHTML     = '';
+    const exportBtn = document.getElementById('sumExportBtn');
+    if (exportBtn) exportBtn.disabled = true;
+  }
 }
 
 function buildWeekOptions() {
@@ -1122,23 +1278,7 @@ async function onWeekChange(silent) {
 
   _sumCurrentStats = { week, wBrk, wRes: [], totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc };
 
-  document.getElementById('ss-jobs').textContent  = totalJobs  || '--';
-  document.getElementById('ss-lens').textContent  = totalLens  || '--';
-  document.getElementById('ss-power').textContent = sPower     || '--';
-  document.getElementById('ss-axis').textContent  = sAxis      || '--';
-  document.getElementById('ss-ar41').textContent  = fmtMin(avgAR41);
-  document.getElementById('ss-proc').textContent  = fmtMin(avgProc);
-
-  const machAgg = {};
-  wBrk.forEach(r => { const m = r.BrkSourceMachine || 'Unknown'; machAgg[m] = (machAgg[m] || 0) + 1; });
-  buildBarList('sumMachineList', Object.entries(machAgg).sort((a, b) => b[1] - a[1]).map(([l, v], i) => [l, v, v, CLR.series[i % CLR.series.length]]));
-
-  const matAgg = {};
-  wBrk.forEach(r => { const m = r.Material || 'Unknown'; matAgg[m] = (matAgg[m] || 0) + (parseInt(r.LensesBroken) || 0); });
-  buildBarList('sumMaterialList', Object.entries(matAgg).sort((a, b) => b[1] - a[1]).map(([l, v], i) => [l, v, v, CLR.series[i % CLR.series.length]]));
-
-  const grid = document.getElementById('sumBreakdownGrid');
-  if (grid) grid.style.display = totalJobs > 0 ? '' : 'none';
+  buildSBPanes({ wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, periodLabel: week.label });
 
   if (!silent) {
     _sumCurrentNarrative = '';
@@ -1151,6 +1291,115 @@ async function onWeekChange(silent) {
   }
 }
 
+/* ============================================================
+   SIGNAL BOARD — populate panes + nav
+============================================================ */
+function sbBuildBarRows(elId, entries, colorFn) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const max = entries[0]?.[1] || 1;
+  el.innerHTML = entries.map(([label, val], i) => `
+    <div class="sb-bar-row" style="transition-delay:${i * 55}ms">
+      <div class="sb-bar-lbl" title="${label}">${label}</div>
+      <div class="sb-bar-track">
+        <div class="sb-bar-fill" style="background:${colorFn(i)};width:0%" data-w="${Math.round(val / max * 100)}%"></div>
+      </div>
+      <div class="sb-bar-val">${val}</div>
+    </div>`).join('');
+  requestAnimationFrame(() => {
+    el.querySelectorAll('.sb-bar-row').forEach(r => r.classList.add('sb-in'));
+    el.querySelectorAll('.sb-bar-fill').forEach(b => { b.style.width = b.dataset.w; });
+  });
+}
+
+function sbAnimateTickers() {
+  document.querySelectorAll('.sb-ticker-val').forEach(el => {
+    el.classList.remove('sb-in');
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('sb-in')));
+  });
+}
+
+function buildSBPanes({ wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, periodLabel }) {
+  // Update sidebar date label
+  const dateEl = document.getElementById('sbDateLabel');
+  if (dateEl) dateEl.textContent = periodLabel || '—';
+
+  // Ticker values
+  const tickerMap = {
+    'sbt-jobs':  totalJobs  || '--',
+    'sbt-lens':  totalLens  || '--',
+    'sbt-power': sPower     || '--',
+    'sbt-axis':  sAxis      || '--',
+    'sbt-ar41':  fmtMin(avgAR41),
+    'sbt-proc':  fmtMin(avgProc),
+  };
+  Object.entries(tickerMap).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  });
+  sbAnimateTickers();
+
+  // Reason bars
+  const rsnAgg = {};
+  wBrk.forEach(r => { const k = r.BrkReason || 'Unknown'; rsnAgg[k] = (rsnAgg[k] || 0) + 1; });
+  const rsnEntries = Object.entries(rsnAgg).sort((a, b) => b[1] - a[1]);
+  const rsnColors = [CLR.peach, CLR.peri, CLR.teal, CLR.series[3], CLR.series[4]];
+  sbBuildBarRows('sbReasonBars', rsnEntries, i => rsnColors[i % rsnColors.length]);
+
+  // Machine bars
+  const machAgg = {};
+  wBrk.forEach(r => { const m = r.BrkSourceMachine || 'Unknown'; machAgg[m] = (machAgg[m] || 0) + 1; });
+  const machEntries = Object.entries(machAgg).sort((a, b) => b[1] - a[1]);
+  sbBuildBarRows('sbMachineList', machEntries, i => CLR.series[i % CLR.series.length]);
+
+  // Material bars
+  const matAgg = {};
+  wBrk.forEach(r => { const m = r.Material || 'Unknown'; matAgg[m] = (matAgg[m] || 0) + (parseInt(r.LensesBroken) || 0); });
+  const matEntries = Object.entries(matAgg).sort((a, b) => b[1] - a[1]);
+  sbBuildBarRows('sumMaterialList', matEntries, i => CLR.series[i % CLR.series.length]);
+
+  // Timing bars by reason
+  const timingEl = document.getElementById('sbTimingList');
+  if (timingEl) {
+    const timingEntries = rsnEntries.map(([reason]) => {
+      const rows = wBrk.filter(r => (r.BrkReason || 'Unknown') === reason);
+      const avg = avgArr(rows.map(r => r.AR41_to_Breakage_Min));
+      return [reason, Math.round(avg), fmtMin(avg)];
+    }).filter(e => e[1] > 0).sort((a, b) => b[1] - a[1]);
+    const maxT = timingEntries[0]?.[1] || 1;
+    timingEl.innerHTML = timingEntries.map(([label, val, display], i) => `
+      <div class="sb-bar-row" style="transition-delay:${i * 55}ms">
+        <div class="sb-bar-lbl" title="${label}">${label}</div>
+        <div class="sb-bar-track">
+          <div class="sb-bar-fill" style="background:${rsnColors[i % rsnColors.length]};width:0%" data-w="${Math.round(val / maxT * 100)}%"></div>
+        </div>
+        <div class="sb-bar-val" style="min-width:52px">${display}</div>
+      </div>`).join('');
+    requestAnimationFrame(() => {
+      timingEl.querySelectorAll('.sb-bar-row').forEach(r => r.classList.add('sb-in'));
+      timingEl.querySelectorAll('.sb-bar-fill').forEach(b => { b.style.width = b.dataset.w; });
+    });
+  }
+}
+
+function sbNav(pane, btn) {
+  document.querySelectorAll('.sb-nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.sb-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const el = document.getElementById('sbp-' + pane);
+  if (!el) return;
+  el.classList.add('active');
+  // Re-trigger bar animations on pane switch
+  requestAnimationFrame(() => {
+    el.querySelectorAll('.sb-bar-row').forEach(r => { r.classList.remove('sb-in'); requestAnimationFrame(() => r.classList.add('sb-in')); });
+    el.querySelectorAll('.sb-bar-fill').forEach(b => { b.style.width = '0%'; setTimeout(() => { b.style.width = b.dataset.w; }, 30); });
+    el.querySelectorAll('.sb-ticker-val').forEach(v => { v.classList.remove('sb-in'); requestAnimationFrame(() => v.classList.add('sb-in')); });
+  });
+}
+
+/* ============================================================
+   SUMMARY PAYLOAD + GENERATE
+============================================================ */
 function buildSummaryPayload(stats) {
   const { week, wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc } = stats;
 
@@ -1209,12 +1458,15 @@ function generateSummary() {
   }, 200);
 }
 
-/* ── Pure data-driven report builder — no API needed ── */
+/* ── Pure data-driven report builder — weekly or daily ── */
 function buildDataReport(stats) {
-  const { week, wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc } = stats;
+  const { wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, isDaily, dateLabel } = stats;
+  const periodLabel = isDaily ? dateLabel : stats.week.label;
+  const periodWord  = isDaily ? 'day' : 'week';
+  const periodTitle = isDaily ? 'Day at a Glance' : 'Week at a Glance';
 
   if (totalJobs === 0) {
-    return `<h2>Week at a Glance</h2><p>No breakage events recorded for the week of <strong>${week.label}</strong>. Clean week — no action required.</p>`;
+    return `<h2>${periodTitle}</h2><p>No breakage events recorded for <strong>${periodLabel}</strong>. Clean ${periodWord} — no action required.</p>`;
   }
 
   // ── Aggregations ──────────────────────────────────────────
@@ -1249,14 +1501,14 @@ function buildDataReport(stats) {
   const powerPct  = totalJobs > 0 ? Math.round(sPower / totalJobs * 100) : 0;
   const axisPct   = totalJobs > 0 ? Math.round(sAxis  / totalJobs * 100) : 0;
 
-  // ── Section 1: Week at a Glance ───────────────────────────
-  let glance = `<h2>Week at a Glance</h2>`;
-  glance += `<p>The week of <strong>${week.label}</strong> recorded <strong>${totalJobs} breakage job${totalJobs!==1?'s':''}</strong> with a total of <strong>${totalLens} lens${totalLens!==1?'es':''} broken</strong>. `;
+  // ── Section 1: Glance ─────────────────────────────────────
+  let glance = `<h2>${periodTitle}</h2>`;
+  glance += `<p><strong>${periodLabel}</strong> recorded <strong>${totalJobs} breakage job${totalJobs!==1?'s':''}</strong> with a total of <strong>${totalLens} lens${totalLens!==1?'es':''} broken</strong>. `;
 
   if (lowVol) {
-    glance += `This was a light week with minimal breakage activity. `;
+    glance += `This was a light ${periodWord} with minimal breakage activity. `;
   } else if (highVol) {
-    glance += `This was a high-volume breakage week that warrants close review. `;
+    glance += `This was a high-volume ${periodWord} that warrants close review. `;
   } else {
     glance += `Volume was within normal range. `;
   }
@@ -1271,7 +1523,7 @@ function buildDataReport(stats) {
   // ── Section 2: Breakage Reasons ───────────────────────────
   let reasons = `<h2>Breakage Reasons</h2>`;
   if (reasonList.length === 1) {
-    reasons += `<p>All <strong>${totalJobs} jobs</strong> were attributed to <strong>${topReason[0]}</strong> this week.</p>`;
+    reasons += `<p>All <strong>${totalJobs} jobs</strong> were attributed to <strong>${topReason[0]}</strong> this ${periodWord}.</p>`;
   } else {
     reasons += `<p><strong>${topReason[0]}</strong> was the leading cause with <strong>${topReason[1]} job${topReason[1]!==1?'s':''}</strong> (${Math.round(topReason[1]/totalJobs*100)}% of total). `;
     if (reasonList.length > 1) {
@@ -1318,9 +1570,9 @@ function buildDataReport(stats) {
 
   // Volume flag
   if (highVol) {
-    obs += `<li><strong>High breakage volume</strong> — ${totalJobs} jobs this week is elevated. Review if any process changes coincide with this period.</li>`;
+    obs += `<li><strong>High breakage volume</strong> — ${totalJobs} jobs this ${periodWord} is elevated. Review if any process changes coincide with this period.</li>`;
   } else if (lowVol) {
-    obs += `<li><strong>Low breakage volume</strong> — only ${totalJobs} job${totalJobs!==1?'s':''} this week. No major concerns.</li>`;
+    obs += `<li><strong>Low breakage volume</strong> — only ${totalJobs} job${totalJobs!==1?'s':''} this ${periodWord}. No major concerns.</li>`;
   } else {
     obs += `<li><strong>Normal volume</strong> — ${totalJobs} jobs is within expected range.</li>`;
   }
@@ -1360,15 +1612,17 @@ function buildDataReport(stats) {
 
 function exportSummaryTXT() {
   if (!_sumCurrentNarrative || !_sumCurrentStats) return;
-  const { totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, week } = _sumCurrentStats;
+  const { totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, week, isDaily, dateLabel } = _sumCurrentStats;
+  const periodLabel = isDaily ? dateLabel : week.label;
+  const reportType  = isDaily ? 'DAILY' : 'WEEKLY';
 
   const tmp     = document.createElement('div');
   tmp.innerHTML = _sumCurrentNarrative;
   const plain   = tmp.innerText || tmp.textContent || '';
 
   const header = [
-    `SURFACE FLOW — WEEKLY BREAKAGE REPORT`,
-    `Week: ${week.label}`,
+    `SURFACE FLOW — ${reportType} BREAKAGE REPORT`,
+    `Period: ${periodLabel}`,
     `Generated: ${new Date().toLocaleString()}`,
     ``,
     `SUMMARY STATISTICS`,
@@ -1386,7 +1640,10 @@ function exportSummaryTXT() {
   const blob = new Blob([header + plain], { type: 'text/plain;charset=utf-8;' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
-  a.download = `breakage_summary_${week.from.toISOString().slice(0, 10)}.txt`;
+  const fileDate = isDaily
+    ? document.getElementById('daySelect')?.value || new Date().toISOString().slice(0,10)
+    : (week.from ? week.from.toISOString().slice(0,10) : new Date().toISOString().slice(0,10));
+  a.download = `breakage_${isDaily ? 'daily' : 'weekly'}_${fileDate}.txt`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
