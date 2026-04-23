@@ -2,7 +2,8 @@ const AUTH_API =
   "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
 
 /**************************************************
- * LOADER MAP — routes each user to their screen
+ * LOADER MAP — users with a personal loader go there first
+ * Anyone not listed falls back to index.html
  **************************************************/
 const LOADER_MAP = {
   "BLOPEZ":        "loader_BLOPEZ.html",
@@ -13,10 +14,6 @@ const LOADER_MAP = {
   "AIVANOVSKI":    "loader_AIVANOVSKI.html",
   "SANDERSON":     "loader_SANDERSON.html"
 };
-
-/**************************************************
- * INIT
- **************************************************/
 document.addEventListener("DOMContentLoaded", () => {
   const userEl     = document.getElementById("username");
   const passwordEl = document.getElementById("password");
@@ -57,7 +54,7 @@ function setLoading(isLoading) {
   const btn     = document.getElementById("loginBtn");
   const btnText = document.getElementById("loginBtnText");
   if (!btn || !btnText) return;
-  btn.disabled      = isLoading;
+  btn.disabled        = isLoading;
   btnText.textContent = isLoading ? "Signing In..." : "Sign In";
 }
 
@@ -129,25 +126,33 @@ async function handleLoginResponse(data, originalPassword) {
   }
 
   if (data.status === "SUCCESS") {
-
-    // Build full name from firstName + lastName returned by API
     const fullName = ((data.firstName || "") + " " + (data.lastName || "")).trim()
                      || data.username;
 
-    // Save everything to sessionStorage
-    sessionStorage.setItem("lms_logged_in",  "true");
-    sessionStorage.setItem("lms_user",        data.username);
-    sessionStorage.setItem("lms_role",        data.role    || "");
-    sessionStorage.setItem("lms_subrole",     data.subRole || "");
-    sessionStorage.setItem("lms_fullname",    fullName);
-    sessionStorage.setItem("lms_visibility",  JSON.stringify(data.visibility || {}));
+    // ── Visibility: new structure has departments + features ──
+    const visibility   = data.visibility || {};
+    const departments  = visibility.departments || {};
+    const features     = visibility.features    || {};
+
+    // Core session
+    sessionStorage.setItem("lms_logged_in",   "true");
+    sessionStorage.setItem("lms_user",         data.username);
+    sessionStorage.setItem("lms_role",         data.role    || "");
+    sessionStorage.setItem("lms_subrole",      data.subRole || "");
+    sessionStorage.setItem("lms_fullname",     fullName);
+    sessionStorage.setItem("lms_firstname",    data.firstName || "");
+    sessionStorage.setItem("lms_lastname",     data.lastName  || "");
+
+    // Visibility — stored separately for easy access on dashboard
+    sessionStorage.setItem("lms_visibility",   JSON.stringify(visibility));
+    sessionStorage.setItem("lms_departments",  JSON.stringify(departments));
+    sessionStorage.setItem("lms_features",     JSON.stringify(features));
 
     setProgress(100);
     setMessage("Access granted. Redirecting...", "success");
 
-    // Route to personal loader or fall back to index
+    // Route to personal loader if one exists, otherwise index.html
     const loader = LOADER_MAP[data.username] || "index.html";
-
     setTimeout(() => {
       window.location.replace(loader);
     }, 400);
@@ -190,4 +195,45 @@ async function setPassword(username, password) {
     setMessage("Password setup failed.", "error");
     setProgress(0);
   }
+}
+
+/**************************************************
+ * VISIBILITY HELPERS
+ * Use these anywhere in your dashboard JS
+ *
+ * canAccessDept("Production")
+ * canAccessFeature("Production_SurfaceWorkflow")
+ **************************************************/
+function canAccessDept(deptKey) {
+  const depts = JSON.parse(sessionStorage.getItem("lms_departments") || "{}");
+  return depts[deptKey] === true;
+}
+
+function canAccessFeature(featureKey) {
+  const feats = JSON.parse(sessionStorage.getItem("lms_features") || "{}");
+  return feats[featureKey] === true;
+}
+
+function applyVisibility() {
+  // Hide sidebar sections where dept gate = false
+  // Requires: data-dept="Production" on sidebar elements
+  document.querySelectorAll("[data-dept]").forEach(el => {
+    const dept = el.getAttribute("data-dept");
+    el.style.display = canAccessDept(dept) ? "" : "none";
+  });
+
+  // Hide tabs/features where feature = false
+  // Requires: data-feature="Production_SurfaceWorkflow" on tab elements
+  document.querySelectorAll("[data-feature]").forEach(el => {
+    const key = el.getAttribute("data-feature");
+    el.style.display = canAccessFeature(key) ? "" : "none";
+  });
+}
+
+function requireAuth() {
+  if (sessionStorage.getItem("lms_logged_in") !== "true") {
+    window.location.replace("login.html");
+    return false;
+  }
+  return true;
 }

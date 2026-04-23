@@ -586,16 +586,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Show the UI immediately — don't wait for API
   unlockPage();
 
-  const username = sessionStorage.getItem("lms_user");
+  // Apply visibility from sessionStorage immediately (no extra API call needed)
+  applyVisibilityRules();
 
   // Data loads in background and fills in when ready
-  Promise.all([
-    fetchDashboard(),
-    fetchVisibility(username)
-  ])
-  .then(([dashboardData, visibilityData]) => {
+  fetchDashboard()
+  .then(dashboardData => {
     renderDashboard(dashboardData);
-    applyVisibilityRules(visibilityData.visibility || {});
     if (window.dismissLoader) window.dismissLoader();
   })
   .catch(err => {
@@ -873,22 +870,7 @@ async function fetchDashboard() {
   }
 }
 
-/* =====================================================
-   FETCH VISIBILITY
-===================================================== */
-async function fetchVisibility(username) {
-  console.time("VISIBILITY_API");
-  if (!username) return { status: "SUCCESS", visibility: {} };
-  try {
-    const res  = await fetch(`${AUTH_API}?action=visibility&username=${encodeURIComponent(username)}`);
-    const data = await res.json();
-    console.timeEnd("VISIBILITY_API");
-    return data || { status: "SUCCESS", visibility: {} };
-  } catch (err) {
-    console.error("Visibility API failed", err);
-    return { status: "SUCCESS", visibility: {} };
-  }
-}
+
 
 /* =====================================================
    THRESHOLD COLOR HELPERS
@@ -942,41 +924,89 @@ function renderDashboard(data) {
 }
 
 /* =====================================================
-   VISIBILITY RULES
+   VISIBILITY RULES — reads from sessionStorage
+   set at login by login.js
 ===================================================== */
-function applyVisibilityRules(visibility) {
-  const map = {
-    "Scanner Map":        "#scanner-card",
-    "Investigation Hold": "#investigation-card",
-    "True Curve":         "#truecurve-card",
-    "Tools":              "#tools-card",
-    "Coating":            "#coating-card",
-    "Incoming Jobs":      "#incoming-card",
-    "Admin":              ".admin-only"
+function applyVisibilityRules() {
+
+  // Try new separate keys first, fall back to lms_visibility for compatibility
+  let departments = JSON.parse(sessionStorage.getItem("lms_departments") || "null");
+  let features    = JSON.parse(sessionStorage.getItem("lms_features")    || "null");
+
+  if (!departments || !features) {
+    const visibility = JSON.parse(sessionStorage.getItem("lms_visibility") || "{}");
+    departments = visibility.departments || {};
+    features    = visibility.features    || {};
+  }
+
+  console.log("DEPARTMENTS:", departments);
+  console.log("FEATURES:", features);
+
+  // ── 1. Sidebar nav tabs — hide entire sections ──
+  const deptNavMap = {
+    "LMS_Command": "operations",
+    "Production":  "production",
+    "System":      "system",
+    "Inventory":   "inventory"
   };
 
-  // Hide all gated cards first
-  Object.values(map).forEach(sel => {
-    document.querySelectorAll(sel).forEach(el => el.style.display = "none");
-  });
+  let firstVisibleTab = null;
 
-  // Show permitted cards
-  Object.keys(map).forEach(feature => {
-    if (visibility[feature]) {
-      document.querySelectorAll(map[feature]).forEach(el => el.style.display = "flex");
+  Object.entries(deptNavMap).forEach(([deptKey, tabId]) => {
+    const navBtn  = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+    const section = document.getElementById(tabId);
+    const hasAccess = departments[deptKey] === true;
+
+    if (!hasAccess) {
+      if (navBtn)  navBtn.style.display = "none";
+      if (section) {
+        section.style.display = "none";
+        section.classList.remove("active");
+      }
+    } else {
+      if (navBtn)  navBtn.style.display = "";
+      if (section) section.style.display = "";
+      if (!firstVisibleTab) firstVisibleTab = tabId;
     }
   });
 
-  // Power Analysis Tool
-  if (visibility["Coating"] || visibility["Production"]) {
-    const pw = document.getElementById("power-card");
-    if (pw) pw.style.display = "flex";
-  }
+  // ── 2. Feature cards — hide individual cards ──
+  const featureCardMap = {
+    "LMS_Command_InvestigationHold": "#investigation-card",
+    "LMS_Command_LensIntake":        "#tools-card",
+    "LMS_Command_TrueCurve":         "#truecurve-card",
+    "Production_CoatingBreakage":    "#coating-card",
+    "Production_PowerAnalysis":      "#power-card",
+    "System_ScannerMap":             "#scanner-card",
+    "Inventory_IncomingJobs":        "#incoming-card"
+  };
 
-  // Re-run tab animations NOW that cards are visible
-  const activeSection = document.querySelector(".tab-content.active");
-  if (activeSection) {
-    setTimeout(() => animateTab(activeSection.id), 60);
+  // Hide all feature cards first
+  Object.values(featureCardMap).forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => el.style.display = "none");
+  });
+
+  // Show only permitted cards
+  Object.entries(featureCardMap).forEach(([featureKey, sel]) => {
+    if (features[featureKey] === true) {
+      document.querySelectorAll(sel).forEach(el => el.style.display = "flex");
+    }
+  });
+
+  // ── 3. Switch active tab to first accessible one ──
+  const allTabs     = document.querySelectorAll(".nav-item[data-tab]");
+  const allSections = document.querySelectorAll(".tab-content");
+
+  if (firstVisibleTab) {
+    allTabs.forEach(t     => t.classList.remove("active"));
+    allSections.forEach(s => s.classList.remove("active"));
+
+    const activeNav     = document.querySelector(`.nav-item[data-tab="${firstVisibleTab}"]`);
+    const activeSection = document.getElementById(firstVisibleTab);
+    if (activeNav)     activeNav.classList.add("active");
+    if (activeSection) activeSection.classList.add("active");
+
+    setTimeout(() => animateTab(firstVisibleTab), 80);
   }
 }
 
