@@ -21,6 +21,15 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 
 <link rel="preload" href="style-index.css" as="style">
 <link rel="stylesheet" href="style-index.css">
+<style>
+  .card--training { border-color: rgba(245,158,11,0.18); }
+  .card-accent--amber { background: linear-gradient(90deg, rgba(245,158,11,0.5), transparent); }
+  .badge--training { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.25); }
+  .card-btn--amber { background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.1)); border: 1px solid rgba(245,158,11,0.3); color: #f59e0b; }
+  .card-btn--amber:hover { background: linear-gradient(135deg, rgba(245,158,11,0.3), rgba(245,158,11,0.15)); }
+  .card-btn--amber:disabled { opacity: 0.5; cursor: not-allowed; }
+  .wip-notice { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #f59e0b; opacity: 0.7; margin-bottom: 12px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+</style>
 </head>
 
 <body>
@@ -168,6 +177,20 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
           <path d="M5 8h14M5 8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/>
         </svg>
         <span>Inventory</span>
+      </div>
+    </div>
+  </button>
+
+  <button class="nav-item nav-item--anim" data-tab="training">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-training" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span>Training / Quality</span>
       </div>
     </div>
   </button>
@@ -386,9 +409,48 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
   </section>
 
+  <!-- TRAINING / QUALITY TAB -->
+  <section id="training" class="tab-content">
+    <div class="module-head">
+      <div class="module-label">Training &amp; Quality</div>
+    </div>
+    <div class="cards-grid">
+
+      <!-- Facility Breakage — Training Coordinator + Quality -->
+      <div id="facility-breakage-card" class="card card--training" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#f59e0b"></canvas>
+        <div class="card-accent card-accent--amber"></div>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Facility Breakage</h3>
+              <span class="badge badge--training">Training / Quality</span>
+            </div>
+            <p class="card-desc">Facility-wide breakage tracking, trend analysis, and quality reporting</p>
+          </div>
+          <div class="card-tags">
+            <span class="tag">Coating</span>
+            <span class="tag">Surface</span>
+            <span class="tag">AR</span>
+            <span class="tag">Trends</span>
+          </div>
+          <div class="wip-notice">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            Under Development
+          </div>
+          <button class="card-btn card-btn--amber" disabled>
+            Coming Soon
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
 </main>
 
 <script defer src="index.js"></script>
 
 </body>
-</html>
+</html><!-- Training/Quality styles injected -->

@@ -204,8 +204,8 @@
       <button class="tab" onclick="showTab('reasons',this)">Top Reasons</button>
       <button class="tab" onclick="showTab('machines',this)">Machine Analysis</button>
       <button class="tab" onclick="showTab('compare',this)">Date Comparison</button>
-      <button class="tab" onclick="showTab('daily',this)">Daily Summary</button>
-      <button class="tab" onclick="showTab('weekly',this)">Weekly Summary</button>
+      <button class="tab" id="dailySummaryBtn" onclick="showTab('daily',this)">Daily Summary</button>
+      <button class="tab" id="weeklySummaryBtn" onclick="showTab('weekly',this)">Weekly Summary</button>
     </div>
     <div class="tabs-actions">
       <button class="btn-export-csv" onclick="exportCSV()">⬇ Export CSV</button>
@@ -465,5 +465,27 @@
 </div>
 
 <script src="coating.js"></script>
+
+<script>
+(function applyRoleRestrictions() {
+  const role     = (sessionStorage.getItem("lms_role")    || "").trim().toUpperCase();
+  const subRole  = (sessionStorage.getItem("lms_subrole") || "").trim().toUpperCase();
+  const username = (sessionStorage.getItem("lms_user")    || "").trim().toUpperCase();
+
+  const ALLOWED_ROLES     = ["ADMIN", "MANAGER", "SR DIRECTOR", "SR MANAGER"];
+  const ALLOWED_USERNAMES = []; // add usernames here e.g. "JSMITH", "CBAYLIS"
+
+  const hasAccess =
+    ALLOWED_ROLES.some(r => role.includes(r) || subRole.includes(r)) ||
+    ALLOWED_USERNAMES.includes(username);
+
+  if (!hasAccess) {
+    const daily  = document.getElementById("dailySummaryBtn");
+    const weekly = document.getElementById("weeklySummaryBtn");
+    if (daily)  daily.style.display  = "none";
+    if (weekly) weekly.style.display = "none";
+  }
+})();
+</script>
 </body>
 </html>

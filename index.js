@@ -153,6 +153,76 @@ function initNavAnimations() {
   animProd(document.getElementById("nav-canvas-prod"));
   animSys(document.getElementById("nav-canvas-sys"));
   animInv(document.getElementById("nav-canvas-inv"));
+  animTraining(document.getElementById("nav-canvas-training"));
+}
+
+/* Training/Quality nav — checklist rows filling in like quality checks passing */
+function animTraining(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const TEAL = "#2dd4bf";
+
+  const rows = Array.from({ length: 5 }, (_, i) => ({
+    y:       8 + i * 12,
+    fill:    Math.random(),
+    target:  0.6 + Math.random() * 0.4,
+    speed:   0.008 + Math.random() * 0.006,
+    checked: Math.random() > 0.3,
+    phase:   Math.random() * Math.PI * 2,
+  }));
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    rows.forEach(r => {
+      r.fill  += (r.target - r.fill) * r.speed;
+      r.phase += 0.025;
+      if (Math.abs(r.fill - r.target) < 0.01) {
+        r.target  = 0.4 + Math.random() * 0.6;
+        r.checked = Math.random() > 0.25;
+      }
+
+      const barW  = (W - 22) * r.fill;
+      const alpha = 0.25 + r.fill * 0.45;
+      const pulse = 0.5 + 0.5 * Math.sin(r.phase);
+
+      // track
+      ctx.fillStyle = `rgba(45,212,191,0.07)`;
+      ctx.beginPath();
+      ctx.roundRect(18, r.y, W - 22, 7, 3);
+      ctx.fill();
+
+      // filled bar
+      ctx.fillStyle = `rgba(45,212,191,${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(18, r.y, barW, 7, 3);
+      ctx.fill();
+
+      // check dot on left
+      ctx.beginPath();
+      ctx.arc(9, r.y + 3.5, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = r.checked
+        ? `rgba(45,212,191,${0.6 + pulse * 0.4})`
+        : `rgba(45,212,191,0.12)`;
+      ctx.fill();
+
+      // checkmark inside dot
+      if (r.checked) {
+        ctx.strokeStyle = `rgba(5,20,20,0.9)`;
+        ctx.lineWidth   = 1.2;
+        ctx.lineCap     = "round";
+        ctx.beginPath();
+        ctx.moveTo(6.5, r.y + 3.5);
+        ctx.lineTo(8.5, r.y + 5.5);
+        ctx.lineTo(12,  r.y + 1.5);
+        ctx.stroke();
+      }
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
 }
 
 /* Inventory nav — stacked bar chart filling up like stock levels */
@@ -947,7 +1017,8 @@ function applyVisibilityRules() {
     "LMS_Command": "operations",
     "Production":  "production",
     "System":      "system",
-    "Inventory":   "inventory"
+    "Inventory":   "inventory",
+    "Training":    "training"
   };
 
   let firstVisibleTab = null;
@@ -978,7 +1049,8 @@ function applyVisibilityRules() {
     "Production_CoatingBreakage":    "#coating-card",
     "Production_PowerAnalysis":      "#power-card",
     "System_ScannerMap":             "#scanner-card",
-    "Inventory_IncomingJobs":        "#incoming-card"
+    "Inventory_IncomingJobs":        "#incoming-card",
+    "Training_TrainingPortal":       "#facility-breakage-card"
   };
 
   // Hide all feature cards first

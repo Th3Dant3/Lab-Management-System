@@ -587,5 +587,25 @@
 </div>
 <div class="gantt-tip" id="ganttTip"></div>
 <script src="power.js"></script>
+
+<script>
+(function applyRoleRestrictions() {
+  const role     = (sessionStorage.getItem("lms_role")    || "").trim().toUpperCase();
+  const subRole  = (sessionStorage.getItem("lms_subrole") || "").trim().toUpperCase();
+  const username = (sessionStorage.getItem("lms_user")    || "").trim().toUpperCase();
+
+  const ALLOWED_ROLES     = ["ADMIN", "MANAGER", "SR DIRECTOR", "SR MANAGER"];
+  const ALLOWED_USERNAMES = []; // add usernames here e.g. "JSMITH", "CBAYLIS"
+
+  const hasAccess =
+    ALLOWED_ROLES.some(r => role.includes(r) || subRole.includes(r)) ||
+    ALLOWED_USERNAMES.includes(username);
+
+  if (!hasAccess) {
+    const summaryBtn = document.getElementById("summaryTabBtn");
+    if (summaryBtn) summaryBtn.style.display = "none";
+  }
+})();
+</script>
 </body>
 </html>
