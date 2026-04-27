@@ -26,7 +26,7 @@ const DEPT_COLORS = {
 
 const CHART_DEFAULTS = {
   gridColor:   'rgba(255,255,255,0.05)',
-  textColor:   '#9aafc4',
+  textColor:   '#ffffff',
   tooltipBg:   '#131a24',
   tooltipBorder:'rgba(255,255,255,0.1)',
   fontMono:    'DM Mono, monospace',
@@ -64,22 +64,19 @@ Chart.defaults.scale.ticks.color               = CHART_DEFAULTS.textColor;
    API LAYER
 ═══════════════════════════════════════════════════════════ */
 const API = {
-  async fetch(action, extra = '') {
-    const res  = await fetch(`${API_URL}?action=${action}${extra}`);
+  async get(action, params = {}) {
+    const qs   = Object.entries(params).map(([k,v]) => `&${k}=${encodeURIComponent(v)}`).join('');
+    const res  = await fetch(`${API_URL}?action=${action}${qs}`);
     const json = await res.json();
     if (!json.success) throw new Error(json.error || `API error: ${action}`);
     return json;
   },
 
-  async all()      { return this.fetch('all'); },
-  async history()  { return this.fetch('snapshotHistory'); },
-
-  async snapshot(name) {
-    const res  = await fetch(`${API_URL}?action=takeSnapshot&snappedBy=${encodeURIComponent(name)}`, { method: 'POST' });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error);
-    return json;
-  },
+  // Live: action=all (no date)
+  // History: action=all&date=MM/DD/YYYY
+  async all(date)    { return date ? this.get('all', { date }) : this.get('all'); },
+  async status()     { return this.get('status'); },
+  async historyDates(){ return this.get('history'); },
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -176,7 +173,7 @@ const ChartFactory = {
         plugins: {
           legend: {
             display: opts.legend || false,
-            labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#9aafc4' },
+            labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#ffffff' },
           },
         },
         scales: {
@@ -209,7 +206,7 @@ const ChartFactory = {
         plugins: {
           legend: {
             display: true, position: 'bottom',
-            labels: { usePointStyle: true, pointStyle: 'circle', padding: 14, color: '#9aafc4', font: { size: 11 } },
+            labels: { usePointStyle: true, pointStyle: 'circle', padding: 14, color: '#ffffff', font: { size: 11 } },
           },
         },
       },
@@ -241,11 +238,16 @@ const ChartFactory = {
 
 /* ── META BAR ───────────────────────────────────────────── */
 function renderMeta(meta) {
-  document.getElementById('metaOrders').textContent  = U.fmt(meta.orderCount);
-  document.getElementById('metaLenses').textContent  = U.fmt(meta.lensCount);
+  document.getElementById('metaOrders').textContent  = meta.orderCount > 0 ? U.fmt(meta.orderCount) : '—';
+  document.getElementById('metaLenses').textContent  = meta.lensCount  > 0 ? U.fmt(meta.lensCount)  : '—';
   document.getElementById('reportDate').textContent  = meta.reportDate  || '—';
   document.getElementById('lastRefresh').textContent = meta.lastRefresh || '—';
-  document.getElementById('headerSub').textContent   = `Report: ${meta.reportDate || '—'}  ·  ${U.fmt(meta.lensCount)} lenses`;
+  const isHistory = App._isHistoryMode;
+  document.getElementById('headerSub').textContent   = isHistory
+    ? `History: ${meta.reportDate || '—'}`
+    : meta.lensCount > 0
+      ? `Report: ${meta.reportDate || '—'}  ·  ${U.fmt(meta.lensCount)} lenses`
+      : 'No live data — select a date or wait for upload';
 }
 
 /* ── SUMMARY TAB ────────────────────────────────────────── */
@@ -317,7 +319,7 @@ function renderSummary(summary, meta, history) {
         <div class="dept-broken" style="color:${color}">${U.fmt(d.lensesBroken)}</div>
         <div class="dept-pct"   style="color:${color}">${U.pct(d.lensBrkPct)}</div>
         ${d.framesBroken > 0 ? `<div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">${U.fmt(d.framesBroken)} frames</div>` : ''}
-        <div class="dept-top">↑ ${d.topReason || '—'}</div>
+        <div class="dept-top">↑ ${(!d.topReason || d.topReason.startsWith('#')) ? '—' : d.topReason}</div>
       </div>`;
   }).join('');
 
@@ -432,7 +434,7 @@ function renderDaily(summary, history) {
         plugins: {
           legend: {
             display: true,
-            labels: { usePointStyle: true, pointStyle: 'circle', padding: 14, color: '#9aafc4' },
+            labels: { usePointStyle: true, pointStyle: 'circle', padding: 14, color: '#ffffff' },
           },
           tooltip: {
             callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` },
@@ -575,7 +577,7 @@ function renderWeekly(history) {
         legend: {
           display: true,
           position: 'bottom',
-          labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#9aafc4' },
+          labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#ffffff' },
         },
         tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` } },
       },
@@ -749,29 +751,63 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
     }
   }
 
-  /* Operators table */
+  /* Breakage by Operator — collapsible rows, click to expand/collapse reasons */
   const opsEl = document.querySelector(`#tab-${tabId} [id$="Operators"]`);
   if (opsEl) {
     const isFinish = tabId === 'finish';
     if (operators.length) {
+
+      // Group rows by operator
+      const grouped = {};
+      operators.forEach(o => {
+        const key = o.operator || 'NONE';
+        if (!grouped[key]) grouped[key] = { name: key, reasons: [], lensTotal: 0, frameTotal: 0 };
+        const lenses = isFinish ? (o.lensTotal || 0) : (o.total || 0);
+        const frames = isFinish ? (o.frameTotal || 0) : 0;
+        grouped[key].reasons.push({ reason: o.reason || '—', lenses, frames });
+        grouped[key].lensTotal  += lenses;
+        grouped[key].frameTotal += frames;
+      });
+
+      const sortedOps = Object.values(grouped).sort((a, b) => b.lensTotal - a.lensTotal);
+      const uid = tabId; // unique prefix per tab
+
       opsEl.innerHTML = `
-        <table class="op-table">
-          <thead><tr>
-            <th>Operator</th><th>Reason</th>
-            ${isFinish ? '<th style="text-align:right">Lenses</th><th style="text-align:right">Frames</th>' : '<th style="text-align:right">Total</th>'}
-          </tr></thead>
-          <tbody>
-            ${operators.map(o => `
-              <tr>
-                <td class="op-name">${o.operator || '—'}</td>
-                <td><span class="op-reason">${o.reason || '—'}</span></td>
-                ${isFinish
-                  ? `<td class="op-total" style="color:${color};text-align:right">${o.lensTotal||0}</td>
-                     <td class="op-total" style="color:var(--amber);text-align:right">${o.frameTotal||0}</td>`
-                  : `<td class="op-total" style="color:${color};text-align:right">${o.total||0}</td>`}
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
+        <div class="op-collapse-list">
+          ${sortedOps.map((op, idx) => {
+            const detailId = `op-detail-${uid}-${idx}`;
+            const headerId = `op-header-${uid}-${idx}`;
+            const maxLenses = sortedOps[0].lensTotal || 1;
+            return `
+              <!-- Operator header row — clickable -->
+              <div class="op-group-header" id="${headerId}" onclick="toggleOperator('${detailId}','${headerId}')">
+                <svg class="op-header-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                <div class="op-header-name" style="color:${color}">${op.name}</div>
+                <div class="op-header-meta">
+                  <span>${op.reasons.length} reason${op.reasons.length !== 1 ? 's' : ''}</span>
+                  ${isFinish && op.frameTotal > 0 ? `<span style="color:var(--amber)">${op.frameTotal} frames</span>` : ''}
+                </div>
+                <div class="op-header-total" style="color:${color}">${op.lensTotal}</div>
+              </div>
+
+              <!-- Reasons detail — hidden until clicked -->
+              <div class="op-reasons-detail" id="${detailId}">
+                <div class="op-reasons-inner">
+                  ${op.reasons.sort((a,b) => b.lenses - a.lenses).map(r => `
+                    <div class="op-reason-row">
+                      <span class="op-reason-tag">${r.reason}</span>
+                      <span class="op-reason-bar-wrap">
+                        <span class="op-reason-bar" style="width:${op.lensTotal > 0 ? Math.round((r.lenses/op.lensTotal)*100) : 0}%;background:${color}60"></span>
+                      </span>
+                      <span class="op-reason-num" style="color:${color}">${r.lenses}</span>
+                      ${isFinish && r.frames > 0 ? `<span class="op-reason-frames">+${r.frames}f</span>` : ''}
+                    </div>`).join('')}
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
     } else {
       opsEl.innerHTML = U.emptyState('No operator data for today');
     }
@@ -815,204 +851,281 @@ function renderHistory(rows) {
 
 /* ── DAILY SUMMARY ──────────────────────────────────────── */
 function renderDaily(summary, depts, meta) {
-  const lt       = summary.labTotal;
+  const lt         = summary.labTotal;
   const lensCount  = meta.lensCount  || 1;
   const orderCount = meta.orderCount || 1;
-  const labPct   = lt.labLensPct * 100;
-  const framePct = lt.labFramePct * 100;
+  const labPct     = lt.labLensPct * 100;
+  const framePct   = lt.labFramePct * 100;
 
   // Date badge
-  const today = new Date();
+  const today    = new Date();
   const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('dailyDateBadge').textContent =
     dayNames[today.getDay()] + ' · ' + (meta.reportDate || today.toLocaleDateString());
 
-  // ── Facility KPIs ──
-  const deptMap = {};
-  summary.departments.forEach(d => { deptMap[d.department] = d; });
-
+  // ── Facility KPIs strip ──
   document.getElementById('dailyFacilityKpis').innerHTML = [
-    { label: 'Lab Lenses Broken', value: lt.labLensesBroken, accent: 'var(--cyan)', sub: `of ${lt.lensCount.toLocaleString()} lenses` },
-    { label: 'Lab Lens %',  value: labPct.toFixed(2) + '%',  accent: U.statusColor(labPct, 5.00),  sub: 'Goal ≤5.00%', badge: U.statusBadge(labPct, 5.00) },
-    { label: 'Frames Broken', value: lt.framesBroken,        accent: 'var(--amber)', sub: `of ${orderCount.toLocaleString()} orders` },
-    { label: 'Frame Brk %', value: framePct.toFixed(2) + '%', accent: U.statusColor(framePct, 1.00), sub: 'Goal ≤1.00%', badge: U.statusBadge(framePct, 1.00) },
+    { label: 'Lab Lenses Broken', value: U.fmt(lt.labLensesBroken), accent: 'var(--cyan)',  sub: `of ${U.fmt(lensCount)} lenses` },
+    { label: 'Lab Lens %',        value: labPct.toFixed(2) + '%',   accent: U.statusColor(labPct, 5.00),  sub: 'Goal ≤5.00%', badge: U.statusBadge(labPct, 5.00) },
+    { label: 'Frames Broken',     value: U.fmt(lt.framesBroken),    accent: 'var(--amber)', sub: `of ${U.fmt(orderCount)} orders` },
+    { label: 'Frame Brk %',       value: framePct.toFixed(2) + '%', accent: U.statusColor(framePct, 1.00), sub: 'Goal ≤1.00%', badge: U.statusBadge(framePct, 1.00) },
+    { label: 'Total Orders',      value: U.fmt(orderCount),         accent: 'var(--mail)',  sub: 'Mailroom shipped' },
+    { label: 'Report Date',       value: meta.reportDate || '—',    accent: 'var(--muted)', sub: 'Data as of' },
   ].map(k => `
     <div class="kpi-card" style="--accent:${k.accent}">
       <div class="kpi-label">${k.label}</div>
-      <div class="kpi-value" style="color:${k.accent}">${typeof k.value === 'number' && !k.value.toString().includes('%') ? k.value.toLocaleString() : k.value}</div>
+      <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
       <div class="kpi-sub">${k.sub}</div>
       ${k.badge || ''}
     </div>`).join('');
 
-  // ── Goal Status ──
-  const arPct  = deptMap.AR      ? (deptMap.AR.lensesBroken  / lensCount * 100) : 0;
-  const finPct = deptMap.Finish  ? (deptMap.Finish.lensesBroken  / lensCount * 100) : 0;
-  const srfPct = deptMap.Surface ? (deptMap.Surface.lensesBroken / lensCount * 100) : 0;
+  // ── Surface machine IDs ──
+  const SURFACE_MACHINES = ['ORB','54R','FLEX','ODT','OTL','NONE'];
+  const isSurfaceMachine = name => SURFACE_MACHINES.some(m => name && name.toUpperCase().startsWith(m));
+  const isMeiMachine     = name => name && name.toUpperCase().startsWith('MEI');
 
-  const goalCards = [
-    { label: 'Lab Total',      pct: labPct,   target: 5.00 },
-    { label: 'AR',             pct: arPct,    target: 0.85 },
-    { label: 'Finish',         pct: finPct,   target: 1.70 },
-    { label: 'Surface',        pct: srfPct,   target: 2.80 },
-    { label: 'Frame Breakage', pct: framePct, target: 1.00 },
+  // ── Build dept data list sorted high → low ──
+  const deptMap = {};
+  summary.departments.forEach(d => { deptMap[d.department] = d; });
+
+  const deptConfigs = [
+    { key: 'AR',        label: 'AR',        color: '#a78bfa', goal: 0.85, data: depts.ar,        isMachine: false },
+    { key: 'Finish',    label: 'Finish',    color: '#34d399', goal: 1.70, data: depts.finish,     isMachine: false },
+    { key: 'Surface',   label: 'Surface',   color: '#fb923c', goal: 2.80, data: depts.surface,    isMachine: true  },
+    { key: 'LMS',       label: 'LMS',       color: '#60a5fa', goal: null, data: depts.lms,        isMachine: false },
+    { key: 'Inventory', label: 'Inventory', color: '#f472b6', goal: null, data: depts.inventory,  isMachine: false },
   ];
 
-  document.getElementById('dailyGoalStatus').innerHTML = goalCards.map(g => {
-    const ok = g.pct <= g.target;
+  // Build full sorted dept list with computed pcts
+  const deptList = deptConfigs.map(dc => {
+    const dept = summary.departments.find(d => d.department === dc.key);
+    const broken = dept ? dept.lensesBroken : 0;
+    const pct    = broken / lensCount * 100;
+    return { ...dc, broken, pct, dept };
+  }).sort((a, b) => b.broken - a.broken);
+
+  // Build full Lab total
+  const labEntry = {
+    key: 'LAB', label: 'Lab Total', color: '#38bdf8',
+    broken: lt.labLensesBroken, pct: labPct,
+    goal: 5.00, isLab: true,
+  };
+
+  const allEntries = [labEntry, ...deptList];
+
+  // ── Build sidebar ──
+  document.getElementById('dailySidebarItems').innerHTML = allEntries.map((entry, idx) => {
+    const ok     = entry.goal ? entry.pct <= entry.goal : true;
+    const status = entry.goal ? (ok ? 'ON GOAL' : 'OVER GOAL') : '—';
+    const sc     = entry.goal ? (ok ? 'var(--green)' : 'var(--red)') : 'var(--muted)';
     return `
-      <div class="goal-status-card ${ok ? 'on-goal' : 'over-goal'}">
-        <div class="gs-icon">${ok ? '✓' : '✗'}</div>
-        <div class="gs-label">${g.label}</div>
-        <div class="gs-value">${g.pct.toFixed(2)}%</div>
-        <div class="gs-target">Goal ≤${g.target}%</div>
+      <div class="daily-sb-item" id="sb-item-${entry.key}"
+           style="--item-color:${entry.color}"
+           onclick="selectDailyDept('${entry.key}')">
+        <div class="daily-sb-dot"></div>
+        <div class="daily-sb-info">
+          <div class="daily-sb-name ${entry.isLab ? 'lab-total' : ''}">${entry.label}</div>
+          <div class="daily-sb-pct" style="color:${sc}">${entry.pct.toFixed(2)}%</div>
+          <div class="daily-sb-count">${U.fmt(entry.broken)} lenses</div>
+        </div>
+        <div class="daily-sb-badge" style="color:${sc};border-color:${sc}30;background:${sc}12">${status}</div>
       </div>`;
   }).join('');
 
-  // ── Dept Breakdown Table ──
-  const deptConfigs = [
-    { key: 'AR',        color: '#a78bfa', goal: 0.85, data: depts.ar },
-    { key: 'Finish',    color: '#34d399', goal: 1.70, data: depts.finish },
-    { key: 'Surface',   color: '#fb923c', goal: 2.80, data: depts.surface },
-    { key: 'LMS',       color: '#60a5fa', goal: null, data: depts.lms },
-    { key: 'Inventory', color: '#f472b6', goal: null, data: depts.inventory },
-  ];
+  // ── Store data for click handler ──
+  window._dailyData = { allEntries, deptList, labEntry, deptConfigs, summary, depts, meta, lensCount, orderCount, framePct };
 
-  document.getElementById('dailyDeptBreakdown').innerHTML = `
-    <div class="panel">
-      <div class="panel-body" style="padding:0">
-        <table class="dept-breakdown-table">
-          <thead><tr>
-            <th>Dept</th>
-            <th style="text-align:right">Broken</th>
-            <th style="text-align:right">%</th>
-            <th style="text-align:center">Status</th>
-            <th>Top Reasons</th>
-            <th>Top Operators</th>
-          </tr></thead>
-          <tbody>
-            ${deptConfigs.map(dc => {
-              const dept = summary.departments.find(d => d.department === dc.key);
-              if (!dept) return '';
-              const pct = dept.lensesBroken / lensCount * 100;
-              const ok  = dc.goal ? pct <= dc.goal : true;
-              const topReasons  = (dc.data?.reasons  || []).filter(r => r.lensesBroken > 0).slice(0, 3);
-              const topOps      = (dc.data?.operators || [])
-                .reduce((acc, o) => {
-                  const key = o.operator;
-                  if (!key || key === 'NONE') return acc;
-                  acc[key] = (acc[key] || 0) + (o.total || o.lensTotal || 0);
-                  return acc;
-                }, {});
-              const sortedOps = Object.entries(topOps).sort((a,b) => b[1]-a[1]).slice(0, 3);
+  // Auto-select first entry (Lab Total)
+  selectDailyDept('LAB');
+}
 
-              return `
-                <tr>
-                  <td><div class="dbt-dept" style="color:${dc.color}">${dc.key}</div></td>
-                  <td><div class="dbt-count" style="color:${dc.color}">${dept.lensesBroken}</div></td>
-                  <td><div class="dbt-pct" style="color:${U.statusColor(pct, dc.goal||999)}">${pct.toFixed(2)}%</div></td>
-                  <td class="dbt-status">${ok ? '<span style="color:var(--green);font-size:16px">✓</span>' : '<span style="color:var(--red);font-size:16px">✗</span>'}</td>
-                  <td>
-                    <div class="dbt-reasons">
-                      ${topReasons.length ? topReasons.map((r,i) => `
-                        <div class="dbt-reason-item">
-                          <span class="dbt-reason-rank">${i+1}</span>
-                          <span class="dbt-reason-name">${r.reason}</span>
-                          <span class="dbt-reason-count" style="color:${dc.color}">${r.lensesBroken}</span>
-                        </div>`).join('') : '<span style="color:var(--muted)">—</span>'}
-                    </div>
-                  </td>
-                  <td>
-                    <div class="dbt-operators">
-                      ${sortedOps.length ? sortedOps.map(([name, count]) => `
-                        <div class="dbt-op-item">
-                          <span class="dbt-op-name">${name}</span>
-                          <span class="dbt-op-count" style="color:${dc.color}">${count}</span>
-                        </div>`).join('') : '<span style="color:var(--muted)">—</span>'}
-                    </div>
-                  </td>
-                </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
+/* ── DAILY DEPT DETAIL RENDERER ─────────────────────────── */
+function selectDailyDept(key) {
+  if (!window._dailyData) return;
+  const { allEntries, deptList, labEntry, deptConfigs, summary, depts, meta, lensCount, orderCount, framePct } = window._dailyData;
 
-  // ── Improvement Opportunities ──
-  const improvements = [];
+  // Update sidebar active state
+  document.querySelectorAll('.daily-sb-item').forEach(el => el.classList.remove('active'));
+  const activeItem = document.getElementById('sb-item-' + key);
+  if (activeItem) activeItem.classList.add('active');
 
-  goalCards.forEach(g => {
-    if (g.pct > g.target) {
-      const over = (g.pct - g.target).toFixed(2);
-      const deptKey = g.label === 'Frame Breakage' ? 'Frames' : g.label === 'Lab Total' ? 'Lab' : g.label;
-      improvements.push({
-        type: 'critical',
-        dept: deptKey,
-        title: `Over goal by ${over}%  (${g.pct.toFixed(2)}% vs ≤${g.target}%)`,
-        desc: `Reduce breakage by ${Math.ceil((g.pct - g.target) / g.pct * 100)}% to reach target`,
+  const pane = document.getElementById('dailyDetailPane');
+
+  // ── LAB TOTAL view ──
+  if (key === 'LAB') {
+    const labPct = labEntry.pct;
+    const ok     = labPct <= 5.00;
+
+    // All reasons across all depts sorted high → low
+    const allReasons = [];
+    deptConfigs.forEach(dc => {
+      (dc.data?.reasons || []).filter(r => r.lensesBroken > 0).forEach(r => {
+        allReasons.push({ reason: r.reason, dept: dc.key, count: r.lensesBroken, color: dc.color });
       });
-    }
-  });
-
-  // Top offending reasons across depts
-  const allReasons = [];
-  deptConfigs.forEach(dc => {
-    (dc.data?.reasons || []).filter(r => r.lensesBroken > 0).forEach(r => {
-      allReasons.push({ reason: r.reason, dept: dc.key, count: r.lensesBroken, color: dc.color });
     });
-  });
-  allReasons.sort((a,b) => b.count - a.count);
-  allReasons.slice(0, 3).forEach(r => {
-    improvements.push({
-      type: 'warning',
-      dept: r.dept,
-      title: `${r.reason} — ${r.count} lenses`,
-      desc: `Review training and process controls for this failure mode`,
-    });
-  });
+    allReasons.sort((a, b) => b.count - a.count);
 
-  // All goals met?
-  const allMet = goalCards.every(g => g.pct <= g.target);
-  if (allMet) {
-    improvements.push({ type: 'ok', dept: 'Lab', title: 'All goals met today', desc: 'Facility operating within all breakage targets' });
+    // All depts sorted high → low for summary
+    const deptsSorted = [...deptList].sort((a, b) => b.broken - a.broken);
+    const overGoal    = deptsSorted.filter(d => d.goal && d.pct > d.goal);
+    const onGoal      = deptsSorted.filter(d => !d.goal || d.pct <= d.goal);
+
+    // Unassigned check across all depts
+    const unassignedDepts = [];
+    deptConfigs.forEach(dc => {
+      const noneCount = (dc.data?.operators || [])
+        .filter(o => !o.operator || o.operator === 'NONE')
+        .reduce((sum, o) => sum + (o.lensTotal || o.total || 0), 0);
+      if (noneCount > 0) unassignedDepts.push({ dept: dc.key, count: noneCount });
+    });
+
+    // Write professional summary
+    const topReason = allReasons[0];
+    const summaryText = `As of ${meta.reportDate || 'today'}, the facility recorded ${U.fmt(labEntry.broken)} lens breakages representing a ${labPct.toFixed(2)}% breakage rate across ${U.fmt(lensCount)} lenses processed. The lab is currently ${ok ? 'within' : 'exceeding'} the 5.00% facility goal${!ok ? ` by ${(labPct - 5.00).toFixed(2)} percentage points` : ''}.
+${overGoal.length > 0 ? `${overGoal.map(d => d.label).join(' and ')} ${overGoal.length === 1 ? 'is' : 'are'} operating above goal, requiring immediate attention. ` : 'All departments are operating within their respective goals. '}${topReason ? `The leading breakage cause facility-wide is ${topReason.reason} (${topReason.dept}) with ${topReason.count} lenses. ` : ''}${unassignedDepts.length > 0 ? `Unassigned operator entries were detected in ${unassignedDepts.map(u => u.dept).join(', ')} — totaling ${unassignedDepts.reduce((s, u) => s + u.count, 0)} lenses without operator attribution. Data integrity review is recommended.` : 'All breakage records have been attributed to an operator or machine.'}`;
+
+    pane.innerHTML = `
+      <div class="dd-header">
+        <div>
+          <div class="dd-title" style="color:var(--cyan)">FULL LAB SUMMARY</div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px">${meta.reportDate || '—'} · ${U.fmt(lensCount)} lenses · ${U.fmt(orderCount)} orders</div>
+        </div>
+        <div class="dd-meta">
+          <div class="dd-pct" style="color:${ok ? 'var(--green)' : 'var(--red)'}">${labPct.toFixed(2)}%</div>
+          <div class="dd-goal" style="color:${ok ? 'var(--green)' : 'var(--red)'}">Lab Goal ≤5.00% — ${ok ? 'On Goal' : 'Over Goal'}</div>
+        </div>
+      </div>
+
+      ${unassignedDepts.length > 0 ? `
+      <div class="dd-unassigned-alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ${unassignedDepts.reduce((s,u) => s + u.count, 0)} lenses unassigned (NONE operator) across: ${unassignedDepts.map(u => `${u.dept} — ${u.count}`).join(', ')} · Data integrity review required
+      </div>` : ''}
+
+      <div class="dd-cards">
+        <div class="dd-card">
+          <div class="dd-card-label">All Departments — Highest to Lowest</div>
+          ${deptsSorted.map(d => `
+            <div class="dd-item">
+              <div class="dd-item-name" style="color:${d.color};font-weight:600">${d.label}</div>
+              <div class="dd-item-bar"><div class="dd-item-fill" style="width:${deptsSorted[0].broken > 0 ? (d.broken/deptsSorted[0].broken*100) : 0}%;background:${d.color}70"></div></div>
+              <div class="dd-item-num" style="color:${d.color}">${d.broken}</div>
+            </div>`).join('')}
+        </div>
+        <div class="dd-card">
+          <div class="dd-card-label">Top Reasons Facility-Wide</div>
+          ${allReasons.slice(0, 8).map(r => `
+            <div class="dd-item">
+              <div class="dd-item-name">${r.reason} <span style="font-size:9px;color:${r.color};font-family:var(--font-mono)">${r.dept}</span></div>
+              <div class="dd-item-bar"><div class="dd-item-fill" style="width:${allReasons[0].count > 0 ? (r.count/allReasons[0].count*100) : 0}%;background:${r.color}70"></div></div>
+              <div class="dd-item-num" style="color:${r.color}">${r.count}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="dd-summary" style="--summary-color:var(--cyan)">
+        <div class="dd-summary-label">Executive Summary — ${meta.reportDate || '—'}</div>
+        <div class="dd-summary-text">${summaryText}</div>
+      </div>`;
+    return;
   }
 
-  // Build compact table rows
-  const impRows = improvements.map(imp => {
-    const deptMatch = imp.title.match(/^(Lab Total|AR|Finish|Surface|Frame Breakage|High volume:.+?\((\w+)\))/);
-    const dept = imp.dept || (imp.title.includes('Surface') ? 'Surface'
-               : imp.title.includes('Finish') ? 'Finish'
-               : imp.title.includes('AR') ? 'AR'
-               : imp.title.includes('Frame') ? 'Frames'
-               : imp.title.includes('Lab') ? 'Lab' : '—');
-    const deptColor = { AR:'#a78bfa', Finish:'#34d399', Surface:'#fb923c', Frames:'#f5a623', Lab:'#38bdf8' }[dept] || 'var(--muted)';
-    const priority = imp.type === 'critical' ? 'high' : imp.type === 'warning' ? 'medium' : 'low';
-    const priorityLabel = priority === 'high' ? 'HIGH' : priority === 'medium' ? 'MEDIUM' : 'OK';
-    return { dept, deptColor, issue: imp.title, action: imp.desc, priority, priorityLabel };
-  });
+  // ── DEPARTMENT view ──
+  const entry  = allEntries.find(e => e.key === key);
+  const dc     = deptConfigs.find(d => d.key === key);
+  if (!entry || !dc) return;
 
-  document.getElementById('dailyImprovements').innerHTML = `
-    <div class="panel">
-      <div class="panel-body" style="padding:0">
-        <table class="imp-table">
-          <thead><tr>
-            <th>Dept</th>
-            <th>Issue</th>
-            <th>Recommended Action</th>
-            <th>Priority</th>
-          </tr></thead>
-          <tbody>
-            ${impRows.map(r => `
-              <tr>
-                <td><span class="imp-dept" style="color:${r.deptColor}">${r.dept}</span></td>
-                <td><span class="imp-issue">${r.issue}</span></td>
-                <td><span class="imp-action">${r.action}</span></td>
-                <td><span class="imp-priority ${r.priority}">${r.priorityLabel}</span></td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
+  const ok         = dc.goal ? entry.pct <= dc.goal : true;
+  const color      = entry.color;
+  const statusText = dc.goal ? (ok ? `On Goal (${dc.goal}%)` : `Over Goal — ${(entry.pct - dc.goal).toFixed(2)}pp above ${dc.goal}%`) : 'No goal set';
+  const statusColor= dc.goal ? (ok ? 'var(--green)' : 'var(--red)') : 'var(--muted)';
+  const isMachine  = dc.isMachine;
+  const colLabel   = isMachine ? 'Machine' : 'Operator';
+
+  // Reasons sorted high → low, filter out zero
+  const reasons = (dc.data?.reasons || [])
+    .filter(r => r.lensesBroken > 0 || r.framesBroken > 0)
+    .sort((a, b) => (b.lensesBroken || b.framesBroken) - (a.lensesBroken || a.framesBroken));
+
+  // Operators/machines — group by name, sort high → low
+  const opMap = {};
+  (dc.data?.operators || []).forEach(o => {
+    const name    = o.operator || 'NONE';
+    const isNone  = !o.operator || o.operator === 'NONE';
+    const lenses  = (key === 'Finish') ? (o.lensTotal || 0) : (o.total || 0);
+    const frames  = (key === 'Finish') ? (o.frameTotal || 0) : 0;
+    if (!opMap[name]) opMap[name] = { name, lenses: 0, frames: 0, isNone };
+    opMap[name].lenses += lenses;
+    opMap[name].frames += frames;
+  });
+  const opList = Object.values(opMap)
+    .sort((a, b) => b.lenses - a.lenses);
+
+  const maxReasons = reasons[0] ? (reasons[0].lensesBroken || reasons[0].framesBroken) : 1;
+  const maxOps     = opList[0]  ? opList[0].lenses : 1;
+  const noneTotal  = opList.filter(o => o.isNone).reduce((s, o) => s + o.lenses, 0);
+  const topOp      = opList.filter(o => !o.isNone)[0];
+  const topReason  = reasons[0];
+
+  // Write professional summary
+  const dept = entry.dept;
+  const deptFrames = dc?.data?.totals?.framesBroken || 0;
+  const framesNote = key === 'Finish' && deptFrames > 0
+    ? ` Additionally, ${deptFrames} frames were broken (F-Frame Breakage) at a ${dc.data?.totals ? (dc.data.totals.labFramePct < 0.01 ? (dc.data.totals.labFramePct * 10000).toFixed(2) : (dc.data.totals.labFramePct * 100).toFixed(2)) : '0.00'}% frame breakage rate.` : '';
+  const noneNote = noneTotal > 0
+    ? ` ${noneTotal} lenses were logged without a valid ${colLabel.toLowerCase()} assignment (recorded as NONE). This represents a data quality concern that should be investigated by the supervisor.` : '';
+  const summaryText = `${entry.label} department recorded ${U.fmt(entry.broken)} lens breakages on ${meta.reportDate || 'this date'}, representing a ${entry.pct.toFixed(2)}% breakage rate. ${dc.goal ? `The department is ${ok ? `within` : `exceeding`} its ${dc.goal}% goal${!ok ? `, exceeding the target by ${(entry.pct - dc.goal).toFixed(2)} percentage points` : ''}.` : ''} ${topReason ? `The primary driver is ${topReason.reason} with ${topReason.lensesBroken || topReason.framesBroken} lenses, accounting for ${entry.broken > 0 ? Math.round(((topReason.lensesBroken || topReason.framesBroken)/entry.broken)*100) : 0}% of department breakage.` : ''} ${topOp ? `The highest contributing ${colLabel.toLowerCase()} is ${topOp.name} with ${topOp.lenses} lenses broken.` : ''}${framesNote}${noneNote}`;
+
+  pane.innerHTML = `
+    <div class="dd-header">
+      <div>
+        <div class="dd-title" style="color:${color}">${entry.label.toUpperCase()} DEPARTMENT</div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px">${meta.reportDate || '—'} · ${U.fmt(lensCount)} facility lenses</div>
       </div>
+      <div class="dd-meta">
+        <div class="dd-pct" style="color:${statusColor}">${entry.pct.toFixed(2)}%</div>
+        <div class="dd-goal" style="color:${statusColor}">${statusText}</div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:3px">${U.fmt(entry.broken)} lenses broken</div>
+      </div>
+    </div>
+
+    ${noneTotal > 0 ? `
+    <div class="dd-unassigned-alert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      ${noneTotal} lenses recorded with no ${colLabel.toLowerCase()} assignment (NONE) — supervisor review required
+    </div>` : ''}
+
+    <div class="dd-cards">
+      <div class="dd-card">
+        <div class="dd-card-label">Breakage by Reason — Highest to Lowest</div>
+        ${reasons.map(r => {
+          const cnt = r.lensesBroken || r.framesBroken;
+          return `
+          <div class="dd-item">
+            <div class="dd-item-name">${r.reason}</div>
+            <div class="dd-item-bar"><div class="dd-item-fill" style="width:${Math.round((cnt/maxReasons)*100)}%;background:${color}70"></div></div>
+            <div class="dd-item-num" style="color:${color}">${cnt}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="dd-card">
+        <div class="dd-card-label">${colLabel} Breakdown — Highest to Lowest</div>
+        ${opList.map(op => `
+          <div class="dd-item">
+            <div class="dd-item-name ${op.isNone ? 'unassigned' : ''}">${op.isNone ? 'Unassigned' : op.name}</div>
+            <div class="dd-item-bar"><div class="dd-item-fill" style="width:${Math.round((op.lenses/maxOps)*100)}%;background:${op.isNone ? 'var(--red)' : color}70"></div></div>
+            <div class="dd-item-num ${op.isNone ? 'unassigned' : ''}" style="${op.isNone ? '' : `color:${color}`}">${op.lenses}${op.frames > 0 ? `<span style="font-size:10px;color:var(--amber)"> +${op.frames}f</span>` : ''}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="dd-summary" style="--summary-color:${color}">
+      <div class="dd-summary-label">Department Summary — ${meta.reportDate || '—'}</div>
+      <div class="dd-summary-text">${summaryText}</div>
     </div>`;
 }
+
 
 
 /* ── WEEKLY SUMMARY (Sun–Sat) ───────────────────────────── */
@@ -1102,12 +1215,12 @@ function renderWeekly(history, meta) {
           responsive: true, maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
           plugins: {
-            legend: { display: true, position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#9aafc4' } },
+            legend: { display: true, position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#ffffff' } },
             tooltip: { callbacks: { label: ctx => ctx.raw !== null ? ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` : ' No data' } },
           },
           scales: {
-            x: { grid: { display: false }, ticks: { color: '#9aafc4', font: { size: 10 } } },
-            y: { beginAtZero: true, ticks: { callback: v => v.toFixed(2) + '%', color: '#9aafc4', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            x: { grid: { display: false }, ticks: { color: '#ffffff', font: { size: 10 } } },
+            y: { beginAtZero: true, ticks: { callback: v => v.toFixed(2) + '%', color: '#ffffff', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
           },
         },
       });
@@ -1242,41 +1355,272 @@ function renderWeekly(history, meta) {
   }
 }
 
+
+/* ── OPERATOR ROW TOGGLE ────────────────────────────────── */
+function toggleOperator(detailId, headerId) {
+  const detail = document.getElementById(detailId);
+  const header = document.getElementById(headerId);
+  if (!detail || !header) return;
+  const isOpen = detail.classList.contains('open');
+  if (isOpen) {
+    detail.classList.remove('open');
+    header.classList.remove('open');
+  } else {
+    detail.classList.add('open');
+    header.classList.add('open');
+  }
+}
+
+
+/* ── NO DATA STATE ──────────────────────────────────────── */
+function renderNoData(meta) {
+  // Update header meta with dashes
+  document.getElementById('metaOrders').textContent = '—';
+  document.getElementById('metaLenses').textContent = '—';
+  document.getElementById('reportDate').textContent  = '—';
+  document.getElementById('lastRefresh').textContent = meta?.lastRefresh || '—';
+  document.getElementById('headerSub').textContent   = 'Waiting for RawData upload…';
+
+  const noDataHTML = `
+    <div style="
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      min-height:400px; gap:16px; text-align:center;
+      background:var(--bg2); border:1px solid var(--border);
+      border-radius:var(--radius-md); padding:40px;
+    ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"
+           width="48" height="48">
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+        <polyline points="13 2 13 9 20 9"/>
+        <line x1="9" y1="13" x2="15" y2="13"/>
+      </svg>
+      <div style="font-family:var(--font-display);font-size:22px;letter-spacing:2px;color:var(--text)">
+        NO DATA AVAILABLE
+      </div>
+      <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);max-width:380px;line-height:1.7">
+        RawData is currently empty.<br>
+        Data will populate automatically once today's breakage data is uploaded.
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button onclick="App.loadAll()" style="
+          font-family:var(--font-mono);font-size:11px;
+          background:var(--bg3);border:1px solid var(--border2);
+          border-radius:var(--radius-sm);color:var(--cyan);
+          padding:8px 16px;cursor:pointer;letter-spacing:0.5px;
+        ">↻ Check Again</button>
+        <button onclick="App.switchTab('history')" style="
+          font-family:var(--font-mono);font-size:11px;
+          background:var(--bg3);border:1px solid var(--border2);
+          border-radius:var(--radius-sm);color:var(--muted);
+          padding:8px 16px;cursor:pointer;letter-spacing:0.5px;
+        ">View History</button>
+      </div>
+    </div>`;
+
+  // Show no-data state in all main content areas
+  const targets = ['labKpis','goalBars','deptCards','topReasonsGrid',
+                   'dailyFacilityKpis','dailySidebarItems','dailyDetailPane',
+                   'arKpis','finKpis','srfKpis','lmsKpis','invKpis'];
+  targets.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = id === 'labKpis' ? noDataHTML : '';
+  });
+
+  // Hide goal bars section
+  const goalWrap = document.querySelector('.goal-bar-wrap');
+  if (goalWrap) goalWrap.style.display = 'none';
+  const deptGrid = document.getElementById('deptCards');
+  if (deptGrid) deptGrid.innerHTML = '';
+  const topGrid = document.getElementById('topReasonsGrid');
+  if (topGrid) topGrid.innerHTML = '';
+}
+
+
+/* ── TRANSITION OVERLAY ─────────────────────────────────────── */
+function showTransition(mode, subText) {
+  const overlay = document.getElementById('transitionOverlay');
+  const label   = document.getElementById('transitionLabel');
+  const sub     = document.getElementById('transitionSub');
+  const svg     = document.getElementById('transitionIconSvg');
+  if (!overlay) return;
+
+  overlay.className = `transition-overlay show ${mode === 'live' ? 'live-mode' : 'history-mode'}`;
+  label.textContent = mode === 'live' ? 'SWITCHING TO LIVE' : 'LOADING HISTORY';
+  sub.textContent   = subText || (mode === 'live' ? 'Reading RawData…' : 'Reading Snapshot_History…');
+
+  // Icon paths
+  if (mode === 'live') {
+    svg.setAttribute('stroke', '#22d47e');
+    svg.innerHTML = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>';
+  } else {
+    svg.setAttribute('stroke', '#f5a623');
+    svg.innerHTML = '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+  }
+}
+
+function hideTransition() {
+  const overlay = document.getElementById('transitionOverlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
 /* ═══════════════════════════════════════════════════════════
    MAIN APP CONTROLLER
 ═══════════════════════════════════════════════════════════ */
 const App = {
 
-  async loadAll() {
+  // Current mode tracking
+  _isHistoryMode: false,
+  _currentDate: null,
+
+  // ── Set Live mode UI ──
+  setLiveMode() {
+    App._isHistoryMode = false;
+    const badge = document.getElementById('modeBadge');
+    const label = document.getElementById('modeLabel');
+    const banner = document.getElementById('historyBanner');
+    const picker = document.getElementById('datePicker');
+    if (badge)  { badge.classList.remove('history-mode'); }
+    if (label)  { label.textContent = 'LIVE'; }
+    if (banner) { banner.classList.remove('show'); }
+    if (picker) { picker.classList.remove('history'); picker.value = ''; }
+    document.querySelector('.mode-dot')?.classList.add('live-dot-anim');
+  },
+
+  // ── Set History mode UI ──
+  setHistoryMode(dateStr) {
+    App._isHistoryMode = true;
+    App._currentDate   = dateStr;
+    const badge  = document.getElementById('modeBadge');
+    const label  = document.getElementById('modeLabel');
+    const banner = document.getElementById('historyBanner');
+    const bannerDate = document.getElementById('historyBannerDate');
+    const picker = document.getElementById('datePicker');
+    if (badge)      { badge.classList.add('history-mode'); }
+    if (label)      { label.textContent = 'HISTORY'; }
+    if (banner)     { banner.classList.add('show'); }
+    if (bannerDate) { bannerDate.textContent = dateStr; }
+    if (picker)     { picker.classList.add('history'); picker.value = dateStr; }
+    document.querySelector('.mode-dot')?.classList.remove('live-dot-anim');
+  },
+
+  // ── Load today (live mode) ──
+  async loadToday() {
+    App.setLiveMode();
+    showTransition('live', 'Switching to live data…');
+    await App.loadAll();
+  },
+
+  // ── Load by selected date ──
+  async loadByDate(dateStr) {
+    if (!dateStr) { await App.loadToday(); return; }
+
+    // Check if selected date is today
+    const today = new Date().toISOString().split('T')[0];
+    if (dateStr === today) { await App.loadToday(); return; }
+
+    // Load from Snapshot_History
+    App.setHistoryMode(dateStr);
+    await App.loadFromHistory(dateStr);
+  },
+
+  // ── Load from Snapshot_History for a specific date ──
+  async loadFromHistory(dateStr) {
     const btn = document.getElementById('refreshBtn');
     btn.classList.add('loading');
+    showTransition('history', 'Loading ' + dateStr + '…');
     try {
-      const [allRes, histRes] = await Promise.all([API.all(), API.history()]);
+      const histRes = await API.all(dateStr);
+      const d       = histRes.data;
 
-      State.meta    = allRes.meta;
-      State.summary = allRes.data.summary;
-      State.depts   = allRes.data;
-      State.history = histRes.data;
+      if (!d.lensCount || d.lensCount === 0) {
+        App.showToast('No snapshot found for ' + dateStr, 'error');
+        App.setLiveMode();
+        btn.classList.remove('loading');
+        return;
+      }
 
-      renderMeta(allRes.meta);
-      renderSummary(allRes.data.summary, allRes.meta, histRes.data);
-      renderDeptTab('ar',        allRes.data.ar,        'AR',        '#a78bfa', 'arChart');
-      renderDeptTab('finish',    allRes.data.finish,    'Finish',    '#34d399', 'finChart');
-      renderDeptTab('surface',   allRes.data.surface,   'Surface',   '#fb923c', 'srfChart');
-      renderDeptTab('lms',       allRes.data.lms,       'LMS',       '#60a5fa', 'lmsChart');
-      renderDeptTab('inventory', allRes.data.inventory, 'Inventory', '#f472b6', null);
+      const meta = {
+        lensCount:   d.lensCount,
+        orderCount:  d.orderCount,
+        reportDate:  d.reportDate || dateStr,
+        lastRefresh: d.reportDate || dateStr,
+      };
 
-      renderMailroom(allRes.meta);
-      renderHistory(histRes.data);
-      renderDaily(allRes.data.summary, allRes.data, allRes.meta);
-      renderWeekly(histRes.data, allRes.meta);
+      State.meta    = meta;
+      State.summary = d.summary;
+      State.depts   = d;
+
+      renderMeta(meta);
+      renderSummary(d.summary, meta, []);
+      renderDeptTab('ar',        d.ar,        'AR',        '#a78bfa', 'arChart');
+      renderDeptTab('finish',    d.finish,    'Finish',    '#34d399', 'finChart');
+      renderDeptTab('surface',   d.surface,   'Surface',   '#fb923c', 'srfChart');
+      renderDeptTab('lms',       d.lms,       'LMS',       '#60a5fa', 'lmsChart');
+      renderDeptTab('inventory', d.inventory, 'Inventory', '#f472b6', null);
+      renderMailroom(meta);
+      renderDaily(d.summary, d, meta);
 
       document.getElementById('loadingOverlay').classList.add('hidden');
-      App.showToast('Data refreshed successfully', 'success');
+      hideTransition();
+      App.showToast('History loaded: ' + (d.reportDate || dateStr), 'success');
 
     } catch (err) {
       console.error(err);
-      App.showToast('Error loading data: ' + err.message, 'error');
+      hideTransition();
+      App.showToast('History error: ' + err.message, 'error');
+      App.setLiveMode();
+    }
+    btn.classList.remove('loading');
+  },
+
+  async loadAll() {
+    const btn = document.getElementById('refreshBtn');
+    btn.classList.add('loading');
+    showTransition('live', 'Reading RawData…');
+    try {
+      const res = await API.all(); // live — no date param
+      const d   = res.data;
+
+      // Empty RawData check
+      if (!d.lensCount || d.lensCount === 0) {
+        renderNoData(d);
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        App.showToast('No live data — RawData is empty', 'error');
+        btn.classList.remove('loading');
+        return;
+      }
+
+      const meta = {
+        lensCount:   d.lensCount,
+        orderCount:  d.orderCount,
+        reportDate:  d.reportDate,
+        lastRefresh: new Date().toLocaleTimeString(),
+      };
+
+      State.meta    = meta;
+      State.summary = d.summary;
+      State.depts   = d;
+      State.history = [];
+
+      App.setLiveMode();
+      renderMeta(meta);
+      renderSummary(d.summary, meta, []);
+      renderDeptTab('ar',        d.ar,        'AR',        '#a78bfa', 'arChart');
+      renderDeptTab('finish',    d.finish,    'Finish',    '#34d399', 'finChart');
+      renderDeptTab('surface',   d.surface,   'Surface',   '#fb923c', 'srfChart');
+      renderDeptTab('lms',       d.lms,       'LMS',       '#60a5fa', 'lmsChart');
+      renderDeptTab('inventory', d.inventory, 'Inventory', '#f472b6', null);
+      renderMailroom(meta);
+      renderDaily(d.summary, d, meta);
+
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      hideTransition();
+      App.showToast('Live data loaded', 'success');
+
+    } catch (err) {
+      console.error(err);
+      hideTransition();
+      App.showToast('Error: ' + err.message, 'error');
       document.getElementById('loadingOverlay').classList.add('hidden');
     }
     btn.classList.remove('loading');
@@ -1285,8 +1629,8 @@ const App = {
   switchTab(id) {
     const tab = document.querySelector(`.nav-tab[data-tab="${id}"]`);
     if (tab) {
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active', 'collapsing'));
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active', 'collapsed'));
       document.getElementById('tab-' + id)?.classList.add('active');
       tab.classList.add('active');
     }
@@ -1299,10 +1643,7 @@ const App = {
       await API.snapshot(name.trim());
       App.showToast(`Snapshot saved by ${name.trim()}`, 'success');
       // Refresh history
-      const histRes = await API.history();
-      State.history = histRes.data;
-      renderHistory(histRes.data);
-      renderWeekly(histRes.data, State.meta);
+
     } catch (err) {
       App.showToast('Snapshot failed: ' + err.message, 'error');
     }
@@ -1316,13 +1657,35 @@ const App = {
   },
 };
 
-/* ── NAV TAB CLICK WIRING ───────────────────────────────── */
+/* ── NAV TAB CLICK WIRING — collapse toggle ─────────────── */
 document.querySelectorAll('.nav-tab').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const id = btn.dataset.tab;
-    document.getElementById('tab-' + id)?.classList.add('active');
+    const id          = btn.dataset.tab;
+    const panel       = document.getElementById('tab-' + id);
+    const isActive    = btn.classList.contains('active');
+    const isCollapsed = btn.classList.contains('collapsed');
+
+    if (isActive && !isCollapsed) {
+      // Currently open — collapse it
+      panel.classList.add('collapsing');
+      setTimeout(() => {
+        panel.classList.remove('active', 'collapsing');
+        btn.classList.add('collapsed');
+      }, 240);
+      return;
+    }
+
+    if (isActive && isCollapsed) {
+      // Currently collapsed — re-expand
+      btn.classList.remove('collapsed');
+      panel.classList.add('active');
+      return;
+    }
+
+    // Switch to a new tab — close everything first
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active', 'collapsing'));
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active', 'collapsed'));
+    panel?.classList.add('active');
     btn.classList.add('active');
   });
 });

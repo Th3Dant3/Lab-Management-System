@@ -45,6 +45,18 @@
   <!-- TOAST -->
   <div class="toast" id="toast"></div>
 
+  <!-- LIVE/HISTORY TRANSITION OVERLAY -->
+  <div class="transition-overlay" id="transitionOverlay">
+    <div class="transition-icon" id="transitionIcon">
+      <svg id="transitionIconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"></svg>
+    </div>
+    <div class="transition-label" id="transitionLabel">SWITCHING</div>
+    <div class="transition-sub"  id="transitionSub">Loading data…</div>
+    <div class="transition-bar-wrap">
+      <div class="transition-bar"></div>
+    </div>
+  </div>
+
   <!-- ── HEADER ── -->
   <header class="header">
     <div class="header-left">
@@ -61,10 +73,19 @@
     <div class="header-right">
       <div class="meta-pill">Orders <span id="metaOrders">—</span></div>
       <div class="meta-pill">Lenses <span id="metaLenses">—</span></div>
-      <button class="snapshot-btn" onclick="App.triggerSnapshot()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-        Snapshot
-      </button>
+
+      <!-- Mode indicator -->
+      <div class="mode-badge" id="modeBadge">
+        <span class="mode-dot live-dot-anim"></span>
+        <span id="modeLabel">LIVE</span>
+      </div>
+
+      <!-- Date picker -->
+      <div class="date-picker-wrap">
+        <input type="date" id="datePicker" class="date-picker"
+               onchange="App.loadByDate(this.value)" />
+        <button class="today-btn" onclick="App.loadToday()">Today</button>
+      </div>
       <button class="refresh-btn" id="refreshBtn" onclick="App.loadAll()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         Refresh
@@ -76,34 +97,54 @@
   <nav class="nav">
     <button class="nav-tab active" data-tab="summary">
       <span class="dot" style="background:var(--cyan)"></span>Summary
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
 
     <button class="nav-tab" data-tab="daily">
       <span class="dot" style="background:var(--green)"></span>Daily
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="weekly">
       <span class="dot" style="background:var(--amber)"></span>Weekly
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="ar">
       <span class="dot" style="background:var(--ar)"></span>AR
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="finish">
       <span class="dot" style="background:var(--fin)"></span>Finish
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="surface">
       <span class="dot" style="background:var(--srf)"></span>Surface
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="lms">
       <span class="dot" style="background:var(--lms)"></span>LMS
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="inventory">
       <span class="dot" style="background:var(--inv)"></span>Inventory
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="mailroom">
       <span class="dot" style="background:var(--mail)"></span>Mailroom
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="history">
       <span class="dot" style="background:var(--muted)"></span>History
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
   </nav>
 
@@ -112,6 +153,14 @@
 
     <!-- ══════════════ SUMMARY TAB ══════════════ -->
     <section class="tab-panel active" id="tab-summary">
+      <!-- History mode banner -->
+      <div class="history-banner" id="historyBanner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        HISTORY MODE — Viewing snapshot data for <strong id="historyBannerDate">—</strong>
+        &nbsp;·&nbsp;
+        <span style="cursor:pointer;text-decoration:underline" onclick="App.loadToday()">Switch to Live</span>
+      </div>
+
       <div class="report-bar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Report Date: <strong id="reportDate">—</strong>
@@ -148,40 +197,30 @@
         <div class="section-badge" id="dailyDateBadge">—</div>
       </div>
 
-      <!-- Facility Overview KPIs -->
-      <div class="ds-block">
-        <div class="ds-block-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Facility Overview
-        </div>
-        <div class="kpi-grid" id="dailyFacilityKpis"></div>
-      </div>
+      <!-- Facility KPIs strip -->
+      <div class="kpi-grid" id="dailyFacilityKpis" style="margin-bottom:18px"></div>
 
-      <!-- Goal Status Row -->
-      <div class="ds-block">
-        <div class="ds-block-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
-          Goal Status Today
-        </div>
-        <div class="goal-status-grid" id="dailyGoalStatus"></div>
-      </div>
+      <!-- Option 4 Split Panel -->
+      <div class="daily-split">
 
-      <!-- Dept Breakdown -->
-      <div class="ds-block">
-        <div class="ds-block-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          Department Breakdown
+        <!-- LEFT: Department sidebar -->
+        <div class="daily-sidebar" id="dailySidebar">
+          <div class="daily-sb-head">
+            <div class="daily-sb-title">Departments</div>
+            <div class="daily-sb-sub">Highest → Lowest Breakage</div>
+          </div>
+          <div id="dailySidebarItems"></div>
         </div>
-        <div id="dailyDeptBreakdown"></div>
-      </div>
 
-      <!-- Improvement Flags -->
-      <div class="ds-block">
-        <div class="ds-block-title" style="color:var(--amber)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Improvement Opportunities
+        <!-- RIGHT: Detail pane -->
+        <div class="daily-detail" id="dailyDetailPane">
+          <div class="daily-detail-empty">
+            <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:40px 20px">
+              Select a department from the left to view the full breakdown
+            </div>
+          </div>
         </div>
-        <div id="dailyImprovements"></div>
+
       </div>
     </section>
 
@@ -252,7 +291,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Operator Breakdown</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
         <div class="panel-body" id="arOperators"></div>
       </div>
     </section>
@@ -275,7 +314,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Operator Breakdown</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
         <div class="panel-body" id="finOperators"></div>
       </div>
     </section>
@@ -298,7 +337,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Operator / Machine Breakdown</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
         <div class="panel-body" id="srfOperators"></div>
       </div>
     </section>
@@ -321,7 +360,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Operator Breakdown</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
         <div class="panel-body" id="lmsOperators"></div>
       </div>
     </section>
@@ -338,7 +377,7 @@
         <div class="panel-body" id="invReasonsTable"></div>
       </div>
       <div class="panel" style="margin-top:18px">
-        <div class="panel-header"><div class="panel-title">Operator Breakdown</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
         <div class="panel-body" id="invOperators"></div>
       </div>
     </section>
