@@ -1,3 +1,4 @@
+// FacilityBreakage.js — v20260427_1947
 /* ═══════════════════════════════════════════════════════════
    ZENNI FACILITY BREAKAGE — app.js
    Requires: Chart.js 4.x loaded before this file
