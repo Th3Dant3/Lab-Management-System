@@ -238,20 +238,25 @@ const ChartFactory = {
 
 /* ── META BAR ───────────────────────────────────────────── */
 function renderMeta(meta) {
-  document.getElementById('metaOrders').textContent  = meta.orderCount > 0 ? U.fmt(meta.orderCount) : '—';
-  document.getElementById('metaLenses').textContent  = meta.lensCount  > 0 ? U.fmt(meta.lensCount)  : '—';
-  document.getElementById('reportDate').textContent  = meta.reportDate  || '—';
-  document.getElementById('lastRefresh').textContent = meta.lastRefresh || '—';
-  const isHistory = App._isHistoryMode;
-  document.getElementById('headerSub').textContent   = isHistory
-    ? `History: ${meta.reportDate || '—'}`
-    : meta.lensCount > 0
-      ? `Report: ${meta.reportDate || '—'}  ·  ${U.fmt(meta.lensCount)} lenses`
-      : 'No live data — select a date or wait for upload';
+  const rd = document.getElementById('reportDate');
+  const lr = document.getElementById('lastRefresh');
+  if (rd) rd.textContent = meta.reportDate  || '—';
+  if (lr) lr.textContent = meta.lastRefresh || '—';
+  const sub = document.getElementById('headerSub');
+  if (sub) {
+    const isHistory = App._isHistoryMode;
+    sub.textContent = isHistory
+      ? `History: ${meta.reportDate || '—'}`
+      : meta.lensCount > 0
+        ? `Report: ${meta.reportDate || '—'}  ·  ${U.fmt(meta.lensCount)} lenses`
+        : 'Waiting for RawData upload…';
+  }
 }
 
 /* ── SUMMARY TAB ────────────────────────────────────────── */
 function renderSummary(summary, meta, history) {
+  // Guard — skip if Overview tab elements not in DOM
+  if (!document.getElementById('labKpis')) return;
   const lt        = summary.labTotal;
   const labPct    = lt.labLensPct   * 100;
   const framePct  = lt.labFramePct  * 100;
@@ -267,8 +272,6 @@ function renderSummary(summary, meta, history) {
     { label: 'Lab Lens %',   value: U.pctRaw(labPct),   sub: 'Goal ≤5.00%', accent: U.statusColor(labPct,  5.00), badge: U.statusBadge(labPct, 5.00),  delta: U.deltaHtml(labPct, prevLabPct) },
     { label: 'Frames Broken', value: U.fmt(lt.framesBroken), sub: `of ${U.fmt(lt.orderCount)} orders`, accent: 'var(--amber)', delta: '' },
     { label: 'Frame Brk %',  value: U.pctRaw(framePct), sub: 'Goal ≤1.00%', accent: U.statusColor(framePct, 1.00), badge: U.statusBadge(framePct, 1.00), delta: U.deltaHtml(framePct, prevFramePct) },
-    { label: 'Lens Count',   value: U.fmt(lt.lensCount),   sub: 'Total lenses today',  accent: 'var(--lms)',  delta: '' },
-    { label: 'Order Count',  value: U.fmt(lt.orderCount),  sub: 'Mailroom orders',     accent: 'var(--mail)', delta: '' },
   ].map(k => `
     <div class="kpi-card" style="--accent:${k.accent}">
       <div class="kpi-label">${k.label}</div>
@@ -500,170 +503,190 @@ function renderDaily(summary, history) {
 }
 
 /* ── WEEKLY SUMMARY TAB ─────────────────────────────────── */
-function renderWeekly(history) {
-  if (!history || history.length === 0) {
-    ['weeklyKpis', 'weeklyReasons'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = U.emptyState('No snapshot history yet. Take daily snapshots to see weekly trends.');
-    });
+function renderWeekly(data) {
+  if (!data || !data.days) {
+    document.getElementById('weeklyFacilityKpis').innerHTML = U.emptyState('No weekly data available');
     return;
   }
 
-  // Use last 7 snapshots
-  const recent = history.slice(-7);
-  const labels = recent.map(r => U.shortDate(r['Date']));
+  const { days, weekStart, weekEnd, availableWeeks } = data;
 
-  document.getElementById('weeklyRange').textContent =
-    `${recent.length} snapshots${recent.length >= 2 ? ` · ${U.shortDate(recent[0]['Date'])} – ${U.shortDate(recent[recent.length-1]['Date'])}` : ''}`;
+  document.getElementById('weeklyRangeBadge').textContent =
+    `${weekStart || '—'} – ${weekEnd || '—'}`;
 
-  /* Extract series */
-  const labSeries  = recent.map(r => U.parseHistoryPct(r['Lab Lens %'])  || 0);
-  const arSeries   = recent.map(r => U.parseHistoryPct(r['AR %'])        || 0);
-  const finSeries  = recent.map(r => U.parseHistoryPct(r['Fin %'])       || 0);
-  const srfSeries  = recent.map(r => U.parseHistoryPct(r['Srf %'])       || 0);
-  const frameSeries= recent.map(r => U.parseHistoryPct(r['Lab Frame %']) || 0);
-  const volSeries  = recent.map(r => parseFloat(r['Lab Lenses'] || 0));
+  const daysWithData = days.filter(d => d.hasData);
 
-  /* Weekly averages for KPIs */
-  const avg = arr => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
-  const trend = arr => {
-    if (arr.length < 2) return 0;
-    return arr[arr.length - 1] - arr[arr.length - 2];
-  };
+  // ── Week KPI averages ──
+  const avg = arr => arr.length ? arr.reduce((a,b) => a+b,0)/arr.length : 0;
+  const avgLab = avg(daysWithData.map(d => d.labLensPct));
+  const avgAR  = avg(daysWithData.map(d => d.arPct));
+  const avgFin = avg(daysWithData.map(d => d.finPct));
+  const avgSrf = avg(daysWithData.map(d => d.srfPct));
+  const totalBroken = daysWithData.reduce((s,d) => s + (d.labLenses||0), 0);
 
-  const avgLab  = avg(labSeries);
-  const avgAR   = avg(arSeries);
-  const avgFin  = avg(finSeries);
-  const avgSrf  = avg(srfSeries);
+  document.getElementById('weeklyFacilityKpis').innerHTML = daysWithData.length === 0
+    ? `<div style="grid-column:1/-1">${U.emptyState('No snapshots found for this week')}</div>`
+    : [
+        { label: 'Days with Data',   value: daysWithData.length + ' of 7', accent: 'var(--muted)' },
+        { label: 'Total Lenses Broken', value: U.fmt(totalBroken),        accent: 'var(--cyan)' },
+        { label: 'Avg Lab %',    value: avgLab.toFixed(2)+'%', accent: U.statusColor(avgLab, 5.00), badge: U.statusBadge(avgLab, 5.00) },
+        { label: 'Avg AR %',     value: avgAR.toFixed(2) +'%', accent: U.statusColor(avgAR,  0.85), badge: U.statusBadge(avgAR,  0.85) },
+        { label: 'Avg Finish %', value: avgFin.toFixed(2)+'%', accent: U.statusColor(avgFin, 1.70), badge: U.statusBadge(avgFin, 1.70) },
+        { label: 'Avg Surface %',value: avgSrf.toFixed(2)+'%', accent: U.statusColor(avgSrf, 2.80), badge: U.statusBadge(avgSrf, 2.80) },
+      ].map(k => `
+        <div class="kpi-card" style="--accent:${k.accent}">
+          <div class="kpi-label">${k.label}</div>
+          <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
+          ${k.badge || ''}
+        </div>`).join('');
 
-  document.getElementById('weeklyKpis').innerHTML = [
-    { label: 'Avg Lab Lens %',  value: avgLab.toFixed(2)  + '%', accent: U.statusColor(avgLab, 5.00),  delta: U.deltaHtml(labSeries.at(-1), labSeries.at(-2)) },
-    { label: 'Avg AR %',        value: avgAR.toFixed(2)   + '%', accent: U.statusColor(avgAR,  0.85),  delta: U.deltaHtml(arSeries.at(-1),  arSeries.at(-2))  },
-    { label: 'Avg Finish %',    value: avgFin.toFixed(2)  + '%', accent: U.statusColor(avgFin, 1.70),  delta: U.deltaHtml(finSeries.at(-1), finSeries.at(-2)) },
-    { label: 'Avg Surface %',   value: avgSrf.toFixed(2)  + '%', accent: U.statusColor(avgSrf, 2.80),  delta: U.deltaHtml(srfSeries.at(-1), srfSeries.at(-2)) },
-    { label: 'Snapshots',       value: recent.length,             accent: 'var(--muted)',                delta: '' },
-  ].map(k => `
-    <div class="kpi-card" style="--accent:${k.accent}">
-      <div class="kpi-label">${k.label}</div>
-      <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
-      ${k.delta}
-    </div>`).join('');
-
-  /* Weekly trend chart — dept % lines */
-  const legendEl = document.getElementById('weeklyLegend');
-  if (legendEl) {
-    const items = [
-      { label: 'Lab Total', color: '#38bdf8' },
-      { label: 'AR',        color: '#a78bfa' },
-      { label: 'Finish',    color: '#34d399' },
-      { label: 'Surface',   color: '#fb923c' },
-    ];
-    legendEl.innerHTML = items.map(i => `
-      <div class="legend-item">
-        <div class="legend-dot" style="background:${i.color}"></div>
-        ${i.label}
-      </div>`).join('');
+  // ── Weekly Trend Chart ──
+  destroyChart('weeklyTrendChart');
+  const ctx = document.getElementById('weeklyTrendChart');
+  if (ctx && daysWithData.length > 0) {
+    const labels = days.map(d => d.day + ' ' + d.date.slice(0,5));
+    const getVal = (day, key) => day.hasData ? day[key] : null;
+    Charts['weeklyTrendChart'] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label:'Lab Total', data: days.map(d => getVal(d,'labLensPct')),  borderColor:'#38bdf8', backgroundColor:'#38bdf820', pointBackgroundColor:'#38bdf8', pointBorderColor:'#080b0f', pointBorderWidth:2, pointRadius:5, borderWidth:2, tension:0.3, spanGaps:true },
+          { label:'AR',        data: days.map(d => getVal(d,'arPct')),       borderColor:'#a78bfa', backgroundColor:'transparent', pointBackgroundColor:'#a78bfa', pointBorderColor:'#080b0f', pointBorderWidth:2, pointRadius:4, borderWidth:2, tension:0.3, spanGaps:true },
+          { label:'Finish',    data: days.map(d => getVal(d,'finPct')),      borderColor:'#34d399', backgroundColor:'transparent', pointBackgroundColor:'#34d399', pointBorderColor:'#080b0f', pointBorderWidth:2, pointRadius:4, borderWidth:2, tension:0.3, spanGaps:true },
+          { label:'Surface',   data: days.map(d => getVal(d,'srfPct')),      borderColor:'#fb923c', backgroundColor:'transparent', pointBackgroundColor:'#fb923c', pointBorderColor:'#080b0f', pointBorderWidth:2, pointRadius:4, borderWidth:2, tension:0.3, spanGaps:true },
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        plugins:{
+          legend:{ display:true, position:'bottom', labels:{ usePointStyle:true, pointStyle:'circle', padding:16, color:'#9aafc4' }},
+          tooltip:{ callbacks:{ label: ctx => ctx.raw !== null ? ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` : ' No data' }},
+        },
+        scales:{
+          x:{ grid:{ display:false }, ticks:{ color:'#9aafc4', font:{ size:10 }}},
+          y:{ beginAtZero:true, ticks:{ callback: v => v.toFixed(2)+'%', color:'#9aafc4', font:{ size:10 }}, grid:{ color:'rgba(255,255,255,0.05)' }},
+        },
+      },
+    });
   }
 
-  ChartFactory.line('weeklyTrendChart', labels, [
-    ChartFactory.lineDataset('Lab Total', labSeries, '#38bdf8', { fill: true }),
-    ChartFactory.lineDataset('AR',        arSeries,  '#a78bfa'),
-    ChartFactory.lineDataset('Finish',    finSeries, '#34d399'),
-    ChartFactory.lineDataset('Surface',   srfSeries, '#fb923c'),
-  ], {
-    isPct: true, legend: true,
-    extra: {
-      plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#ffffff' },
-        },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` } },
-      },
-      scales: {
-        y: {
-          ticks: { callback: v => v.toFixed(2) + '%' },
-          // Draw goal lines via plugin if needed
-        },
-      },
-    },
-  });
+  // ── Day-by-day table ──
+  const DEPTS = [
+    { key:'arPct',  label:'AR',      color:'#a78bfa', goal:0.85 },
+    { key:'finPct', label:'Finish',  color:'#34d399', goal:1.70 },
+    { key:'srfPct', label:'Surface', color:'#fb923c', goal:2.80 },
+  ];
 
-  /* Volume bar chart */
-  ChartFactory.bar('weeklyVolumeChart', labels, [{
-    label: 'Lenses Broken',
-    data: volSeries,
-    backgroundColor: volSeries.map((v, i) => {
-      // Gradient by index
-      const opacity = 0.4 + (i / volSeries.length) * 0.5;
-      return `rgba(56,189,248,${opacity.toFixed(2)})`;
-    }),
-    borderRadius: 5, borderSkipped: false,
-  }], {
-    extra: {
-      plugins: { tooltip: { callbacks: { label: ctx => ` ${ctx.raw} lenses broken` } } },
-    },
-  });
+  const deptBreakdownEl = document.getElementById('weeklyDeptBreakdown');
+  if (deptBreakdownEl) {
+    deptBreakdownEl.innerHTML = `
+      <div class="panel">
+        <div class="panel-body" style="padding:0">
+          <table class="dept-breakdown-table">
+            <thead><tr>
+              <th>Day</th>
+              <th style="text-align:right">Lab %</th>
+              ${DEPTS.map(d => `<th style="text-align:right;color:${d.color}">${d.label}</th>`).join('')}
+              <th>Top Reason</th>
+            </tr></thead>
+            <tbody>
+              ${days.map(day => {
+                if (day.isFuture && !day.hasData) return `
+                  <tr style="opacity:0.3">
+                    <td><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${day.day} ${day.date.slice(0,5)}</span></td>
+                    <td colspan="5" style="color:var(--muted);font-family:var(--font-mono);font-size:11px">—</td>
+                  </tr>`;
+                if (!day.hasData) return `
+                  <tr style="opacity:0.5">
+                    <td><span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${day.day} ${day.date.slice(0,5)}</span></td>
+                    <td colspan="5" style="color:var(--muted);font-family:var(--font-mono);font-size:11px">No snapshot</td>
+                  </tr>`;
+                const labOk = day.labLensPct <= 5.00;
+                const topReason = day.topReasons && day.topReasons.Surface && day.topReasons.Surface[0]
+                  ? day.topReasons.Surface[0].reason
+                  : (day.topReasons && day.topReasons.Finish && day.topReasons.Finish[0] ? day.topReasons.Finish[0].reason : '—');
+                return `
+                  <tr>
+                    <td style="font-family:var(--font-mono);font-size:11px;font-weight:600">${day.day} ${day.date.slice(0,5)}</td>
+                    <td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${labOk?'var(--green)':'var(--red)'}">${day.labLensPct.toFixed(2)}%</td>
+                    ${DEPTS.map(d => {
+                      const v = day[d.key] || 0;
+                      return `<td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${v<=d.goal?'var(--green)':'var(--red)'}">${v.toFixed(2)}%</td>`;
+                    }).join('')}
+                    <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${topReason}</td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
 
-  /* Frame breakage trend */
-  ChartFactory.line('weeklyFrameChart', labels, [
-    ChartFactory.lineDataset('Frame Brk %', frameSeries, '#facc15', { fill: true }),
-  ], {
-    isPct: true,
-    extra: {
-      plugins: {
-        tooltip: { callbacks: { label: ctx => ` Frame Brk: ${ctx.raw.toFixed(2)}%` } },
-        annotation: {}, // could add goal line plugin if desired
-      },
-      scales: {
-        y: { ticks: { callback: v => v.toFixed(2) + '%' } },
-      },
-    },
-  });
-
-  /* Dept contribution pie */
-  const latestAR  = arSeries.at(-1)  || 0;
-  const latestFin = finSeries.at(-1) || 0;
-  const latestSrf = srfSeries.at(-1) || 0;
-  ChartFactory.doughnut(
-    'weeklyDeptPieChart',
-    ['AR', 'Finish', 'Surface'],
-    [latestAR, latestFin, latestSrf],
-    ['#a78bfa', '#34d399', '#fb923c']
-  );
-
-  /* Recurring top reasons from AR Top Reason, Fin Top Reason, Srf Top Reason columns */
+  // ── Top Recurring Reasons ──
   const reasonCount = {};
-  recent.forEach(r => {
-    ['AR Top Reason', 'Fin Top Reason', 'Srf Top Reason'].forEach(col => {
-      const val = r[col];
-      if (val && val.trim()) {
-        reasonCount[val] = (reasonCount[val] || 0) + 1;
+  daysWithData.forEach(day => {
+    ['AR','Finish','Surface','LMS'].forEach(dept => {
+      const top = (day.topReasons[dept] || [])[0];
+      if (top && top.reason) {
+        if (!reasonCount[top.reason]) reasonCount[top.reason] = { count:0, dept, color: DEPT_COLORS[dept]||'var(--cyan)' };
+        reasonCount[top.reason].count++;
       }
     });
   });
-  const sortedReasons = Object.entries(reasonCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8);
-  const maxRCount = sortedReasons[0]?.[1] || 1;
+  const sortedReasons = Object.entries(reasonCount).sort((a,b) => b[1].count - a[1].count).slice(0,8);
+  const maxRC = sortedReasons[0]?.[1].count || 1;
 
-  document.getElementById('weeklyReasons').innerHTML = sortedReasons.length
-    ? sortedReasons.map(([reason, count]) => {
-        const dept = reason.startsWith('A-') ? 'AR'
-                   : reason.startsWith('F-') ? 'Finish'
-                   : reason.startsWith('S-') ? 'Surface' : 'Lab';
-        const color = DEPT_COLORS[dept] || 'var(--cyan)';
-        return `
+  const weeklyReasonsEl = document.getElementById('weeklyTopReasons');
+  if (weeklyReasonsEl) {
+    weeklyReasonsEl.innerHTML = sortedReasons.length
+      ? sortedReasons.map(([reason, {count, dept, color}]) => `
           <div class="weekly-reason-row">
             <div class="wr-name">${reason}</div>
             <div class="wr-dept" style="color:${color}">${dept}</div>
-            <div class="wr-bar"><div class="wr-fill" style="width:${(count/maxRCount)*100}%;background:${color}"></div></div>
-            <div class="wr-count" style="color:${color}">${count}</div>
-          </div>`;
-      }).join('')
-    : U.emptyState('Take more snapshots to see recurring reasons');
+            <div class="wr-bar"><div class="wr-fill" style="width:${(count/maxRC)*100}%;background:${color}"></div></div>
+            <div class="wr-count" style="color:${color}">${count}d</div>
+          </div>`)
+        .join('')
+      : U.emptyState('Take daily snapshots to see recurring reasons');
+  }
+
+  // ── Weekly Improvements ──
+  const impEl = document.getElementById('weeklyImprovements');
+  if (impEl && daysWithData.length > 0) {
+    const overLab = daysWithData.filter(d => d.labLensPct > 5.00);
+    const overSrf = daysWithData.filter(d => d.srfPct > 2.80);
+    const overFin = daysWithData.filter(d => d.finPct  > 1.70);
+    const overAR  = daysWithData.filter(d => d.arPct   > 0.85);
+    const imps = [];
+    if (overLab.length) imps.push({ dept:'Lab',     issue:`Over 5% goal on ${overLab.length} day(s)`,    action:overLab.map(d=>d.day).join(', ')+' — review all depts',       priority:'high' });
+    if (overSrf.length) imps.push({ dept:'Surface',  issue:`Over 2.80% goal on ${overSrf.length} day(s)`, action:overSrf.map(d=>d.day).join(', ')+' — review S-Power/S-HC Pit', priority:'high' });
+    if (overFin.length) imps.push({ dept:'Finish',   issue:`Over 1.70% goal on ${overFin.length} day(s)`, action:overFin.map(d=>d.day).join(', ')+' — check F-Slip equipment',  priority:'medium' });
+    if (overAR.length)  imps.push({ dept:'AR',       issue:`Over 0.85% goal on ${overAR.length} day(s)`,  action:overAR.map(d=>d.day).join(', ')+'  — review A-Off color',      priority:'medium' });
+    if (!imps.length)   imps.push({ dept:'Lab',      issue:'All goals met this week',                      action:'Facility within all breakage targets',                         priority:'low' });
+
+    impEl.innerHTML = `
+      <table class="imp-table">
+        <thead><tr><th>Dept</th><th>Issue</th><th>Action</th><th>Priority</th></tr></thead>
+        <tbody>
+          ${imps.map(r => {
+            const color = {Lab:'#38bdf8',Surface:'#fb923c',Finish:'#34d399',AR:'#a78bfa'}[r.dept]||'var(--muted)';
+            const pc    = r.priority==='high'?'high':r.priority==='medium'?'medium':'low';
+            const pl    = r.priority==='high'?'HIGH':r.priority==='medium'?'MEDIUM':'OK';
+            return `<tr>
+              <td><span class="imp-dept" style="color:${color}">${r.dept}</span></td>
+              <td><span class="imp-issue">${r.issue}</span></td>
+              <td><span class="imp-action">${r.action}</span></td>
+              <td><span class="imp-priority ${pc}">${pl}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
 }
+
+
 
 /* ── DEPARTMENT DETAIL TABS ─────────────────────────────── */
 function renderDeptTab(tabId, data, deptName, color, chartId) {
@@ -751,65 +774,132 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
     }
   }
 
-  /* Breakage by Operator — collapsible rows, click to expand/collapse reasons */
+  /* Breakage by Operator/Reason — toggle between grouped-by-operator and grouped-by-reason */
   const opsEl = document.querySelector(`#tab-${tabId} [id$="Operators"]`);
   if (opsEl) {
-    const isFinish = tabId === 'finish';
-    if (operators.length) {
+    const isFinish  = tabId === 'finish';
+    const isSurface = tabId === 'surface';
+    const colLabel  = isSurface ? 'Machine' : 'Operator';
 
-      // Group rows by operator
-      const grouped = {};
-      operators.forEach(o => {
-        const key = o.operator || 'NONE';
-        if (!grouped[key]) grouped[key] = { name: key, reasons: [], lensTotal: 0, frameTotal: 0 };
-        const lenses = isFinish ? (o.lensTotal || 0) : (o.total || 0);
-        const frames = isFinish ? (o.frameTotal || 0) : 0;
-        grouped[key].reasons.push({ reason: o.reason || '—', lenses, frames });
-        grouped[key].lensTotal  += lenses;
-        grouped[key].frameTotal += frames;
+    if (operators.length) {
+      // operators now have: { operator, total/lensTotal/frameTotal, reason (top), reasons: [{reason, lenses, frames}] }
+      const sorted = [...operators].sort((a, b) => {
+        const at = a.total ?? ((a.lensTotal||0) + (a.frameTotal||0));
+        const bt = b.total ?? ((b.lensTotal||0) + (b.frameTotal||0));
+        return bt - at;
       });
 
-      const sortedOps = Object.values(grouped).sort((a, b) => b.lensTotal - a.lensTotal);
-      const uid = tabId; // unique prefix per tab
-
-      opsEl.innerHTML = `
-        <div class="op-collapse-list">
-          ${sortedOps.map((op, idx) => {
-            const detailId = `op-detail-${uid}-${idx}`;
-            const headerId = `op-header-${uid}-${idx}`;
-            const maxLenses = sortedOps[0].lensTotal || 1;
-            return `
-              <!-- Operator header row — clickable -->
-              <div class="op-group-header" id="${headerId}" onclick="toggleOperator('${detailId}','${headerId}')">
-                <svg class="op-header-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-                <div class="op-header-name" style="color:${color}">${op.name}</div>
-                <div class="op-header-meta">
-                  <span>${op.reasons.length} reason${op.reasons.length !== 1 ? 's' : ''}</span>
-                  ${isFinish && op.frameTotal > 0 ? `<span style="color:var(--amber)">${op.frameTotal} frames</span>` : ''}
+      const renderByOperator = () => {
+        const uid = tabId;
+        return `
+          <div class="op-collapse-list">
+            ${sorted.map((op, idx) => {
+              const name      = op.operator || 'NONE';
+              const isNone    = name === 'NONE';
+              const total     = op.total ?? ((op.lensTotal||0) + (op.frameTotal||0));
+              const maxTotal  = (sorted[0]?.total ?? ((sorted[0]?.lensTotal||0)+(sorted[0]?.frameTotal||0))) || 1;
+              const detailId  = `op-detail-${uid}-${idx}`;
+              const headerId  = `op-header-${uid}-${idx}`;
+              const reasonsList = (op.reasons || []).sort((a,b)=>(b.lenses+b.frames)-(a.lenses+a.frames));
+              return `
+                <div class="op-group-header ${isNone?'op-none':''}" id="${headerId}" onclick="toggleOperator('${detailId}','${headerId}')">
+                  <svg class="op-header-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  <div class="op-header-name" style="color:${isNone?'var(--red)':color}">${isNone?'⚠ Unassigned':name}</div>
+                  <div class="op-header-meta">
+                    <span>${reasonsList.length} reason${reasonsList.length!==1?'s':''}</span>
+                    ${isFinish && (op.frameTotal||0) > 0 ? `<span style="color:var(--amber)">${op.frameTotal}f</span>` : ''}
+                  </div>
+                  <div class="op-header-total" style="color:${isNone?'var(--red)':color}">${total}</div>
                 </div>
-                <div class="op-header-total" style="color:${color}">${op.lensTotal}</div>
-              </div>
+                <div class="op-reasons-detail" id="${detailId}">
+                  <div class="op-reasons-inner">
+                    ${reasonsList.length ? reasonsList.map(r => `
+                      <div class="op-reason-row">
+                        <span class="op-reason-tag">${r.reason}</span>
+                        <span class="op-reason-bar-wrap">
+                          <span class="op-reason-bar" style="width:${total>0?Math.round(((r.lenses+r.frames)/total)*100):0}%;background:${isNone?'var(--red)':color}60"></span>
+                        </span>
+                        <span class="op-reason-num" style="color:${isNone?'var(--red)':color}">${r.lenses}</span>
+                        ${isFinish && r.frames > 0 ? `<span class="op-reason-frames">+${r.frames}f</span>` : ''}
+                      </div>`).join('')
+                    : '<div class="op-reason-row"><span class="op-reason-tag" style="color:var(--muted)">No reason data</span></div>'}
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>`;
+      };
 
-              <!-- Reasons detail — hidden until clicked -->
-              <div class="op-reasons-detail" id="${detailId}">
-                <div class="op-reasons-inner">
-                  ${op.reasons.sort((a,b) => b.lenses - a.lenses).map(r => `
-                    <div class="op-reason-row">
-                      <span class="op-reason-tag">${r.reason}</span>
-                      <span class="op-reason-bar-wrap">
-                        <span class="op-reason-bar" style="width:${op.lensTotal > 0 ? Math.round((r.lenses/op.lensTotal)*100) : 0}%;background:${color}60"></span>
-                      </span>
-                      <span class="op-reason-num" style="color:${color}">${r.lenses}</span>
-                      ${isFinish && r.frames > 0 ? `<span class="op-reason-frames">+${r.frames}f</span>` : ''}
-                    </div>`).join('')}
+      const renderByReason = () => {
+        // Group by reason across all operators
+        const byReason = {};
+        operators.forEach(op => {
+          const total = op.total ?? ((op.lensTotal||0)+(op.frameTotal||0));
+          if (total === 0 && !(op.reasons||[]).length) return;
+          (op.reasons||[]).forEach(r => {
+            if (!byReason[r.reason]) byReason[r.reason] = { reason: r.reason, lenses: 0, frames: 0, ops: [] };
+            byReason[r.reason].lenses += r.lenses;
+            byReason[r.reason].frames += r.frames;
+            byReason[r.reason].ops.push({ name: op.operator||'NONE', lenses: r.lenses, frames: r.frames });
+          });
+        });
+        const sortedR = Object.values(byReason).sort((a,b)=>(b.lenses+b.frames)-(a.lenses+a.frames));
+        const maxR    = sortedR[0] ? sortedR[0].lenses + sortedR[0].frames : 1;
+        const uid     = tabId + 'r';
+        return `
+          <div class="op-collapse-list">
+            ${sortedR.map((r, idx) => {
+              const detailId = `op-detail-${uid}-${idx}`;
+              const headerId = `op-header-${uid}-${idx}`;
+              const total    = r.lenses + r.frames;
+              return `
+                <div class="op-group-header" id="${headerId}" onclick="toggleOperator('${detailId}','${headerId}')">
+                  <svg class="op-header-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  <div class="op-header-name" style="color:${color}">${r.reason}</div>
+                  <div class="op-header-meta"><span>${r.ops.length} ${colLabel.toLowerCase()}${r.ops.length!==1?'s':''}</span></div>
+                  <div class="op-header-total" style="color:${color}">${r.lenses}</div>
                 </div>
-              </div>`;
-          }).join('')}
-        </div>`;
+                <div class="op-reasons-detail" id="${detailId}">
+                  <div class="op-reasons-inner">
+                    ${r.ops.sort((a,b)=>(b.lenses+b.frames)-(a.lenses+a.frames)).map(op => `
+                      <div class="op-reason-row">
+                        <span class="op-reason-tag">${op.name==='NONE'?'⚠ Unassigned':op.name}</span>
+                        <span class="op-reason-bar-wrap">
+                          <span class="op-reason-bar" style="width:${Math.round((op.lenses/total)*100)}%;background:${color}60"></span>
+                        </span>
+                        <span class="op-reason-num" style="color:${color}">${op.lenses}</span>
+                      </div>`).join('')}
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>`;
+      };
+
+      // Toggle state per tab
+      if (!window._opFilter) window._opFilter = {};
+      if (!window._opFilter[tabId]) window._opFilter[tabId] = 'operator';
+
+      const renderToggle = () => {
+        const mode = window._opFilter[tabId];
+        opsEl.innerHTML = `
+          <div class="op-filter-toggle">
+            <button class="op-filter-btn ${mode==='operator'?'active':''}"
+              onclick="window._opFilter['${tabId}']='operator';document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').nextSibling.remove();document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').insertAdjacentHTML('afterend',window._opRenderFn['${tabId}']())">
+              By ${colLabel}
+            </button>
+            <button class="op-filter-btn ${mode==='reason'?'active':''}"
+              onclick="window._opFilter['${tabId}']='reason';document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').nextSibling.remove();document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').insertAdjacentHTML('afterend',window._opRenderFn['${tabId}']())">
+              By Reason
+            </button>
+          </div>
+          ${mode==='operator' ? renderByOperator() : renderByReason()}`;
+      };
+
+      if (!window._opRenderFn) window._opRenderFn = {};
+      window._opRenderFn[tabId] = () => window._opFilter[tabId]==='operator' ? renderByOperator() : renderByReason();
+
+      renderToggle();
     } else {
-      opsEl.innerHTML = U.emptyState('No operator data for today');
+      opsEl.innerHTML = U.emptyState(`No ${colLabel.toLowerCase()} data for today`);
     }
   }
 }
@@ -851,6 +941,8 @@ function renderHistory(rows) {
 
 /* ── DAILY SUMMARY ──────────────────────────────────────── */
 function renderDaily(summary, depts, meta) {
+  // Daily tab removed — skip if elements don't exist
+  if (!document.getElementById('dailyFacilityKpis') && !document.getElementById('dailySidebarItems')) return;
   const lt         = summary.labTotal;
   const lensCount  = meta.lensCount  || 1;
   const orderCount = meta.orderCount || 1;
@@ -861,11 +953,12 @@ function renderDaily(summary, depts, meta) {
   const today    = new Date();
   const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  document.getElementById('dailyDateBadge').textContent =
-    dayNames[today.getDay()] + ' · ' + (meta.reportDate || today.toLocaleDateString());
+  const dateBadge = document.getElementById('dailyDateBadge');
+  if (dateBadge) dateBadge.textContent = dayNames[today.getDay()] + ' · ' + (meta.reportDate || today.toLocaleDateString());
 
   // ── Facility KPIs strip ──
-  document.getElementById('dailyFacilityKpis').innerHTML = [
+  const dFKpis = document.getElementById('dailyFacilityKpis');
+  if (dFKpis) dFKpis.innerHTML = [
     { label: 'Lab Lenses Broken', value: U.fmt(lt.labLensesBroken), accent: 'var(--cyan)',  sub: `of ${U.fmt(lensCount)} lenses` },
     { label: 'Lab Lens %',        value: labPct.toFixed(2) + '%',   accent: U.statusColor(labPct, 5.00),  sub: 'Goal ≤5.00%', badge: U.statusBadge(labPct, 5.00) },
     { label: 'Frames Broken',     value: U.fmt(lt.framesBroken),    accent: 'var(--amber)', sub: `of ${U.fmt(orderCount)} orders` },
@@ -915,7 +1008,8 @@ function renderDaily(summary, depts, meta) {
   const allEntries = [labEntry, ...deptList];
 
   // ── Build sidebar ──
-  document.getElementById('dailySidebarItems').innerHTML = allEntries.map((entry, idx) => {
+  const dSide = document.getElementById('dailySidebarItems');
+  if (dSide) dSide.innerHTML = allEntries.map((entry, idx) => {
     const ok     = entry.goal ? entry.pct <= entry.goal : true;
     const status = entry.goal ? (ok ? 'ON GOAL' : 'OVER GOAL') : '—';
     const sc     = entry.goal ? (ok ? 'var(--green)' : 'var(--red)') : 'var(--muted)';
@@ -1129,231 +1223,7 @@ ${overGoal.length > 0 ? `${overGoal.map(d => d.label).join(' and ')} ${overGoal.
 
 
 /* ── WEEKLY SUMMARY (Sun–Sat) ───────────────────────────── */
-function renderWeekly(history, meta) {
-  const lensCount  = meta.lensCount  || 1;
-  const orderCount = meta.orderCount || 1;
 
-  // Get current Sun–Sat week boundaries
-  const now     = new Date();
-  const dayOfWk = now.getDay(); // 0=Sun
-  const weekStart = new Date(now); weekStart.setDate(now.getDate() - dayOfWk); weekStart.setHours(0,0,0,0);
-  const weekEnd   = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999);
-
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
-  document.getElementById('weeklyRangeBadge').textContent =
-    `Week: ${fmt(weekStart)} – ${fmt(weekEnd)}`;
-
-  // Filter history to this Sun–Sat week
-  const weekSnaps = history.filter(r => {
-    if (!r['Date']) return false;
-    const d = new Date(r['Date']);
-    return d >= weekStart && d <= weekEnd;
-  });
-
-  // Build day slots Sun–Sat
-  const daySlots = Array.from({length: 7}, (_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(weekStart.getDate() + i);
-    const snap = weekSnaps.find(r => {
-      const rd = new Date(r['Date']);
-      return rd.getDay() === i;
-    });
-    return { day: dayNames[i], date: fmt(d), snap, isFuture: d > now };
-  });
-
-  const hasData = weekSnaps.length > 0;
-
-  // ── Week KPI Overview ──
-  if (!hasData) {
-    document.getElementById('weeklyFacilityKpis').innerHTML = `
-      <div style="grid-column:1/-1;padding:20px;text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--muted)">
-        No snapshots taken this week yet. Take daily snapshots to populate weekly data.
-      </div>`;
-  } else {
-    const labPcts   = weekSnaps.map(r => U.parseHistoryPct(r['Lab Lens %'])   || 0);
-    const framePcts = weekSnaps.map(r => U.parseHistoryPct(r['Lab Frame %'])  || 0);
-    const arPcts    = weekSnaps.map(r => U.parseHistoryPct(r['AR %'])         || 0);
-    const finPcts   = weekSnaps.map(r => U.parseHistoryPct(r['Fin %'])        || 0);
-    const srfPcts   = weekSnaps.map(r => U.parseHistoryPct(r['Srf %'])        || 0);
-    const avg = arr => arr.length ? arr.reduce((a,b) => a+b, 0) / arr.length : 0;
-    const avgLab = avg(labPcts), avgFin = avg(finPcts), avgSrf = avg(srfPcts), avgAR = avg(arPcts);
-
-    document.getElementById('weeklyFacilityKpis').innerHTML = [
-      { label: 'Snapshots This Week', value: weekSnaps.length,       accent: 'var(--muted)',    sub: `${weekSnaps.length} of 7 days` },
-      { label: 'Avg Lab Lens %',      value: avgLab.toFixed(2) + '%', accent: U.statusColor(avgLab, 5.00),  sub: 'Goal ≤5.00%', badge: U.statusBadge(avgLab, 5.00) },
-      { label: 'Avg AR %',            value: avgAR.toFixed(2)  + '%', accent: U.statusColor(avgAR,  0.85),  sub: 'Goal ≤0.85%', badge: U.statusBadge(avgAR, 0.85)  },
-      { label: 'Avg Finish %',        value: avgFin.toFixed(2) + '%', accent: U.statusColor(avgFin, 1.70),  sub: 'Goal ≤1.70%', badge: U.statusBadge(avgFin, 1.70) },
-      { label: 'Avg Surface %',       value: avgSrf.toFixed(2) + '%', accent: U.statusColor(avgSrf, 2.80),  sub: 'Goal ≤2.80%', badge: U.statusBadge(avgSrf, 2.80) },
-    ].map(k => `
-      <div class="kpi-card" style="--accent:${k.accent}">
-        <div class="kpi-label">${k.label}</div>
-        <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
-        <div class="kpi-sub">${k.sub}</div>
-        ${k.badge || ''}
-      </div>`).join('');
-
-    // ── Weekly Trend Chart ──
-    const chartLabels = daySlots.map(d => d.day + ' ' + d.date);
-    const getVal = (slot, key) => slot.snap ? (U.parseHistoryPct(slot.snap[key]) || 0) : null;
-
-    destroyChart('weeklyTrendChart');
-    const ctx = document.getElementById('weeklyTrendChart');
-    if (ctx) {
-      Charts['weeklyTrendChart'] = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: chartLabels,
-          datasets: [
-            { label: 'Lab Total', data: daySlots.map(d => getVal(d,'Lab Lens %')),  borderColor: '#38bdf8', backgroundColor: '#38bdf820', pointBackgroundColor: '#38bdf8', pointBorderColor: '#080b0f', pointBorderWidth: 2, pointRadius: 5, borderWidth: 2, tension: 0.3, spanGaps: true },
-            { label: 'AR',        data: daySlots.map(d => getVal(d,'AR %')),         borderColor: '#a78bfa', backgroundColor: 'transparent', pointBackgroundColor: '#a78bfa', pointBorderColor: '#080b0f', pointBorderWidth: 2, pointRadius: 4, borderWidth: 2, tension: 0.3, spanGaps: true },
-            { label: 'Finish',    data: daySlots.map(d => getVal(d,'Fin %')),        borderColor: '#34d399', backgroundColor: 'transparent', pointBackgroundColor: '#34d399', pointBorderColor: '#080b0f', pointBorderWidth: 2, pointRadius: 4, borderWidth: 2, tension: 0.3, spanGaps: true },
-            { label: 'Surface',   data: daySlots.map(d => getVal(d,'Srf %')),        borderColor: '#fb923c', backgroundColor: 'transparent', pointBackgroundColor: '#fb923c', pointBorderColor: '#080b0f', pointBorderWidth: 2, pointRadius: 4, borderWidth: 2, tension: 0.3, spanGaps: true },
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: { display: true, position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', padding: 16, color: '#ffffff' } },
-            tooltip: { callbacks: { label: ctx => ctx.raw !== null ? ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` : ' No data' } },
-          },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: '#ffffff', font: { size: 10 } } },
-            y: { beginAtZero: true, ticks: { callback: v => v.toFixed(2) + '%', color: '#ffffff', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-          },
-        },
-      });
-    }
-
-    // ── Weekly Dept Breakdown (per day) ──
-    const deptCols = [
-      { key: 'AR %',   label: 'AR',      color: '#a78bfa', goal: 0.85 },
-      { key: 'Fin %',  label: 'Finish',  color: '#34d399', goal: 1.70 },
-      { key: 'Srf %',  label: 'Surface', color: '#fb923c', goal: 2.80 },
-    ];
-
-    document.getElementById('weeklyDeptBreakdown').innerHTML = `
-      <div class="panel">
-        <div class="panel-body" style="padding:0">
-          <table class="dept-breakdown-table">
-            <thead><tr>
-              <th>Day</th>
-              <th style="text-align:right">Lab %</th>
-              ${deptCols.map(d => `<th style="text-align:right;color:${d.color}">${d.label}</th>`).join('')}
-              <th>AR Top Reason</th>
-              <th>Fin Top Reason</th>
-              <th>Srf Top Reason</th>
-            </tr></thead>
-            <tbody>
-              ${daySlots.map(slot => {
-                const s = slot.snap;
-                if (slot.isFuture && !s) return `
-                  <tr style="opacity:0.3">
-                    <td><div class="dbt-dept" style="color:var(--muted)">${slot.day} ${slot.date}</div></td>
-                    <td colspan="6" style="color:var(--muted);font-family:var(--font-mono);font-size:11px">—</td>
-                  </tr>`;
-                if (!s) return `
-                  <tr style="opacity:0.5">
-                    <td><div class="dbt-dept" style="color:var(--muted)">${slot.day} ${slot.date}</div></td>
-                    <td colspan="6" style="color:var(--muted);font-family:var(--font-mono);font-size:11px">No snapshot</td>
-                  </tr>`;
-                const labP = U.parseHistoryPct(s['Lab Lens %']) || 0;
-                const labOk = labP <= 5.00;
-                return `
-                  <tr>
-                    <td><div class="dbt-dept" style="color:var(--text)">${slot.day} ${slot.date}</div></td>
-                    <td class="dbt-pct" style="color:${labOk ? 'var(--green)' : 'var(--red)'}">${labP.toFixed(2)}%</td>
-                    ${deptCols.map(d => {
-                      const v = U.parseHistoryPct(s[d.key]) || 0;
-                      return `<td class="dbt-pct" style="color:${v <= d.goal ? 'var(--green)' : 'var(--red)'}">${v.toFixed(2)}%</td>`;
-                    }).join('')}
-                    <td class="dbt-reasons"><span style="color:var(--ar)">${s['AR Top Reason'] || '—'}</span></td>
-                    <td class="dbt-reasons"><span style="color:var(--fin)">${s['Fin Top Reason'] || '—'}</span></td>
-                    <td class="dbt-reasons"><span style="color:var(--srf)">${s['Srf Top Reason'] || '—'}</span></td>
-                  </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-
-    // ── Top Recurring Reasons This Week ──
-    const reasonCount = {};
-    weekSnaps.forEach(r => {
-      ['AR Top Reason','Fin Top Reason','Srf Top Reason'].forEach(col => {
-        const val = r[col];
-        if (val && val.trim()) {
-          if (!reasonCount[val]) reasonCount[val] = { count: 0, dept: col.split(' ')[0] };
-          reasonCount[val].count++;
-        }
-      });
-    });
-    const sortedReasons = Object.entries(reasonCount).sort((a,b) => b[1].count - a[1].count).slice(0, 8);
-    const maxRC = sortedReasons[0]?.[1].count || 1;
-    const deptColorMap = { AR: '#a78bfa', Fin: '#34d399', Srf: '#fb923c' };
-
-    document.getElementById('weeklyTopReasons').innerHTML = sortedReasons.length
-      ? sortedReasons.map(([reason, {count, dept}]) => {
-          const color = deptColorMap[dept] || 'var(--cyan)';
-          return `
-            <div class="weekly-reason-row">
-              <div class="wr-name">${reason}</div>
-              <div class="wr-dept" style="color:${color}">${dept}</div>
-              <div class="wr-bar"><div class="wr-fill" style="width:${(count/maxRC)*100}%;background:${color}"></div></div>
-              <div class="wr-count" style="color:${color}">${count}d</div>
-            </div>`;
-        }).join('')
-      : '<div style="color:var(--muted);font-family:var(--font-mono);font-size:12px;text-align:center;padding:20px">Take snapshots daily to see recurring reasons</div>';
-
-    // ── Weekly Improvements ──
-    const weekImprovements = [];
-    const avgLabPct = avg(labPcts);
-    const overGoalDays = daySlots.filter(d => d.snap && (U.parseHistoryPct(d.snap['Lab Lens %'])||0) > 5.00);
-    const overARDays   = daySlots.filter(d => d.snap && (U.parseHistoryPct(d.snap['AR %'])||0)  > 0.85);
-    const overFinDays  = daySlots.filter(d => d.snap && (U.parseHistoryPct(d.snap['Fin %'])||0) > 1.70);
-    const overSrfDays  = daySlots.filter(d => d.snap && (U.parseHistoryPct(d.snap['Srf %'])||0) > 2.80);
-
-    if (overGoalDays.length > 0)
-      weekImprovements.push({ type: 'critical', icon: '⚠', title: `Lab over 5% goal on ${overGoalDays.length} day(s)`, desc: overGoalDays.map(d => d.day).join(', ') + ' — review process controls' });
-    if (overSrfDays.length > 0)
-      weekImprovements.push({ type: 'critical', icon: '⚠', title: `Surface over 2.80% goal on ${overSrfDays.length} day(s)`, desc: overSrfDays.map(d => d.day).join(', ') + ' — S-Power and S-HC Pit most common drivers' });
-    if (overARDays.length > 0)
-      weekImprovements.push({ type: 'warning', icon: '↑', title: `AR over 0.85% goal on ${overARDays.length} day(s)`, desc: overARDays.map(d => d.day).join(', ') + ' — review A-Off color and A-Scratch frequency' });
-    if (overFinDays.length > 0)
-      weekImprovements.push({ type: 'warning', icon: '↑', title: `Finish over 1.70% goal on ${overFinDays.length} day(s)`, desc: overFinDays.map(d => d.day).join(', ') + ' — check F-Slip equipment calibration' });
-    if (sortedReasons[0])
-      weekImprovements.push({ type: 'warning', icon: '↑', title: `"${sortedReasons[0][0]}" appeared ${sortedReasons[0][1].count} day(s) as top reason`, desc: 'Most persistent breakage reason this week — prioritize training focus' });
-    if (weekImprovements.length === 0)
-      weekImprovements.push({ type: 'ok', icon: '✓', title: 'All goals met across all snapshot days this week', desc: 'Facility is consistently within all breakage targets' });
-
-    const weekImpRows = weekImprovements.map(imp => {
-      const dept = imp.title.includes('Surface') ? 'Surface'
-                 : imp.title.includes('Finish')  ? 'Finish'
-                 : imp.title.includes('AR')       ? 'AR'
-                 : imp.title.includes('Lab')      ? 'Lab' : 'Lab';
-      const deptColor = { AR:'#a78bfa', Finish:'#34d399', Surface:'#fb923c', Lab:'#38bdf8' }[dept] || 'var(--muted)';
-      const priority = imp.type === 'critical' ? 'high' : imp.type === 'warning' ? 'medium' : 'low';
-      return { dept, deptColor, issue: imp.title, action: imp.desc, priority, priorityLabel: priority === 'high' ? 'HIGH' : priority === 'medium' ? 'MEDIUM' : 'OK' };
-    });
-
-    document.getElementById('weeklyImprovements').innerHTML = `
-      <table class="imp-table">
-        <thead><tr>
-          <th>Dept</th><th>Issue</th><th>Action</th><th>Priority</th>
-        </tr></thead>
-        <tbody>
-          ${weekImpRows.map(r => `
-            <tr>
-              <td><span class="imp-dept" style="color:${r.deptColor}">${r.dept}</span></td>
-              <td><span class="imp-issue">${r.issue}</span></td>
-              <td><span class="imp-action">${r.action}</span></td>
-              <td><span class="imp-priority ${r.priority}">${r.priorityLabel}</span></td>
-            </tr>`).join('')}
-        </tbody>
-      </table>`;
-  }
-}
 
 
 /* ── OPERATOR ROW TOGGLE ────────────────────────────────── */
@@ -1375,8 +1245,6 @@ function toggleOperator(detailId, headerId) {
 /* ── NO DATA STATE ──────────────────────────────────────── */
 function renderNoData(meta) {
   // Update header meta with dashes
-  document.getElementById('metaOrders').textContent = '—';
-  document.getElementById('metaLenses').textContent = '—';
   document.getElementById('reportDate').textContent  = '—';
   document.getElementById('lastRefresh').textContent = meta?.lastRefresh || '—';
   document.getElementById('headerSub').textContent   = 'Waiting for RawData upload…';
@@ -1463,6 +1331,433 @@ function hideTransition() {
   if (overlay) overlay.classList.remove('show');
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   SUMMARY TAB (Daily + Weekly combined)
+═══════════════════════════════════════════════════════════ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ── GENERATE REPORT ──────────────────────────────────────── */
+
+
+
+
+
+/* ═══════════════════════════════════════════════════════════
+   SUMMARY TAB
+═══════════════════════════════════════════════════════════ */
+const SUM = {
+  mode: 'daily',
+  dates: [],
+  weeks: [],
+  selectedDate: null,
+  selectedWeek: null,
+  data: null,
+  weekData: null,
+  selectedDept: 'LAB',
+};
+
+async function initSummaryTab() {
+  try {
+    // Load available dates
+    const res = await API.get('history');
+    SUM.dates = res.data || [];
+
+    // Add today if live data available
+    if (State.meta?.lensCount > 0 && State.meta?.reportDate) {
+      const today = State.meta.reportDate;
+      if (!SUM.dates.includes(today)) SUM.dates.unshift(today);
+    }
+
+    // Load available weeks
+    try {
+      const wRes = await fetch(`${API_URL}?action=weekly`);
+      const wJson = await wRes.json();
+      if (wJson.success) SUM.weeks = wJson.data?.availableWeeks || [];
+    } catch(e) {}
+
+    // Populate date selects
+    const ds = document.getElementById('sumDateSelect');
+    if (ds) {
+      ds.innerHTML = '<option value="">Select date…</option>' +
+        SUM.dates.map(d => {
+          const isLive = d === State.meta?.reportDate && State.meta?.lensCount > 0;
+          return `<option value="${d}">${d}${isLive ? ' ● Live' : ''}</option>`;
+        }).join('');
+    }
+
+    const ws = document.getElementById('sumWeekSelect');
+    if (ws) {
+      ws.innerHTML = '<option value="">Select week…</option>' +
+        SUM.weeks.map(w => `<option value="${w}">Week of ${w}</option>`).join('');
+    }
+
+    // Auto-select first date
+    if (SUM.dates.length > 0) {
+      const ds2 = document.getElementById('sumDateSelect');
+      if (ds2) ds2.value = SUM.dates[0];
+      await loadSumDate(SUM.dates[0]);
+    }
+  } catch(e) { console.error('initSummaryTab:', e); }
+}
+
+function setSummaryMode(mode) {
+  SUM.mode = mode;
+  document.getElementById('ssModeDaily').classList.toggle('active', mode === 'daily');
+  document.getElementById('ssModeWeekly').classList.toggle('active', mode === 'weekly');
+  document.getElementById('sumDateWrap').style.display  = mode === 'daily'  ? 'flex' : 'none';
+  document.getElementById('sumWeekWrap').style.display  = mode === 'weekly' ? 'flex' : 'none';
+  document.getElementById('sumDailyView').style.display  = mode === 'daily'  ? 'block' : 'none';
+  document.getElementById('sumWeeklyView').style.display = mode === 'weekly' ? 'block' : 'none';
+}
+
+async function onSumDateChange(date) {
+  if (!date) return;
+  showTransition('history', 'Loading ' + date + '…');
+  await loadSumDate(date);
+}
+
+async function onSumWeekChange(week) {
+  if (!week) return;
+  showTransition('history', 'Loading week of ' + week + '…');
+  await loadSumWeek(week);
+}
+
+async function loadSumDate(date) {
+  SUM.selectedDate = date;
+  const isLive = date === State.meta?.reportDate && State.meta?.lensCount > 0;
+
+  let d;
+  if (isLive) {
+    d = State.depts;
+    d.lensCount  = State.meta.lensCount;
+    d.orderCount = State.meta.orderCount;
+    d.reportDate = State.meta.reportDate;
+  } else {
+    try {
+      const res = await API.get('all', { date });
+      d = res.data;
+    } catch(e) { App.showToast('Error: ' + e.message, 'error'); hideTransition(); return; }
+  }
+
+  SUM.data = d;
+  SUM.selectedDept = 'LAB';
+  renderSumKpis(d);
+  renderSumSidebar(d);
+  renderSumMain(d, 'LAB');
+  hideTransition();
+}
+
+async function loadSumWeek(weekStart) {
+  SUM.selectedWeek = weekStart;
+  try {
+    const res  = await fetch(`${API_URL}?action=weekly&weekStart=${encodeURIComponent(weekStart)}`);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    SUM.weekData = json.data;
+    renderSumWeekly(json.data);
+    hideTransition();
+  } catch(e) { App.showToast('Weekly error: ' + e.message, 'error'); hideTransition(); }
+}
+
+function renderSumKpis(d) {
+  const lt       = d.summary?.labTotal || {};
+  const lc       = d.lensCount  || 1;
+  const oc       = d.orderCount || 1;
+  const labPct   = (lt.labLensPct  || 0) * 100;
+  const framePct = (lt.labFramePct || 0) * 100;
+  const dayName  = d.reportDate ? new Date(d.reportDate).toLocaleDateString('en-US',{weekday:'long'}) : '';
+
+  const el = document.getElementById('sumKpiStrip');
+  if (!el) return;
+  el.innerHTML = `
+    <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div style="font-family:var(--font-display);font-size:15px;letter-spacing:2px">DAILY SUMMARY</div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${dayName.toUpperCase()} · ${d.reportDate||'—'}</div>
+    </div>
+    ${[
+      { label:'Lab Lenses Broken', value:U.fmt(lt.labLensesBroken||0), sub:`of ${U.fmt(lc)} lenses`,    accent:'var(--cyan)' },
+      { label:'Lab Lens %',        value:labPct.toFixed(2)+'%',        sub:'Goal ≤5.00%', accent:U.statusColor(labPct,5.00), badge:U.statusBadge(labPct,5.00) },
+      { label:'Frames Broken',     value:U.fmt(lt.framesBroken||0),    sub:`of ${U.fmt(oc)} orders`,    accent:'var(--amber)' },
+      { label:'Frame Brk %',       value:framePct.toFixed(2)+'%',      sub:'Goal ≤1.00%', accent:U.statusColor(framePct,1.00), badge:U.statusBadge(framePct,1.00) },
+      { label:'Total Orders',      value:U.fmt(oc),                    sub:'Mailroom shipped', accent:'var(--mail)' },
+      { label:'Report Date',       value:d.reportDate||'—',            sub:'Date as of', accent:'var(--muted)' },
+    ].map(k => `
+      <div class="kpi-card" style="--accent:${k.accent}">
+        <div class="kpi-label">${k.label}</div>
+        <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
+        <div class="kpi-sub">${k.sub}</div>
+        ${k.badge||''}
+      </div>`).join('')}`;
+}
+
+function renderSumSidebar(d) {
+  const el = document.getElementById('sumDeptSidebarItems');
+  if (!el) return;
+  const lc = d.lensCount || 1;
+  const lt = d.summary?.labTotal || {};
+  const labPct = (lt.labLensPct||0)*100;
+
+  // Lab Total + depts sorted high→low
+  const depts = [...(d.summary?.departments||[])].sort((a,b)=>b.lensesBroken-a.lensesBroken);
+  const allItems = [
+    { key:'LAB', label:'Lab Total', color:'var(--cyan)', pct:labPct, broken:lt.labLensesBroken||0, goal:5.00 },
+    ...depts.map(dep => ({
+      key:    dep.department,
+      label:  dep.department,
+      color:  DEPT_COLORS[dep.department]||'var(--cyan)',
+      pct:    (dep.lensBrkPct||0)*100,
+      broken: dep.lensesBroken,
+      goal:   {AR:0.85,Finish:1.70,Surface:2.80}[dep.department]||null,
+    }))
+  ];
+
+  el.innerHTML = allItems.map(item => {
+    const ok  = item.goal ? item.pct <= item.goal : true;
+    const sc  = item.goal ? (ok?'var(--green)':'var(--red)') : 'var(--muted)';
+    const bad = item.goal ? (ok?'ON GOAL':'OVER') : '—';
+    return `
+      <div class="sum-dept-item ${item.key===SUM.selectedDept?'active':''}"
+           style="--item-color:${item.color}"
+           onclick="selectSumDept('${item.key}')">
+        <div class="sum-dept-dot"></div>
+        <div class="sum-dept-info">
+          <div class="sum-dept-name">${item.label}</div>
+          <div class="sum-dept-pct" style="color:${sc}">${item.pct.toFixed(2)}%</div>
+          <div class="sum-dept-count">${U.fmt(item.broken)} lenses</div>
+        </div>
+        <div class="sum-dept-badge" style="color:${sc};border:1px solid ${sc}30;background:${sc}10">${bad}</div>
+      </div>`;
+  }).join('');
+}
+
+function selectSumDept(key) {
+  SUM.selectedDept = key;
+  // Update active state
+  document.querySelectorAll('.sum-dept-item').forEach(el => {
+    el.classList.toggle('active', el.onclick?.toString().includes(`'${key}'`));
+  });
+  renderSumSidebar(SUM.data); // re-render to update active
+  renderSumMain(SUM.data, key);
+}
+
+function renderSumMain(d, deptKey) {
+  const el = document.getElementById('sumMain');
+  if (!el) return;
+  const lc = d.lensCount || 1;
+  const oc = d.orderCount || 1;
+
+  if (deptKey === 'LAB') {
+    // Full lab summary view (matches image 2 right panel)
+    const lt      = d.summary?.labTotal || {};
+    const labPct  = (lt.labLensPct||0)*100;
+    const ok      = labPct <= 5.00;
+    const depts   = [...(d.summary?.departments||[])].sort((a,b)=>b.lensesBroken-a.lensesBroken);
+    const maxD    = depts[0]?.lensesBroken || 1;
+
+    // Collect all reasons facility-wide sorted high→low
+    const allReasons = [];
+    const deptKeys = ['AR','Finish','Surface','LMS','Inventory'];
+    deptKeys.forEach(dep => {
+      (d.summary?.topReasons?.[dep]||[]).forEach(r => {
+        allReasons.push({ reason:r.reason, dept:dep, count:r.lensesBroken, color:DEPT_COLORS[dep]||'var(--cyan)' });
+      });
+    });
+    allReasons.sort((a,b)=>b.count-a.count);
+    const maxR = allReasons[0]?.count||1;
+
+    // Unassigned check
+    const noneTotal = deptKeys.reduce((sum, dep) => {
+      const opData = d[dep.toLowerCase()]?.operators||[];
+      return sum + opData.filter(o=>!o.operator||o.operator==='NONE')
+        .reduce((s,o)=>s+(o.total||(o.lensTotal||0)),0);
+    }, 0);
+
+    const noneDepts = deptKeys.filter(dep => {
+      const opData = d[dep.toLowerCase()]?.operators||[];
+      return opData.some(o=>!o.operator||o.operator==='NONE');
+    });
+
+    // Exec summary text
+    const topReason = allReasons[0];
+    const overGoal  = depts.filter(dep=>dep.lensBrkPct*100>({AR:0.85,Finish:1.70,Surface:2.80}[dep.department]||999));
+    const execText  = `As of ${d.reportDate||'today'}, the facility recorded ${U.fmt(lt.labLensesBroken||0)} lens breakages representing a ${labPct.toFixed(2)}% breakage rate across ${U.fmt(lc)} lenses processed. The lab is currently ${ok?'within':'exceeding'} the 5.00% facility goal.${overGoal.length?' '+overGoal.map(dep=>`${dep.department} is over goal at ${(dep.lensBrkPct*100).toFixed(2)}%.`).join(' '):'  All departments are operating within their respective goals.'} ${topReason?`The leading breakage cause facility-wide is ${topReason.reason} (${topReason.dept}) with ${topReason.count} lenses.`:''} ${noneTotal>0?`Unassigned operator entries were detected in ${noneDepts.join(', ')} — totaling ${noneTotal} lenses without operator attribution. Data integrity review is recommended.`:'All breakage records have been attributed to an operator or machine.'}`;
+
+    el.innerHTML = `
+      <div class="sum-main-title" style="color:var(--cyan)">FULL LAB SUMMARY</div>
+      <div class="sum-main-subtitle">${d.reportDate||'—'} · ${U.fmt(lc)} lenses · ${U.fmt(oc)} orders</div>
+
+      ${noneTotal>0?`
+      <div class="sum-none-alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ${noneTotal} lenses unassigned (NONE operator) across: ${noneDepts.join(', ')} · Data integrity review required
+      </div>`:''}
+
+      <div class="sum-two-col">
+        <div class="sum-card">
+          <div class="sum-card-label">All Departments — Highest to Lowest</div>
+          ${depts.map(dep => {
+            const color = DEPT_COLORS[dep.department]||'var(--cyan)';
+            return `<div class="sum-item">
+              <div class="sum-item-name dept-label" style="color:${color}">${dep.department}</div>
+              <div class="sum-item-bar"><div class="sum-item-fill" style="width:${Math.round((dep.lensesBroken/maxD)*100)}%;background:${color}70"></div></div>
+              <div class="sum-item-num" style="color:${color}">${dep.lensesBroken}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="sum-card">
+          <div class="sum-card-label">Top Reasons Facility-Wide</div>
+          ${allReasons.slice(0,8).map(r => `
+            <div class="sum-item">
+              <div class="sum-item-name">${r.reason} <span style="font-size:9px;color:${r.color};font-family:var(--font-mono)">${r.dept}</span></div>
+              <div class="sum-item-bar"><div class="sum-item-fill" style="width:${Math.round((r.count/maxR)*100)}%;background:${r.color}70"></div></div>
+              <div class="sum-item-num" style="color:${r.color}">${r.count}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="sum-exec" style="--exec-color:var(--cyan)">
+        <div class="sum-exec-label">Executive Summary — ${d.reportDate||'—'}</div>
+        <div class="sum-exec-text">${execText}</div>
+      </div>`;
+
+  } else {
+    // Single dept view
+    const depKey  = deptKey.toLowerCase();
+    const depData = d[depKey] || {};
+    const depInfo = d.summary?.departments?.find(x=>x.department===deptKey)||{};
+    const color   = DEPT_COLORS[deptKey]||'var(--cyan)';
+    const pct     = (depInfo.lensBrkPct||0)*100;
+    const goal    = {AR:0.85,Finish:1.70,Surface:2.80}[deptKey]||null;
+    const ok      = goal?pct<=goal:true;
+    const sc      = goal?(ok?'var(--green)':'var(--red)'):'var(--muted)';
+    const isSurface = deptKey === 'surface';
+    const colLabel  = isSurface ? 'Machine' : 'Operator';
+
+    const reasons  = (depData.reasons||[]).filter(r=>r.lensesBroken>0||r.framesBroken>0);
+    const ops      = depData.operators||[];
+    const maxR     = reasons[0]?.lensesBroken||reasons[0]?.framesBroken||1;
+    const maxO     = ops[0] ? (ops[0].total||(ops[0].lensTotal||0)) : 1;
+
+    const noneOps = ops.filter(o=>!o.operator||o.operator==='NONE');
+    const noneTotal = noneOps.reduce((s,o)=>s+(o.total||(o.lensTotal||0)),0);
+
+    el.innerHTML = `
+      <div class="sum-main-title" style="color:${color}">${deptKey.toUpperCase()} DEPARTMENT</div>
+      <div class="sum-main-subtitle">${d.reportDate||'—'} · ${U.fmt(depInfo.lensesBroken||0)} lenses broken · ${goal?`Goal ≤${goal}% — `:''}${goal?(ok?'<span style="color:var(--green)">On Goal</span>':'<span style="color:var(--red)">Over Goal</span>'):'No goal set'}</div>
+
+      ${noneTotal>0?`
+      <div class="sum-none-alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        ${noneTotal} lenses with no ${colLabel.toLowerCase()} assigned (NONE) · supervisor review required
+      </div>`:''}
+
+      <div class="sum-two-col">
+        <div class="sum-card">
+          <div class="sum-card-label">Breakage by Reason — Highest to Lowest</div>
+          ${reasons.slice(0,8).map(r=>{
+            const cnt=r.lensesBroken||r.framesBroken;
+            return `<div class="sum-item">
+              <div class="sum-item-name">${r.reason}</div>
+              <div class="sum-item-bar"><div class="sum-item-fill" style="width:${Math.round((cnt/maxR)*100)}%;background:${color}70"></div></div>
+              <div class="sum-item-num" style="color:${color}">${cnt}</div>
+            </div>`;
+          }).join('')||'<div style="color:var(--muted);font-family:var(--font-mono);font-size:11px">No breakage data</div>'}
+        </div>
+        <div class="sum-card">
+          <div class="sum-card-label">${colLabel} Breakdown — Highest to Lowest</div>
+          ${ops.slice(0,10).map(op=>{
+            const isNone=!op.operator||op.operator==='NONE';
+            const total=op.total||(op.lensTotal||0);
+            return `<div class="sum-item">
+              <div class="sum-item-name${isNone?' unassigned':''}">${isNone?'Unassigned':op.operator}</div>
+              <div class="sum-item-bar"><div class="sum-item-fill" style="width:${Math.round((total/maxO)*100)}%;background:${isNone?'var(--red)':color}70"></div></div>
+              <div class="sum-item-num${isNone?' unassigned':''}" style="${isNone?'':'color:'+color}">${total}</div>
+            </div>`;
+          }).join('')||'<div style="color:var(--muted);font-family:var(--font-mono);font-size:11px">No operator data</div>'}
+        </div>
+      </div>
+
+      <div class="sum-exec" style="--exec-color:${color}">
+        <div class="sum-exec-label">Department Summary — ${d.reportDate||'—'}</div>
+        <div class="sum-exec-text">${deptKey} department recorded ${U.fmt(depInfo.lensesBroken||0)} lens breakages on ${d.reportDate||'this date'}, representing a ${pct.toFixed(2)}% breakage rate.${goal?` The department is ${ok?'within':'exceeding'} its ${goal}% goal${!ok?`, exceeding the target by ${(pct-goal).toFixed(2)} percentage points`:''}. `:' '}${reasons[0]?`The primary driver is ${reasons[0].reason} with ${reasons[0].lensesBroken||reasons[0].framesBroken} lenses.`:''}${noneTotal>0?` ${noneTotal} lenses were logged without a valid ${colLabel.toLowerCase()} (NONE). Data quality review recommended.`:''}</div>
+      </div>`;
+  }
+}
+
+function renderSumWeekly(data) {
+  const { days, weekStart, weekEnd } = data;
+  const daysWithData = days.filter(d=>d.hasData);
+  const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
+
+  const el = document.getElementById('sumWeekKpiStrip');
+  if (el) {
+    const avgLab = avg(daysWithData.map(d=>d.labLensPct||0));
+    const total  = daysWithData.reduce((s,d)=>s+(d.labLenses||0),0);
+    el.innerHTML = `
+      <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <div style="font-family:var(--font-display);font-size:15px;letter-spacing:2px">WEEKLY SUMMARY</div>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${weekStart} – ${weekEnd}</div>
+      </div>
+      ${[
+        {label:'Days Captured',  value:daysWithData.length+'/7', accent:'var(--muted)'},
+        {label:'Total Broken',   value:U.fmt(total),             accent:'var(--cyan)'},
+        {label:'Avg Lab %',      value:avgLab.toFixed(2)+'%',    accent:U.statusColor(avgLab,5.00), badge:U.statusBadge(avgLab,5.00)},
+        {label:'Avg Surface %',  value:avg(daysWithData.map(d=>d.srfPct||0)).toFixed(2)+'%', accent:U.statusColor(avg(daysWithData.map(d=>d.srfPct||0)),2.80)},
+        {label:'Avg Finish %',   value:avg(daysWithData.map(d=>d.finPct||0)).toFixed(2)+'%', accent:U.statusColor(avg(daysWithData.map(d=>d.finPct||0)),1.70)},
+        {label:'Avg AR %',       value:avg(daysWithData.map(d=>d.arPct||0)).toFixed(2)+'%',  accent:U.statusColor(avg(daysWithData.map(d=>d.arPct||0)),0.85)},
+      ].map(k=>`<div class="kpi-card" style="--accent:${k.accent}">
+        <div class="kpi-label">${k.label}</div>
+        <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
+        ${k.badge||''}
+      </div>`).join('')}`;
+  }
+
+  const wd = document.getElementById('sumWeekDetail');
+  if (!wd) return;
+  const DCOLS = [{key:'arPct',c:'var(--ar)',g:0.85,l:'AR'},{key:'finPct',c:'var(--fin)',g:1.70,l:'Fin'},{key:'srfPct',c:'var(--srf)',g:2.80,l:'Srf'}];
+  wd.innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Day-by-Day Breakdown</div></div>
+      <div class="panel-body" style="padding:0">
+        <table class="dept-breakdown-table">
+          <thead><tr>
+            <th>Day</th><th style="text-align:right">Lab %</th>
+            ${DCOLS.map(c=>`<th style="text-align:right;color:${c.c}">${c.l}</th>`).join('')}
+            <th>Top Reason</th>
+          </tr></thead>
+          <tbody>
+            ${days.map(day=>{
+              if(!day.hasData) return `<tr style="opacity:${day.isFuture?0.2:0.5}">
+                <td style="font-family:var(--font-mono);font-size:11px">${day.day} ${day.date.slice(0,5)}</td>
+                <td colspan="5" style="color:var(--muted);font-family:var(--font-mono);font-size:11px">${day.isFuture?'—':'No snapshot'}</td>
+              </tr>`;
+              const labOk=day.labLensPct<=5.00;
+              const topR=day.topReasons?.Surface?.[0]?.reason||day.topReasons?.Finish?.[0]?.reason||'—';
+              return `<tr>
+                <td style="font-family:var(--font-mono);font-size:11px;font-weight:600">${day.day} ${day.date.slice(0,5)}</td>
+                <td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${labOk?'var(--green)':'var(--red)'}">${day.labLensPct.toFixed(2)}%</td>
+                ${DCOLS.map(c=>{const v=day[c.key]||0;return`<td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${v<=c.g?'var(--green)':'var(--red)'}">${v.toFixed(2)}%</td>`;}).join('')}
+                <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${topR}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 /* ═══════════════════════════════════════════════════════════
    MAIN APP CONTROLLER
 ═══════════════════════════════════════════════════════════ */
@@ -1471,6 +1766,7 @@ const App = {
   // Current mode tracking
   _isHistoryMode: false,
   _currentDate: null,
+  _currentWeekStart: null,   // null = current week
 
   // ── Set Live mode UI ──
   setLiveMode() {
@@ -1508,6 +1804,38 @@ const App = {
     App.setLiveMode();
     showTransition('live', 'Switching to live data…');
     await App.loadAll();
+  },
+
+  // ── Week navigation ──
+  async weekNav(direction) {
+    // direction: -1=prev, 0=this week, 1=next
+    let current = App._currentWeekStart
+      ? new Date(App._currentWeekStart)
+      : (() => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return d; })();
+
+    if (direction === 0) {
+      App._currentWeekStart = null;
+    } else {
+      current.setDate(current.getDate() + direction * 7);
+      const mm = String(current.getMonth()+1).padStart(2,'0');
+      const dd = String(current.getDate()).padStart(2,'0');
+      const yy = current.getFullYear();
+      App._currentWeekStart = `${mm}/${dd}/${yy}`;
+    }
+    await App.loadWeekly();
+  },
+
+  // ── Load weekly data ──
+  async loadWeekly() {
+    try {
+      const qs  = App._currentWeekStart ? `&weekStart=${encodeURIComponent(App._currentWeekStart)}` : '';
+      const res = await fetch(`${API_URL}?action=weekly${qs}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      renderWeekly(json.data);
+    } catch(err) {
+      App.showToast('Weekly error: ' + err.message, 'error');
+    }
   },
 
   // ── Load by selected date ──
@@ -1558,7 +1886,6 @@ const App = {
       renderDeptTab('lms',       d.lms,       'LMS',       '#60a5fa', 'lmsChart');
       renderDeptTab('inventory', d.inventory, 'Inventory', '#f472b6', null);
       renderMailroom(meta);
-      renderDaily(d.summary, d, meta);
 
       document.getElementById('loadingOverlay').classList.add('hidden');
       hideTransition();
@@ -1611,7 +1938,7 @@ const App = {
       renderDeptTab('lms',       d.lms,       'LMS',       '#60a5fa', 'lmsChart');
       renderDeptTab('inventory', d.inventory, 'Inventory', '#f472b6', null);
       renderMailroom(meta);
-      renderDaily(d.summary, d, meta);
+      initSummaryTab(); // pre-load summary dates
 
       document.getElementById('loadingOverlay').classList.add('hidden');
       hideTransition();
@@ -1633,6 +1960,8 @@ const App = {
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active', 'collapsed'));
       document.getElementById('tab-' + id)?.classList.add('active');
       tab.classList.add('active');
+      // Init summary tab when switched to
+      if (id === 'summary' && SUM.dates.length === 0) initSummaryTab();
     }
   },
 
