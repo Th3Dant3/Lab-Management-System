@@ -1448,10 +1448,10 @@ const CMP = {
 };
 
 async function initCompareTab() {
-  const grid = document.getElementById('cmpDateGrid');
-  if (grid) grid.innerHTML = '<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Loading dates…</span>';
+  const fromSel = document.getElementById('cmpFromDate');
+  const toSel   = document.getElementById('cmpToDate');
+  if (fromSel) fromSel.innerHTML = '<option value="">Loading…</option>';
 
-  // Always sync from SUM.dates if available, otherwise fetch
   if (SUM.dates.length > 0) {
     CMP.dates = [...SUM.dates];
   } else {
@@ -1463,7 +1463,7 @@ async function initCompareTab() {
       }
     } catch(e) {
       console.error('initCompareTab:', e);
-      if (grid) grid.innerHTML = '<span style="color:var(--red);font-size:11px">Error loading dates</span>';
+      if (fromSel) fromSel.innerHTML = '<option value="">Error loading</option>';
       return;
     }
   }
@@ -1471,37 +1471,54 @@ async function initCompareTab() {
 }
 
 function renderComparePicker() {
-  const grid = document.getElementById('cmpDateGrid');
-  if (!grid) return;
-  grid.innerHTML = CMP.dates.map(d => {
-    const isLive    = d === State.meta?.reportDate && State.meta?.lensCount > 0;
-    const isChecked = CMP.selected.includes(d);
-    return `
-      <label class="cmp-date-chip ${isChecked ? 'checked' : ''}" id="cmp-chip-${d.replace(/\//g,'-')}">
-        <input type="checkbox" value="${d}" ${isChecked ? 'checked' : ''}
-               onchange="onCmpDateToggle(this)"
-               style="display:none">
-        ${d}${isLive ? ' <span style="color:var(--green);font-size:9px">●</span>' : ''}
-      </label>`;
+  const fromSel = document.getElementById('cmpFromDate');
+  const toSel   = document.getElementById('cmpToDate');
+  if (!fromSel || !toSel) return;
+
+  // CMP.dates is newest→oldest — From = older end, To = newer end
+  const opts = CMP.dates.map(d => {
+    const isLive = d === State.meta?.reportDate && State.meta?.lensCount > 0;
+    return `<option value="${d}">${d}${isLive ? ' ●' : ''}</option>`;
   }).join('');
+
+  fromSel.innerHTML = '<option value="">Start date…</option>' + opts;
+  toSel.innerHTML   = '<option value="">End date…</option>'   + opts;
+
+  // Default: From = 7th oldest available, To = most recent
+  if (CMP.dates.length >= 2) {
+    toSel.value   = CMP.dates[0];
+    fromSel.value = CMP.dates[Math.min(6, CMP.dates.length - 1)];
+    onCmpRangeChange();
+  }
+}
+
+function onCmpRangeChange() {
+  const fromVal = document.getElementById('cmpFromDate')?.value;
+  const toVal   = document.getElementById('cmpToDate')?.value;
+  if (!fromVal || !toVal) return;
+
+  // Find indices — dates array is newest→oldest
+  const fromIdx = CMP.dates.indexOf(fromVal);
+  const toIdx   = CMP.dates.indexOf(toVal);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  // Slice between the two (inclusive), keep newest→oldest order
+  const lo = Math.min(fromIdx, toIdx);
+  const hi = Math.max(fromIdx, toIdx);
+  CMP.selected = CMP.dates.slice(lo, hi + 1);
+  if (CMP.selected.length > 7) CMP.selected = CMP.selected.slice(0, 7);
+
   updateCmpSelCount();
 }
 
 function onCmpDateToggle(cb) {
   const d = cb.value;
   if (cb.checked) {
-    if (CMP.selected.length >= 7) {
-      cb.checked = false;
-      App.showToast('Maximum 7 dates', 'error');
-      return;
-    }
+    if (CMP.selected.length >= 7) { cb.checked = false; App.showToast('Maximum 7 dates', 'error'); return; }
     if (!CMP.selected.includes(d)) CMP.selected.push(d);
   } else {
     CMP.selected = CMP.selected.filter(x => x !== d);
   }
-  // Update chip style
-  const chip = document.getElementById('cmp-chip-' + d.replace(/\//g,'-'));
-  if (chip) chip.classList.toggle('checked', cb.checked);
   updateCmpSelCount();
 }
 
@@ -1509,7 +1526,7 @@ function updateCmpSelCount() {
   const n   = CMP.selected.length;
   const el  = document.getElementById('cmpSelCount');
   const btn = document.getElementById('cmpRunBtn');
-  if (el)  el.textContent = `(${n} selected)`;
+  if (el)  el.textContent = n >= 2 ? `${n} dates selected` : n === 1 ? '1 date — pick a range' : '0 dates';
   if (btn) {
     const ready = n >= 2;
     btn.style.opacity       = ready ? '1'    : '0.4';
@@ -1542,129 +1559,252 @@ async function runCompare() {
 }
 
 function renderCompareResults(dates, dataArr, el) {
-  const n = dates.length;
-
-  // Helper: delta between first date and each subsequent
-  const baseData = dataArr[0];
-  const lcArr    = dataArr.map(d => d.lensCount  || 1);
-  const ocArr    = dataArr.map(d => d.orderCount || 1);
-
-  const pctArr   = dataArr.map((d,i) => (d.summary?.labTotal?.labLensPct  || 0) * 100);
-  const fpArr    = dataArr.map((d,i) => (d.summary?.labTotal?.labFramePct || 0) * 100);
-  const brkArr   = dataArr.map(d    => d.summary?.labTotal?.labLensesBroken || 0);
-  const frmArr   = dataArr.map(d    => d.summary?.labTotal?.framesBroken    || 0);
-
-  const arrowHtml = (base, val, lowerBetter = true) => {
-    const diff = val - base;
-    if (Math.abs(diff) < 0.001 && typeof diff === 'number') return '';
-    if (diff === 0) return '';
-    const good  = lowerBetter ? diff < 0 : diff > 0;
-    const color = good ? 'var(--green)' : 'var(--red)';
-    const sym   = diff > 0 ? '▲' : '▼';
-    const abs   = typeof val === 'number' && val % 1 !== 0 ? Math.abs(diff).toFixed(2) : Math.abs(diff).toLocaleString();
-    return `<span style="color:${color};font-size:10px;margin-left:4px">${sym}${abs}</span>`;
-  };
-
-  // ── Lab totals header strip ──
-  const kpiCols = dates.map((d, i) => `
-    <div class="cmp-col-kpi ${i === 0 ? 'cmp-col-base' : ''}">
-      <div class="cmp-col-date">${d}${i===0 ? ' <span style="font-size:9px;color:var(--muted)">(base)</span>' : ''}</div>
-      <div class="cmp-col-stat" style="color:var(--cyan)">${brkArr[i].toLocaleString()}
-        ${i > 0 ? arrowHtml(brkArr[0], brkArr[i]) : ''}
-      </div>
-      <div class="cmp-col-sub">${pctArr[i].toFixed(2)}%
-        ${i > 0 ? arrowHtml(pctArr[0], pctArr[i]) : ''}
-        <span style="color:${pctArr[i]<=5?'var(--green)':'var(--red)'}"> ${pctArr[i]<=5?'✓':'✗'}</span>
-      </div>
-      <div class="cmp-col-sub2">${lcArr[i].toLocaleString()} lenses · ${ocArr[i].toLocaleString()} orders</div>
-    </div>`).join('');
-
-  // ── Dept table ──
   const DEPTS     = ['AR','Finish','Surface','LMS','Inventory','Breakage'];
   const DEPT_KEYS = { AR:'ar', Finish:'finish', Surface:'surface', LMS:'lms', Inventory:'inventory', Breakage:'breakage' };
-  const deptRows  = DEPTS.map(name => {
-    const key  = DEPT_KEYS[name];
-    const col  = DEPT_COLORS[name] || 'var(--cyan)';
-    const vals = dataArr.map((d,i) => {
-      const t   = d[key]?.totals || {};
-      const pct = t.lensesBroken > 0 ? (t.lensesBroken / lcArr[i] * 100) : 0;
-      return { brk: t.lensesBroken || 0, pct };
-    });
-    const cells = vals.map((v, i) => `
-      <td class="cmp-num">${v.brk}${i > 0 ? arrowHtml(vals[0].brk, v.brk) : ''}</td>
-      <td class="cmp-pct">${v.pct.toFixed(2)}%${i > 0 ? arrowHtml(vals[0].pct, v.pct) : ''}</td>`).join('');
-    return `<tr><td style="color:${col};font-weight:500">${name}</td>${cells}</tr>`;
-  }).join('');
 
-  const deptHeadCols = dates.map(d => `<th colspan="2" class="cmp-date-head">${d}</th>`).join('');
+  const lcArr  = dataArr.map(d => d.lensCount  || 1);
+  const ocArr  = dataArr.map(d => d.orderCount || 1);
+  const pctArr = dataArr.map(d => (d.summary?.labTotal?.labLensPct  || 0) * 100);
+  const brkArr = dataArr.map(d =>  d.summary?.labTotal?.labLensesBroken || 0);
+  const frmArr = dataArr.map(d =>  d.summary?.labTotal?.framesBroken    || 0);
 
-  // ── Top reasons table (union, sorted by sum across all dates) ──
-  const reasonTotals = {};
-  dataArr.forEach(d => {
+  const shortDate = d => d.slice(0, 5);
+
+  const diffHtml = (base, val, decimals = 0) => {
+    const diff = val - base;
+    if (diff === 0 || (Math.abs(diff) < 0.01 && decimals > 0)) return '';
+    const good  = diff < 0;
+    const color = good ? 'var(--green)' : 'var(--red)';
+    const sym   = diff > 0 ? '▲' : '▼';
+    const abs   = decimals > 0 ? Math.abs(diff).toFixed(decimals) : Math.abs(diff).toLocaleString();
+    return `<span class="cmp-diff" style="color:${color}">${sym}${abs}</span>`;
+  };
+
+  // Dept data per date
+  const deptData = DEPTS.map(name => ({
+    name,
+    color: DEPT_COLORS[name] || 'var(--cyan)',
+    key:   DEPT_KEYS[name],
+    vals:  dataArr.map((d, i) => {
+      const t = d[DEPT_KEYS[name]]?.totals || {};
+      return { brk: t.lensesBroken || 0, pct: t.lensesBroken > 0 ? t.lensesBroken / lcArr[i] * 100 : 0 };
+    }),
+  }));
+
+  // Top reason per date (facility-wide)
+  const getTopReason = (d) => {
+    const counts = {};
     DEPTS.forEach(name => {
       (d[DEPT_KEYS[name]]?.reasons || []).forEach(r => {
-        reasonTotals[r.reason] = (reasonTotals[r.reason] || 0) + r.lensesBroken;
+        counts[r.reason] = (counts[r.reason] || 0) + (r.lensesBroken || 0);
       });
     });
-  });
-  const topReasons = Object.keys(reasonTotals).sort((a,b) => reasonTotals[b] - reasonTotals[a]).slice(0, 12);
+    return Object.entries(counts).sort((a,b) => b[1]-a[1])[0]?.[0] || '—';
+  };
 
-  const reasonRows = topReasons.map(reason => {
-    const vals = dataArr.map(d => {
-      let sum = 0;
-      DEPTS.forEach(name => {
-        const r = (d[DEPT_KEYS[name]]?.reasons || []).find(x => x.reason === reason);
-        if (r) sum += r.lensesBroken;
-      });
-      return sum;
-    });
-    const cells = vals.map((v,i) => `<td class="cmp-num">${v || '—'}${i>0&&v!==vals[0]?arrowHtml(vals[0],v):''}</td>`).join('');
-    return `<tr><td>${reason}</td>${cells}</tr>`;
+  // Summary stats
+  const avgPct    = pctArr.reduce((a,b) => a+b, 0) / pctArr.length;
+  const totalBrk  = brkArr.reduce((a,b) => a+b, 0);
+  const worstIdx  = brkArr.indexOf(Math.max(...brkArr));
+  const bestIdx   = brkArr.indexOf(Math.min(...brkArr));
+
+  // ── SECTION 1: DAY CARDS ──
+  const cardsHtml = dates.map((date, i) => {
+    const isBase   = i === 0;
+    const pct      = pctArr[i];
+    const ok       = pct <= 5.00;
+    const pctColor = ok ? 'var(--green)' : 'var(--red)';
+    const topR     = getTopReason(dataArr[i]);
+    return `
+      <div class="cmp-day-card ${isBase ? 'cmp-day-base' : ''}">
+        <div class="cmp-day-header">
+          <div class="cmp-day-date">${date}</div>
+          ${isBase ? '<div class="cmp-base-tag">BASE</div>' : ''}
+        </div>
+        <div class="cmp-day-stat" style="color:var(--cyan)">${brkArr[i].toLocaleString()}</div>
+        <div class="cmp-day-pct" style="color:${pctColor}">${pct.toFixed(2)}% ${ok ? '✓' : '✗'}</div>
+        <div class="cmp-day-delta">
+          ${i > 0 ? `${diffHtml(brkArr[0], brkArr[i])} ${diffHtml(pctArr[0], pctArr[i], 2)}` : '<span style="color:var(--muted);font-size:10px">baseline</span>'}
+        </div>
+        <div class="cmp-day-meta">${lcArr[i].toLocaleString()} lenses · ${ocArr[i].toLocaleString()} orders</div>
+        <div class="cmp-day-divider"></div>
+        <div class="cmp-day-dept-list">
+          ${[...deptData]
+            .filter(d => d.vals[i].brk > 0)
+            .sort((a,b) => b.vals[i].brk - a.vals[i].brk)
+            .slice(0, 4)
+            .map(d => `
+              <div class="cmp-day-dept-row">
+                <span style="color:${d.color}">${d.name}</span>
+                <span style="color:${d.color};font-family:var(--font-mono);font-size:11px">${d.vals[i].brk}</span>
+              </div>`).join('')}
+        </div>
+        <div class="cmp-day-top-reason">↑ ${topR}</div>
+      </div>`;
   }).join('');
 
-  const reasonHeadCols = dates.map(d => `<th class="cmp-num cmp-date-head">${d}</th>`).join('');
-
-  el.innerHTML = `
-    <div class="cmp-wrap">
-
-      <!-- Lab totals strip -->
-      <div class="panel">
-        <div class="panel-header"><div class="panel-title">LAB TOTALS — LENSES BROKEN / LENS %</div></div>
-        <div class="panel-body">
-          <div class="cmp-kpi-cols">${kpiCols}</div>
+  // ── SECTION 2: TREND CHART + SUMMARY KPIS ──
+  const trendHtml = `
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-header">
+        <div class="panel-title">LAB % TREND</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">
+          dashed line = 5% goal
         </div>
       </div>
+      <div class="panel-body" style="height:200px">
+        <canvas id="cmpTrendChart"></canvas>
+      </div>
+    </div>
+    <div class="cmp-summary-kpis">
+      <div class="cmp-sum-card">
+        <div class="cmp-sum-label">Avg Lab %</div>
+        <div class="cmp-sum-val" style="color:${avgPct<=5?'var(--green)':'var(--red)'}">${avgPct.toFixed(2)}%</div>
+        <div class="cmp-sum-sub">${dates.length} days</div>
+      </div>
+      <div class="cmp-sum-card">
+        <div class="cmp-sum-label">Total Broken</div>
+        <div class="cmp-sum-val" style="color:var(--cyan)">${totalBrk.toLocaleString()}</div>
+        <div class="cmp-sum-sub">all dates combined</div>
+      </div>
+      <div class="cmp-sum-card">
+        <div class="cmp-sum-label">Worst Day</div>
+        <div class="cmp-sum-val" style="color:var(--red)">${shortDate(dates[worstIdx])}</div>
+        <div class="cmp-sum-sub">${brkArr[worstIdx]} broken · ${pctArr[worstIdx].toFixed(2)}%</div>
+      </div>
+      <div class="cmp-sum-card">
+        <div class="cmp-sum-label">Best Day</div>
+        <div class="cmp-sum-val" style="color:var(--green)">${shortDate(dates[bestIdx])}</div>
+        <div class="cmp-sum-sub">${brkArr[bestIdx]} broken · ${pctArr[bestIdx].toFixed(2)}%</div>
+      </div>
+    </div>
 
-      <div class="cmp-tables-row">
-
-        <!-- Dept breakdown -->
-        <div class="panel" style="flex:1.4">
-          <div class="panel-header"><div class="panel-title">BY DEPARTMENT</div></div>
-          <div class="panel-body">
-            <table class="data-table">
-              <thead>
-                <tr><th>Dept</th>${deptHeadCols}</tr>
-                <tr><th></th>${dates.map(() => '<th class="cmp-num">Broken</th><th class="cmp-pct">%</th>').join('')}</tr>
-              </thead>
-              <tbody>${deptRows}</tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Top reasons -->
-        <div class="panel" style="flex:1">
-          <div class="panel-header"><div class="panel-title">TOP REASONS (facility-wide)</div></div>
-          <div class="panel-body">
-            <table class="data-table">
-              <thead><tr><th>Reason</th>${reasonHeadCols}</tr></thead>
-              <tbody>${reasonRows}</tbody>
-            </table>
-          </div>
-        </div>
-
+    <!-- Breakage Summary by Dept -->
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-header">
+        <div class="panel-title">BREAKAGE SUMMARY BY DEPARTMENT</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">vs base date ${shortDate(dates[0])}</div>
+      </div>
+      <div class="panel-body" style="overflow-x:auto;padding:0">
+        <table class="data-table" style="min-width:100%">
+          <thead>
+            <tr>
+              <th style="min-width:90px">Dept</th>
+              ${dates.map((d,i) => `<th colspan="2" style="text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--cyan);padding:8px 10px;border-bottom:1px solid var(--border)">${d}${i===0?' <span style="font-size:9px;color:var(--muted)">(base)</span>':''}</th>`).join('')}
+            </tr>
+            <tr>
+              <th></th>
+              ${dates.map(() => `<th style="text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--muted);padding:4px 10px">Brk</th><th style="text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--muted);padding:4px 10px">%</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${deptData.map(dept => {
+              const hasAny = dept.vals.some(v => v.brk > 0);
+              if (!hasAny) return '';
+              const rows = dept.vals.map((v, i) => {
+                const diff = i > 0 ? v.brk - dept.vals[0].brk : 0;
+                const diffHtml2 = diff === 0 ? '' : `<span style="color:${diff<0?'var(--green)':'var(--red)'};font-size:9px;margin-left:3px">${diff>0?'▲':'▼'}${Math.abs(diff)}</span>`;
+                return `<td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${dept.color}">${v.brk||'—'}${diffHtml2}</td><td style="text-align:right;font-family:var(--font-mono);font-size:11px;color:var(--muted)">${v.pct>0?v.pct.toFixed(2)+'%':'—'}</td>`;
+              }).join('');
+              return `<tr><td style="font-weight:500;color:${dept.color};padding:8px 10px">${dept.name}</td>${rows}</tr>`;
+            }).filter(Boolean).join('')}
+            <tr style="border-top:1px solid var(--border2)">
+              <td style="font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--cyan);padding:8px 10px">LAB TOTAL</td>
+              ${brkArr.map((v, i) => {
+                const diff = i > 0 ? v - brkArr[0] : 0;
+                const diffHtml2 = diff === 0 ? '' : `<span style="color:${diff<0?'var(--green)':'var(--red)'};font-size:9px;margin-left:3px">${diff>0?'▲':'▼'}${Math.abs(diff)}</span>`;
+                return `<td style="text-align:right;font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--cyan);padding:8px 10px">${v.toLocaleString()}${diffHtml2}</td><td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${pctArr[i]<=5?'var(--green)':'var(--red)'};padding:8px 10px">${pctArr[i].toFixed(2)}%</td>`;
+              }).join('')}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>`;
+
+  el.innerHTML = `
+    <div class="cmp-results-wrap">
+      <div class="cmp-cards-grid">${cardsHtml}</div>
+      ${trendHtml}
+    </div>`;
+
+  requestAnimationFrame(() => initCmpCharts(dates, pctArr, brkArr, deptData));
 }
+
+function initCmpCharts(dates, pctArr, brkArr, deptData) {
+  const labels = dates.map(d => d.slice(0, 5));
+
+  destroyChart('cmpTrendChart');
+  const ctx = document.getElementById('cmpTrendChart');
+  if (!ctx) return;
+
+  Charts['cmpTrendChart'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Lab %',
+          data: pctArr,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.08)',
+          pointBackgroundColor: pctArr.map(v => v <= 5 ? '#34d399' : '#ef4444'),
+          pointBorderColor: '#080b0f',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.raw.toFixed(2)}%`,
+            afterLabel: (ctx) => {
+              const i = ctx.dataIndex;
+              return ` ${brkArr[i].toLocaleString()} lenses broken`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#9aafc4', font: { size: 10 } } },
+        y: {
+          beginAtZero: false,
+          ticks: { callback: v => v.toFixed(1)+'%', color: '#9aafc4', font: { size: 10 } },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+        },
+      },
+    },
+    plugins: [{
+      id: 'goalLine',
+      afterDraw(chart) {
+        const { ctx: c, chartArea: { left, right }, scales: { y } } = chart;
+        const goalY = y.getPixelForValue(5);
+        c.save();
+        c.beginPath();
+        c.setLineDash([5, 5]);
+        c.strokeStyle = 'rgba(255,255,255,0.25)';
+        c.lineWidth = 1;
+        c.moveTo(left, goalY);
+        c.lineTo(right, goalY);
+        c.stroke();
+        c.setLineDash([]);
+        c.font = '9px DM Mono, monospace';
+        c.fillStyle = 'rgba(255,255,255,0.3)';
+        c.fillText('Goal 5%', left + 4, goalY - 4);
+        c.restore();
+      },
+    }],
+  });
+}
+
 
 async function loadSumDate(date) {
   SUM.selectedDate = date;
@@ -2630,4 +2770,24 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
 });
 
 /* ── BOOT ───────────────────────────────────────────────── */
+(function() {
+  const msgs = [
+    'Connecting to data source…',
+    'Reading RawData sheet…',
+    'Calculating breakage rates…',
+    'Building department summaries…',
+    'Almost ready…',
+  ];
+  let i = 0;
+  const el = document.getElementById('loStatus');
+  const interval = setInterval(() => {
+    i++;
+    if (el && i < msgs.length) el.textContent = msgs[i];
+    else clearInterval(interval);
+  }, 600);
+})();
 App.loadAll();
+/* ── AUTO-REFRESH — every 5 min, live mode only ─────────── */
+setInterval(() => {
+  if (!App._isHistoryMode) App.loadAll();
+}, 5 * 60 * 1000);

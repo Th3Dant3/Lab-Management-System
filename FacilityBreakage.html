@@ -37,9 +37,29 @@
 
   <!-- LOADING SCREEN -->
   <div class="loading-overlay" id="loadingOverlay">
-    <div class="loading-logo">ZENNI BREAKAGE</div>
-    <div class="loading-sub">Facility Operations Dashboard</div>
-    <div class="loading-dots"><span></span><span></span><span></span></div>
+    <div class="lo-inner">
+      <!-- Logo mark -->
+      <div class="lo-badge">
+        <div class="lo-badge-ring"></div>
+        <div class="lo-badge-text">ZB</div>
+      </div>
+
+      <!-- Title -->
+      <div class="lo-title">ZENNI FACILITY BREAKAGE</div>
+      <div class="lo-sub">Facility Operations Dashboard</div>
+
+      <!-- Dept scan bars -->
+      <div class="lo-dept-bars">
+        <div class="lo-dept-row"><span class="lo-dept-label">Surface</span><div class="lo-dept-track"><div class="lo-dept-fill" style="--clr:#fb923c;--delay:0s"></div></div></div>
+        <div class="lo-dept-row"><span class="lo-dept-label">Finish</span><div class="lo-dept-track"><div class="lo-dept-fill" style="--clr:#34d399;--delay:0.15s"></div></div></div>
+        <div class="lo-dept-row"><span class="lo-dept-label">AR</span><div class="lo-dept-track"><div class="lo-dept-fill" style="--clr:#a78bfa;--delay:0.3s"></div></div></div>
+        <div class="lo-dept-row"><span class="lo-dept-label">Inventory</span><div class="lo-dept-track"><div class="lo-dept-fill" style="--clr:#f472b6;--delay:0.45s"></div></div></div>
+        <div class="lo-dept-row"><span class="lo-dept-label">LMS</span><div class="lo-dept-track"><div class="lo-dept-fill" style="--clr:#60a5fa;--delay:0.6s"></div></div></div>
+      </div>
+
+      <!-- Status line -->
+      <div class="lo-status" id="loStatus">Connecting to data source…</div>
+    </div>
   </div>
 
   <!-- TOAST -->
@@ -93,7 +113,7 @@
   <!-- ── NAV ── -->
   <nav class="nav">
     <button class="nav-tab active" data-tab="overview">
-      <span class="dot" style="background:var(--cyan)"></span>Overview
+      <span class="dot" style="background:var(--cyan)"></span>AT A GLANCE
     
       <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
@@ -186,7 +206,7 @@
     <!-- ══════════════ SUMMARY TAB ══════════════ -->
     <section class="tab-panel" id="tab-summary">
 
-      <!-- Header: mode toggle + date selector + report button -->
+      <!-- Header: mode toggle + date selector -->
       <div class="sum-header">
         <div class="sum-mode-wrap">
           <button class="ss-mode-btn active" id="ssModeDaily"  onclick="setSummaryMode('daily')">Daily</button>
@@ -213,13 +233,23 @@
 
       <!-- Daily view -->
       <div id="sumDailyView">
+        <!-- KPI strip -->
         <div class="sum-kpi-strip" id="sumKpiStrip"></div>
+
+        <!-- Split: dept sidebar + main detail -->
         <div class="sum-split">
+
+          <!-- LEFT: dept sidebar -->
           <div class="sum-dept-sidebar" id="sumDeptSidebar">
             <div class="sum-sidebar-label">DEPARTMENTS<br><span style="font-size:9px;font-weight:400;color:var(--muted)">Highest → Lowest</span></div>
             <div id="sumDeptSidebarItems"></div>
           </div>
-          <div class="sum-main" id="sumMain"></div>
+
+          <!-- RIGHT: main content -->
+          <div class="sum-main" id="sumMain">
+            <!-- selected dept or lab total detail renders here -->
+          </div>
+
         </div>
       </div>
 
@@ -231,29 +261,43 @@
 
     </section>
 
+
+    
+
+    
+
     <!-- ══════════════ COMPARE TAB ══════════════ -->
     <section class="tab-panel" id="tab-compare">
 
-      <div class="cmp-tab-header">
-        <div>
-          <div class="section-title" style="color:var(--cyan)">DATE COMPARISON</div>
-          <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px">Select up to 7 dates to compare side-by-side</div>
+      <!-- Header row: title + run button tight together -->
+      <div class="cmp-header-row">
+        <div class="section-title" style="color:var(--cyan)">DATE COMPARISON</div>
+
+        <!-- Date range picker -->
+        <div class="cmp-range-wrap">
+          <div class="cmp-range-group">
+            <label class="cmp-range-label">FROM</label>
+            <select class="cmp-range-select" id="cmpFromDate" onchange="onCmpRangeChange()">
+              <option value="">Start date…</option>
+            </select>
+          </div>
+          <div class="cmp-range-sep">→</div>
+          <div class="cmp-range-group">
+            <label class="cmp-range-label">TO</label>
+            <select class="cmp-range-select" id="cmpToDate" onchange="onCmpRangeChange()">
+              <option value="">End date…</option>
+            </select>
+          </div>
+          <div class="cmp-range-count" id="cmpSelCount">0 dates</div>
         </div>
-        <button class="sum-report-btn" id="cmpRunBtn" onclick="runCompare()" style="opacity:0.4;pointer-events:none">
+
+        <button class="sum-report-btn" id="cmpRunBtn" onclick="runCompare()" style="opacity:0.4;pointer-events:none;flex-shrink:0">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           Run Comparison
         </button>
       </div>
 
-      <!-- Date checkbox picker -->
-      <div class="cmp-picker-wrap">
-        <div class="cmp-picker-label">AVAILABLE DATES <span id="cmpSelCount" style="color:var(--cyan)">(0 selected)</span></div>
-        <div class="cmp-date-grid" id="cmpDateGrid"></div>
-      </div>
-
-      <!-- Results -->
       <div id="cmpResults"></div>
-
     </section>
 
     <!-- ══════════════ AR TAB ══════════════ -->
