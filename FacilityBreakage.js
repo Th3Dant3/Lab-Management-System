@@ -23,6 +23,7 @@ const DEPT_COLORS = {
   Surface:   '#fb923c',
   LMS:       '#60a5fa',
   Inventory: '#f472b6',
+  Breakage:  '#ef4444',
 };
 
 const CHART_DEFAULTS = {
@@ -273,6 +274,7 @@ function renderSummary(summary, meta, history) {
     { label: 'Lab Lens %',   value: U.pctRaw(labPct),   sub: 'Goal ≤5.00%', accent: U.statusColor(labPct,  5.00), badge: U.statusBadge(labPct, 5.00),  delta: U.deltaHtml(labPct, prevLabPct) },
     { label: 'Frames Broken', value: U.fmt(lt.framesBroken), sub: `of ${U.fmt(lt.orderCount)} orders`, accent: 'var(--amber)', delta: '' },
     { label: 'Frame Brk %',  value: U.pctRaw(framePct), sub: 'Goal ≤1.00%', accent: U.statusColor(framePct, 1.00), badge: U.statusBadge(framePct, 1.00), delta: U.deltaHtml(framePct, prevFramePct) },
+    { label: 'Order Count',  value: U.fmt(lt.orderCount), sub: 'Total orders today', accent: 'var(--muted)', delta: '' },
   ].map(k => `
     <div class="kpi-card" style="--accent:${k.accent}">
       <div class="kpi-label">${k.label}</div>
@@ -328,8 +330,8 @@ function renderSummary(summary, meta, history) {
   }).join('');
 
   /* Top reasons panels */
-  const deptKeys = ['AR', 'Finish', 'Surface', 'LMS'];
-  const deptClrs = ['var(--ar)', 'var(--fin)', 'var(--srf)', 'var(--lms)'];
+  const deptKeys = ['AR', 'Finish', 'Surface', 'LMS', 'Inventory', 'Breakage'];
+  const deptClrs = ['var(--ar)', 'var(--fin)', 'var(--srf)', 'var(--lms)', 'var(--inv)', 'var(--brk)'];
   document.getElementById('topReasonsGrid').innerHTML = deptKeys.map((dept, i) => {
     const reasons = summary.topReasons[dept] || [];
     if (!reasons.length) return '';
@@ -881,18 +883,19 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
 
       const renderToggle = () => {
         const mode = window._opFilter[tabId];
+        const listWrapperId = `op-list-wrap-${tabId}`;
         opsEl.innerHTML = `
           <div class="op-filter-toggle">
             <button class="op-filter-btn ${mode==='operator'?'active':''}"
-              onclick="window._opFilter['${tabId}']='operator';document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').nextSibling.remove();document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').insertAdjacentHTML('afterend',window._opRenderFn['${tabId}']())">
+              onclick="window._opFilter['${tabId}']='operator';document.getElementById('${listWrapperId}').innerHTML=window._opRenderFn['${tabId}']();document.querySelector('#tab-${tabId} [id\$=Operators] .op-filter-btn:first-child').classList.add('active');document.querySelector('#tab-${tabId} [id\$=Operators] .op-filter-btn:last-child').classList.remove('active')">
               By ${colLabel}
             </button>
             <button class="op-filter-btn ${mode==='reason'?'active':''}"
-              onclick="window._opFilter['${tabId}']='reason';document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').nextSibling.remove();document.querySelector('#tab-${tabId} [id$=Operators]').querySelector('.op-filter-toggle').insertAdjacentHTML('afterend',window._opRenderFn['${tabId}']())">
+              onclick="window._opFilter['${tabId}']='reason';document.getElementById('${listWrapperId}').innerHTML=window._opRenderFn['${tabId}']();document.querySelector('#tab-${tabId} [id\$=Operators] .op-filter-btn:first-child').classList.remove('active');document.querySelector('#tab-${tabId} [id\$=Operators] .op-filter-btn:last-child').classList.add('active')">
               By Reason
             </button>
           </div>
-          ${mode==='operator' ? renderByOperator() : renderByReason()}`;
+          <div id="${listWrapperId}">${mode==='operator' ? renderByOperator() : renderByReason()}</div>`;
       };
 
       if (!window._opRenderFn) window._opRenderFn = {};
@@ -1415,12 +1418,7 @@ async function initSummaryTab() {
 
 function setSummaryMode(mode) {
   SUM.mode = mode;
-  document.getElementById('ssModeDaily').classList.toggle('active', mode === 'daily');
-  document.getElementById('ssModeWeekly').classList.toggle('active', mode === 'weekly');
-  document.getElementById('sumDateWrap').style.display  = mode === 'daily'  ? 'flex' : 'none';
-  document.getElementById('sumWeekWrap').style.display  = mode === 'weekly' ? 'flex' : 'none';
-  document.getElementById('sumDailyView').style.display  = mode === 'daily'  ? 'block' : 'none';
-  document.getElementById('sumWeeklyView').style.display = mode === 'weekly' ? 'block' : 'none';
+  document.getElementById('sumDailyView').style.display = 'block';
 }
 
 async function onSumDateChange(date) {
@@ -1433,6 +1431,227 @@ async function onSumWeekChange(week) {
   if (!week) return;
   showTransition('history', 'Loading week of ' + week + '…');
   await loadSumWeek(week);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COMPARE TAB — multi-date (up to 7)
+═══════════════════════════════════════════════════════════ */
+const CMP = {
+  dates:    [],   // all available dates
+  selected: [],   // checked dates (max 7)
+  dataMap:  {},   // date → API data
+};
+
+async function initCompareTab() {
+  // Reuse SUM.dates if already loaded, otherwise fetch
+  if (SUM.dates.length > 0) {
+    CMP.dates = SUM.dates;
+  } else {
+    try {
+      const res = await API.get('history');
+      CMP.dates = res.data || [];
+      if (State.meta?.lensCount > 0 && State.meta?.reportDate) {
+        if (!CMP.dates.includes(State.meta.reportDate)) CMP.dates.unshift(State.meta.reportDate);
+      }
+    } catch(e) { console.error('initCompareTab:', e); return; }
+  }
+  renderComparePicker();
+}
+
+function renderComparePicker() {
+  const grid = document.getElementById('cmpDateGrid');
+  if (!grid) return;
+  grid.innerHTML = CMP.dates.map(d => {
+    const isLive    = d === State.meta?.reportDate && State.meta?.lensCount > 0;
+    const isChecked = CMP.selected.includes(d);
+    return `
+      <label class="cmp-date-chip ${isChecked ? 'checked' : ''}" id="cmp-chip-${d.replace(/\//g,'-')}">
+        <input type="checkbox" value="${d}" ${isChecked ? 'checked' : ''}
+               onchange="onCmpDateToggle(this)"
+               style="display:none">
+        ${d}${isLive ? ' <span style="color:var(--green);font-size:9px">●</span>' : ''}
+      </label>`;
+  }).join('');
+  updateCmpSelCount();
+}
+
+function onCmpDateToggle(cb) {
+  const d = cb.value;
+  if (cb.checked) {
+    if (CMP.selected.length >= 7) {
+      cb.checked = false;
+      App.showToast('Maximum 7 dates', 'error');
+      return;
+    }
+    if (!CMP.selected.includes(d)) CMP.selected.push(d);
+  } else {
+    CMP.selected = CMP.selected.filter(x => x !== d);
+  }
+  // Update chip style
+  const chip = document.getElementById('cmp-chip-' + d.replace(/\//g,'-'));
+  if (chip) chip.classList.toggle('checked', cb.checked);
+  updateCmpSelCount();
+}
+
+function updateCmpSelCount() {
+  const n   = CMP.selected.length;
+  const el  = document.getElementById('cmpSelCount');
+  const btn = document.getElementById('cmpRunBtn');
+  if (el)  el.textContent = `(${n} selected)`;
+  if (btn) {
+    const ready = n >= 2;
+    btn.style.opacity       = ready ? '1'    : '0.4';
+    btn.style.pointerEvents = ready ? 'auto' : 'none';
+  }
+}
+
+async function runCompare() {
+  if (CMP.selected.length < 2) return;
+  const resultsEl = document.getElementById('cmpResults');
+  resultsEl.innerHTML = '<div class="empty-state" style="padding:40px">Loading data…</div>';
+
+  const fetchDate = async (date) => {
+    if (CMP.dataMap[date]) return CMP.dataMap[date];
+    const isLive = date === State.meta?.reportDate && State.meta?.lensCount > 0;
+    const d = isLive ? State.depts : (await API.get('all', { date })).data;
+    CMP.dataMap[date] = d;
+    return d;
+  };
+
+  try {
+    showTransition('history', 'Loading comparison data…');
+    const dataArr = await Promise.all(CMP.selected.map(fetchDate));
+    hideTransition();
+    renderCompareResults(CMP.selected, dataArr, resultsEl);
+  } catch(e) {
+    hideTransition();
+    resultsEl.innerHTML = `<div class="empty-state" style="padding:40px">Error: ${e.message}</div>`;
+  }
+}
+
+function renderCompareResults(dates, dataArr, el) {
+  const n = dates.length;
+
+  // Helper: delta between first date and each subsequent
+  const baseData = dataArr[0];
+  const lcArr    = dataArr.map(d => d.lensCount  || 1);
+  const ocArr    = dataArr.map(d => d.orderCount || 1);
+
+  const pctArr   = dataArr.map((d,i) => (d.summary?.labTotal?.labLensPct  || 0) * 100);
+  const fpArr    = dataArr.map((d,i) => (d.summary?.labTotal?.labFramePct || 0) * 100);
+  const brkArr   = dataArr.map(d    => d.summary?.labTotal?.labLensesBroken || 0);
+  const frmArr   = dataArr.map(d    => d.summary?.labTotal?.framesBroken    || 0);
+
+  const arrowHtml = (base, val, lowerBetter = true) => {
+    const diff = val - base;
+    if (Math.abs(diff) < 0.001 && typeof diff === 'number') return '';
+    if (diff === 0) return '';
+    const good  = lowerBetter ? diff < 0 : diff > 0;
+    const color = good ? 'var(--green)' : 'var(--red)';
+    const sym   = diff > 0 ? '▲' : '▼';
+    const abs   = typeof val === 'number' && val % 1 !== 0 ? Math.abs(diff).toFixed(2) : Math.abs(diff).toLocaleString();
+    return `<span style="color:${color};font-size:10px;margin-left:4px">${sym}${abs}</span>`;
+  };
+
+  // ── Lab totals header strip ──
+  const kpiCols = dates.map((d, i) => `
+    <div class="cmp-col-kpi ${i === 0 ? 'cmp-col-base' : ''}">
+      <div class="cmp-col-date">${d}${i===0 ? ' <span style="font-size:9px;color:var(--muted)">(base)</span>' : ''}</div>
+      <div class="cmp-col-stat" style="color:var(--cyan)">${brkArr[i].toLocaleString()}
+        ${i > 0 ? arrowHtml(brkArr[0], brkArr[i]) : ''}
+      </div>
+      <div class="cmp-col-sub">${pctArr[i].toFixed(2)}%
+        ${i > 0 ? arrowHtml(pctArr[0], pctArr[i]) : ''}
+        <span style="color:${pctArr[i]<=5?'var(--green)':'var(--red)'}"> ${pctArr[i]<=5?'✓':'✗'}</span>
+      </div>
+      <div class="cmp-col-sub2">${lcArr[i].toLocaleString()} lenses · ${ocArr[i].toLocaleString()} orders</div>
+    </div>`).join('');
+
+  // ── Dept table ──
+  const DEPTS     = ['AR','Finish','Surface','LMS','Inventory','Breakage'];
+  const DEPT_KEYS = { AR:'ar', Finish:'finish', Surface:'surface', LMS:'lms', Inventory:'inventory', Breakage:'breakage' };
+  const deptRows  = DEPTS.map(name => {
+    const key  = DEPT_KEYS[name];
+    const col  = DEPT_COLORS[name] || 'var(--cyan)';
+    const vals = dataArr.map((d,i) => {
+      const t   = d[key]?.totals || {};
+      const pct = t.lensesBroken > 0 ? (t.lensesBroken / lcArr[i] * 100) : 0;
+      return { brk: t.lensesBroken || 0, pct };
+    });
+    const cells = vals.map((v, i) => `
+      <td class="cmp-num">${v.brk}${i > 0 ? arrowHtml(vals[0].brk, v.brk) : ''}</td>
+      <td class="cmp-pct">${v.pct.toFixed(2)}%${i > 0 ? arrowHtml(vals[0].pct, v.pct) : ''}</td>`).join('');
+    return `<tr><td style="color:${col};font-weight:500">${name}</td>${cells}</tr>`;
+  }).join('');
+
+  const deptHeadCols = dates.map(d => `<th colspan="2" class="cmp-date-head">${d}</th>`).join('');
+
+  // ── Top reasons table (union, sorted by sum across all dates) ──
+  const reasonTotals = {};
+  dataArr.forEach(d => {
+    DEPTS.forEach(name => {
+      (d[DEPT_KEYS[name]]?.reasons || []).forEach(r => {
+        reasonTotals[r.reason] = (reasonTotals[r.reason] || 0) + r.lensesBroken;
+      });
+    });
+  });
+  const topReasons = Object.keys(reasonTotals).sort((a,b) => reasonTotals[b] - reasonTotals[a]).slice(0, 12);
+
+  const reasonRows = topReasons.map(reason => {
+    const vals = dataArr.map(d => {
+      let sum = 0;
+      DEPTS.forEach(name => {
+        const r = (d[DEPT_KEYS[name]]?.reasons || []).find(x => x.reason === reason);
+        if (r) sum += r.lensesBroken;
+      });
+      return sum;
+    });
+    const cells = vals.map((v,i) => `<td class="cmp-num">${v || '—'}${i>0&&v!==vals[0]?arrowHtml(vals[0],v):''}</td>`).join('');
+    return `<tr><td>${reason}</td>${cells}</tr>`;
+  }).join('');
+
+  const reasonHeadCols = dates.map(d => `<th class="cmp-num cmp-date-head">${d}</th>`).join('');
+
+  el.innerHTML = `
+    <div class="cmp-wrap">
+
+      <!-- Lab totals strip -->
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">LAB TOTALS — LENSES BROKEN / LENS %</div></div>
+        <div class="panel-body">
+          <div class="cmp-kpi-cols">${kpiCols}</div>
+        </div>
+      </div>
+
+      <div class="cmp-tables-row">
+
+        <!-- Dept breakdown -->
+        <div class="panel" style="flex:1.4">
+          <div class="panel-header"><div class="panel-title">BY DEPARTMENT</div></div>
+          <div class="panel-body">
+            <table class="data-table">
+              <thead>
+                <tr><th>Dept</th>${deptHeadCols}</tr>
+                <tr><th></th>${dates.map(() => '<th class="cmp-num">Broken</th><th class="cmp-pct">%</th>').join('')}</tr>
+              </thead>
+              <tbody>${deptRows}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Top reasons -->
+        <div class="panel" style="flex:1">
+          <div class="panel-header"><div class="panel-title">TOP REASONS (facility-wide)</div></div>
+          <div class="panel-body">
+            <table class="data-table">
+              <thead><tr><th>Reason</th>${reasonHeadCols}</tr></thead>
+              <tbody>${reasonRows}</tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
 }
 
 async function loadSumDate(date) {
@@ -1759,6 +1978,377 @@ function renderSumWeekly(data) {
     </div>`;
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   GENERATE SUMMARY REPORT — per selected dept or full lab
+═══════════════════════════════════════════════════════════ */
+function generateSummaryReport() {
+  const panel  = document.getElementById('sumReportPanel');
+  const btn    = document.getElementById('sumReportBtn');
+  const d      = SUM.data;
+  const deptKey = SUM.selectedDept || 'LAB';
+
+  if (!d) { App.showToast('Select a date first', 'error'); return; }
+
+  // Toggle off if already showing
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    btn.textContent = '📄 Generate Report';
+    return;
+  }
+
+  btn.textContent = 'Building…';
+
+  const lensCount  = d.lensCount  || 1;
+  const orderCount = d.orderCount || 1;
+  const date       = d.reportDate || SUM.selectedDate || '—';
+  const lt         = d.summary?.labTotal || {};
+  const labPct     = (lt.labLensPct  || 0) * 100;
+  const framePct   = (lt.labFramePct || 0) * 100;
+  const DEPT_GOALS = { AR:0.85, Finish:1.70, Surface:2.80 };
+  const colLabel   = key => key === 'Surface' ? 'Machine' : 'Operator';
+  const fmt        = n => (n||0).toLocaleString();
+  const pf         = n => (n||0).toFixed(2) + '%';
+
+  // Helper: status color style string
+  const sc  = (ok) => ok ? 'color:var(--green)' : 'color:var(--red)';
+  const scG = (v, goal) => !goal ? 'color:var(--muted)' : sc(v <= goal);
+
+  // ── FULL LAB REPORT ──────────────────────────────────────
+  if (deptKey === 'LAB') {
+    const depts = [...(d.summary?.departments || [])].sort((a,b) => b.lensesBroken - a.lensesBroken);
+    const overGoal = depts.filter(dep => DEPT_GOALS[dep.department] && dep.lensBrkPct*100 > DEPT_GOALS[dep.department]);
+    const onGoal   = depts.filter(dep => !DEPT_GOALS[dep.department] || dep.lensBrkPct*100 <= DEPT_GOALS[dep.department]);
+
+    // All reasons across all depts sorted high → low
+    const allReasons = [];
+    ['AR','Finish','Surface','LMS','Inventory'].forEach(dep => {
+      const depData = d[dep.toLowerCase()];
+      (depData?.reasons || []).forEach(r => {
+        allReasons.push({ reason: r.reason, dept: dep, count: r.lensesBroken||0,
+          color: DEPT_COLORS[dep]||'var(--cyan)',
+          pctLab:  ((r.lensesBroken||0)/lensCount*100).toFixed(2),
+          pctDept: depts.find(x=>x.department===dep)?.lensesBroken > 0
+            ? ((r.lensesBroken||0)/depts.find(x=>x.department===dep).lensesBroken*100).toFixed(0) : '0',
+        });
+      });
+    });
+    allReasons.sort((a,b) => b.count - a.count);
+
+    // All operators across all depts sorted high → low (no NONE)
+    const allOps = [];
+    ['AR','Finish','Surface','LMS','Inventory'].forEach(dep => {
+      const depData = d[dep.toLowerCase()];
+      (depData?.operators || []).filter(o => o.operator && o.operator !== 'NONE').forEach(o => {
+        const total = o.total ?? ((o.lensTotal||0) + (o.frameTotal||0));
+        if (total > 0) allOps.push({ name: o.operator, dept: dep, color: DEPT_COLORS[dep]||'var(--cyan)',
+          lenses: total, frames: o.frameTotal||0,
+          topReason: (o.reasons||[])[0]?.reason || '—', reasonCount: (o.reasons||[]).length });
+      });
+    });
+    allOps.sort((a,b) => b.lenses - a.lenses);
+
+    // Unassigned per dept
+    const unassigned = [];
+    ['AR','Finish','Surface','LMS','Inventory'].forEach(dep => {
+      const depData = d[dep.toLowerCase()];
+      const noneOps = (depData?.operators || []).filter(o => !o.operator || o.operator === 'NONE');
+      const count   = noneOps.reduce((s,o) => s + (o.total||(o.lensTotal||0)), 0);
+      const reasons = noneOps.flatMap(o => o.reasons||[]).sort((a,b)=>(b.lenses||0)-(a.lenses||0));
+      if (count > 0) unassigned.push({ dept: dep, color: DEPT_COLORS[dep]||'var(--cyan)',
+        count, reasons, deptTotal: depts.find(x=>x.department===dep)?.lensesBroken||0 });
+    });
+    const totalUnassigned = unassigned.reduce((s,u) => s+u.count, 0);
+
+    // Frame breakage detail
+    const frameOps = [];
+    const finData = d.finish;
+    (finData?.operators || []).filter(o => (o.frameTotal||0) > 0).forEach(o => {
+      frameOps.push({ name: o.operator||'Unassigned', frames: o.frameTotal, none: !o.operator||o.operator==='NONE' });
+    });
+
+    const labOk   = labPct <= 5.00;
+    const frameOk = framePct <= 1.00;
+
+    panel.style.setProperty('--report-color', 'var(--cyan)');
+    panel.innerHTML = `
+      <div class="rpt-h1" style="color:var(--cyan)">FULL LAB BREAKAGE REPORT</div>
+      <div class="rpt-meta">${date} &nbsp;·&nbsp; ${fmt(lensCount)} lenses processed &nbsp;·&nbsp; ${fmt(orderCount)} orders &nbsp;·&nbsp; Generated ${new Date().toLocaleTimeString()}</div>
+
+      <!-- 1. Facility Overview -->
+      <div class="rpt-h2">1. Facility Overview</div>
+      <p class="rpt-p">On <strong>${date}</strong>, the facility processed <strong style="color:var(--cyan)">${fmt(lensCount)} lenses</strong> across <strong>${fmt(orderCount)} orders</strong>.
+      A total of <strong style="${sc(labOk)}">${fmt(lt.labLensesBroken||0)} lenses</strong> were broken, representing a <strong style="${sc(labOk)}">${labPct.toFixed(2)}%</strong> lab-wide breakage rate.
+      The facility is <strong style="${sc(labOk)}">${labOk ? 'within' : 'exceeding'}</strong> the 5.00% facility goal${labOk ? ', with <strong>' + (5.00-labPct).toFixed(2) + 'pp of margin remaining</strong>.' : ', exceeding by <strong>' + (labPct-5.00).toFixed(2) + 'pp</strong>.'}
+      Frame breakage: <strong style="${sc(frameOk)}">${fmt(lt.framesBroken||0)} frames (${framePct.toFixed(2)}%)</strong> — ${frameOk ? 'within' : 'exceeding'} the 1.00% goal.</p>
+
+      <!-- 2. Goal Status Table -->
+      <div class="rpt-h2">2. Department Goal Status</div>
+      ${overGoal.length > 0
+        ? `<div class="rpt-flag err">⚠ ${overGoal.length} department${overGoal.length>1?'s':''} over goal: ${overGoal.map(d=>d.department).join(', ')}</div>`
+        : `<div class="rpt-flag ok">✓ All departments with goals are operating within their targets.</div>`}
+      <table class="rpt-table">
+        <thead><tr><th>Department</th><th>Broken</th><th>Rate</th><th>Goal</th><th>Status</th><th>Margin</th><th>Top Reason</th></tr></thead>
+        <tbody>
+          ${depts.filter(dep => DEPT_GOALS[dep.department]).map(dep => {
+            const goal   = DEPT_GOALS[dep.department];
+            const pct    = (dep.lensBrkPct||0)*100;
+            const ok     = pct <= goal;
+            const margin = (goal - pct).toFixed(2);
+            const topR   = (d[dep.department.toLowerCase()]?.reasons||[])[0]?.reason || '—';
+            return `<tr>
+              <td style="font-weight:600;color:${DEPT_COLORS[dep.department]||'var(--cyan)'}">${dep.department}</td>
+              <td style="font-family:var(--font-mono)">${dep.lensesBroken}</td>
+              <td style="font-family:var(--font-mono);${sc(ok)}">${pct.toFixed(2)}%</td>
+              <td style="font-family:var(--font-mono);color:var(--muted)">≤${goal}%</td>
+              <td style="font-family:var(--font-mono);${sc(ok)}">${ok?'✓ On Goal':'✗ Over Goal'}</td>
+              <td style="font-family:var(--font-mono);${sc(ok)}">${ok?'+'+margin:'−'+Math.abs(margin)}pp</td>
+              <td style="font-size:11px;color:var(--muted)">${topR}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+
+      <!-- 3. Dept Deep Dive -->
+      <div class="rpt-h2">3. Department Deep Dive — Highest to Lowest</div>
+      ${depts.map(dep => {
+        const depKey  = dep.department.toLowerCase();
+        const depData = d[depKey] || {};
+        const goal    = DEPT_GOALS[dep.department];
+        const pct     = (dep.lensBrkPct||0)*100;
+        const ok      = !goal || pct <= goal;
+        const color   = DEPT_COLORS[dep.department]||'var(--cyan)';
+        const reasons = (depData.reasons||[]).slice(0,6);
+        const ops     = (depData.operators||[]).filter(o=>o.operator&&o.operator!=='NONE').slice(0,6);
+        const noneC   = (depData.operators||[]).filter(o=>!o.operator||o.operator==='NONE').reduce((s,o)=>s+(o.total||(o.lensTotal||0)),0);
+        const maxR    = reasons[0] ? (reasons[0].lensesBroken||reasons[0].framesBroken||1) : 1;
+        return `<div class="rpt-dept-card" style="--dc:${color}">
+          <div class="rpt-dept-head">
+            <span style="font-family:var(--font-display);font-size:16px;font-weight:700;color:${color}">${dep.department}</span>
+            <span style="font-family:var(--font-mono);font-size:12px;${sc(ok)}">${pct.toFixed(2)}%</span>
+            ${goal ? `<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">Goal ≤${goal}%</span>` : ''}
+            <span style="font-family:var(--font-display);font-size:20px;font-weight:700;color:${color};margin-left:auto">${dep.lensesBroken} lenses</span>
+          </div>
+          ${reasons.length ? `<div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">TOP REASONS</div>
+          <div class="rpt-reasons-grid">
+            ${reasons.map(r => {
+              const cnt = r.lensesBroken||r.framesBroken||0;
+              return `<div class="rpt-reason-chip">
+                <div style="width:4px;height:4px;border-radius:50%;background:${color};flex-shrink:0"></div>
+                <span style="flex:1;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.reason}</span>
+                <span style="font-family:var(--font-display);font-size:13px;font-weight:700;color:${color}">${cnt}</span>
+                <span style="font-family:var(--font-mono);font-size:9px;color:var(--muted)">${dep.lensesBroken>0?(cnt/dep.lensesBroken*100).toFixed(0):0}%</span>
+              </div>`;
+            }).join('')}
+          </div>` : ''}
+          ${ops.length ? `<div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px;margin-top:8px">TOP ${dep.department==='Surface'?'MACHINES':'OPERATORS'}</div>
+          <div class="rpt-op-chips">
+            ${ops.map(op => {
+              const total = op.total??(op.lensTotal||0);
+              return `<div class="rpt-op-chip" style="border:1px solid ${color}30;background:${color}10;color:${color}">${op.operator} — ${total}${(op.frameTotal||0)>0?' (+'+op.frameTotal+'f)':''}</div>`;
+            }).join('')}
+          </div>` : ''}
+          ${noneC > 0 ? `<div style="font-family:var(--font-mono);font-size:10px;color:var(--red);margin-top:8px;padding:5px 10px;background:rgba(240,79,90,0.08);border-radius:6px;border:1px solid rgba(240,79,90,0.2)">⚠ ${noneC} lenses unassigned (NONE) — supervisor review required</div>` : ''}
+        </div>`;
+      }).join('')}
+
+      <!-- 4. Top Reasons Facility-Wide -->
+      <div class="rpt-h2">4. Top Breakage Reasons — Facility-Wide</div>
+      <table class="rpt-table">
+        <thead><tr><th>#</th><th>Reason</th><th>Dept</th><th>Count</th><th>% of Lab</th><th>% of Dept</th></tr></thead>
+        <tbody>
+          ${allReasons.slice(0,12).map((r,i) => `<tr>
+            <td style="font-family:var(--font-mono);color:var(--muted)">${i+1}</td>
+            <td style="font-weight:500">${r.reason}</td>
+            <td style="color:${r.color};font-family:var(--font-mono);font-size:11px">${r.dept}</td>
+            <td style="font-family:var(--font-display);font-weight:700;color:${r.color}">${r.count}</td>
+            <td style="font-family:var(--font-mono);font-size:11px">${r.pctLab}%</td>
+            <td style="font-family:var(--font-mono);font-size:11px">${r.pctDept}%</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+
+      <!-- 5. Top Operators -->
+      ${allOps.length > 0 ? `<div class="rpt-h2">5. Top Contributing Operators — All Departments</div>
+      <table class="rpt-table">
+        <thead><tr><th>Name</th><th>Dept</th><th>Lenses</th><th>Frames</th><th>Top Reason</th><th>Reasons</th></tr></thead>
+        <tbody>
+          ${allOps.slice(0,10).map(op => `<tr>
+            <td style="font-weight:500;color:${op.color}">${op.name}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${op.dept}</td>
+            <td style="font-family:var(--font-display);font-weight:700;color:${op.color}">${op.lenses}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;color:${op.frames>0?'var(--amber)':'var(--muted)'}">${op.frames>0?op.frames:'—'}</td>
+            <td style="font-size:11px;color:var(--muted)">${op.topReason}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${op.reasonCount}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+
+      <!-- 6. Data Integrity -->
+      ${totalUnassigned > 0 ? `<div class="rpt-h2">6. Data Integrity — Unassigned Records</div>
+      <p class="rpt-p" style="color:var(--red)"><strong>${totalUnassigned} lenses</strong> were recorded without a valid operator assignment (NONE). These cannot be attributed for performance tracking. Supervisor review required for: ${unassigned.map(u=>u.dept).join(', ')}.</p>
+      <table class="rpt-table">
+        <thead><tr><th>Dept</th><th>Unassigned</th><th>% of Dept</th><th>Top Unassigned Reasons</th></tr></thead>
+        <tbody>
+          ${unassigned.map(u => `<tr>
+            <td style="font-weight:600;color:${u.color}">${u.dept}</td>
+            <td style="font-family:var(--font-display);font-weight:700;color:var(--red)">${u.count}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;color:var(--red)">${u.deptTotal>0?(u.count/u.deptTotal*100).toFixed(0):0}% of dept</td>
+            <td style="font-size:11px;color:var(--muted)">${u.reasons.slice(0,3).map(r=>r.reason||r.r||'—').join(', ')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+
+      <!-- 7. Frame Breakage -->
+      ${(lt.framesBroken||0) > 0 ? `<div class="rpt-h2">${totalUnassigned>0?'7':'6'}. Frame Breakage Detail</div>
+      <p class="rpt-p">${lt.framesBroken} frames broken at ${framePct.toFixed(2)}% (${frameOk?'within':'exceeding'} the 1.00% goal).
+      ${frameOps.length>0?'Frame breakage attributed to: '+frameOps.map(o=>o.name+' ('+o.frames+' frame'+(o.frames>1?'s':'')+')').join(', '):''}</p>` : ''}
+
+      <!-- 8. Key Observations -->
+      <div class="rpt-h2">${totalUnassigned>0&&(lt.framesBroken||0)>0?'8':totalUnassigned>0||(lt.framesBroken||0)>0?'7':'6'}. Key Observations & Recommendations</div>
+      ${overGoal.map(dep => {
+        const goal = DEPT_GOALS[dep.department];
+        const pct  = (dep.lensBrkPct||0)*100;
+        const depData = d[dep.department.toLowerCase()]||{};
+        const topR = (depData.reasons||[]).slice(0,2).map(r=>r.reason).join(' and ');
+        return `<div class="rpt-flag err">✗ ${dep.department} is ${(pct-goal).toFixed(2)}pp over goal — review ${topR||'top reasons'} with lead supervisor</div>`;
+      }).join('')}
+      ${depts.filter(dep => DEPT_GOALS[dep.department] && (dep.lensBrkPct*100 <= DEPT_GOALS[dep.department]) && (DEPT_GOALS[dep.department] - dep.lensBrkPct*100) < 0.30).map(dep =>
+        `<div class="rpt-flag warn">⚡ ${dep.department} is within ${(DEPT_GOALS[dep.department]-dep.lensBrkPct*100).toFixed(2)}pp of goal — monitor closely</div>`
+      ).join('')}
+      ${allReasons[0] ? `<div class="rpt-flag err">🔎 ${allReasons[0].reason} (${allReasons[0].dept}) is the #1 facility driver — ${allReasons[0].count} lenses (${allReasons[0].pctLab}% of all breakage)</div>` : ''}
+      ${totalUnassigned > 0 ? `<div class="rpt-flag err">⚠ ${totalUnassigned} unassigned lenses — operator scan compliance requires immediate supervisor attention</div>` : ''}
+      ${allOps[0] ? `<div class="rpt-flag warn">👤 Highest contributor: ${allOps[0].name} (${allOps[0].dept}) — ${allOps[0].lenses} lenses, top reason: ${allOps[0].topReason}</div>` : ''}
+      ${overGoal.length===0 ? `<div class="rpt-flag ok">✓ All departments within goal — strong operational day</div>` : ''}
+      ${totalUnassigned===0 ? `<div class="rpt-flag ok">✓ All breakage records have full operator attribution</div>` : ''}
+
+      <div class="rpt-footer">
+        <span>Generated ${new Date().toLocaleString()} · Zenni Facility Breakage Dashboard</span>
+        <button onclick="document.getElementById('sumReportPanel').style.display='none';document.getElementById('sumReportBtn').textContent='📄 Generate Report'"
+          style="font-family:var(--font-mono);font-size:11px;padding:5px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--muted);cursor:pointer">✕ Close</button>
+      </div>`;
+
+  } else {
+    // ── DEPARTMENT-SPECIFIC REPORT ──────────────────────────
+    const depKey  = deptKey.toLowerCase();
+    const depData = d[depKey] || {};
+    const depInfo = d.summary?.departments?.find(x => x.department === deptKey) || {};
+    const color   = DEPT_COLORS[deptKey] || 'var(--cyan)';
+    const goal    = DEPT_GOALS[deptKey] || null;
+    const pct     = (depInfo.lensBrkPct || 0) * 100;
+    const ok      = !goal || pct <= goal;
+    const isSurface = deptKey === 'Surface';
+    const cLabel  = colLabel(deptKey);
+
+    const reasons  = [...(depData.reasons || [])].sort((a,b) => (b.lensesBroken||0)-(a.lensesBroken||0));
+    const operators= [...(depData.operators || [])];
+    const namedOps = operators.filter(o => o.operator && o.operator !== 'NONE');
+    const noneOps  = operators.filter(o => !o.operator || o.operator === 'NONE');
+    const noneCount= noneOps.reduce((s,o) => s+(o.total||(o.lensTotal||0)), 0);
+    const totalOps = operators.length;
+    const maxR     = reasons[0] ? (reasons[0].lensesBroken||1) : 1;
+    const topOp    = namedOps[0];
+    const framesBroken = depData.totals?.framesBroken || depInfo.framesBroken || 0;
+    const framePctDept = orderCount > 0 ? (framesBroken/orderCount*100) : 0;
+
+    // Concentration analysis — top reason % of dept
+    const topReasonPct = reasons[0] && depInfo.lensesBroken > 0
+      ? (((reasons[0].lensesBroken||0)/depInfo.lensesBroken)*100).toFixed(0) : 0;
+
+    // Operator spread — how many ops contributed
+    const opSpread = namedOps.filter(o=>(o.total||(o.lensTotal||0))>0).length;
+
+    panel.style.setProperty('--report-color', color);
+    panel.innerHTML = `
+      <div class="rpt-h1" style="color:${color}">${deptKey.toUpperCase()} DEPARTMENT REPORT</div>
+      <div class="rpt-meta">${date} &nbsp;·&nbsp; ${fmt(lensCount)} facility lenses &nbsp;·&nbsp; ${fmt(depInfo.lensesBroken||0)} dept lenses broken &nbsp;·&nbsp; Generated ${new Date().toLocaleTimeString()}</div>
+
+      <!-- 1. Dept Overview -->
+      <div class="rpt-h2">1. Department Overview</div>
+      <p class="rpt-p">${deptKey} department recorded <strong style="color:${color}">${fmt(depInfo.lensesBroken||0)} lenses</strong> broken on ${date}, representing a <strong style="${sc(ok)}">${pct.toFixed(2)}%</strong> breakage rate against ${fmt(lensCount)} facility lenses.
+      ${goal ? 'The department is <strong style="'+sc(ok)+'">'+( ok?'within':'exceeding')+' its '+goal+'% goal</strong>'+(ok?', with <strong>'+(goal-pct).toFixed(2)+'pp of margin remaining</strong>.':' by <strong>'+(pct-goal).toFixed(2)+'pp</strong>.') : 'No breakage goal is set for this department.'}
+      ${framesBroken > 0 ? 'Additionally, <strong style="color:var(--amber)">'+framesBroken+' frames</strong> were broken ('+framePctDept.toFixed(2)+'% frame breakage rate).' : ''}</p>
+
+      <!-- 2. Goal & Position -->
+      ${goal ? `<div class="rpt-h2">2. Goal Analysis</div>
+      <div class="rpt-flag ${ok?'ok':'err'}">${ok?'✓':'✗'} ${deptKey} at ${pct.toFixed(2)}% vs goal ≤${goal}% — ${ok?'On Goal · '+( goal-pct).toFixed(2)+'pp remaining':'Over Goal · '+(pct-goal).toFixed(2)+'pp above target'}</div>` : ''}
+
+      <!-- 3. Reason Breakdown -->
+      <div class="rpt-h2">${goal?'3':'2'}. Breakage Reason Analysis</div>
+      ${reasons.length === 0 ? '<p class="rpt-p" style="color:var(--muted)">No reason data available.</p>' : `
+      <p class="rpt-p">
+        ${reasons.length} distinct reason${reasons.length>1?'s were':' was'} recorded.
+        The primary driver is <strong style="color:${color}">${reasons[0].reason}</strong> with ${reasons[0].lensesBroken||0} lenses, accounting for <strong>${topReasonPct}%</strong> of all ${deptKey} breakage.
+        ${reasons.length > 1 ? 'The top 3 reasons account for <strong>'+(reasons.slice(0,3).reduce((s,r)=>s+(r.lensesBroken||0),0))+' lenses</strong> ('+(depInfo.lensesBroken>0?(reasons.slice(0,3).reduce((s,r)=>s+(r.lensesBroken||0),0)/depInfo.lensesBroken*100).toFixed(0):0)+'% of dept breakage).' : ''}
+      </p>
+      <table class="rpt-table">
+        <thead><tr><th>#</th><th>Reason</th><th>Lenses</th><th>% of Dept</th><th>% of Lab</th></tr></thead>
+        <tbody>
+          ${reasons.map((r,i) => {
+            const cnt = r.lensesBroken||r.framesBroken||0;
+            return `<tr>
+              <td style="font-family:var(--font-mono);color:var(--muted)">${i+1}</td>
+              <td style="font-weight:${i===0?'600':'400'}">${r.reason}</td>
+              <td style="font-family:var(--font-display);font-weight:700;color:${color}">${cnt}</td>
+              <td style="font-family:var(--font-mono);font-size:11px">${depInfo.lensesBroken>0?(cnt/depInfo.lensesBroken*100).toFixed(1):0}%</td>
+              <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${(cnt/lensCount*100).toFixed(2)}%</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`}
+
+      <!-- 4. Operator/Machine Breakdown -->
+      <div class="rpt-h2">${goal?'4':'3'}. ${cLabel} Breakdown</div>
+      ${namedOps.length === 0 ? '<p class="rpt-p" style="color:var(--muted)">No '+cLabel.toLowerCase()+' data available.</p>' : `
+      <p class="rpt-p">
+        ${opSpread} ${cLabel.toLowerCase()}${opSpread>1?'s':''} contributed to ${deptKey} breakage.
+        ${topOp ? 'The highest contributor is <strong style="color:'+color+'">'+(topOp.operator)+'</strong> with <strong>'+(topOp.total||(topOp.lensTotal||0))+'</strong> lenses'+(topOp.reasons&&topOp.reasons[0]?', primarily from '+topOp.reasons[0].reason:'')+'.' : ''}
+      </p>
+      <table class="rpt-table">
+        <thead><tr><th>${cLabel}</th><th>Lenses</th>${deptKey==='Finish'?'<th>Frames</th>':''}<th>% of Dept</th><th>Top Reason</th><th>Reasons</th></tr></thead>
+        <tbody>
+          ${namedOps.map(op => {
+            const total   = op.total ?? (op.lensTotal||0);
+            const topR    = (op.reasons||[])[0]?.reason || '—';
+            const rCount  = (op.reasons||[]).length;
+            return `<tr>
+              <td style="font-weight:500;color:${color}">${op.operator}</td>
+              <td style="font-family:var(--font-display);font-weight:700;color:${color}">${total}</td>
+              ${deptKey==='Finish'?'<td style="font-family:var(--font-mono);font-size:11px;color:'+(op.frameTotal>0?'var(--amber)':'var(--muted)')+'">'+((op.frameTotal||0)>0?op.frameTotal:'—')+'</td>':''}
+              <td style="font-family:var(--font-mono);font-size:11px">${depInfo.lensesBroken>0?(total/depInfo.lensesBroken*100).toFixed(1):0}%</td>
+              <td style="font-size:11px;color:var(--muted)">${topR}</td>
+              <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${rCount}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`}
+
+      <!-- 5. Unassigned -->
+      ${noneCount > 0 ? `<div class="rpt-h2">${goal?'5':'4'}. Data Integrity — Unassigned Records</div>
+      <div class="rpt-flag err">⚠ ${noneCount} lenses recorded without a valid ${cLabel.toLowerCase()} (NONE) — ${depInfo.lensesBroken>0?(noneCount/depInfo.lensesBroken*100).toFixed(0):0}% of dept breakage lacks attribution</div>
+      <p class="rpt-p" style="color:var(--red)">The unassigned records were associated with: ${noneOps.flatMap(o=>o.reasons||[]).sort((a,b)=>(b.lenses||0)-(a.lenses||0)).slice(0,5).map(r=>r.reason||'—').join(', ')}. Supervisor review and corrective scanning protocol recommended.</p>` : ''}
+
+      <!-- 6. Key Observations -->
+      <div class="rpt-h2">${goal ? (noneCount>0?'6':'5') : (noneCount>0?'5':'4')}. Key Observations & Recommendations</div>
+      ${!ok ? `<div class="rpt-flag err">✗ ${deptKey} is ${(pct-goal).toFixed(2)}pp over the ${goal}% goal — escalate to department supervisor</div>` : ''}
+      ${ok && goal && (goal-pct) < 0.30 ? `<div class="rpt-flag warn">⚡ ${deptKey} is within ${(goal-pct).toFixed(2)}pp of goal — elevated monitoring recommended</div>` : ''}
+      ${reasons[0] ? `<div class="rpt-flag ${!ok?'err':'warn'}">🔎 ${reasons[0].reason} is the primary driver at ${reasons[0].lensesBroken||0} lenses (${topReasonPct}% of dept) — focus root cause review here</div>` : ''}
+      ${topOp ? `<div class="rpt-flag warn">👤 ${topOp.operator} is the highest contributing ${cLabel.toLowerCase()} with ${topOp.total||(topOp.lensTotal||0)} lenses — review for targeted coaching or machine calibration</div>` : ''}
+      ${noneCount > 0 ? `<div class="rpt-flag err">⚠ ${noneCount} unassigned lenses (${depInfo.lensesBroken>0?(noneCount/depInfo.lensesBroken*100).toFixed(0):0}%) — operator scan compliance action required</div>` : ''}
+      ${ok && noneCount===0 ? `<div class="rpt-flag ok">✓ ${deptKey} is within goal with full operator attribution — no immediate action required</div>` : ''}
+
+      <div class="rpt-footer">
+        <span>Generated ${new Date().toLocaleString()} · Zenni Facility Breakage Dashboard</span>
+        <button onclick="document.getElementById('sumReportPanel').style.display='none';document.getElementById('sumReportBtn').textContent='📄 Generate Report'"
+          style="font-family:var(--font-mono);font-size:11px;padding:5px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--muted);cursor:pointer">✕ Close</button>
+      </div>`;
+  }
+
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Generate Report';
+}
+
 /* ═══════════════════════════════════════════════════════════
    MAIN APP CONTROLLER
 ═══════════════════════════════════════════════════════════ */
@@ -1886,6 +2476,7 @@ const App = {
       renderDeptTab('surface',   d.surface,   'Surface',   '#fb923c', 'srfChart');
       renderDeptTab('lms',       d.lms,       'LMS',       '#60a5fa', 'lmsChart');
       renderDeptTab('inventory', d.inventory, 'Inventory', '#f472b6', null);
+      renderDeptTab('breakage',  d.breakage,  'Breakage',  '#ef4444', null);
       renderMailroom(meta);
 
       document.getElementById('loadingOverlay').classList.add('hidden');
@@ -1922,7 +2513,7 @@ const App = {
         lensCount:   d.lensCount,
         orderCount:  d.orderCount,
         reportDate:  d.reportDate,
-        lastRefresh: new Date().toLocaleTimeString(),
+        lastRefresh: d.lastRefresh || new Date().toLocaleTimeString(),
       };
 
       State.meta    = meta;
@@ -1938,6 +2529,7 @@ const App = {
       renderDeptTab('surface',   d.surface,   'Surface',   '#fb923c', 'srfChart');
       renderDeptTab('lms',       d.lms,       'LMS',       '#60a5fa', 'lmsChart');
       renderDeptTab('inventory', d.inventory, 'Inventory', '#f472b6', null);
+      renderDeptTab('breakage',  d.breakage,  'Breakage',  '#ef4444', null);
       renderMailroom(meta);
       initSummaryTab(); // pre-load summary dates
 
@@ -1963,6 +2555,7 @@ const App = {
       tab.classList.add('active');
       // Init summary tab when switched to
       if (id === 'summary' && SUM.dates.length === 0) initSummaryTab();
+      if (id === 'compare' && CMP.dates.length === 0) initCompareTab();
     }
   },
 

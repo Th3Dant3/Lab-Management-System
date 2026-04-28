@@ -100,6 +100,9 @@
     <button class="nav-tab" data-tab="summary">
       <span class="dot" style="background:var(--green)"></span>Summary
     </button>
+    <button class="nav-tab" data-tab="compare">
+      <span class="dot" style="background:var(--cyan)"></span>Compare
+    </button>
     <button class="nav-tab" data-tab="ar">
       <span class="dot" style="background:var(--ar)"></span>AR
     
@@ -122,6 +125,11 @@
     </button>
     <button class="nav-tab" data-tab="inventory">
       <span class="dot" style="background:var(--inv)"></span>Inventory
+    
+      <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+    </button>
+    <button class="nav-tab" data-tab="breakage">
+      <span class="dot" style="background:var(--brk)"></span>Breakage
     
       <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
@@ -178,23 +186,21 @@
     <!-- ══════════════ SUMMARY TAB ══════════════ -->
     <section class="tab-panel" id="tab-summary">
 
-      <!-- Header: mode toggle + date selector -->
+      <!-- Header: date selector + report button -->
       <div class="sum-header">
-        <div class="sum-mode-wrap">
-          <button class="ss-mode-btn active" id="ssModeDaily"  onclick="setSummaryMode('daily')">Daily</button>
-          <button class="ss-mode-btn"        id="ssModeWeekly" onclick="setSummaryMode('weekly')">Weekly</button>
-        </div>
         <div class="sum-date-wrap" id="sumDateWrap">
           <select class="sum-date-select" id="sumDateSelect" onchange="onSumDateChange(this.value)">
             <option value="">Select date…</option>
           </select>
         </div>
-        <div class="sum-week-wrap" id="sumWeekWrap" style="display:none">
-          <select class="sum-date-select" id="sumWeekSelect" onchange="onSumWeekChange(this.value)">
-            <option value="">Select week…</option>
-          </select>
-        </div>
+        <button class="sum-report-btn" id="sumReportBtn" onclick="generateSummaryReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Generate Report
+        </button>
       </div>
+
+      <!-- Report output panel (slides in below header) -->
+      <div id="sumReportPanel" style="display:none"></div>
 
       <!-- Daily view -->
       <div id="sumDailyView">
@@ -218,18 +224,32 @@
         </div>
       </div>
 
-      <!-- Weekly view -->
-      <div id="sumWeeklyView" style="display:none">
-        <div class="sum-kpi-strip" id="sumWeekKpiStrip"></div>
-        <div id="sumWeekDetail"></div>
-      </div>
-
     </section>
 
+    <!-- ══════════════ COMPARE TAB ══════════════ -->
+    <section class="tab-panel" id="tab-compare">
 
-    
+      <div class="cmp-tab-header">
+        <div>
+          <div class="section-title" style="color:var(--cyan)">DATE COMPARISON</div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:3px">Select up to 7 dates to compare side-by-side</div>
+        </div>
+        <button class="sum-report-btn" id="cmpRunBtn" onclick="runCompare()" style="opacity:0.4;pointer-events:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Run Comparison
+        </button>
+      </div>
 
-    
+      <!-- Date checkbox picker -->
+      <div class="cmp-picker-wrap">
+        <div class="cmp-picker-label">AVAILABLE DATES <span id="cmpSelCount" style="color:var(--cyan)">(0 selected)</span></div>
+        <div class="cmp-date-grid" id="cmpDateGrid"></div>
+      </div>
+
+      <!-- Results -->
+      <div id="cmpResults"></div>
+
+    </section>
 
     <!-- ══════════════ AR TAB ══════════════ -->
     <section class="tab-panel" id="tab-ar">
@@ -337,6 +357,23 @@
       <div class="panel" style="margin-top:18px">
         <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
         <div class="panel-body" id="invOperators"></div>
+      </div>
+    </section>
+
+    <!-- ══════════════ BREAKAGE TAB ══════════════ -->
+    <section class="tab-panel" id="tab-breakage">
+      <div class="section-header">
+        <div class="section-title" style="color:var(--brk)">BREAKAGE DEPARTMENT</div>
+        <div class="section-badge" id="brkBadge">—</div>
+      </div>
+      <div class="kpi-grid" id="brkKpis"></div>
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">Ranked Reasons</div></div>
+        <div class="panel-body" id="brkReasonsTable"></div>
+      </div>
+      <div class="panel" style="margin-top:18px">
+        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
+        <div class="panel-body" id="brkOperators"></div>
       </div>
     </section>
 
