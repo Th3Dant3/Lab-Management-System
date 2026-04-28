@@ -186,11 +186,20 @@
     <!-- ══════════════ SUMMARY TAB ══════════════ -->
     <section class="tab-panel" id="tab-summary">
 
-      <!-- Header: date selector + report button -->
+      <!-- Header: mode toggle + date selector + report button -->
       <div class="sum-header">
+        <div class="sum-mode-wrap">
+          <button class="ss-mode-btn active" id="ssModeDaily"  onclick="setSummaryMode('daily')">Daily</button>
+          <button class="ss-mode-btn"        id="ssModeWeekly" onclick="setSummaryMode('weekly')">Weekly</button>
+        </div>
         <div class="sum-date-wrap" id="sumDateWrap">
           <select class="sum-date-select" id="sumDateSelect" onchange="onSumDateChange(this.value)">
             <option value="">Select date…</option>
+          </select>
+        </div>
+        <div class="sum-week-wrap" id="sumWeekWrap" style="display:none">
+          <select class="sum-date-select" id="sumWeekSelect" onchange="onSumWeekChange(this.value)">
+            <option value="">Select week…</option>
           </select>
         </div>
         <button class="sum-report-btn" id="sumReportBtn" onclick="generateSummaryReport()">
@@ -204,24 +213,20 @@
 
       <!-- Daily view -->
       <div id="sumDailyView">
-        <!-- KPI strip -->
         <div class="sum-kpi-strip" id="sumKpiStrip"></div>
-
-        <!-- Split: dept sidebar + main detail -->
         <div class="sum-split">
-
-          <!-- LEFT: dept sidebar -->
           <div class="sum-dept-sidebar" id="sumDeptSidebar">
             <div class="sum-sidebar-label">DEPARTMENTS<br><span style="font-size:9px;font-weight:400;color:var(--muted)">Highest → Lowest</span></div>
             <div id="sumDeptSidebarItems"></div>
           </div>
-
-          <!-- RIGHT: main content -->
-          <div class="sum-main" id="sumMain">
-            <!-- selected dept or lab total detail renders here -->
-          </div>
-
+          <div class="sum-main" id="sumMain"></div>
         </div>
+      </div>
+
+      <!-- Weekly view -->
+      <div id="sumWeeklyView" style="display:none">
+        <div class="sum-kpi-strip" id="sumWeekKpiStrip"></div>
+        <div id="sumWeekDetail"></div>
       </div>
 
     </section>
