@@ -11,7 +11,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbylW0fs7zWLncknhz7peJcC
 
 const GOALS = {
   'Lab Total':      5.00,
-  'AR':             0.85,
+  'AR':             0.50,
   'Finish':         1.70,
   'Surface':        2.80,
   'Frame Breakage': 1.00,
@@ -290,7 +290,7 @@ function renderSummary(summary, meta, history) {
 
   const goalRows = [
     { label: 'Lab Total',      pct: labPct,                              target: 5.00, color: 'var(--cyan)' },
-    { label: 'AR',             pct: (deptMap.AR?.lensBrkPct    || 0) * 100, target: 0.85, color: 'var(--ar)'   },
+    { label: 'AR',             pct: (deptMap.AR?.lensBrkPct    || 0) * 100, target: 0.50, color: 'var(--ar)'   },
     { label: 'Finish',         pct: (deptMap.Finish?.lensBrkPct  || 0) * 100, target: 1.70, color: 'var(--fin)'  },
     { label: 'Surface',        pct: (deptMap.Surface?.lensBrkPct || 0) * 100, target: 2.80, color: 'var(--srf)'  },
     { label: 'Frame Breakage', pct: framePct,                            target: 1.00, color: 'var(--mail)' },
@@ -392,7 +392,7 @@ function renderDaily(summary, history) {
   /* Daily KPIs with deltas */
   document.getElementById('dailyKpis').innerHTML = [
     { label: 'Lab Lens %',     value: U.pctRaw(labPct),   accent: U.statusColor(labPct,  5.00), delta: U.deltaHtml(labPct,  prevLabPct),   badge: U.statusBadge(labPct,  5.00) },
-    { label: 'AR %',           value: U.pctRaw(arPct),    accent: U.statusColor(arPct,   0.85), delta: U.deltaHtml(arPct,   prevARPct),    badge: U.statusBadge(arPct,   0.85) },
+    { label: 'AR %',           value: U.pctRaw(arPct),    accent: U.statusColor(arPct,   0.50), delta: U.deltaHtml(arPct,   prevARPct),    badge: U.statusBadge(arPct,   0.50) },
     { label: 'Finish %',       value: U.pctRaw(finPct),   accent: U.statusColor(finPct,  1.70), delta: U.deltaHtml(finPct,  prevFinPct),   badge: U.statusBadge(finPct,  1.70) },
     { label: 'Surface %',      value: U.pctRaw(srfPct),   accent: U.statusColor(srfPct,  2.80), delta: U.deltaHtml(srfPct,  prevSrfPct),   badge: U.statusBadge(srfPct,  2.80) },
     { label: 'Frame Brk %',    value: U.pctRaw(framePct), accent: U.statusColor(framePct, 1.00), delta: U.deltaHtml(framePct, prevFramePct), badge: U.statusBadge(framePct, 1.00) },
@@ -487,7 +487,7 @@ function renderDaily(summary, history) {
   /* Goal status cards */
   const goalData = [
     { label: 'Lab Total',      pct: labPct,  target: 5.00 },
-    { label: 'AR',             pct: arPct,   target: 0.85 },
+    { label: 'AR',             pct: arPct,   target: 0.50 },
     { label: 'Finish',         pct: finPct,  target: 1.70 },
     { label: 'Surface',        pct: srfPct,  target: 2.80 },
     { label: 'Frame Breakage', pct: framePct, target: 1.00 },
@@ -533,7 +533,7 @@ function renderWeekly(data) {
         { label: 'Days with Data',   value: daysWithData.length + ' of 7', accent: 'var(--muted)' },
         { label: 'Total Lenses Broken', value: U.fmt(totalBroken),        accent: 'var(--cyan)' },
         { label: 'Avg Lab %',    value: avgLab.toFixed(2)+'%', accent: U.statusColor(avgLab, 5.00), badge: U.statusBadge(avgLab, 5.00) },
-        { label: 'Avg AR %',     value: avgAR.toFixed(2) +'%', accent: U.statusColor(avgAR,  0.85), badge: U.statusBadge(avgAR,  0.85) },
+        { label: 'Avg AR %',     value: avgAR.toFixed(2) +'%', accent: U.statusColor(avgAR,  0.50), badge: U.statusBadge(avgAR,  0.50) },
         { label: 'Avg Finish %', value: avgFin.toFixed(2)+'%', accent: U.statusColor(avgFin, 1.70), badge: U.statusBadge(avgFin, 1.70) },
         { label: 'Avg Surface %',value: avgSrf.toFixed(2)+'%', accent: U.statusColor(avgSrf, 2.80), badge: U.statusBadge(avgSrf, 2.80) },
       ].map(k => `
@@ -577,7 +577,7 @@ function renderWeekly(data) {
 
   // ── Day-by-day table ──
   const DEPTS = [
-    { key:'arPct',  label:'AR',      color:'#a78bfa', goal:0.85 },
+    { key:'arPct',  label:'AR',      color:'#a78bfa', goal:0.50 },
     { key:'finPct', label:'Finish',  color:'#34d399', goal:1.70 },
     { key:'srfPct', label:'Surface', color:'#fb923c', goal:2.80 },
   ];
@@ -661,12 +661,12 @@ function renderWeekly(data) {
     const overLab = daysWithData.filter(d => d.labLensPct > 5.00);
     const overSrf = daysWithData.filter(d => d.srfPct > 2.80);
     const overFin = daysWithData.filter(d => d.finPct  > 1.70);
-    const overAR  = daysWithData.filter(d => d.arPct   > 0.85);
+    const overAR  = daysWithData.filter(d => d.arPct   > 0.50);
     const imps = [];
     if (overLab.length) imps.push({ dept:'Lab',     issue:`Over 5% goal on ${overLab.length} day(s)`,    action:overLab.map(d=>d.day).join(', ')+' — review all depts',       priority:'high' });
     if (overSrf.length) imps.push({ dept:'Surface',  issue:`Over 2.80% goal on ${overSrf.length} day(s)`, action:overSrf.map(d=>d.day).join(', ')+' — review S-Power/S-HC Pit', priority:'high' });
     if (overFin.length) imps.push({ dept:'Finish',   issue:`Over 1.70% goal on ${overFin.length} day(s)`, action:overFin.map(d=>d.day).join(', ')+' — check F-Slip equipment',  priority:'medium' });
-    if (overAR.length)  imps.push({ dept:'AR',       issue:`Over 0.85% goal on ${overAR.length} day(s)`,  action:overAR.map(d=>d.day).join(', ')+'  — review A-Off color',      priority:'medium' });
+    if (overAR.length)  imps.push({ dept:'AR',       issue:`Over 0.50% goal on ${overAR.length} day(s)`,  action:overAR.map(d=>d.day).join(', ')+'  — review A-Off color',      priority:'medium' });
     if (!imps.length)   imps.push({ dept:'Lab',      issue:'All goals met this week',                      action:'Facility within all breakage targets',                         priority:'low' });
 
     impEl.innerHTML = `
@@ -716,7 +716,7 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
   /* KPIs */
   const kpiEl = document.querySelector(`#tab-${tabId} [id$="Kpis"]`);
   if (kpiEl) {
-    const goal = { ar: 0.85, finish: 1.70, surface: 2.80 }[tabId];
+    const goal = { ar: 0.50, finish: 1.70, surface: 2.80 }[tabId];
     kpiEl.innerHTML = [
       { label: 'Lenses Broken',  value: U.fmt(totals.lensesBroken), accent: color, sub: '' },
       { label: 'Lens Brk %',     value: lensPct.toFixed(2) + '%', accent: U.statusColor(lensPct, goal || 999), sub: goal ? `Goal ≤${goal}%` : '', badge: goal ? U.statusBadge(lensPct, goal) : '' },
@@ -987,7 +987,7 @@ function renderDaily(summary, depts, meta) {
   summary.departments.forEach(d => { deptMap[d.department] = d; });
 
   const deptConfigs = [
-    { key: 'AR',        label: 'AR',        color: '#a78bfa', goal: 0.85, data: depts.ar,        isMachine: false },
+    { key: 'AR',        label: 'AR',        color: '#a78bfa', goal: 0.50, data: depts.ar,        isMachine: false },
     { key: 'Finish',    label: 'Finish',    color: '#34d399', goal: 1.70, data: depts.finish,     isMachine: false },
     { key: 'Surface',   label: 'Surface',   color: '#fb923c', goal: 2.80, data: depts.surface,    isMachine: true  },
     { key: 'LMS',       label: 'LMS',       color: '#60a5fa', goal: null, data: depts.lms,        isMachine: false },
@@ -1739,7 +1739,7 @@ function renderSumSidebar(d) {
       color:  DEPT_COLORS[dep.department]||'var(--cyan)',
       pct:    (dep.lensBrkPct||0)*100,
       broken: dep.lensesBroken,
-      goal:   {AR:0.85,Finish:1.70,Surface:2.80}[dep.department]||null,
+      goal:   {AR:0.50,Finish:1.70,Surface:2.80}[dep.department]||null,
     }))
   ];
 
@@ -1811,7 +1811,7 @@ function renderSumMain(d, deptKey) {
 
     // Exec summary text
     const topReason = allReasons[0];
-    const overGoal  = depts.filter(dep=>dep.lensBrkPct*100>({AR:0.85,Finish:1.70,Surface:2.80}[dep.department]||999));
+    const overGoal  = depts.filter(dep=>dep.lensBrkPct*100>({AR:0.50,Finish:1.70,Surface:2.80}[dep.department]||999));
     const execText  = `As of ${d.reportDate||'today'}, the facility recorded ${U.fmt(lt.labLensesBroken||0)} lens breakages representing a ${labPct.toFixed(2)}% breakage rate across ${U.fmt(lc)} lenses processed. The lab is currently ${ok?'within':'exceeding'} the 5.00% facility goal.${overGoal.length?' '+overGoal.map(dep=>`${dep.department} is over goal at ${(dep.lensBrkPct*100).toFixed(2)}%.`).join(' '):'  All departments are operating within their respective goals.'} ${topReason?`The leading breakage cause facility-wide is ${topReason.reason} (${topReason.dept}) with ${topReason.count} lenses.`:''} ${noneTotal>0?`Unassigned operator entries were detected in ${noneDepts.join(', ')} — totaling ${noneTotal} lenses without operator attribution. Data integrity review is recommended.`:'All breakage records have been attributed to an operator or machine.'}`;
 
     el.innerHTML = `
@@ -1859,7 +1859,7 @@ function renderSumMain(d, deptKey) {
     const depInfo = d.summary?.departments?.find(x=>x.department===deptKey)||{};
     const color   = DEPT_COLORS[deptKey]||'var(--cyan)';
     const pct     = (depInfo.lensBrkPct||0)*100;
-    const goal    = {AR:0.85,Finish:1.70,Surface:2.80}[deptKey]||null;
+    const goal    = {AR:0.50,Finish:1.70,Surface:2.80}[deptKey]||null;
     const ok      = goal?pct<=goal:true;
     const sc      = goal?(ok?'var(--green)':'var(--red)'):'var(--muted)';
     const isSurface = deptKey === 'surface';
@@ -1936,7 +1936,7 @@ function renderSumWeekly(data) {
         {label:'Avg Lab %',      value:avgLab.toFixed(2)+'%',    accent:U.statusColor(avgLab,5.00), badge:U.statusBadge(avgLab,5.00)},
         {label:'Avg Surface %',  value:avg(daysWithData.map(d=>d.srfPct||0)).toFixed(2)+'%', accent:U.statusColor(avg(daysWithData.map(d=>d.srfPct||0)),2.80)},
         {label:'Avg Finish %',   value:avg(daysWithData.map(d=>d.finPct||0)).toFixed(2)+'%', accent:U.statusColor(avg(daysWithData.map(d=>d.finPct||0)),1.70)},
-        {label:'Avg AR %',       value:avg(daysWithData.map(d=>d.arPct||0)).toFixed(2)+'%',  accent:U.statusColor(avg(daysWithData.map(d=>d.arPct||0)),0.85)},
+        {label:'Avg AR %',       value:avg(daysWithData.map(d=>d.arPct||0)).toFixed(2)+'%',  accent:U.statusColor(avg(daysWithData.map(d=>d.arPct||0)),0.50)},
       ].map(k=>`<div class="kpi-card" style="--accent:${k.accent}">
         <div class="kpi-label">${k.label}</div>
         <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
@@ -1946,7 +1946,7 @@ function renderSumWeekly(data) {
 
   const wd = document.getElementById('sumWeekDetail');
   if (!wd) return;
-  const DCOLS = [{key:'arPct',c:'var(--ar)',g:0.85,l:'AR'},{key:'finPct',c:'var(--fin)',g:1.70,l:'Fin'},{key:'srfPct',c:'var(--srf)',g:2.80,l:'Srf'}];
+  const DCOLS = [{key:'arPct',c:'var(--ar)',g:0.50,l:'AR'},{key:'finPct',c:'var(--fin)',g:1.70,l:'Fin'},{key:'srfPct',c:'var(--srf)',g:2.80,l:'Srf'}];
   wd.innerHTML = `
     <div class="panel">
       <div class="panel-header"><div class="panel-title">Day-by-Day Breakdown</div></div>
@@ -2005,7 +2005,7 @@ function generateSummaryReport() {
   const lt         = d.summary?.labTotal || {};
   const labPct     = (lt.labLensPct  || 0) * 100;
   const framePct   = (lt.labFramePct || 0) * 100;
-  const DEPT_GOALS = { AR:0.85, Finish:1.70, Surface:2.80 };
+  const DEPT_GOALS = { AR:0.50, Finish:1.70, Surface:2.80 };
   const colLabel   = key => key === 'Surface' ? 'Machine' : 'Operator';
   const fmt        = n => (n||0).toLocaleString();
   const pf         = n => (n||0).toFixed(2) + '%';
