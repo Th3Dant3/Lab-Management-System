@@ -175,7 +175,10 @@
 <!-- HEADER -->
 <div class="site-header">
   <div class="header-left">
-    <button class="back-btn" onclick="goBack()">← Back</button>
+    <button class="back-btn" onclick="window.location.href='index.html'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Dashboard
+    </button>
     <div class="header-divider"></div>
     <div class="logo-block">
       <div class="eyebrow">Production · Optical · Zenni Lab</div>
@@ -183,6 +186,10 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="facility-btn" onclick="window.location.href='FacilityBreakage.html'">
+      Facility Breakage
+    </button>
+    <div class="header-divider"></div>
     <label class="filter-label">Date</label>
     <div class="date-wrap">
       <input type="date" id="historyDate" class="date-input" onchange="applyDateFilter()" />

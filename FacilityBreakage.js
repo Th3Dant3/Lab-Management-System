@@ -2740,6 +2740,22 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
     const isActive    = btn.classList.contains('active');
     const isCollapsed = btn.classList.contains('collapsed');
 
+    // Special handling for Surface tab - only toggle submenu, don't collapse tab
+    const submenu = document.getElementById('surfaceSubmenu');
+    if (id === 'surface') {
+      if (isActive && !isCollapsed) {
+        // Surface tab is already active and open - ONLY toggle submenu, don't collapse tab
+        submenu?.classList.toggle('show');
+        return; // Exit early - don't run the collapse logic below
+      } else {
+        // Surface tab is being activated - show submenu
+        submenu?.classList.add('show');
+      }
+    } else {
+      // Other tab clicked - hide submenu
+      submenu?.classList.remove('show');
+    }
+
     if (isActive && !isCollapsed) {
       // Currently open — collapse it
       panel.classList.add('collapsing');

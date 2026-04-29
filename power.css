@@ -68,13 +68,38 @@ html, body {
 }
 .nav-brand { display: flex; align-items: center; gap: 9px; margin-right: auto; flex-shrink: 0; }
 .back-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; gap: 6px;
+  height: 28px; border-radius: 6px;
   background: rgba(255,255,255,0.06); border: 1px solid var(--border);
   color: var(--muted); cursor: pointer; transition: all .15s;
   flex-shrink: 0;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
 }
 .back-btn:hover { background: var(--bg-hover); border-color: var(--border-hi); color: var(--white); }
+
+/* Facility Breakage button */
+.facility-btn {
+  display: flex; align-items: center; gap: 6px;
+  height: 28px; border-radius: 6px;
+  background: rgba(253,186,116,0.08);
+  border: 1px solid rgba(253,186,116,0.25);
+  color: var(--peach);
+  cursor: pointer;
+  transition: all .15s;
+  flex-shrink: 0;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+.facility-btn:hover {
+  background: rgba(253,186,116,0.15);
+  border-color: var(--peach);
+  color: var(--white);
+}
 
 .nav-brand-ico {
   width: 26px; height: 26px; border-radius: 7px;
