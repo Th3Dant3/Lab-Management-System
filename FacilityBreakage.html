@@ -490,7 +490,7 @@
   const username = (sessionStorage.getItem("lms_user")    || "").trim().toUpperCase();
 
   const ALLOWED_ROLES     = ["ADMIN", "MANAGER", "SR DIRECTOR", "SR MANAGER"];
-  const ALLOWED_USERNAMES = ["BDADE"]; // e.g. ["JSMITH", "CBAYLIS"]
+  const ALLOWED_USERNAMES = ["BDADE", "KMANACK"]; // e.g. ["JSMITH", "CBAYLIS"]
 
   const hasAccess =
     ALLOWED_ROLES.some(r => role.includes(r) || subRole.includes(r)) ||
