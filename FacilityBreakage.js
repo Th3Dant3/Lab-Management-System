@@ -274,7 +274,7 @@ function renderSummary(summary, meta, history) {
     { label: 'Lab Lens %',   value: U.pctRaw(labPct),   sub: 'Goal ≤5.00%', accent: U.statusColor(labPct,  5.00), badge: U.statusBadge(labPct, 5.00),  delta: U.deltaHtml(labPct, prevLabPct) },
     { label: 'Frames Broken', value: U.fmt(lt.framesBroken), sub: `of ${U.fmt(lt.orderCount)} orders`, accent: 'var(--amber)', delta: '' },
     { label: 'Frame Brk %',  value: U.pctRaw(framePct), sub: 'Goal ≤1.00%', accent: U.statusColor(framePct, 1.00), badge: U.statusBadge(framePct, 1.00), delta: U.deltaHtml(framePct, prevFramePct) },
-    { label: 'Order Count',  value: U.fmt(lt.orderCount), sub: 'Total orders today', accent: 'var(--muted)', delta: '' },
+    { label: 'Shipped Orders',  value: U.fmt(lt.orderCount), sub: 'Total Shipped today', accent: 'var(--muted)', delta: '' },
   ].map(k => `
     <div class="kpi-card" style="--accent:${k.accent}">
       <div class="kpi-label">${k.label}</div>

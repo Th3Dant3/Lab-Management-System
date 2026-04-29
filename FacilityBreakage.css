@@ -353,23 +353,23 @@ body::before {
 
 /* ── SURFACE SUBMENU ────────────────────────────────────── */
 .surface-submenu {
-  position: absolute;
-  top: calc(var(--header-h) + var(--nav-h) + 8px);
-  left: 28px;
-  right: 28px;
-  max-width: 600px;
+  position: fixed;
+  top: calc(var(--header-h) + var(--nav-h));
+  right: 0;
+  bottom: 0;
+  width: 280px;
   background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-md);
-  padding: 8px;
-  display: none;
+  border-left: 1px solid var(--border2);
+  padding: 16px;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 90;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: -4px 0 16px rgba(0,0,0,0.4);
+  overflow-y: auto;
 }
 
 .surface-submenu.show {
-  display: block;
-  animation: submenuSlide 0.2s ease;
+  transform: translateX(0);
 }
 
 @keyframes submenuSlide {
@@ -383,21 +383,59 @@ body::before {
   }
 }
 
+.submenu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.submenu-header-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 1px;
+  color: var(--srf);
+}
+
+.submenu-close {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.submenu-close:hover {
+  background: rgba(251,146,60,0.1);
+  border-color: var(--srf);
+  color: var(--srf);
+}
+
 .submenu-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 8px 12px;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   text-decoration: none;
   transition: all 0.15s;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .submenu-item:last-child {
@@ -410,15 +448,15 @@ body::before {
 }
 
 .submenu-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   background: var(--bg4);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
   flex-shrink: 0;
   transition: all 0.15s;
 }
@@ -434,15 +472,16 @@ body::before {
 
 .submenu-title {
   font-weight: 500;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   color: var(--text);
+  font-size: 11px;
 }
 
 .submenu-desc {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--muted);
   font-family: var(--font-mono);
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
 }
 
 .submenu-arrow {
