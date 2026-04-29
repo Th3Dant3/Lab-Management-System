@@ -1424,7 +1424,56 @@ function setSummaryMode(mode) {
   document.getElementById('sumWeekWrap').style.display    = mode === 'weekly' ? 'flex'  : 'none';
   document.getElementById('sumDailyView').style.display   = mode === 'daily'  ? 'block' : 'none';
   document.getElementById('sumWeeklyView').style.display  = mode === 'weekly' ? 'block' : 'none';
+  // Update Generate Report button label
+  const btn = document.getElementById('sumReportBtn');
+  if (btn) btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Generate ${mode === 'weekly' ? 'Weekly' : 'Daily'} Report`;
 }
+
+/* Toggle Summary flush dropdown — positioned flush below the nav tab */
+function toggleSummarySubmenu(e) {
+  e.stopPropagation();
+  const btn  = document.getElementById('summaryNavTab');
+  const menu = document.getElementById('summarySubmenu');
+  const isOpen = menu.classList.contains('show');
+
+  // Close surface submenu if open
+  document.getElementById('surfaceSubmenu')?.classList.remove('show');
+
+  if (isOpen) {
+    _closeSummarySubmenu();
+    return;
+  }
+
+  // Position flush below the tab
+  const rect = btn.getBoundingClientRect();
+  menu.style.top  = (rect.bottom - 1) + 'px';   // -1 so top border overlaps nav bottom border
+  menu.style.left = rect.left + 'px';
+
+  menu.classList.add('show');
+  btn.classList.add('sum-open');
+
+  // Update active state on flush items to reflect current mode
+  _updateFlushActive();
+}
+
+function _closeSummarySubmenu() {
+  document.getElementById('summarySubmenu')?.classList.remove('show');
+  document.getElementById('summaryNavTab')?.classList.remove('sum-open');
+}
+
+function _updateFlushActive() {
+  const mode = SUM.mode || 'daily';
+  document.getElementById('sumFlushDaily')?.classList.toggle('active',  mode === 'daily');
+  document.getElementById('sumFlushWeekly')?.classList.toggle('active', mode === 'weekly');
+}
+
+/* Called from flush dropdown items */
+function selectSummaryMode(mode) {
+  _closeSummarySubmenu();
+  App.switchTab('summary');
+  setSummaryMode(mode);
+}
+
 
 async function onSumDateChange(date) {
   if (!date) return;
@@ -2098,8 +2147,33 @@ function renderSumWeekly(data) {
 
   const wd = document.getElementById('sumWeekDetail');
   if (!wd) return;
+
   const DCOLS = [{key:'arPct',c:'var(--ar)',g:0.50,l:'AR'},{key:'finPct',c:'var(--fin)',g:1.70,l:'Fin'},{key:'srfPct',c:'var(--srf)',g:2.80,l:'Srf'}];
+
+  // Aggregate top reasons per dept from topReasons on each day
+  const deptReasonAgg = {};
+  const DEPT_DEFS = [
+    {id:'Surface', key:'srfPct', goal:2.80, color:'var(--srf)'},
+    {id:'Finish',  key:'finPct', goal:1.70, color:'var(--fin)'},
+    {id:'AR',      key:'arPct',  goal:0.50, color:'var(--ar)'},
+  ];
+  DEPT_DEFS.forEach(dep => {
+    const rMap = {};
+    daysWithData.forEach(d => {
+      const rs = d.topReasons?.[dep.id] || [];
+      rs.forEach(r => {
+        const k = r.reason||'—';
+        if (!rMap[k]) rMap[k] = 0;
+        rMap[k] += r.lensesBroken||r.count||1;
+      });
+    });
+    deptReasonAgg[dep.id] = Object.entries(rMap)
+      .map(([reason,count])=>({reason,count}))
+      .sort((a,b)=>b.count-a.count).slice(0,6);
+  });
+
   wd.innerHTML = `
+    <!-- Day-by-Day table -->
     <div class="panel">
       <div class="panel-header"><div class="panel-title">Day-by-Day Breakdown</div></div>
       <div class="panel-body" style="padding:0">
@@ -2112,14 +2186,14 @@ function renderSumWeekly(data) {
           <tbody>
             ${days.map(day=>{
               if(!day.hasData) return `<tr style="opacity:${day.isFuture?0.2:0.5}">
-                <td style="font-family:var(--font-mono);font-size:11px">${day.day} ${day.date.slice(0,5)}</td>
+                <td style="font-family:var(--font-mono);font-size:11px">${day.day} ${(day.date||'').slice(0,5)}</td>
                 <td colspan="5" style="color:var(--muted);font-family:var(--font-mono);font-size:11px">${day.isFuture?'—':'No snapshot'}</td>
               </tr>`;
               const labOk=day.labLensPct<=5.00;
-              const topR=day.topReasons?.Surface?.[0]?.reason||day.topReasons?.Finish?.[0]?.reason||'—';
+              const topR=day.topReasons?.Surface?.[0]?.reason||day.topReasons?.Finish?.[0]?.reason||day.topReasons?.AR?.[0]?.reason||'—';
               return `<tr>
-                <td style="font-family:var(--font-mono);font-size:11px;font-weight:600">${day.day} ${day.date.slice(0,5)}</td>
-                <td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${labOk?'var(--green)':'var(--red)'}">${day.labLensPct.toFixed(2)}%</td>
+                <td style="font-family:var(--font-mono);font-size:11px;font-weight:600">${day.day} ${(day.date||'').slice(0,5)}</td>
+                <td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${labOk?'var(--green)':'var(--red)'}">${(day.labLensPct||0).toFixed(2)}%</td>
                 ${DCOLS.map(c=>{const v=day[c.key]||0;return`<td style="text-align:right;font-family:var(--font-mono);font-size:12px;color:${v<=c.g?'var(--green)':'var(--red)'}">${v.toFixed(2)}%</td>`;}).join('')}
                 <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${topR}</td>
               </tr>`;
@@ -2127,7 +2201,66 @@ function renderSumWeekly(data) {
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Dept Deep Dives -->
+    <div style="font-family:var(--font-display);font-size:12px;letter-spacing:2px;color:var(--muted);margin:22px 0 10px">DEPARTMENT DEEP DIVES — WEEK AGGREGATED</div>
+    <div class="two-col" style="margin-bottom:18px">
+      ${DEPT_DEFS.map(dep => {
+        const pcts = daysWithData.map(d=>d[dep.key]||0);
+        const avgPct = pcts.length ? pcts.reduce((a,b)=>a+b,0)/pcts.length : 0;
+        const ok = avgPct <= dep.goal;
+        const reasons = deptReasonAgg[dep.id] || [];
+        const maxR = reasons[0]?.count || 1;
+        // Day sparkline as mini trend bars
+        const sparkMax = Math.max(...pcts, dep.goal) || 1;
+        const sparkBars = daysWithData.map(d => {
+          const v = d[dep.key]||0;
+          const h = Math.round((v/sparkMax)*32);
+          return `<div style="width:6px;height:${Math.max(h,2)}px;background:${v>dep.goal?'var(--red)':dep.color};border-radius:2px;align-self:flex-end;opacity:0.85"></div>`;
+        }).join('');
+
+        return `<div class="panel">
+          <div class="panel-header">
+            <div class="panel-title" style="color:${dep.color}">${dep.id} Department</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+              <div style="font-family:var(--font-display);font-size:18px;font-weight:700;color:${ok?'var(--green)':'var(--red)'}">${avgPct.toFixed(2)}%</div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">avg · goal ≤${dep.goal}%</div>
+              <div style="display:flex;align-items:flex-end;gap:2px;height:32px">${sparkBars}</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            ${!ok ? `<div class="sum-none-alert" style="margin-bottom:10px">
+              ⚠ ${dep.id} averaged ${avgPct.toFixed(2)}% — over the ${dep.goal}% goal this week
+            </div>` : `<div style="font-family:var(--font-mono);font-size:10px;color:var(--green);margin-bottom:10px;padding:5px 10px;background:rgba(52,211,153,0.07);border-radius:6px;border:1px solid rgba(52,211,153,0.15)">
+              ✓ Within goal — ${(dep.goal-avgPct).toFixed(2)}pp margin
+            </div>`}
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px;letter-spacing:1px">TOP REASONS (WEEK)</div>
+            ${reasons.length ? reasons.map(r => `
+              <div class="sum-item">
+                <div class="sum-item-name">${r.reason}</div>
+                <div class="sum-item-bar"><div class="sum-item-fill" style="width:${Math.round((r.count/maxR)*100)}%;background:${dep.color}60"></div></div>
+                <div class="sum-item-num" style="color:${dep.color}">${r.count}</div>
+              </div>`).join('')
+            : `<div style="color:var(--muted);font-family:var(--font-mono);font-size:11px">No reason data captured this week</div>`}
+
+            <!-- Per-day rates for this dept -->
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin:12px 0 6px;letter-spacing:1px">DAILY RATES</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px">
+              ${days.map(d => {
+                if (!d.hasData) return `<div style="font-family:var(--font-mono);font-size:10px;padding:3px 7px;border-radius:4px;background:var(--bg3);color:var(--muted);opacity:0.4">${d.day?.slice(0,3)||'?'}</div>`;
+                const v = d[dep.key]||0;
+                const dok = v <= dep.goal;
+                return `<div style="font-family:var(--font-mono);font-size:10px;padding:3px 7px;border-radius:4px;background:${dok?'rgba(52,211,153,0.08)':'rgba(240,79,90,0.08)'};border:1px solid ${dok?'rgba(52,211,153,0.2)':'rgba(240,79,90,0.2)'};color:${dok?'var(--green)':'var(--red)'}">
+                  ${d.day?.slice(0,3)||'?'} ${v.toFixed(2)}%
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`;
+
 }
 
 
@@ -2137,17 +2270,183 @@ function renderSumWeekly(data) {
 function generateSummaryReport() {
   const panel  = document.getElementById('sumReportPanel');
   const btn    = document.getElementById('sumReportBtn');
-  const d      = SUM.data;
-  const deptKey = SUM.selectedDept || 'LAB';
-
-  if (!d) { App.showToast('Select a date first', 'error'); return; }
 
   // Toggle off if already showing
   if (panel.style.display !== 'none') {
     panel.style.display = 'none';
-    btn.textContent = '📄 Generate Report';
+    setSummaryMode(SUM.mode || 'daily'); // reset btn label
     return;
   }
+
+  // ── WEEKLY REPORT ────────────────────────────────────────
+  if (SUM.mode === 'weekly') {
+    const wd = SUM.weekData;
+    if (!wd) { App.showToast('Select a week first', 'error'); return; }
+
+    btn.textContent = 'Building…';
+
+    const { days, weekStart, weekEnd } = wd;
+    const daysWithData = days.filter(d => d.hasData);
+    const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+    const fmt  = n => (n||0).toLocaleString();
+    const pf   = n => (n||0).toFixed(2) + '%';
+    const sc   = ok => ok ? 'color:var(--green)' : 'color:var(--red)';
+
+    const avgLab = avg(daysWithData.map(d=>d.labLensPct||0));
+    const avgSrf = avg(daysWithData.map(d=>d.srfPct||0));
+    const avgFin = avg(daysWithData.map(d=>d.finPct||0));
+    const avgAR  = avg(daysWithData.map(d=>d.arPct||0));
+    const totalBroken = daysWithData.reduce((s,d)=>s+(d.labLenses||0),0);
+
+    const DEPT_GOALS = { AR:0.50, Finish:1.70, Surface:2.80 };
+    const DCOLS = [
+      {key:'arPct',  label:'AR',      goal:0.50, color:'var(--ar)'},
+      {key:'finPct', label:'Finish',  goal:1.70, color:'var(--fin)'},
+      {key:'srfPct', label:'Surface', goal:2.80, color:'var(--srf)'},
+    ];
+
+    // Per-dept weekly aggregation from days that carry dept data
+    const deptAgg = {};
+    ['AR','Finish','Surface'].forEach(dep => {
+      const key = dep.toLowerCase() === 'finish' ? 'fin' : dep.toLowerCase() === 'surface' ? 'srf' : 'ar';
+      const pcts = daysWithData.map(d=>d[key+'Pct']||0);
+      const avgPct = avg(pcts);
+      const ok = avgPct <= DEPT_GOALS[dep];
+      deptAgg[dep] = { avgPct, ok, color: `var(--${key})`, goal: DEPT_GOALS[dep] };
+    });
+
+    // Top reasons aggregated from topReasons field on each day
+    const reasonMap = {};
+    daysWithData.forEach(d => {
+      if (!d.topReasons) return;
+      Object.entries(d.topReasons).forEach(([dept, reasons]) => {
+        (reasons||[]).forEach(r => {
+          const k = r.reason;
+          if (!reasonMap[k]) reasonMap[k] = { reason:k, dept, count:0 };
+          reasonMap[k].count += r.lensesBroken||r.count||1;
+        });
+      });
+    });
+    const topReasons = Object.values(reasonMap).sort((a,b)=>b.count-a.count).slice(0,10);
+
+    // Worst day
+    const worstDay = daysWithData.reduce((best,d) => (d.labLensPct||0) > (best?.labLensPct||0) ? d : best, null);
+    const bestDay  = daysWithData.reduce((best,d) => (d.labLensPct||0) < (best?.labLensPct||99) ? d : best, null);
+
+    panel.style.setProperty('--report-color', 'var(--green)');
+    panel.innerHTML = `
+      <div class="rpt-h1" style="color:var(--green)">WEEKLY BREAKAGE REPORT</div>
+      <div class="rpt-meta">Week of ${weekStart} – ${weekEnd} &nbsp;·&nbsp; ${daysWithData.length}/7 days captured &nbsp;·&nbsp; Generated ${new Date().toLocaleTimeString()}</div>
+
+      <!-- 1. Week Overview -->
+      <div class="rpt-h2">1. Week Overview</div>
+      <p class="rpt-p">
+        For the week of <strong>${weekStart} – ${weekEnd}</strong>, the facility captured data for <strong>${daysWithData.length} of 7 days</strong>.
+        The weekly average lab breakage rate was <strong style="${sc(avgLab<=5.00)}">${pf(avgLab)}</strong> against the 5.00% facility goal.
+        A total of <strong style="color:var(--cyan)">${fmt(totalBroken)} lenses</strong> were broken across all captured days.
+        ${worstDay ? `The highest-breakage day was <strong style="color:var(--red)">${worstDay.day} ${worstDay.date?.slice(0,5)||''}</strong> at ${pf(worstDay.labLensPct)}.` : ''}
+        ${bestDay  ? ` The lowest was <strong style="color:var(--green)">${bestDay.day} ${bestDay.date?.slice(0,5)||''}</strong> at ${pf(bestDay.labLensPct)}.` : ''}
+      </p>
+
+      <!-- 2. Department Avg vs Goal -->
+      <div class="rpt-h2">2. Department Weekly Averages vs Goals</div>
+      ${Object.values(deptAgg).filter(d=>d.goal).some(d=>!d.ok)
+        ? `<div class="rpt-flag err">⚠ One or more departments averaged above goal this week</div>`
+        : `<div class="rpt-flag ok">✓ All departments averaged within their weekly goals</div>`}
+      <table class="rpt-table">
+        <thead><tr><th>Department</th><th>Avg Rate</th><th>Goal</th><th>Status</th><th>Margin</th><th>Trend</th></tr></thead>
+        <tbody>
+          ${[
+            {dep:'AR',     key:'ar',  pct:avgAR,  goal:0.50, color:'var(--ar)'},
+            {dep:'Finish', key:'fin', pct:avgFin, goal:1.70, color:'var(--fin)'},
+            {dep:'Surface',key:'srf', pct:avgSrf, goal:2.80, color:'var(--srf)'},
+          ].map(row => {
+            const ok = row.pct <= row.goal;
+            const margin = (row.goal - row.pct).toFixed(2);
+            const dayPcts = daysWithData.map(d=>d[row.key+'Pct']||0);
+            const trend = dayPcts.length >= 2
+              ? (dayPcts[dayPcts.length-1] > dayPcts[0] ? '↑ Rising' : dayPcts[dayPcts.length-1] < dayPcts[0] ? '↓ Falling' : '→ Stable')
+              : '—';
+            return `<tr>
+              <td style="font-weight:600;color:${row.color}">${row.dep}</td>
+              <td style="font-family:var(--font-mono);${sc(ok)}">${pf(row.pct)}</td>
+              <td style="font-family:var(--font-mono);color:var(--muted)">≤${row.goal}%</td>
+              <td style="font-family:var(--font-mono);${sc(ok)}">${ok?'✓ On Goal':'✗ Over Goal'}</td>
+              <td style="font-family:var(--font-mono);${sc(ok)}">${ok?'+'+margin:'−'+Math.abs(margin)}pp</td>
+              <td style="font-family:var(--font-mono);font-size:11px;color:${row.color}">${trend}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+
+      <!-- 3. Day-by-Day Breakdown -->
+      <div class="rpt-h2">3. Day-by-Day Breakdown</div>
+      <table class="rpt-table">
+        <thead><tr>
+          <th>Day</th><th>Lab %</th>
+          ${DCOLS.map(c=>`<th style="color:${c.color}">${c.label}</th>`).join('')}
+          <th>Top Reason</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${days.map(day => {
+            if (!day.hasData) return `<tr style="opacity:${day.isFuture?0.2:0.5}">
+              <td style="font-family:var(--font-mono);font-size:11px">${day.day} ${(day.date||'').slice(0,5)}</td>
+              <td colspan="6" style="color:var(--muted);font-family:var(--font-mono);font-size:11px">${day.isFuture?'—':'No snapshot'}</td>
+            </tr>`;
+            const labOk = (day.labLensPct||0) <= 5.00;
+            const topR = day.topReasons?.Surface?.[0]?.reason || day.topReasons?.Finish?.[0]?.reason || day.topReasons?.AR?.[0]?.reason || '—';
+            return `<tr>
+              <td style="font-family:var(--font-mono);font-size:11px;font-weight:600">${day.day} ${(day.date||'').slice(0,5)}</td>
+              <td style="font-family:var(--font-display);font-weight:700;${sc(labOk)}">${pf(day.labLensPct||0)}</td>
+              ${DCOLS.map(c=>{const v=day[c.key]||0;return`<td style="font-family:var(--font-mono);font-size:11px;${sc(v<=c.goal)}">${pf(v)}</td>`;}).join('')}
+              <td style="font-size:11px;color:var(--muted)">${topR}</td>
+              <td style="font-family:var(--font-mono);font-size:11px;${sc(labOk)}">${labOk?'✓':'✗'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+
+      <!-- 4. Top Breakage Reasons (Weekly) -->
+      ${topReasons.length > 0 ? `<div class="rpt-h2">4. Top Breakage Reasons — Week Aggregated</div>
+      <table class="rpt-table">
+        <thead><tr><th>#</th><th>Reason</th><th>Dept</th><th>Total Count</th></tr></thead>
+        <tbody>
+          ${topReasons.map((r,i) => `<tr>
+            <td style="font-family:var(--font-mono);color:var(--muted)">${i+1}</td>
+            <td style="font-weight:${i===0?'600':'400'}">${r.reason}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;color:${DEPT_COLORS[r.dept]||'var(--cyan)'}">${r.dept||'—'}</td>
+            <td style="font-family:var(--font-display);font-weight:700;color:var(--cyan)">${r.count}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : ''}
+
+      <!-- 5. Key Observations -->
+      <div class="rpt-h2">${topReasons.length>0?'5':'4'}. Key Observations & Recommendations</div>
+      ${avgLab > 5.00 ? `<div class="rpt-flag err">✗ Weekly avg lab rate ${pf(avgLab)} exceeds the 5.00% goal — escalate to operations management</div>` : `<div class="rpt-flag ok">✓ Weekly avg lab rate ${pf(avgLab)} within the 5.00% goal</div>`}
+      ${worstDay ? `<div class="rpt-flag err">📅 Worst day: ${worstDay.day} at ${pf(worstDay.labLensPct)} — review that shift's data for root cause</div>` : ''}
+      ${bestDay  ? `<div class="rpt-flag ok">📅 Best day: ${bestDay.day} at ${pf(bestDay.labLensPct)}</div>` : ''}
+      ${Object.entries(deptAgg).filter(([,v])=>!v.ok).map(([dep,v]) =>
+        `<div class="rpt-flag err">✗ ${dep} averaged ${pf(v.avgPct)} vs goal ≤${v.goal}% — sustained over-goal performance, supervisor review required</div>`
+      ).join('')}
+      ${topReasons[0] ? `<div class="rpt-flag err">🔎 #1 weekly reason: ${topReasons[0].reason} (${topReasons[0].dept||'—'}) — ${topReasons[0].count} total lenses across the week</div>` : ''}
+      ${daysWithData.length < 5 ? `<div class="rpt-flag warn">⚡ Only ${daysWithData.length}/7 days captured — weekly averages may not be fully representative</div>` : ''}
+
+      <div class="rpt-footer">
+        <span>Generated ${new Date().toLocaleString()} · Zenni Facility Breakage Dashboard — Weekly Report</span>
+        <button onclick="document.getElementById('sumReportPanel').style.display='none';setSummaryMode(SUM.mode||'weekly')"
+          style="font-family:var(--font-mono);font-size:11px;padding:5px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--muted);cursor:pointer">✕ Close</button>
+      </div>`;
+
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  // ── DAILY REPORT (original logic below) ─────────────────
+  const d      = SUM.data;
+  const deptKey = SUM.selectedDept || 'LAB';
+
+  if (!d) { App.showToast('Select a date first', 'error'); return; }
 
   btn.textContent = 'Building…';
 
@@ -2376,7 +2675,7 @@ function generateSummaryReport() {
 
       <div class="rpt-footer">
         <span>Generated ${new Date().toLocaleString()} · Zenni Facility Breakage Dashboard</span>
-        <button onclick="document.getElementById('sumReportPanel').style.display='none';document.getElementById('sumReportBtn').textContent='📄 Generate Report'"
+        <button onclick="document.getElementById('sumReportPanel').style.display='none';setSummaryMode(SUM.mode||'daily')"
           style="font-family:var(--font-mono);font-size:11px;padding:5px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--muted);cursor:pointer">✕ Close</button>
       </div>`;
 
@@ -2491,7 +2790,7 @@ function generateSummaryReport() {
 
       <div class="rpt-footer">
         <span>Generated ${new Date().toLocaleString()} · Zenni Facility Breakage Dashboard</span>
-        <button onclick="document.getElementById('sumReportPanel').style.display='none';document.getElementById('sumReportBtn').textContent='📄 Generate Report'"
+        <button onclick="document.getElementById('sumReportPanel').style.display='none';setSummaryMode(SUM.mode||'daily')"
           style="font-family:var(--font-mono);font-size:11px;padding:5px 14px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--muted);cursor:pointer">✕ Close</button>
       </div>`;
   }
@@ -2740,9 +3039,9 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
     const isActive    = btn.classList.contains('active');
     const isCollapsed = btn.classList.contains('collapsed');
 
-    // Special handling for Surface tab - only toggle submenu, don't collapse tab
     const submenu = document.getElementById('surfaceSubmenu');
     if (id === 'surface') {
+      _closeSummarySubmenu();
       if (isActive && !isCollapsed) {
         // Surface tab is already active and open - ONLY toggle submenu, don't collapse tab
         submenu?.classList.toggle('show');
@@ -2751,9 +3050,13 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
         // Surface tab is being activated - show submenu
         submenu?.classList.add('show');
       }
-    } else {
-      // Other tab clicked - hide submenu
+    } else if (id === 'summary') {
+      // Summary tab handled by its own onclick (toggleSummarySubmenu), skip here
       submenu?.classList.remove('show');
+    } else {
+      // Other tab clicked - hide both submenus
+      submenu?.classList.remove('show');
+      _closeSummarySubmenu();
     }
 
     if (isActive && !isCollapsed) {
@@ -2807,3 +3110,14 @@ App.loadAll();
 setInterval(() => {
   if (!App._isHistoryMode) App.loadAll();
 }, 5 * 60 * 1000);
+/* ── Close submenus when clicking outside ── */
+document.addEventListener('click', (e) => {
+  const surfMenu = document.getElementById('surfaceSubmenu');
+  if (surfMenu && !surfMenu.contains(e.target) && !e.target.closest('[data-tab="surface"]')) {
+    surfMenu.classList.remove('show');
+  }
+  const sumMenu = document.getElementById('summarySubmenu');
+  if (sumMenu && !sumMenu.contains(e.target) && !e.target.closest('#summaryNavTab')) {
+    _closeSummarySubmenu();
+  }
+});

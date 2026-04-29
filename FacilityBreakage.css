@@ -783,8 +783,84 @@ body::before {
 }
 .nav-tab.active.collapsed .collapse-icon {
   transform: rotate(-90deg);
-  opacity: 0.4;
 }
+
+/* ── Summary nav tab — flush dropdown trigger ── */
+.nav-tab--summary {
+  position: relative;
+}
+.nav-tab--summary .sum-chevron {
+  margin-left: 3px;
+  opacity: 0.45;
+  transition: transform 0.2s, opacity 0.15s;
+  flex-shrink: 0;
+}
+.nav-tab--summary:hover .sum-chevron,
+.nav-tab--summary.active .sum-chevron { opacity: 0.9; }
+.nav-tab--summary.sum-open .sum-chevron { transform: rotate(180deg); opacity: 1; }
+.nav-tab--summary.sum-open {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-bottom: 2px solid var(--green);
+  color: var(--green);
+}
+
+/* ── Flush dropdown panel ── */
+.sum-flush-drop {
+  position: fixed;
+  display: flex;
+  flex-direction: row;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-top: 2px solid var(--green);
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+  z-index: 200;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  min-width: 260px;
+}
+.sum-flush-drop.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: all;
+}
+.sum-flush-item {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 10px 16px 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.14s;
+}
+.sum-flush-item:hover { background: rgba(52,211,153,0.07); }
+.sum-flush-item.active { background: rgba(52,211,153,0.10); }
+.sum-flush-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  color: var(--text);
+  margin-bottom: 2px;
+  transition: color 0.14s;
+}
+.sum-flush-item:hover .sum-flush-title,
+.sum-flush-item.active .sum-flush-title { color: var(--green); }
+.sum-flush-desc {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+.sum-flush-divider {
+  width: 1px;
+  background: var(--border2);
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
 .nav-tab.active.collapsed {
   opacity: 0.6;
   border-bottom-color: rgba(56,189,248,0.35);

@@ -117,8 +117,9 @@
     
       <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
-    <button class="nav-tab" data-tab="summary">
+    <button class="nav-tab nav-tab--summary" data-tab="summary" id="summaryNavTab" onclick="toggleSummarySubmenu(event)">
       <span class="dot" style="background:var(--green)"></span>Summary
+      <svg class="sum-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="10"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
     <button class="nav-tab" data-tab="compare">
       <span class="dot" style="background:var(--cyan)"></span>Compare
@@ -159,6 +160,19 @@
       <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
   </nav>
+
+  <!-- ── SUMMARY FLUSH DROPDOWN (Option 4) ── -->
+  <div class="sum-flush-drop" id="summarySubmenu">
+    <button class="sum-flush-item" id="sumFlushDaily" onclick="selectSummaryMode('daily')">
+      <div class="sum-flush-title">Daily</div>
+      <div class="sum-flush-desc">Single-day breakdown &amp; report</div>
+    </button>
+    <div class="sum-flush-divider"></div>
+    <button class="sum-flush-item" id="sumFlushWeekly" onclick="selectSummaryMode('weekly')">
+      <div class="sum-flush-title">Weekly</div>
+      <div class="sum-flush-desc">7-day trends &amp; dept deep dives</div>
+    </button>
+  </div>
 
   <!-- ── SURFACE SUBMENU DROPDOWN ── -->
   <div class="surface-submenu" id="surfaceSubmenu">
@@ -468,5 +482,34 @@
   </main>
 
   <script src="FacilityBreakage.js?v=202604271947"></script>
+
+  <script>
+(function applyRoleRestrictions() {
+  const role     = (sessionStorage.getItem("lms_role")    || "").trim().toUpperCase();
+  const subRole  = (sessionStorage.getItem("lms_subrole") || "").trim().toUpperCase();
+  const username = (sessionStorage.getItem("lms_user")    || "").trim().toUpperCase();
+
+  const ALLOWED_ROLES     = ["ADMIN", "MANAGER", "SR DIRECTOR", "SR MANAGER"];
+  const ALLOWED_USERNAMES = ["BDADE"]; // e.g. ["JSMITH", "CBAYLIS"]
+
+  const hasAccess =
+    ALLOWED_ROLES.some(r => role.includes(r) || subRole.includes(r)) ||
+    ALLOWED_USERNAMES.includes(username);
+
+  if (!hasAccess) {
+    // Hide the entire Summary nav tab
+    const navTab = document.getElementById("summaryNavTab");
+    if (navTab) navTab.style.display = "none";
+
+    // Hide the flush dropdown panel
+    const dropPanel = document.getElementById("summarySubmenu");
+    if (dropPanel) dropPanel.style.display = "none";
+
+    // Hide the Summary tab content panel
+    const tabPanel = document.getElementById("tab-summary");
+    if (tabPanel) tabPanel.style.display = "none";
+  }
+})();
+</script>
 </body>
 </html>
