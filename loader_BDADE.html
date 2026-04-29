@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0d0800;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── Split bg: left Browns orange/brown, right Cavs wine/gold ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 60% 80% at 0% 50%, rgba(210,80,0,.18) 0%,transparent 60%),
+    radial-gradient(ellipse 60% 80% at 100% 50%, rgba(134,0,56,.18) 0%,transparent 60%),
+    radial-gradient(ellipse 80% 40% at 50% 100%, rgba(255,140,0,.1) 0%,transparent 55%),
+    #0d0800;
+  animation:bgp 5s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.85}50%{opacity:1}}
+
+/* ── Confetti — orange + brown + wine + gold ── */
+.conf{
+  position:fixed;top:-10px;
+  width:8px;height:8px;
+  border-radius:2px;
+  animation:confFall linear infinite;
+  pointer-events:none;z-index:2;
+  opacity:0;
+}
+@keyframes confFall{
+  0%{transform:translateY(-10px) rotate(0deg);opacity:0;}
+  10%{opacity:.9;}
+  90%{opacity:.7;}
+  100%{transform:translateY(105vh) rotate(720deg);opacity:0;}
+}
+
+/* ── Field lines ── */
+.field-lines{
+  position:fixed;bottom:0;left:0;right:0;
+  height:60px;pointer-events:none;z-index:1;
+}
+
+/* ── Scan ── */
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,rgba(210,80,0,.15),rgba(134,0,56,.15));animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+/* ── PAGE ── */
+.page{
+  position:fixed;inset:0;bottom:60px;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:6px;
+}
+
+.welcome-txt{font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:8px;color:rgba(255,255,255,.6);text-transform:uppercase;animation:fu .4s .3s ease both;}
+
+.fullname{
+  font-family:'Bebas Neue',sans-serif;font-size:66px;color:#ffffff;
+  letter-spacing:5px;line-height:1;
+  animation:nameIn .6s .4s ease both;
+  text-shadow:0 0 25px rgba(210,80,0,.5),0 0 50px rgba(134,0,56,.3),0 2px 0 rgba(0,0,0,.8);
+}
+@keyframes nameIn{from{opacity:0;letter-spacing:18px}to{opacity:1;letter-spacing:5px}}
+
+/* ── TEAM BADGES ── */
+.teams{
+  display:flex;align-items:center;gap:20px;
+  margin-top:4px;
+  animation:fu .5s .55s ease both;
+}
+
+/* Browns badge */
+.browns-badge{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:10px 20px;
+  border:2px solid rgba(210,80,0,.6);
+  background:rgba(210,80,0,.1);
+  border-radius:4px;
+  position:relative;
+  overflow:hidden;
+}
+.browns-badge::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(210,80,0,.08),transparent);
+}
+/* Browns helmet CSS */
+.browns-helmet{
+  width:52px;height:44px;
+  background:linear-gradient(135deg,#d45000,#ff6a00,#d45000);
+  border-radius:50% 50% 35% 35%;
+  position:relative;
+  box-shadow:0 4px 12px rgba(0,0,0,.4),inset 0 2px 4px rgba(255,255,255,.1);
+}
+.browns-helmet::before{/* face mask */
+  content:'';position:absolute;
+  bottom:-6px;left:8px;right:8px;height:12px;
+  border:2px solid rgba(255,255,255,.3);
+  border-radius:0 0 8px 8px;
+  border-top:none;
+}
+.browns-helmet::after{/* stripe */
+  content:'';position:absolute;
+  top:6px;left:0;right:0;height:8px;
+  background:rgba(0,0,0,.2);
+}
+.team-name{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:#ffffff;text-shadow:0 0 8px rgba(210,80,0,.5);}
+.team-sub{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.45);text-transform:uppercase;}
+
+.vs-dot{
+  font-family:'Bebas Neue',sans-serif;font-size:22px;
+  color:rgba(255,255,255,.2);
+}
+
+/* Cavs badge */
+.cavs-badge{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:10px 20px;
+  border:2px solid rgba(134,0,56,.6);
+  background:rgba(134,0,56,.1);
+  border-radius:4px;
+  position:relative;overflow:hidden;
+}
+.cavs-badge::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(134,0,56,.08),transparent);
+}
+/* Cavs sword shield CSS */
+.cavs-shield{
+  width:44px;height:52px;
+  position:relative;
+  display:flex;align-items:center;justify-content:center;
+}
+.cavs-shield-bg{
+  position:absolute;inset:0;
+  background:linear-gradient(160deg,#860038,#6b002d,#860038);
+  clip-path:polygon(10% 0%,90% 0%,100% 30%,100% 70%,50% 100%,0% 70%,0% 30%);
+  box-shadow:0 4px 12px rgba(0,0,0,.4);
+}
+.cavs-shield-gold{
+  position:absolute;
+  width:36px;height:44px;
+  clip-path:polygon(10% 0%,90% 0%,100% 30%,100% 70%,50% 100%,0% 70%,0% 30%);
+  border:2px solid #c89520;
+  top:0;left:4px;
+}
+.cavs-c{
+  position:relative;z-index:2;
+  font-family:'Bebas Neue',sans-serif;
+  font-size:24px;color:#c89520;
+  text-shadow:0 0 8px rgba(200,149,32,.6);
+  letter-spacing:0;
+}
+.team-name-cavs{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:#ffffff;text-shadow:0 0 8px rgba(134,0,56,.5);}
+
+/* ── ROLE ── */
+.role-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.06);
+  padding:6px 22px;margin-top:2px;
+  animation:fu .4s .72s ease both;
+}
+.role-badge span{font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:4px;color:#ffffff;text-transform:uppercase;font-weight:600;}
+
+/* ── STATS ── live score-style ── */
+.scoreboard{
+  display:flex;align-items:center;gap:0;
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(0,0,0,.45);
+  margin-top:4px;
+  animation:fu .5s .85s ease both;
+}
+.score-team{
+  display:flex;flex-direction:column;align-items:center;
+  padding:8px 18px;
+  border-right:1px solid rgba(255,255,255,.1);
+}
+.score-team:last-child{border-right:none;}
+.score-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase;}
+.score-val{font-family:'Bebas Neue',sans-serif;font-size:30px;line-height:1;letter-spacing:2px;}
+.score-val.brn{color:#ff6a00;text-shadow:0 0 10px rgba(210,80,0,.6);}
+.score-val.cav{color:#c89520;text-shadow:0 0 10px rgba(200,149,32,.6);}
+.score-val.cle{color:#ffffff;}
+
+/* ── Progress ── */
+.pbar-wrap{width:320px;margin-top:10px;animation:fu .4s .98s ease both;}
+.pbar-top{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:2px;color:#ffffff;text-transform:uppercase;margin-bottom:6px;}
+.pbar-track{width:100%;height:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);overflow:hidden;}
+.pbar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#6b2500,#d45000,#ff6a00,#860038,#c89520);
+  background-size:300% 100%;
+  animation:pf 6s 1s ease forwards,pshift 4s 1s linear infinite;
+  position:relative;
+}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:14px;height:100%;background:rgba(255,210,80,.5);filter:blur(3px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+@keyframes pshift{0%{background-position:0%}100%{background-position:300%}}
+.sys-txt{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.6);text-transform:uppercase;margin-top:5px;animation:fu .4s 1.1s ease both;}
+
+@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* Field at bottom */
+.field{
+  position:fixed;bottom:0;left:0;right:0;
+  height:58px;
+  background:linear-gradient(180deg,#0a1a08,#0d220a);
+  border-top:2px solid rgba(100,160,60,.5);
+  z-index:3;pointer-events:none;
+}
+.field::before{
+  content:'';position:absolute;
+  top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,#5a9a30,#7ac040,#5a9a30,transparent);
+  box-shadow:0 0 10px rgba(100,160,60,.4);
+}
+/* Yard lines */
+.field::after{
+  content:'';position:absolute;
+  inset:0;
+  background:repeating-linear-gradient(
+    90deg,
+    transparent 0,transparent 58px,
+    rgba(255,255,255,.06) 58px,rgba(255,255,255,.06) 60px
+  );
+}
+/* 50 yard line center */
+.yd50{
+  position:absolute;top:0;bottom:0;left:50%;
+  width:2px;background:rgba(255,255,255,.12);
+}
+
+.corner{position:fixed;font-family:'DM Mono',monospace;font-size:9px;color:rgba(255,255,255,.18);letter-spacing:1px;z-index:1;}
+.ctop{top:18px;left:22px;}.cbot{bottom:65px;right:22px;}
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="scan"></div>
+
+<!-- Confetti Browns + Cavs colors -->
+<div class="conf" style="left:5%;animation-duration:5s;animation-delay:0s;background:#d45000;"></div>
+<div class="conf" style="left:12%;animation-duration:6.5s;animation-delay:.4s;background:#ff6a00;border-radius:50%;"></div>
+<div class="conf" style="left:20%;animation-duration:5.5s;animation-delay:.8s;background:#c89520;"></div>
+<div class="conf" style="left:28%;animation-duration:7s;animation-delay:.2s;background:#860038;border-radius:50%;"></div>
+<div class="conf" style="left:36%;animation-duration:6s;animation-delay:1.2s;background:#d45000;"></div>
+<div class="conf" style="left:44%;animation-duration:5.8s;animation-delay:.6s;background:#ffffff;opacity:.4;"></div>
+<div class="conf" style="left:52%;animation-duration:6.2s;animation-delay:1.5s;background:#c89520;border-radius:50%;"></div>
+<div class="conf" style="left:60%;animation-duration:5.3s;animation-delay:.3s;background:#860038;"></div>
+<div class="conf" style="left:68%;animation-duration:6.8s;animation-delay:1s;background:#ff6a00;border-radius:50%;"></div>
+<div class="conf" style="left:76%;animation-duration:5.6s;animation-delay:1.8s;background:#d45000;"></div>
+<div class="conf" style="left:84%;animation-duration:6.4s;animation-delay:.7s;background:#c89520;border-radius:50%;"></div>
+<div class="conf" style="left:92%;animation-duration:5.9s;animation-delay:2s;background:#860038;"></div>
+<div class="conf" style="left:8%;animation-duration:7.2s;animation-delay:2.5s;background:#ff6a00;"></div>
+<div class="conf" style="left:32%;animation-duration:5.4s;animation-delay:3s;background:#c89520;border-radius:50%;"></div>
+<div class="conf" style="left:56%;animation-duration:6.6s;animation-delay:2.2s;background:#d45000;"></div>
+<div class="conf" style="left:80%;animation-duration:5.7s;animation-delay:3.5s;background:#860038;border-radius:50%;"></div>
+
+<!-- Field -->
+<div class="field"><div class="yd50"></div></div>
+
+<div class="corner ctop">ZENNI LMS · TRAINING & QUALITY</div>
+<div class="corner cbot">SESSION ACTIVE</div>
+
+<div class="page">
+  <div class="welcome-txt">Welcome back</div>
+  <div class="fullname" id="displayName">Brad Dade</div>
+
+  <!-- Team badges -->
+  <div class="teams">
+    <div class="browns-badge">
+      <div class="browns-helmet"></div>
+      <div class="team-name">Browns</div>
+      <div class="team-sub">Cleveland</div>
+    </div>
+    <div class="vs-dot">·</div>
+    <div class="cavs-badge">
+      <div class="cavs-shield">
+        <div class="cavs-shield-bg"></div>
+        <div class="cavs-shield-gold"></div>
+        <div class="cavs-c">C</div>
+      </div>
+      <div class="team-name-cavs">Cavaliers</div>
+      <div class="team-sub">Cleveland</div>
+    </div>
+  </div>
+
+  <!-- Role -->
+  <div class="role-badge">
+    <span id="displayRole">Training · Quality Coordinator</span>
+  </div>
+
+  <!-- Scoreboard style stats -->
+  <div class="scoreboard">
+    <div class="score-team">
+      <div class="score-lbl">Browns</div>
+      <div class="score-val brn" id="brownsScore">--</div>
+    </div>
+    <div class="score-team">
+      <div class="score-lbl">Cleveland</div>
+      <div class="score-val cle">CLE</div>
+    </div>
+    <div class="score-team">
+      <div class="score-lbl">Cavs</div>
+      <div class="score-val cav" id="cavsScore">--</div>
+    </div>
+  </div>
+
+  <div class="pbar-wrap">
+    <div class="pbar-top"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+  </div>
+  <div class="sys-txt" id="sysTxt">Preparing your workspace...</div>
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Brad Dade";
+  const r=sessionStorage.getItem("lms_role")||"Training";
+  const s=sessionStorage.getItem("lms_subrole")||"Coordinator";
+  document.getElementById("displayName").textContent=n;
+  document.getElementById("displayRole").textContent=r+" · Quality "+s;
+
+  // Animate scoreboard
+  setTimeout(()=>{ animCount("brownsScore",0,27,1200); },700);
+  setTimeout(()=>{ animCount("cavsScore",0,114,1400); },900);
+  function animCount(id,from,to,dur){
+    const el=document.getElementById(id);if(!el)return;
+    const steps=24;const inc=(to-from)/steps;let cur=from;let i=0;
+    const iv=setInterval(()=>{cur+=inc;i++;el.textContent=Math.round(cur);if(i>=steps){el.textContent=to;clearInterval(iv);}},dur/steps);
+  }
+
+  const msgs=["Preparing your workspace...","Loading training data...","Syncing quality metrics...","Almost ready...","Dashboard loading..."];
+  let p=0;
+  const pEl=document.getElementById("pct");
+  const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);
+    pEl.textContent=p+"%";
+    if(p<20)sysEl.textContent=msgs[0];
+    else if(p<40)sysEl.textContent=msgs[1];
+    else if(p<60)sysEl.textContent=msgs[2];
+    else if(p<80)sysEl.textContent=msgs[3];
+    else sysEl.textContent=msgs[4];
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  const MIN_TIME=6000;const startTime=Date.now();
+  const preload=document.createElement("link");preload.rel="prefetch";preload.href="index.html";document.head.appendChild(preload);
+  function goToDashboard(){const e=Date.now()-startTime;const r=Math.max(0,MIN_TIME-e);setTimeout(()=>{p=100;pEl.textContent="100%";clearInterval(iv);setTimeout(()=>{window.location.replace("index.html");},400);},r);}
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>goToDashboard()).catch(()=>goToDashboard());
+  setTimeout(()=>{window.location.replace("index.html");},10000);
+</script>
+</body>
+</html>
