@@ -1280,12 +1280,15 @@ function renderNoData(meta) {
           border-radius:var(--radius-sm);color:var(--cyan);
           padding:8px 16px;cursor:pointer;letter-spacing:0.5px;
         ">↻ Check Again</button>
-        <button onclick="App.switchTab('history')" style="
+        <button onclick="App.switchTab('summary');document.getElementById('datePicker')?.focus()" style="
           font-family:var(--font-mono);font-size:11px;
-          background:var(--bg3);border:1px solid var(--border2);
-          border-radius:var(--radius-sm);color:var(--muted);
+          background:var(--bg3);border:1px solid var(--green);
+          border-radius:var(--radius-sm);color:var(--green);
           padding:8px 16px;cursor:pointer;letter-spacing:0.5px;
-        ">View History</button>
+        ">📅 View History</button>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:4px">
+        Use the date picker in the top-right to load a historical snapshot.
       </div>
     </div>`;
 
@@ -2953,9 +2956,10 @@ const App = {
 
       // Empty RawData check
       if (!d.lensCount || d.lensCount === 0) {
+        hideTransition();
         renderNoData(d);
         document.getElementById('loadingOverlay').classList.add('hidden');
-        App.showToast('No live data — RawData is empty', 'error');
+        App.showToast('No live data — try History mode to view past data', 'error');
         btn.classList.remove('loading');
         return;
       }
