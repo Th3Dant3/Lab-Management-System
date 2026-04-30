@@ -1050,6 +1050,7 @@ function applyVisibilityRules() {
     "Production_PowerAnalysis":      "#power-card",
     "System_ScannerMap":             "#scanner-card",
     "Inventory_IncomingJobs":        "#incoming-card",
+    "Inventory_PickingWIP":          "#pickwip-card",
     "Training_TrainingPortal":       "#facility-breakage-card"
   };
 

@@ -246,11 +246,11 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 </div>
 
 <!-- ============================================================
-     MAIN CONTENT (unchanged structure, effects injected via JS)
+     MAIN CONTENT
      ============================================================ -->
 <main class="main">
 
-  <!-- OPERATIONS TAB (unchanged) -->
+  <!-- OPERATIONS TAB -->
   <section id="operations" class="tab-content active">
     <div class="module-head">
       <div class="module-label">LMS Command Center</div>
@@ -333,7 +333,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
   </section>
 
-  <!-- PRODUCTION TAB (unchanged) -->
+  <!-- PRODUCTION TAB -->
   <section id="production" class="tab-content">
     <div class="module-head">
       <div class="module-label">Production Modules</div>
@@ -388,7 +388,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
   </section>
 
-  <!-- SYSTEM TAB (unchanged) -->
+  <!-- SYSTEM TAB -->
   <section id="system" class="tab-content">
     <div class="module-head">
       <div class="module-label">System Modules</div>
@@ -422,7 +422,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
   </section>
 
-  <!-- PICKING TAB (unchanged) -->
+  <!-- PICKING TAB -->
   <section id="inventory" class="tab-content">
     <div class="module-head">
       <div class="module-label">Picking</div>
@@ -453,10 +453,36 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
         </div>
       </div>
 
+      <!-- ── NEW: Picking WIP Command Center ── -->
+      <div id="pickwip-card" class="card card--inventory" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#19c8ff"></canvas>
+        <div class="card-accent card-accent--green"></div>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Picking WIP Command Center</h3>
+              <span class="badge badge--inventory">Picking</span>
+            </div>
+            <p class="card-desc">Live WIP tracking for SF, FSV &amp; Breakage queues with queue counts and automated daily reports</p>
+          </div>
+          <div class="card-tags">
+            <span class="tag">SF Scan &amp; Verify</span>
+            <span class="tag">FSV</span>
+            <span class="tag">Breakage</span>
+            <span class="tag">Queues</span>
+            <span class="tag">Reports</span>
+          </div>
+          <button class="card-btn card-btn--green" onclick="openPage('PickWip.html')">
+            Open Dashboard
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
     </div>
   </section>
 
-  <!-- TRAINING / QUALITY TAB (unchanged) -->
+  <!-- TRAINING / QUALITY TAB -->
   <section id="training" class="tab-content">
     <div class="module-head">
       <div class="module-label">Training &amp; Quality</div>
@@ -499,621 +525,168 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 <script defer src="index.js"></script>
 
 <!-- ============================================================
-     PAGE BACKGROUND ANIMATION — injected via JS so it never
-     affects document flow. Change BG_STYLE to switch style.
+     PAGE BACKGROUND ANIMATION
      ============================================================ -->
 <script>
 (function() {
-  /* CHANGE THIS: 'hex' | 'grid' | 'stars' | 'circuit' */
   var BG_STYLE = 'hex';
-
-  /* Create canvas via JS and append to body — never in flow */
   var canvas = document.createElement('canvas');
   canvas.id = 'page-bg-canvas';
   document.body.appendChild(canvas);
-
   var ctx = canvas.getContext('2d');
   var W, H, t = 0;
-
-  function resize() {
-    W = canvas.width  = window.innerWidth;
-    H = canvas.height = window.innerHeight;
-  }
+  function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
   resize();
   window.addEventListener('resize', resize);
-
-  /* ── HEX: pulsing hex grid wave from center ── */
   function drawHex() {
-    ctx.clearRect(0, 0, W, H);
-    t += 0.008;
-    var S = 28;
-    ctx.lineWidth = 0.5;
-    var rows = Math.ceil(H / (S * 1.52)) + 3;
-    var cols = Math.ceil(W / (S * 1.75)) + 3;
+    ctx.clearRect(0, 0, W, H); t += 0.008;
+    var S = 28; ctx.lineWidth = 0.5;
+    var rows = Math.ceil(H / (S * 1.52)) + 3, cols = Math.ceil(W / (S * 1.75)) + 3;
     for (var row = 0; row < rows; row++) {
       for (var col = 0; col < cols; col++) {
-        var x = col * S * 1.75 - S;
-        var y = row * S * 1.52 + (col % 2 ? S * 0.76 : 0) - S;
+        var x = col * S * 1.75 - S, y = row * S * 1.52 + (col % 2 ? S * 0.76 : 0) - S;
         var dist = Math.hypot(x - W * 0.5, y - H * 0.5);
         var wave = Math.sin(t - dist * 0.022) * 0.5 + 0.5;
-        var alpha = wave * 0.055 + 0.008;
-        ctx.strokeStyle = 'rgba(100,160,220,' + alpha + ')';
+        ctx.strokeStyle = 'rgba(100,160,220,' + (wave * 0.055 + 0.008) + ')';
         ctx.beginPath();
         for (var i = 0; i < 6; i++) {
           var a = Math.PI / 180 * (60 * i - 30);
-          var hx = x + S * 0.46 * Math.cos(a);
-          var hy = y + S * 0.46 * Math.sin(a);
+          var hx = x + S * 0.46 * Math.cos(a), hy = y + S * 0.46 * Math.sin(a);
           i === 0 ? ctx.moveTo(hx, hy) : ctx.lineTo(hx, hy);
         }
-        ctx.closePath();
-        ctx.stroke();
+        ctx.closePath(); ctx.stroke();
       }
     }
     requestAnimationFrame(drawHex);
   }
-
-  /* ── GRID: diagonal drifting lines ── */
-  var gridOff = 0;
-  function drawGrid() {
-    ctx.clearRect(0, 0, W, H);
-    t += 0.014; gridOff = (gridOff + 0.18) % 30;
-    ctx.lineWidth = 0.4;
-    for (var x = -30 + gridOff; x < W + 30; x += 30) {
-      var wave = Math.sin(t + x * 0.012) * 0.5 + 0.5;
-      ctx.strokeStyle = 'rgba(100,160,220,' + (0.018 + wave * 0.038) + ')';
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 12, H); ctx.stroke();
-    }
-    for (var y = -30 + gridOff; y < H + 30; y += 30) {
-      var wave = Math.sin(t + y * 0.012) * 0.5 + 0.5;
-      ctx.strokeStyle = 'rgba(100,160,220,' + (0.012 + wave * 0.028) + ')';
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y + 8); ctx.stroke();
-    }
-    requestAnimationFrame(drawGrid);
-  }
-
-  /* ── STARS: slow drifting star field ── */
-  var stars = [];
-  function initStars() {
-    stars = [];
-    for (var i = 0; i < 120; i++) {
-      stars.push({
-        x: Math.random()*W, y: Math.random()*H,
-        vx: (Math.random()-.5)*0.12, vy: (Math.random()-.5)*0.12,
-        r: Math.random()*1.2+0.2,
-        phase: Math.random()*Math.PI*2,
-        spd: Math.random()*0.02+0.008
-      });
-    }
-  }
-  initStars();
-  function drawStars() {
-    ctx.clearRect(0, 0, W, H);
-    t += 0.01;
-    stars.forEach(function(s) {
-      s.x += s.vx; s.y += s.vy; s.phase += s.spd;
-      if (s.x < 0) s.x = W; if (s.x > W) s.x = 0;
-      if (s.y < 0) s.y = H; if (s.y > H) s.y = 0;
-      var alpha = (Math.sin(s.phase)*0.5+0.5)*0.35+0.05;
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(180,210,255,' + alpha + ')'; ctx.fill();
-    });
-    requestAnimationFrame(drawStars);
-  }
-
-  /* ── CIRCUIT: trace lines with travelling pulse dots ── */
-  var traces = [];
-  function initCircuit() {
-    traces = [];
-    var step = 60;
-    for (var y = step; y < H; y += step) {
-      if (Math.random() < 0.6) {
-        var x1 = Math.random()*W*0.3, x2 = x1 + Math.random()*W*0.5+100;
-        traces.push({x1:x1,y1:y,x2:x2,y2:y,phase:Math.random()*Math.PI*2,spd:Math.random()*0.018+0.006,dot:Math.random()});
-      }
-    }
-    for (var x = step; x < W; x += step) {
-      if (Math.random() < 0.4) {
-        var y1 = Math.random()*H*0.3, y2 = y1 + Math.random()*H*0.4+80;
-        traces.push({x1:x,y1:y1,x2:x,y2:y2,phase:Math.random()*Math.PI*2,spd:Math.random()*0.016+0.005,dot:Math.random()});
-      }
-    }
-  }
-  initCircuit();
-  function drawCircuit() {
-    ctx.clearRect(0, 0, W, H);
-    t += 0.012;
-    ctx.lineWidth = 0.6;
-    traces.forEach(function(tr) {
-      tr.phase += tr.spd; tr.dot = (tr.dot + 0.004) % 1;
-      var alpha = (Math.sin(tr.phase)*0.5+0.5)*0.06+0.015;
-      ctx.strokeStyle = 'rgba(100,200,180,' + alpha + ')';
-      ctx.beginPath(); ctx.moveTo(tr.x1,tr.y1); ctx.lineTo(tr.x2,tr.y2); ctx.stroke();
-      var px = tr.x1+(tr.x2-tr.x1)*tr.dot, py = tr.y1+(tr.y2-tr.y1)*tr.dot;
-      ctx.beginPath(); ctx.arc(px,py,1.5,0,Math.PI*2);
-      ctx.fillStyle = 'rgba(100,200,180,'+(alpha*3.5)+')'; ctx.fill();
-    });
-    requestAnimationFrame(drawCircuit);
-  }
-
-  var runners = {hex:drawHex, grid:drawGrid, stars:drawStars, circuit:drawCircuit};
-  (runners[BG_STYLE] || drawHex)();
+  drawHex();
 })();
 </script>
 
 <!-- ============================================================
-     EFFECT 3 — GLASS TILT PANEL
-     EFFECT 5 — REACTIVE PARTICLE NETWORK
-     Injected after DOM ready — touches nothing existing
-     Change TILT_STRENGTH, REPEL_RADIUS, PARTICLE_COUNT below
+     GLASS TILT + REACTIVE PARTICLE NETWORK (unchanged)
      ============================================================ -->
 <script>
 (function() {
   'use strict';
-
-  /* ── CHANGE THESE TO TUNE ──────────────────────────────────
-     TILT_STRENGTH : max degrees of tilt (default 12)
-     TILT_SPRING   : snap-back speed 0-1, lower = slower (default 0.1)
-     SHEEN_OPACITY : glass highlight brightness 0-1 (default 0.08)
-     PARTICLE_COUNT: particles per card (default 22)
-     REPEL_RADIUS  : px around cursor that repels particles (default 65)
-     CONNECT_DIST  : px between particles that draws a line (default 60)
-     PARTICLE_ALPHA: particle base opacity (default 0.35)
-     ────────────────────────────────────────────────────────── */
-  var CFG = {
-    TILT_STRENGTH  : 12,
-    TILT_SPRING    : 0.1,
-    SHEEN_OPACITY  : 0.08,
-    PARTICLE_COUNT : 22,
-    REPEL_RADIUS   : 65,
-    CONNECT_DIST   : 60,
-    PARTICLE_ALPHA : 0.35
-  };
-
-  /* ── Read accent color from existing data-color attr or border ── */
+  var CFG = { TILT_STRENGTH:12, TILT_SPRING:0.1, SHEEN_OPACITY:0.08, PARTICLE_COUNT:22, REPEL_RADIUS:65, CONNECT_DIST:60, PARTICLE_ALPHA:0.35 };
   function getAccentRGB(card) {
-    // Check data-color on the card-bg-canvas inside this card
     var bgCanvas = card.querySelector('.card-bg-canvas');
-    if (bgCanvas) {
-      var hex = bgCanvas.getAttribute('data-color') || '#64a0dc';
-      return hexToRGB(hex);
-    }
-    return { r:100, g:160, b:220 }; // fallback blue
+    if (bgCanvas) { var hex = bgCanvas.getAttribute('data-color') || '#64a0dc'; return hexToRGB(hex); }
+    return { r:100, g:160, b:220 };
   }
-
   function hexToRGB(hex) {
     hex = hex.replace('#','');
     if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-    return {
-      r: parseInt(hex.substring(0,2),16),
-      g: parseInt(hex.substring(2,4),16),
-      b: parseInt(hex.substring(4,6),16)
-    };
+    return { r:parseInt(hex.substring(0,2),16), g:parseInt(hex.substring(2,4),16), b:parseInt(hex.substring(4,6),16) };
   }
-
-  /* ════════════════════════════════════════
-     EFFECT 3 — GLASS TILT
-     ════════════════════════════════════════ */
   function initTilt(card) {
-    // Inject sheen div if not already present
-    if (!card.querySelector('.card-sheen')) {
-      var sheen = document.createElement('div');
-      sheen.className = 'card-sheen';
-      card.insertBefore(sheen, card.firstChild);
-    }
+    if (!card.querySelector('.card-sheen')) { var sheen = document.createElement('div'); sheen.className = 'card-sheen'; card.insertBefore(sheen, card.firstChild); }
     var sheen = card.querySelector('.card-sheen');
-
-    var targetX = 0, targetY = 0;
-    var currentX = 0, currentY = 0;
-    var rafId;
-    var isHovered = false;
-
+    var targetX = 0, targetY = 0, currentX = 0, currentY = 0, isHovered = false;
     card.addEventListener('mousemove', function(e) {
       var rect = card.getBoundingClientRect();
-      var x = (e.clientX - rect.left) / rect.width;   // 0 → 1
-      var y = (e.clientY - rect.top)  / rect.height;
-      targetX =  (x - 0.5) * CFG.TILT_STRENGTH * 2;  // -STRENGTH → +STRENGTH deg
-      targetY = -(y - 0.5) * CFG.TILT_STRENGTH * 2;
-      // Sheen tracks cursor
-      sheen.style.background =
-        'radial-gradient(circle at ' + (x*100) + '% ' + (y*100) + '%, ' +
-        'rgba(255,255,255,' + CFG.SHEEN_OPACITY + '), transparent 55%)';
+      var x = (e.clientX - rect.left) / rect.width, y = (e.clientY - rect.top) / rect.height;
+      targetX = (x - 0.5) * CFG.TILT_STRENGTH * 2; targetY = -(y - 0.5) * CFG.TILT_STRENGTH * 2;
+      sheen.style.background = 'radial-gradient(circle at ' + (x*100) + '% ' + (y*100) + '%, rgba(255,255,255,' + CFG.SHEEN_OPACITY + '), transparent 55%)';
       isHovered = true;
     });
-
     card.addEventListener('mouseleave', function() {
-      targetX = 0; targetY = 0;
-      isHovered = false;
-      card.classList.add('tilt-idle');
+      targetX = 0; targetY = 0; isHovered = false; card.classList.add('tilt-idle');
       sheen.style.background = 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03), transparent 60%)';
       setTimeout(function(){ card.classList.remove('tilt-idle'); }, 600);
     });
-
     function animate() {
-      currentX += (targetX - currentX) * CFG.TILT_SPRING;
-      currentY += (targetY - currentY) * CFG.TILT_SPRING;
-
+      currentX += (targetX - currentX) * CFG.TILT_SPRING; currentY += (targetY - currentY) * CFG.TILT_SPRING;
       var mag = Math.abs(currentX) + Math.abs(currentY);
-      card.style.transform =
-        'perspective(800px) rotateY(' + currentX + 'deg) rotateX(' + currentY + 'deg) translateZ(' + (isHovered ? 4 : 0) + 'px)';
-      card.style.boxShadow = isHovered
-        ? '0 ' + (10 + mag) + 'px ' + (28 + mag*1.5) + 'px rgba(0,0,0,' + (0.28 + mag*0.008) + ')'
-        : '';
-
-      rafId = requestAnimationFrame(animate);
+      card.style.transform = 'perspective(800px) rotateY(' + currentX + 'deg) rotateX(' + currentY + 'deg) translateZ(' + (isHovered ? 4 : 0) + 'px)';
+      card.style.boxShadow = isHovered ? '0 ' + (10+mag) + 'px ' + (28+mag*1.5) + 'px rgba(0,0,0,' + (0.28+mag*0.008) + ')' : '';
+      requestAnimationFrame(animate);
     }
     animate();
   }
-
-  /* ════════════════════════════════════════
-     EFFECT 5 — REACTIVE PARTICLE NETWORK
-     ════════════════════════════════════════ */
   function initParticles(card) {
-    var rgb = getAccentRGB(card);
-    var r = rgb.r, g = rgb.g, b = rgb.b;
-
-    // Inject canvas
-    var canvas = document.createElement('canvas');
-    canvas.className = 'card-particle-canvas';
+    var rgb = getAccentRGB(card); var r = rgb.r, g = rgb.g, b = rgb.b;
+    var canvas = document.createElement('canvas'); canvas.className = 'card-particle-canvas';
     card.insertBefore(canvas, card.firstChild);
-
-    var ctx = canvas.getContext('2d');
-    var mouse = { x: -9999, y: -9999 };
-    var particles = [];
-    var W, H;
-
+    var ctx = canvas.getContext('2d'); var mouse = { x:-9999, y:-9999 }; var particles = []; var W, H;
     function buildParticles() {
-      W = canvas.width  = card.offsetWidth;
-      H = canvas.height = card.offsetHeight;
-      particles = [];
+      W = canvas.width = card.offsetWidth; H = canvas.height = card.offsetHeight; particles = [];
       for (var i = 0; i < CFG.PARTICLE_COUNT; i++) {
-        var bvx = (Math.random() - 0.5) * 0.55;
-        var bvy = (Math.random() - 0.5) * 0.55;
-        particles.push({
-          x    : Math.random() * W,
-          y    : Math.random() * H,
-          vx   : bvx, vy: bvy,
-          bvx  : bvx, bvy: bvy,
-          rad  : Math.random() * 1.4 + 0.4,
-          phase: Math.random() * Math.PI * 2
-        });
+        var bvx = (Math.random()-.5)*.55, bvy = (Math.random()-.5)*.55;
+        particles.push({ x:Math.random()*W, y:Math.random()*H, vx:bvx, vy:bvy, bvx:bvx, bvy:bvy, rad:Math.random()*1.4+0.4, phase:Math.random()*Math.PI*2 });
       }
     }
     buildParticles();
-
-    // Track mouse inside card
-    card.addEventListener('mousemove', function(e) {
-      var rect = card.getBoundingClientRect();
-      mouse.x = e.clientX - rect.left;
-      mouse.y = e.clientY - rect.top;
-    });
-    card.addEventListener('mouseleave', function() {
-      mouse.x = -9999; mouse.y = -9999;
-    });
-
+    card.addEventListener('mousemove', function(e) { var rect = card.getBoundingClientRect(); mouse.x = e.clientX-rect.left; mouse.y = e.clientY-rect.top; });
+    card.addEventListener('mouseleave', function() { mouse.x = -9999; mouse.y = -9999; });
     function draw() {
-      // Resize if card changed size (tab switch etc.)
-      if (canvas.width !== card.offsetWidth || canvas.height !== card.offsetHeight) {
-        buildParticles();
-      }
-
+      if (canvas.width !== card.offsetWidth || canvas.height !== card.offsetHeight) buildParticles();
       ctx.clearRect(0, 0, W, H);
-
-      // Update + draw particles
       for (var i = 0; i < particles.length; i++) {
-        var p = particles[i];
-        p.phase += 0.018;
-
-        // Cursor repulsion
-        var dx = p.x - mouse.x;
-        var dy = p.y - mouse.y;
-        var dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < CFG.REPEL_RADIUS && dist > 0) {
-          var force = (CFG.REPEL_RADIUS - dist) / CFG.REPEL_RADIUS;
-          p.vx += (dx / dist) * force * 0.25;
-          p.vy += (dy / dist) * force * 0.25;
-        }
-
-        // Spring back to base velocity
-        p.vx += (p.bvx - p.vx) * 0.025;
-        p.vy += (p.bvy - p.vy) * 0.025;
-
-        // Speed cap
-        var spd = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
-        if (spd > 2.2) { p.vx = p.vx/spd*2.2; p.vy = p.vy/spd*2.2; }
-
+        var p = particles[i]; p.phase += 0.018;
+        var dx = p.x-mouse.x, dy = p.y-mouse.y, dist = Math.sqrt(dx*dx+dy*dy);
+        if (dist < CFG.REPEL_RADIUS && dist > 0) { var force = (CFG.REPEL_RADIUS-dist)/CFG.REPEL_RADIUS; p.vx += (dx/dist)*force*.25; p.vy += (dy/dist)*force*.25; }
+        p.vx += (p.bvx-p.vx)*.025; p.vy += (p.bvy-p.vy)*.025;
+        var spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy); if (spd > 2.2) { p.vx = p.vx/spd*2.2; p.vy = p.vy/spd*2.2; }
         p.x += p.vx; p.y += p.vy;
-
-        // Bounce walls
-        if (p.x < 0)  { p.x = 0;  p.vx *= -1; p.bvx *= -1; }
-        if (p.x > W)  { p.x = W;  p.vx *= -1; p.bvx *= -1; }
-        if (p.y < 0)  { p.y = 0;  p.vy *= -1; p.bvy *= -1; }
-        if (p.y > H)  { p.y = H;  p.vy *= -1; p.bvy *= -1; }
-
-        // Draw dot
-        var alpha = (Math.sin(p.phase) * 0.3 + 0.7) * CFG.PARTICLE_ALPHA;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.rad, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
-        ctx.fill();
+        if (p.x<0){p.x=0;p.vx*=-1;p.bvx*=-1;} if (p.x>W){p.x=W;p.vx*=-1;p.bvx*=-1;}
+        if (p.y<0){p.y=0;p.vy*=-1;p.bvy*=-1;} if (p.y>H){p.y=H;p.vy*=-1;p.bvy*=-1;}
+        var alpha = (Math.sin(p.phase)*.3+.7)*CFG.PARTICLE_ALPHA;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.rad,0,Math.PI*2);
+        ctx.fillStyle = 'rgba('+r+','+g+','+b+','+alpha+')'; ctx.fill();
       }
-
-      // Draw connection lines between nearby particles
       ctx.lineWidth = 0.5;
       for (var i = 0; i < particles.length; i++) {
-        for (var j = i + 1; j < particles.length; j++) {
+        for (var j = i+1; j < particles.length; j++) {
           var a = particles[i], bb = particles[j];
-          var d = Math.sqrt((a.x-bb.x)*(a.x-bb.x) + (a.y-bb.y)*(a.y-bb.y));
-          if (d < CFG.CONNECT_DIST) {
-            var lineAlpha = (1 - d / CFG.CONNECT_DIST) * 0.22;
-            ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + lineAlpha + ')';
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(bb.x, bb.y);
-            ctx.stroke();
-          }
+          var d = Math.sqrt((a.x-bb.x)*(a.x-bb.x)+(a.y-bb.y)*(a.y-bb.y));
+          if (d < CFG.CONNECT_DIST) { ctx.strokeStyle='rgba('+r+','+g+','+b+','+(1-d/CFG.CONNECT_DIST)*.22+')'; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(bb.x,bb.y); ctx.stroke(); }
         }
-        // Lines to cursor
-        var p2 = particles[i];
-        var md = Math.sqrt((p2.x-mouse.x)*(p2.x-mouse.x) + (p2.y-mouse.y)*(p2.y-mouse.y));
-        if (md < CFG.REPEL_RADIUS + 15) {
-          var la = (1 - md / (CFG.REPEL_RADIUS + 15)) * 0.38;
-          ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + la + ')';
-          ctx.beginPath();
-          ctx.moveTo(p2.x, p2.y);
-          ctx.lineTo(mouse.x, mouse.y);
-          ctx.stroke();
-        }
+        var p2 = particles[i], md = Math.sqrt((p2.x-mouse.x)*(p2.x-mouse.x)+(p2.y-mouse.y)*(p2.y-mouse.y));
+        if (md < CFG.REPEL_RADIUS+15) { ctx.strokeStyle='rgba('+r+','+g+','+b+','+(1-md/(CFG.REPEL_RADIUS+15))*.38+')'; ctx.beginPath(); ctx.moveTo(p2.x,p2.y); ctx.lineTo(mouse.x,mouse.y); ctx.stroke(); }
       }
-
       requestAnimationFrame(draw);
     }
     draw();
   }
-
-  /* ════════════════════════════════════════════════════════════
-     CORE HELPERS
-  ════════════════════════════════════════════════════════════ */
-
-  /* Inject tilt sheen onto one card (idempotent) */
-  function ensureTilt(card) {
-    if (card.querySelector('.card-sheen')) return;
-    initTilt(card);
-  }
-
-  /* Inject particle canvas onto one card.
-     If card is currently invisible (width=0) skip — activateTab
-     will call this again once the card is visible.             */
+  function ensureTilt(card) { if (card.querySelector('.card-sheen')) return; initTilt(card); }
   function ensureParticles(card) {
     var existing = card.querySelector('.card-particle-canvas');
-    if (existing) {
-      /* Already injected — but was it built at zero size? */
-      if (existing.width < 10 || existing.height < 10) {
-        existing.parentNode.removeChild(existing);
-      } else {
-        return; /* healthy — nothing to do */
-      }
-    }
-    if (card.offsetWidth < 10) return; /* still hidden — skip */
+    if (existing) { if (existing.width < 10 || existing.height < 10) existing.parentNode.removeChild(existing); else return; }
+    if (card.offsetWidth < 10) return;
     initParticles(card);
   }
-
-  /* Run both effects on every card in a section */
   function activateSection(sectionId) {
-    var section = document.getElementById(sectionId);
-    if (!section) return;
-    section.querySelectorAll('.card').forEach(function(card) {
-      ensureTilt(card);
-      ensureParticles(card);
-    });
+    var section = document.getElementById(sectionId); if (!section) return;
+    section.querySelectorAll('.card').forEach(function(card) { ensureTilt(card); ensureParticles(card); });
   }
-
-  /* ════════════════════════════════════════════════════════════
-     HOOK DIRECTLY ONTO THE SECTION NAV BUTTONS
-     index.js uses data-tab on .nav-item buttons.
-     We listen on the same buttons — after index.js switches
-     the tab (which sets display), we fire with a short delay
-     so the card has real pixel dimensions.
-  ════════════════════════════════════════════════════════════ */
   function hookNavButtons() {
     document.querySelectorAll('.nav-item[data-tab]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var tabId = btn.getAttribute('data-tab');
-        /* 80ms — enough for index.js to toggle active class & CSS display */
         setTimeout(function() { activateSection(tabId); }, 80);
-        /* second pass at 250ms covers slow gating / transitions */
         setTimeout(function() { activateSection(tabId); }, 250);
       });
     });
   }
-
-  /* ════════════════════════════════════════════════════════════
-     BOOT — wait for index.js gating then init the active tab
-  ════════════════════════════════════════════════════════════ */
   function boot() {
-    /* index.js needs ~300ms to run gating & show cards */
     setTimeout(function() {
-
-      /* 1. Hook nav buttons so future tab clicks work */
       hookNavButtons();
-
-      /* 2. Init whichever tab is active right now */
       var activeSection = document.querySelector('.tab-content.active');
       if (activeSection) activateSection(activeSection.id);
-
-      /* 3. Also init ALL tabs upfront for tilt (tilt needs no size).
-            For particles we skip hidden ones — hookNavButtons handles them. */
       document.querySelectorAll('.tab-content').forEach(function(section) {
         section.querySelectorAll('.card').forEach(function(card) {
           ensureTilt(card);
-          /* Only build particles if card is already visible */
           if (card.offsetWidth > 10) ensureParticles(card);
         });
       });
-
     }, 350);
   }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
-
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
 </script>
 
-
-<!-- ============================================================
-     BACKGROUND ANIMATION
-     One self-contained script. Zero impact on layout or cards.
-     Change BG_STYLE: 'hex' | 'grid' | 'stars' | 'circuit'
-     ============================================================ -->
-<script>
-(function () {
-  /* ── PICK YOUR STYLE ── */
-  var BG_STYLE = 'hex';
-
-  /* Create canvas via JS — appended LAST so it's never in flow */
-  var c = document.createElement('canvas');
-  c.id = 'page-bg-canvas';
-  /* Inline style so it NEVER depends on external CSS loading order */
-  c.style.cssText = [
-    'position:fixed',
-    'top:0',
-    'left:0',
-    'width:100vw',
-    'height:100vh',
-    'pointer-events:none',
-    'z-index:-1',
-    'display:block'
-  ].join(';');
-  document.body.appendChild(c);
-
-  var ctx = c.getContext('2d');
-  var W, H, t = 0;
-
-  function resize() {
-    W = c.width  = window.innerWidth;
-    H = c.height = window.innerHeight;
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  /* ─── HEX GRID ─── */
-  function hex() {
-    ctx.clearRect(0, 0, W, H);
-    t += 0.008;
-    var S = 30;
-    var rows = Math.ceil(H / (S * 1.52)) + 2;
-    var cols = Math.ceil(W / (S * 1.75)) + 2;
-    ctx.lineWidth = 0.5;
-    for (var row = 0; row < rows; row++) {
-      for (var col = 0; col < cols; col++) {
-        var x = col * S * 1.75 - S;
-        var y = row * S * 1.52 + (col % 2 ? S * 0.76 : 0) - S;
-        var dist = Math.hypot(x - W * 0.5, y - H * 0.5);
-        var wave = Math.sin(t - dist * 0.02) * 0.5 + 0.5;
-        ctx.strokeStyle = 'rgba(100,160,220,' + (wave * 0.055 + 0.008) + ')';
-        ctx.beginPath();
-        for (var i = 0; i < 6; i++) {
-          var a = Math.PI / 3 * i - Math.PI / 6;
-          var px = x + S * 0.46 * Math.cos(a);
-          var py = y + S * 0.46 * Math.sin(a);
-          i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.stroke();
-      }
-    }
-    requestAnimationFrame(hex);
-  }
-
-  /* ─── GRID ─── */
-  var gOff = 0;
-  function grid() {
-    ctx.clearRect(0, 0, W, H);
-    t += 0.012; gOff = (gOff + 0.2) % 32;
-    ctx.lineWidth = 0.4;
-    for (var x = -32 + gOff; x < W + 32; x += 32) {
-      var w = Math.sin(t + x * 0.01) * 0.5 + 0.5;
-      ctx.strokeStyle = 'rgba(100,160,220,' + (0.015 + w * 0.04) + ')';
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 14, H); ctx.stroke();
-    }
-    for (var y = -32 + gOff; y < H + 32; y += 32) {
-      var w = Math.sin(t + y * 0.01) * 0.5 + 0.5;
-      ctx.strokeStyle = 'rgba(100,160,220,' + (0.01 + w * 0.025) + ')';
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y + 9); ctx.stroke();
-    }
-    requestAnimationFrame(grid);
-  }
-
-  /* ─── STARS ─── */
-  var stars = [];
-  for (var i = 0; i < 140; i++) {
-    stars.push({
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-      vx: (Math.random() - 0.5) * 0.14,
-      vy: (Math.random() - 0.5) * 0.14,
-      r: Math.random() * 1.2 + 0.2,
-      ph: Math.random() * Math.PI * 2,
-      sp: Math.random() * 0.018 + 0.007
-    });
-  }
-  function stars_draw() {
-    ctx.clearRect(0, 0, W, H);
-    stars.forEach(function (s) {
-      s.x += s.vx; s.y += s.vy; s.ph += s.sp;
-      if (s.x < 0) s.x = W; if (s.x > W) s.x = 0;
-      if (s.y < 0) s.y = H; if (s.y > H) s.y = 0;
-      var a = (Math.sin(s.ph) * 0.5 + 0.5) * 0.3 + 0.06;
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(180,210,255,' + a + ')'; ctx.fill();
-    });
-    requestAnimationFrame(stars_draw);
-  }
-
-  /* ─── CIRCUIT ─── */
-  var traces = [];
-  function buildTraces() {
-    traces = [];
-    var step = 64;
-    for (var y = step; y < H; y += step) {
-      if (Math.random() < 0.55) {
-        var x1 = Math.random() * W * 0.25;
-        traces.push({ x1: x1, y1: y, x2: x1 + 120 + Math.random() * W * 0.5, y2: y,
-          ph: Math.random() * Math.PI * 2, sp: 0.006 + Math.random() * 0.016, dot: Math.random() });
-      }
-    }
-    for (var x = step; x < W; x += step) {
-      if (Math.random() < 0.35) {
-        var y1 = Math.random() * H * 0.25;
-        traces.push({ x1: x, y1: y1, x2: x, y2: y1 + 80 + Math.random() * H * 0.4,
-          ph: Math.random() * Math.PI * 2, sp: 0.005 + Math.random() * 0.014, dot: Math.random() });
-      }
-    }
-  }
-  buildTraces();
-  function circuit() {
-    ctx.clearRect(0, 0, W, H);
-    ctx.lineWidth = 0.6;
-    traces.forEach(function (tr) {
-      tr.ph += tr.sp; tr.dot = (tr.dot + 0.0035) % 1;
-      var a = (Math.sin(tr.ph) * 0.5 + 0.5) * 0.055 + 0.012;
-      ctx.strokeStyle = 'rgba(48,200,160,' + a + ')';
-      ctx.beginPath(); ctx.moveTo(tr.x1, tr.y1); ctx.lineTo(tr.x2, tr.y2); ctx.stroke();
-      var px = tr.x1 + (tr.x2 - tr.x1) * tr.dot;
-      var py = tr.y1 + (tr.y2 - tr.y1) * tr.dot;
-      ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(48,200,160,' + (a * 4) + ')'; ctx.fill();
-    });
-    requestAnimationFrame(circuit);
-  }
-
-  /* ─── START ─── */
-  var fn = { hex: hex, grid: grid, stars: stars_draw, circuit: circuit }[BG_STYLE] || hex;
-  fn();
-})();
-</script>
 </body>
 </html>
