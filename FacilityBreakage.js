@@ -1337,9 +1337,9 @@ function renderFlowMap(summary) {
       <div class="fcc-metric"><span>Top Reason</span><strong style="color:${d.color};font-size:9px">${topR}</strong></div>`;
 
     return `
-      <div class="fcc-dept-card ${d.type === 'support' ? 'support' : ''}"
-           data-type="${d.type}" data-key="${d.key}"
-           onclick="fccSelectDept('${d.key}')">
+      <div class="fcc-dept-card fcc-dept-card--wip ${d.type === 'support' ? 'support' : ''}"
+           data-type="${d.type}" data-key="${d.key}">
+        <div class="fcc-wip-overlay">🚧</div>
         <div class="fcc-card-head">
           <div class="fcc-card-name">${d.label}</div>
           <div class="fcc-card-risk ${riskClass}">${riskLabel}</div>

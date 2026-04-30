@@ -3078,3 +3078,52 @@ body::before {
 @media (max-width: 700px) {
   .fcc-cards { grid-template-columns: 1fr; }
 }
+
+
+/* ── UNDER CONSTRUCTION ────────────────────────────────── */
+.fcc-wip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--amber);
+  background: rgba(245,166,35,0.1);
+  border: 1px solid rgba(245,166,35,0.35);
+  border-radius: 999px;
+  padding: 7px 16px;
+  animation: wipPulse 2.5s ease-in-out infinite;
+}
+@keyframes wipPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(245,166,35,0); opacity: 1; }
+  50%       { box-shadow: 0 0 14px rgba(245,166,35,0.3); opacity: 0.85; }
+}
+.fcc-wip-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 8px;
+  letter-spacing: 0.3px;
+}
+
+/* WIP card state — no hover, no pointer */
+.fcc-dept-card--wip {
+  cursor: not-allowed !important;
+  opacity: 0.6;
+  position: relative;
+}
+.fcc-dept-card--wip:hover {
+  transform: none !important;
+  border-color: rgba(255,255,255,0.09) !important;
+  box-shadow: none !important;
+}
+.fcc-dept-card--wip::before { display: none !important; }
+
+.fcc-wip-overlay {
+  position: absolute;
+  top: 8px; right: 10px;
+  font-size: 14px;
+  opacity: 0.5;
+  pointer-events: none;
+}
