@@ -297,16 +297,17 @@ function renderSummary(summary, meta, history) {
   ];
   const maxPct = Math.max(...goalRows.map(r => Math.max(r.pct, r.target))) * 1.25 || 8;
 
-  document.getElementById('goalBars').innerHTML = goalRows.map(r => {
+  document.getElementById('goalBars').innerHTML = goalRows.map((r, i) => {
     const fillW   = Math.min((r.pct    / maxPct) * 100, 100);
     const markerW = Math.min((r.target / maxPct) * 100, 100);
     const ok      = r.pct <= r.target;
     const fill    = ok ? 'var(--green)' : 'var(--red)';
+    const delay   = (i * 0.5).toFixed(1) + 's';
     return `
       <div class="goal-row">
         <div class="goal-dept">${r.label}</div>
-        <div class="goal-track">
-          <div class="goal-fill" style="width:${fillW}%;background:${fill}"></div>
+        <div class="goal-track" style="--flow-delay:${delay}">
+          <div class="goal-fill" style="width:${fillW}%;background:${fill};box-shadow:0 0 6px ${fill}"></div>
           <div class="goal-marker" style="left:${markerW}%"></div>
         </div>
         <div class="goal-pct" style="color:${fill}">${r.pct.toFixed(2)}%</div>
@@ -328,6 +329,9 @@ function renderSummary(summary, meta, history) {
         <div class="dept-top">↑ ${(!d.topReason || d.topReason.startsWith('#')) ? '—' : d.topReason}</div>
       </div>`;
   }).join('');
+
+  /* Animated flow map */
+  renderFlowMap(summary);
 
   /* Top reasons panels */
   const deptKeys = ['AR', 'Finish', 'Surface', 'LMS', 'Inventory', 'Breakage'];
@@ -1246,6 +1250,186 @@ function toggleOperator(detailId, headerId) {
 }
 
 
+/* ── PRODUCTION FLOW COMMAND CENTER ─────────────────────── */
+
+// Filter state
+let _fccFilter = 'all';
+function fccFilter(type, btn) {
+  _fccFilter = type;
+  document.querySelectorAll('.fcc-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.fcc-dept-card').forEach(card => {
+    const t = card.dataset.type || 'production';
+    card.style.display = (type === 'all' || t === type) ? '' : 'none';
+  });
+}
+
+function renderFlowMap(summary) {
+  if (!summary) return;
+
+  const deptMap = {};
+  (summary.departments || []).forEach(d => { deptMap[d.department] = d; });
+  const lt = summary.labTotal || {};
+  const lensCount  = lt.lensCount  || 1;
+  const orderCount = lt.orderCount || 0;
+  const labPct     = (lt.labLensPct || 0) * 100;
+
+  // ── Breakage ring ──
+  const ringEl = document.getElementById('fccRing');
+  const ringVal = document.getElementById('fccRingVal');
+  if (ringEl && ringVal) {
+    const deg   = Math.min((labPct / 10) * 360, 360); // max at 10%
+    const color = labPct <= 5 ? 'var(--green)' : labPct <= 7 ? 'var(--amber)' : 'var(--red)';
+    ringEl.style.background = `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
+    ringEl.style.boxShadow  = `0 0 36px ${color}44`;
+    ringVal.textContent = labPct.toFixed(2) + '%';
+  }
+
+  // Ring stats
+  const statsEl = document.getElementById('fccRingStats');
+  if (statsEl) {
+    const brk = lt.labLensesBroken || 0;
+    const frm = lt.framesBroken    || 0;
+    statsEl.innerHTML = [
+      ['Lenses Broken', U.fmt(brk)],
+      ['Frames Broken', U.fmt(frm)],
+      ['Total Shipped', U.fmt(orderCount)],
+    ].map(([k,v]) => `
+      <div class="fcc-ring-stat"><span>${k}</span><strong>${v}</strong></div>
+    `).join('');
+  }
+
+  // ── Dept cards ──
+  const depts = [
+    { key: 'Surface',   label: 'Surface',   color: '#fb923c', goal: 2.80,  type: 'production' },
+    { key: 'AR',        label: 'AR',        color: '#a78bfa', goal: 0.50,  type: 'production' },
+    { key: 'Finish',    label: 'Finish',    color: '#34d399', goal: 1.70,  type: 'production' },
+    { key: '_shipped',  label: 'Mailroom',  color: '#facc15', goal: null,  type: 'production' },
+  ];
+
+  const cards = document.getElementById('fccCards');
+  if (!cards) return;
+
+  cards.innerHTML = depts.map(d => {
+    const isShipped = d.key === '_shipped';
+    const dept   = isShipped ? null : deptMap[d.key];
+    const broken = dept?.lensesBroken || 0;
+    const pct    = dept ? (dept.lensBrkPct * 100) : 0;
+    const topR   = dept?.topReason || '—';
+
+    const riskClass = isShipped ? 'shipped'
+      : !d.goal ? 'watch'
+      : pct <= d.goal ? 'good'
+      : pct <= d.goal * 1.8 ? 'watch'
+      : 'bad';
+    const riskLabel = isShipped ? 'SHIPPED'
+      : riskClass === 'good' ? 'ON GOAL'
+      : riskClass === 'bad'  ? 'CRITICAL'
+      : 'WATCH';
+
+    const displayVal   = isShipped ? orderCount.toLocaleString() : pct.toFixed(2) + '%';
+    const displaySub   = isShipped ? 'orders shipped' : `${broken.toLocaleString()} broken`;
+    const fillW        = isShipped ? 80
+      : d.goal ? Math.min((pct / (d.goal * 2.5)) * 100, 100) : Math.min(pct * 5, 100);
+
+    const extraMetrics = isShipped ? '' : `
+      <div class="fcc-metric"><span>Breakage</span><strong>${broken.toLocaleString()}</strong></div>
+      <div class="fcc-metric"><span>Top Reason</span><strong style="color:${d.color};font-size:9px">${topR}</strong></div>`;
+
+    return `
+      <div class="fcc-dept-card ${d.type === 'support' ? 'support' : ''}"
+           data-type="${d.type}" data-key="${d.key}"
+           onclick="fccSelectDept('${d.key}')">
+        <div class="fcc-card-head">
+          <div class="fcc-card-name">${d.label}</div>
+          <div class="fcc-card-risk ${riskClass}">${riskLabel}</div>
+        </div>
+        <div class="fcc-metric-pct" style="color:${d.color}">${displayVal}</div>
+        <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">${displaySub}</div>
+        ${extraMetrics}
+        <div class="fcc-mini-bar">
+          <div class="fcc-mini-fill" style="background:${d.color}" data-fill="${fillW}"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Animate fills
+  requestAnimationFrame(() => {
+    cards.querySelectorAll('.fcc-mini-fill').forEach(el => {
+      el.style.width = '0%';
+      setTimeout(() => { el.style.width = el.dataset.fill + '%'; }, 200);
+    });
+  });
+
+  // Auto-select highest-risk production dept
+  const topDept = ['AR','Finish','Surface'].reduce((top, k) => {
+    const d = deptMap[k];
+    if (!d) return top;
+    return (d.lensBrkPct || 0) > (deptMap[top]?.lensBrkPct || 0) ? k : top;
+  }, 'Surface');
+  fccSelectDept(topDept, summary);
+
+  // Apply current filter
+  fccFilter(_fccFilter, null);
+}
+
+function fccSelectDept(key, summaryOverride) {
+  // highlight card
+  document.querySelectorAll('.fcc-dept-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.key === key);
+  });
+
+  const title  = document.getElementById('fccDetailTitle');
+  const body   = document.getElementById('fccDetailBody');
+  if (!title || !body) return; // detail panel removed
+
+  const summary = summaryOverride || State.summary;
+  const deptMap = {};
+  (summary?.departments || []).forEach(d => { deptMap[d.department] = d; });
+  const lt = summary?.labTotal || {};
+
+  if (key === '_shipped') {
+    title.textContent = 'Mailroom Details';
+    body.innerHTML = `
+      <div class="fcc-detail-row">
+        <strong>Orders Shipped Today</strong>
+        <span style="font-size:22px;font-family:var(--font-display);color:#facc15">${U.fmt(lt.orderCount || 0)}</span>
+      </div>
+      <div class="fcc-detail-row">
+        <strong>Frames Broken</strong>
+        <span>${U.fmt(lt.framesBroken || 0)} of ${U.fmt(lt.orderCount || 0)} orders</span>
+      </div>
+      <div class="fcc-detail-row">
+        <strong>Frame Breakage %</strong>
+        <span>${((lt.labFramePct || 0) * 100).toFixed(2)}%</span>
+      </div>`;
+    return;
+  }
+
+  const dept  = deptMap[key];
+  const color = { AR:'#a78bfa', Finish:'#34d399', Surface:'#fb923c', LMS:'#60a5fa', Inventory:'#f472b6' }[key] || '#38bdf8';
+  const pct   = dept ? (dept.lensBrkPct * 100) : 0;
+  const goal  = { AR:0.50, Finish:1.70, Surface:2.80 }[key];
+  const isAlert = goal && pct > goal;
+
+  title.textContent = key + ' Details';
+  const rows = dept ? [
+    { label: 'Breakage %',      val: pct.toFixed(2) + '%', alert: isAlert },
+    { label: 'Lenses Broken',   val: U.fmt(dept.lensesBroken || 0) },
+    { label: 'Frames Broken',   val: U.fmt(dept.framesBroken || 0) },
+    { label: 'Top Reason',      val: dept.topReason || '—' },
+    ...(goal ? [{ label: 'Goal', val: goal.toFixed(2) + '%' }] : []),
+  ] : [{ label: 'Status', val: 'No data available' }];
+
+  body.innerHTML = rows.map(r => `
+    <div class="fcc-detail-row ${r.alert ? 'alert' : ''}">
+      <strong>${r.label}</strong>
+      <span style="color:${r.alert ? 'var(--red)' : (r.label === 'Breakage %' ? color : 'var(--text)')}">${r.val}</span>
+    </div>`).join('');
+}
+
+
+
 /* ── NO DATA STATE ──────────────────────────────────────── */
 function renderNoData(meta) {
   // Update header meta with dashes
@@ -1300,6 +1484,20 @@ function renderNoData(meta) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = id === 'labKpis' ? noDataHTML : '';
   });
+
+  // Clear flow command center
+  const fccCards = document.getElementById('fccCards');
+  if (fccCards) fccCards.innerHTML = '';
+  const fccDetail = document.getElementById('fccDetailBody');
+  if (fccDetail) fccDetail.innerHTML = '';
+  const fccStats = document.getElementById('fccRingStats');
+  if (fccStats) fccStats.innerHTML = '';
+  const fccRingEl = document.getElementById('fccRing');
+  if (fccRingEl) fccRingEl.style.background = 'conic-gradient(rgba(255,255,255,0.07) 0deg, rgba(255,255,255,0.07) 360deg)';
+
+  // Clear flow map
+  const fmcRow = document.getElementById('fmcRow');
+  if (fmcRow) fmcRow.innerHTML = '';
 
   // Hide goal bars section
   const goalWrap = document.querySelector('.goal-bar-wrap');
@@ -3055,8 +3253,9 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
         submenu?.classList.add('show');
       }
     } else if (id === 'summary') {
-      // Summary tab handled by its own onclick (toggleSummarySubmenu), skip here
+      // Summary tab handled entirely by its own onclick (toggleSummarySubmenu)
       submenu?.classList.remove('show');
+      return; // don't run collapse/switch logic below
     } else {
       // Other tab clicked - hide both submenus
       submenu?.classList.remove('show');

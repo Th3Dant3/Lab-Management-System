@@ -35,6 +35,11 @@
 </head>
 <body>
 
+  <!-- AMBIENT BACKGROUND ORBS -->
+  <div class="ambient-orb orb-blue"></div>
+  <div class="ambient-orb orb-purple"></div>
+  <div class="ambient-grid"></div>
+
   <!-- LOADING SCREEN -->
   <div class="loading-overlay" id="loadingOverlay">
     <div class="lo-inner">
@@ -223,6 +228,59 @@
           <button class="pill-btn" onclick="App.switchTab('summary')">DAILY OVERVIEW</button>
         </div>
         <div class="kpi-grid" id="labKpis"></div>
+      </div>
+
+      <!-- ── PRODUCTION FLOW COMMAND CENTER ── -->
+      <div class="fcc-wrap">
+
+        <!-- LEFT: hero text + dept filter buttons -->
+        <div class="fcc-hero glass-panel">
+          <div class="fcc-hero-inner">
+            <div class="fcc-hero-eyebrow">PRODUCTION FLOW COMMAND CENTER</div>
+            <div class="fcc-hero-sub">Track how jobs move through Surface, AR, and Finish. Click a department card to drill in.</div>
+            <div class="fcc-hero-actions">
+              <button class="fcc-btn active" onclick="App.switchTab('surface')">Surface</button>
+              <button class="fcc-btn" onclick="App.switchTab('ar')">AR</button>
+              <button class="fcc-btn" onclick="App.switchTab('finish')">Finish</button>
+              <button class="fcc-btn" onclick="App.switchTab('mailroom')">Mailroom</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: breakage rate ring -->
+        <div class="fcc-ring-panel glass-panel">
+          <div class="fcc-ring-wrap">
+            <div class="fcc-ring" id="fccRing">
+              <div class="fcc-ring-center">
+                <span class="fcc-ring-val" id="fccRingVal">0.00%</span>
+                <span class="fcc-ring-label">Lab Breakage</span>
+              </div>
+            </div>
+          </div>
+          <div class="fcc-ring-stats" id="fccRingStats"></div>
+        </div>
+
+      </div>
+
+      <!-- dept flow cards + connector lines -->
+      <div class="fcc-flow-wrap glass-panel">
+        <div class="fcc-flow-header">
+          <div class="fcc-flow-title">Animated Department Flow Map</div>
+          <div class="fcc-flow-route">Inventory → Surface → AR → Finish</div>
+        </div>
+
+        <div class="fcc-flow-body">
+          <!-- animated lines sit behind cards -->
+          <div class="fcc-connectors" id="fccConnectors">
+            <div class="fcc-conn fcc-conn-1"></div>
+            <div class="fcc-conn fcc-conn-2"></div>
+            <div class="fcc-conn fcc-conn-3"></div>
+          </div>
+
+          <!-- card grid populated by JS -->
+          <div class="fcc-cards" id="fccCards"></div>
+        </div>
+
       </div>
 
       <!-- Goal Bars -->
