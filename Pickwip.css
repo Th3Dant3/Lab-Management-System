@@ -347,3 +347,240 @@ body{min-height:100vh;background:radial-gradient(circle at 20% 0%,rgba(25,200,25
 }
 .back-btn svg{opacity:.8;transition:.2s}
 .back-btn:hover svg{opacity:1}
+
+/* ══════════════════════════════════════════════════
+   MOVEMENT CHECK PANEL — Picking WIP Validation
+   Add this block at the bottom of Pickwip.css
+   ══════════════════════════════════════════════════ */
+
+.movement-panel {
+  margin: 0 0 14px;
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(25, 200, 255, 0.26);
+}
+
+.movement-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(25, 200, 255, 0.10), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(33, 229, 124, 0.08), transparent 26%);
+  pointer-events: none;
+}
+
+.movement-banner {
+  margin: 14px 16px 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(25, 200, 255, 0.28);
+  background: linear-gradient(135deg, rgba(25, 200, 255, 0.08), rgba(8, 22, 36, 0.70));
+  border-radius: 10px;
+  color: #dcefff;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  position: relative;
+  z-index: 1;
+}
+
+.movement-banner.valid {
+  border-color: rgba(33, 229, 124, 0.45);
+  background: linear-gradient(135deg, rgba(33, 229, 124, 0.13), rgba(8, 22, 36, 0.72));
+  color: #d9ffe7;
+}
+
+.movement-banner.warning {
+  border-color: rgba(255, 159, 28, 0.50);
+  background: linear-gradient(135deg, rgba(255, 159, 28, 0.15), rgba(8, 22, 36, 0.72));
+  color: #fff1d6;
+}
+
+.movement-banner.error {
+  border-color: rgba(255, 85, 79, 0.55);
+  background: linear-gradient(135deg, rgba(255, 85, 79, 0.15), rgba(8, 22, 36, 0.72));
+  color: #ffd8d6;
+}
+
+.movement-table {
+  margin: 14px 16px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.movement-head {
+  display: grid;
+  grid-template-columns: 1.7fr 0.8fr 0.8fr 0.8fr 0.8fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid var(--line2);
+  color: #bbc6d4;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.movement-row {
+  display: grid;
+  grid-template-columns: 1.7fr 0.8fr 0.8fr 0.8fr 0.8fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.12);
+  color: #d9ecff;
+  font-size: 13px;
+  font-weight: 800;
+  animation: rowSlideR 0.38s cubic-bezier(.22,1,.36,1) both;
+}
+
+.movement-row:last-child {
+  border-bottom: none;
+}
+
+.movement-row:hover {
+  background: rgba(25, 200, 255, 0.055);
+  transform: translateX(3px);
+}
+
+.movement-station {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.movement-station-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gray);
+  box-shadow: 0 0 10px rgba(119, 136, 156, 0.5);
+  flex-shrink: 0;
+}
+
+.movement-row.gain .movement-station-dot {
+  background: var(--green);
+  box-shadow: 0 0 12px rgba(33, 229, 124, 0.65);
+}
+
+.movement-row.drop .movement-station-dot {
+  background: var(--orange);
+  box-shadow: 0 0 12px rgba(255, 159, 28, 0.65);
+}
+
+.movement-row.no-change .movement-station-dot {
+  background: var(--gray);
+}
+
+.movement-prev,
+.movement-current {
+  font-family: "JetBrains Mono", monospace;
+  color: #d5e8ff;
+}
+
+.movement-diff {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 900;
+}
+
+.movement-diff.gain {
+  color: var(--green);
+}
+
+.movement-diff.drop {
+  color: var(--orange);
+}
+
+.movement-diff.flat {
+  color: var(--muted);
+}
+
+.movement-type {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-width: 68px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(25, 200, 255, 0.28);
+  background: rgba(25, 200, 255, 0.09);
+  color: #bcecff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.movement-row.gain .movement-type {
+  border-color: rgba(33, 229, 124, 0.35);
+  background: rgba(33, 229, 124, 0.10);
+  color: #bdfed3;
+}
+
+.movement-row.drop .movement-type {
+  border-color: rgba(255, 159, 28, 0.40);
+  background: rgba(255, 159, 28, 0.12);
+  color: #ffdba4;
+}
+
+#movementStatus {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 900;
+  color: var(--cyan);
+}
+
+#movementStatus.valid {
+  color: var(--green);
+}
+
+#movementStatus.warning {
+  color: var(--orange);
+}
+
+#movementStatus.error {
+  color: var(--red);
+}
+
+@media(max-width:760px) {
+  .movement-head {
+    display: none;
+  }
+
+  .movement-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .movement-row span {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .movement-row span::before {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .movement-prev::before {
+    content: "Previous";
+  }
+
+  .movement-current::before {
+    content: "Current";
+  }
+
+  .movement-diff::before {
+    content: "Difference";
+  }
+}
