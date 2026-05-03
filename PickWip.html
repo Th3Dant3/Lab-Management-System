@@ -15,19 +15,19 @@
   <div class="data-ticker">
     <div class="ticker-inner" id="tickerInner">
       <span>2b21 PICKING WIP COMMAND CENTER &nbsp;&middot;&nbsp; <em>LIVE</em></span>
-      <span>SF Scan &amp; Verify: <b id="tk-sf">--</b></span>
-      <span>FSV Scan &amp; Verify: <b id="tk-fsv">--</b></span>
-      <span>Breakage to Picking: <b id="tk-brk">--</b></span>
+      <span>SF Productive: <b id="tk-sf">--</b></span>
+      <span>FSV Productive: <b id="tk-fsv">--</b></span>
+      <span>Breakage Count: <b id="tk-brk">--</b></span>
+      <span>Replenishment Count: <b id="tk-rep">--</b></span>
       <span>Total WIP: <em id="tk-total">--</em></span>
-      <span>Completed Today: <em id="tk-done">--</em></span>
       <span>Active Lines: <b id="tk-lines">--</b></span>
 
       <span>2b21 PICKING WIP COMMAND CENTER &nbsp;&middot;&nbsp; <em>LIVE</em></span>
-      <span>SF Scan &amp; Verify: <b id="tk-sf2">--</b></span>
-      <span>FSV Scan &amp; Verify: <b id="tk-fsv2">--</b></span>
-      <span>Breakage to Picking: <b id="tk-brk2">--</b></span>
+      <span>SF Productive: <b id="tk-sf2">--</b></span>
+      <span>FSV Productive: <b id="tk-fsv2">--</b></span>
+      <span>Breakage Count: <b id="tk-brk2">--</b></span>
+      <span>Replenishment Count: <b id="tk-rep2">--</b></span>
       <span>Total WIP: <em id="tk-total2">--</em></span>
-      <span>Completed Today: <em id="tk-done2">--</em></span>
       <span>Active Lines: <b id="tk-lines2">--</b></span>
     </div>
   </div>
@@ -112,7 +112,7 @@
             <div>
               <span>Total Picking WIP</span>
               <strong id="kpiTotalWip">0</strong>
-              <small>Items in process</small>
+              <small>Items currently in process</small>
             </div>
             <svg class="spark" viewBox="0 0 100 36">
               <polyline points="0,28 12,27 20,30 31,20 43,26 55,13 68,21 82,4 100,14"/>
@@ -120,21 +120,21 @@
           </article>
 
           <article class="kpi-card green">
-            <div class="kpi-icon">✓</div>
+            <div class="kpi-icon">SF</div>
             <div>
-              <span>Completed Today</span>
-              <strong id="kpiCompleted">0</strong>
-              <small>Items completed</small>
+              <span>SF Productive Today</span>
+              <strong id="kpiSFProductive">0</strong>
+              <small>Moved into SF Scan Verify</small>
             </div>
             <div class="mini-bars"><i></i><i></i><i></i><i></i></div>
           </article>
 
           <article class="kpi-card orange">
-            <div class="kpi-icon">◷</div>
+            <div class="kpi-icon">FSV</div>
             <div>
-              <span>Highest Queue</span>
-              <strong id="kpiHighestQueue">0</strong>
-              <small id="kpiHighestName">--</small>
+              <span>FSV Productive Today</span>
+              <strong id="kpiFSVProductive">0</strong>
+              <small>Moved into FSV Scan Verify</small>
             </div>
             <svg class="spark orange-spark" viewBox="0 0 100 36">
               <polyline points="0,29 12,30 20,24 31,27 43,18 55,24 68,9 82,20 100,15"/>
@@ -142,21 +142,21 @@
           </article>
 
           <article class="kpi-card purple">
-            <div class="kpi-icon">▥</div>
+            <div class="kpi-icon">BR</div>
             <div>
-              <span>Active Lines</span>
-              <strong id="kpiActiveLines">0</strong>
-              <small>Processing lines</small>
+              <span>Breakage Count Today</span>
+              <strong id="kpiBreakageCount">0</strong>
+              <small>Drops from Breakage to Picking</small>
             </div>
             <div class="mini-bars purple-bars"><i></i><i></i><i></i><i></i></div>
           </article>
 
           <article class="kpi-card teal">
-            <div class="kpi-icon">↗</div>
+            <div class="kpi-icon">RP</div>
             <div>
-              <span>Trend Status</span>
-              <strong id="kpiTrend">● 0</strong>
-              <small id="kpiTrendText">Live WIP snapshot</small>
+              <span>Replenishment Count</span>
+              <strong id="kpiReplenishmentCount">0</strong>
+              <small>Drops from Replenishment</small>
             </div>
           </article>
         </section>
@@ -188,17 +188,17 @@
           <div class="left-stack">
             <section class="panel completion-panel">
               <div class="panel-head">
-                <h2><span>◎</span> Completion Tracking <em>(SF · FSV · Breakage)</em></h2>
+                <h2><span>◎</span> Daily Picking Metrics <em>(Productivity + Record Counts)</em></h2>
                 <button class="view-btn" type="button" onclick="fetchAll(true)">Refresh ›</button>
               </div>
 
               <div class="tracking-table">
                 <div class="tracking-head">
-                  <span>Picking Type</span>
-                  <span>Completed Today</span>
+                  <span>Metric</span>
+                  <span>Count Today</span>
                   <span>Current WIP</span>
-                  <span>Last Change</span>
-                  <span>Trend</span>
+                  <span>Metric Type</span>
+                  <span>Status</span>
                 </div>
                 <div id="trackingRows" class="tracking-rows"></div>
               </div>
@@ -336,64 +336,56 @@
       <div class="tab-content tab-hidden" id="tab-activity">
         <section class="kpi-strip">
           <article class="kpi-card blue">
-            <div class="kpi-icon">◌</div>
+            <div class="kpi-icon">SF</div>
             <div>
-              <span>Log Entries Today</span>
-              <strong id="actTabEntries">0</strong>
-              <small>Completion events</small>
+              <span>SF Productive</span>
+              <strong id="actSFProductive">0</strong>
+              <small>Moved into SF Scan Verify</small>
             </div>
           </article>
 
           <article class="kpi-card green">
-            <div class="kpi-icon">✓</div>
+            <div class="kpi-icon">FSV</div>
             <div>
-              <span>Total Completed</span>
-              <strong id="actTabCompleted">0</strong>
-              <small>Jobs done today</small>
+              <span>FSV Productive</span>
+              <strong id="actFSVProductive">0</strong>
+              <small>Moved into FSV Scan Verify</small>
             </div>
           </article>
 
           <article class="kpi-card orange">
-            <div class="kpi-icon">▲</div>
+            <div class="kpi-icon">BR</div>
             <div>
-              <span>Total Added</span>
-              <strong id="actTabAdded">0</strong>
-              <small>Jobs added today</small>
+              <span>Breakage Count</span>
+              <strong id="actBreakageCount">0</strong>
+              <small>Daily record count</small>
             </div>
           </article>
 
           <article class="kpi-card purple">
-            <div class="kpi-icon">▥</div>
+            <div class="kpi-icon">RP</div>
             <div>
-              <span>Net Change</span>
-              <strong id="actTabNet">0</strong>
-              <small id="actTabNetText">vs start of day</small>
+              <span>Replenishment Count</span>
+              <strong id="actReplenishmentCount">0</strong>
+              <small>Daily record count</small>
             </div>
           </article>
         </section>
 
         <section class="panel act-log-panel">
           <div class="panel-head">
-            <h2><span>◌</span> Completion Log — All Events</h2>
-            <div style="display:flex;gap:10px;align-items:center">
-              <select id="actFilter" class="act-filter-select" onchange="renderActivityTab()">
-                <option value="">All Types</option>
-                <option value="SF Scan & Verify">SF Scan &amp; Verify</option>
-                <option value="FSV Scan & Verify">FSV Scan &amp; Verify</option>
-                <option value="Breakage to Picking">Breakage to Picking</option>
-              </select>
-              <small id="actLogMeta">-- events</small>
-            </div>
+            <h2><span>◌</span> Daily Metric Log</h2>
+            <small id="actLogMeta">Backend daily activity summary</small>
           </div>
 
           <div class="act-log-head">
-            <span>Timestamp</span>
-            <span>Picking Type</span>
-            <span>WIP Before</span>
-            <span>WIP After</span>
-            <span>Jobs</span>
-            <span>Direction</span>
-            <span>Delta</span>
+            <span>Metric</span>
+            <span>Type</span>
+            <span>Current Count</span>
+            <span>Source</span>
+            <span>Status</span>
+            <span>Updated</span>
+            <span>Value</span>
           </div>
 
           <div id="actLogRows" class="act-log-body"></div>
@@ -423,7 +415,7 @@
 
         <section class="panel rpt-section">
           <div class="panel-head">
-            <h2><span>◌</span> Tracked Picking Types — SF · FSV · Breakage</h2>
+            <h2><span>◌</span> Daily Picking Metrics</h2>
           </div>
           <div id="rptTrackedDetail"></div>
         </section>
@@ -448,7 +440,7 @@
 
         <section class="panel rpt-section">
           <div class="panel-head">
-            <h2><span>◷</span> Today's Activity Summary</h2>
+            <h2><span>◷</span> Movement Summary</h2>
           </div>
           <div id="rptActivitySummary"></div>
         </section>
