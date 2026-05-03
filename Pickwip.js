@@ -1,11 +1,14 @@
 /* Picking WIP — Command Center Logic
-   Updated for new backend:
-   payload.data
-   payload.movement
-   payload.totalWip
-   payload.movementStatus
-   payload.movementMessage
-   payload.health
+   Updated for bulletproof backend:
+   - Live WIP from payload.data
+   - Movement check from payload.movement
+   - Daily metrics from payload.dailyStats
+
+   Correct metric definitions:
+   - SF Productive Today = gain into SF Scan & Verify
+   - FSV Productive Today = gain into FSV Scan & Verify
+   - Breakage Count Today = drop from Breakage to Picking
+   - Replenishment Count Today = drop from Replenishment
 */
 
 const API = 'https://script.google.com/macros/s/AKfycbzaEX7HJODh0PhUm7GwDi4Htx9UYoUfVbIV9i20EM-Uef7JjfCBlGNVRK5enOhKYQpPCQ/exec';
@@ -13,7 +16,12 @@ const API = 'https://script.google.com/macros/s/AKfycbzaEX7HJODh0PhUm7GwDi4Htx9U
 const AUTO_REFRESH_MS = 60000;
 const USE_DEMO_ON_ERROR = true;
 
-const TRACKED = ['SF Scan & Verify', 'FSV Scan & Verify', 'Breakage to Picking'];
+const TRACKED = [
+  'SF Scan & Verify',
+  'FSV Scan & Verify',
+  'Breakage to Picking',
+  'Replenishment'
+];
 
 const COLORS = [
   '#19c8ff',
@@ -28,7 +36,8 @@ const COLORS = [
 const CLASS_MAP = {
   'SF Scan & Verify': 'sf',
   'FSV Scan & Verify': 'fsv',
-  'Breakage to Picking': 'brk'
+  'Breakage to Picking': 'brk',
+  'Replenishment': 'brk'
 };
 
 let STATE = {
@@ -39,40 +48,56 @@ let STATE = {
   movementStatus: 'LOADING',
   movementMessage: 'Waiting for movement comparison...',
   health: {},
+  dailyStats: {},
   totalWip: 0,
   demo: false
 };
 
 const DEMO = {
   wip: [
-    { picking: 'SF Scan & Verify', department: 'Inventory', total: 182, lastUpdated: '2026-04-30 13:31:39' },
-    { picking: 'FSV Scan & Verify', department: 'Inventory', total: 42, lastUpdated: '2026-04-30 13:31:39' },
     { picking: 'Breakage to Picking', department: 'Inventory', total: 1, lastUpdated: '2026-04-30 13:31:39' },
-    { picking: 'Out Queue', department: 'Inventory', total: 61, lastUpdated: '2026-04-30 13:31:39' },
-    { picking: 'Scan Verify', department: 'Inventory', total: 40, lastUpdated: '2026-04-30 13:31:39' },
+    { picking: 'FSV Scan & Verify', department: 'Inventory', total: 44, lastUpdated: '2026-04-30 13:31:39' },
+    { picking: 'Out of Finish Queue', department: 'Inventory', total: 44, lastUpdated: '2026-04-30 13:31:39' },
+    { picking: 'Out of Surface Queue', department: 'Inventory', total: 47, lastUpdated: '2026-04-30 13:31:39' },
     { picking: 'Re-Cal', department: 'Inventory', total: 17, lastUpdated: '2026-04-30 13:31:39' },
-    { picking: 'Frame Only Scan & Verify', department: 'Inventory', total: 2, lastUpdated: '2026-04-30 13:31:39' },
+    { picking: 'Release from Hold', department: 'Inventory', total: 1, lastUpdated: '2026-04-30 13:31:39' },
     { picking: 'Replenishment', department: 'Inventory', total: 2, lastUpdated: '2026-04-30 13:31:39' },
-    { picking: 'Release from Hold', department: 'Inventory', total: 1, lastUpdated: '2026-04-30 13:31:39' }
+    { picking: 'SF Scan & Verify', department: 'Inventory', total: 193, lastUpdated: '2026-04-30 13:31:39' }
   ],
-  completion: [
-    { picking: 'SF Scan & Verify', completed: 98, direction: 'completed', wip_before: 181, wip_after: 182, timestamp: '2026-04-30 13:31:39' },
-    { picking: 'FSV Scan & Verify', completed: 189, direction: 'completed', wip_before: 45, wip_after: 42, timestamp: '2026-04-30 13:31:39' },
-    { picking: 'Breakage to Picking', completed: 73, direction: 'completed', wip_before: 8, wip_after: 1, timestamp: '2026-04-30 13:31:39' }
-  ],
+  dailyStats: {
+    sfProductivityToday: 33,
+    fsvProductivityToday: 26,
+    breakageCountToday: 6,
+    replenishmentCountToday: 4,
+    totalProductivityToday: 59
+  },
   movement: [
     {
-      subDepartment: 'Out Queue',
-      previousTotal: 800,
-      currentTotal: 300,
-      difference: -500,
+      subDepartment: 'Out of Surface Queue',
+      previousTotal: 80,
+      currentTotal: 47,
+      difference: -33,
       movementType: 'DROP'
     },
     {
-      subDepartment: 'Scan Verify',
-      previousTotal: 200,
-      currentTotal: 698,
-      difference: 498,
+      subDepartment: 'SF Scan & Verify',
+      previousTotal: 160,
+      currentTotal: 193,
+      difference: 33,
+      movementType: 'GAIN'
+    },
+    {
+      subDepartment: 'Out of Finish Queue',
+      previousTotal: 70,
+      currentTotal: 44,
+      difference: -26,
+      movementType: 'DROP'
+    },
+    {
+      subDepartment: 'FSV Scan & Verify',
+      previousTotal: 18,
+      currentTotal: 44,
+      difference: 26,
       movementType: 'GAIN'
     }
   ]
@@ -94,16 +119,14 @@ function logError(level = 'error', title, detail = '', source = '') {
     second: '2-digit'
   });
 
-  const entry = {
+  ERROR_LOG.unshift({
     id,
     level,
     title,
     detail,
     source,
     ts
-  };
-
-  ERROR_LOG.unshift(entry);
+  });
 
   if (ERROR_LOG.length > 100) {
     ERROR_LOG.pop();
@@ -171,7 +194,7 @@ function clearErrorLog() {
 }
 
 function escHtml(str) {
-  return String(str)
+  return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -290,6 +313,7 @@ async function fetchAll(showToast = false) {
       movementStatus: payload.movementStatus || 'NORMAL',
       movementMessage: payload.movementMessage || 'Normal WIP movement.',
       health: payload.health || {},
+      dailyStats: normalizeDailyStats(payload.dailyStats || {}),
       totalWip: Number(payload.totalWip || 0),
       demo: false
     };
@@ -309,12 +333,13 @@ async function fetchAll(showToast = false) {
 
       STATE = {
         wip: demoWip,
-        completion: normalizeCompletion(DEMO.completion),
+        completion: buildCompletionFromDailyStats(DEMO.dailyStats),
         history: [],
         movement: normalizeMovement(DEMO.movement),
         movementStatus: 'DEMO',
         movementMessage: 'API unreachable — displaying demo data.',
         health: {},
+        dailyStats: normalizeDailyStats(DEMO.dailyStats),
         totalWip: sum(demoWip, 'total'),
         demo: true
       };
@@ -450,6 +475,55 @@ function normalizeMovement(rows) {
   }).filter(r => r.subDepartment !== 'Unknown');
 }
 
+function normalizeDailyStats(stats) {
+  return {
+    sfProductivityToday: num(stats.sfProductivityToday),
+    fsvProductivityToday: num(stats.fsvProductivityToday),
+    breakageCountToday: num(stats.breakageCountToday),
+    replenishmentCountToday: num(stats.replenishmentCountToday),
+    totalProductivityToday: num(stats.totalProductivityToday)
+  };
+}
+
+function buildCompletionFromDailyStats(stats) {
+  const d = normalizeDailyStats(stats);
+
+  return [
+    {
+      picking: 'SF Scan & Verify',
+      completed: d.sfProductivityToday,
+      direction: 'completed',
+      before: 0,
+      after: 0,
+      timestamp: new Date().toISOString()
+    },
+    {
+      picking: 'FSV Scan & Verify',
+      completed: d.fsvProductivityToday,
+      direction: 'completed',
+      before: 0,
+      after: 0,
+      timestamp: new Date().toISOString()
+    },
+    {
+      picking: 'Breakage to Picking',
+      completed: d.breakageCountToday,
+      direction: 'record',
+      before: 0,
+      after: 0,
+      timestamp: new Date().toISOString()
+    },
+    {
+      picking: 'Replenishment',
+      completed: d.replenishmentCountToday,
+      direction: 'record',
+      before: 0,
+      after: 0,
+      timestamp: new Date().toISOString()
+    }
+  ];
+}
+
 /* ──────────────────────────────────────────────────
    Main Render
 ────────────────────────────────────────────────── */
@@ -457,12 +531,15 @@ function normalizeMovement(rows) {
 function renderAll() {
   const wip = STATE.wip;
   const completion = STATE.completion;
+  const daily = STATE.dailyStats || {};
 
   const totalWip = STATE.totalWip || sum(wip, 'total');
 
-  const completedTotal = completion
-    .filter(e => e.direction === 'completed')
-    .reduce((s, e) => s + e.completed, 0);
+  const sfProductive = num(daily.sfProductivityToday);
+  const fsvProductive = num(daily.fsvProductivityToday);
+  const breakageCount = num(daily.breakageCountToday);
+  const replenishmentCount = num(daily.replenishmentCountToday);
+  const totalProductive = num(daily.totalProductivityToday);
 
   const latest =
     STATE.health?.lastImportTimestamp ||
@@ -470,32 +547,28 @@ function renderAll() {
 
   const sorted = [...wip].sort((a, b) => b.total - a.total);
   const highest = sorted[0] || { picking: '--', total: 0 };
-  const activeLines = wip.filter(r => r.total > 0).length;
 
   setText('lastUpdated', latest ? toEastern(latest) : '--');
   setText('sideSystemText', STATE.demo ? 'Demo Mode Active' : 'All Systems Operational');
 
   animateNumber('kpiTotalWip', totalWip);
-  animateNumber('kpiCompleted', completedTotal);
-  animateNumber('kpiHighestQueue', highest.total);
-  setText('kpiHighestName', highest.picking);
-  animateNumber('kpiActiveLines', activeLines);
+  animateNumber('kpiSFProductive', sfProductive);
+  animateNumber('kpiFSVProductive', fsvProductive);
+  animateNumber('kpiBreakageCount', breakageCount);
+  animateNumber('kpiReplenishmentCount', replenishmentCount);
 
-  const trendInfo = getOverallTrend(completion);
-
-  setText('kpiTrend', `${trendInfo.arrow} ${trendInfo.value}`);
-  setText('kpiTrendText', STATE.movementStatus || trendInfo.text);
+  const trendInfo = getOverallTrend();
 
   renderMovementCheck();
-  renderTrackingRows(wip, completion);
+  renderTrackingRows(wip, daily);
   renderWipRows(wip);
   renderDistribution(wip, totalWip);
   renderQueueBars(wip);
-  renderFocus(wip, totalWip);
+  renderFocus(wip, totalWip, highest, totalProductive);
   renderQueuesTab(wip, totalWip);
   renderActivityTab();
   renderReportsTab();
-  updateTicker(wip, completion);
+  updateTicker(wip);
 }
 
 function renderMovementCheck() {
@@ -567,42 +640,74 @@ function renderMovementCheck() {
    Command Center Renderers
 ────────────────────────────────────────────────── */
 
-function renderTrackingRows(wip, completion) {
-  const maxDone = Math.max(...TRACKED.map(t => getCompletedFor(t, completion)), 1);
+function renderTrackingRows(wip, daily) {
+  const metrics = [
+    {
+      name: 'SF Scan & Verify',
+      label: 'SF Productive Today',
+      count: num(daily.sfProductivityToday),
+      current: getWipFor('SF Scan & Verify', wip),
+      type: 'PRODUCTIVITY',
+      status: 'Moved to SF Scan Verify',
+      cls: 'sf',
+      short: 'SF'
+    },
+    {
+      name: 'FSV Scan & Verify',
+      label: 'FSV Productive Today',
+      count: num(daily.fsvProductivityToday),
+      current: getWipFor('FSV Scan & Verify', wip),
+      type: 'PRODUCTIVITY',
+      status: 'Moved to FSV Scan Verify',
+      cls: 'fsv',
+      short: 'FSV'
+    },
+    {
+      name: 'Breakage to Picking',
+      label: 'Breakage Count Today',
+      count: num(daily.breakageCountToday),
+      current: getWipFor('Breakage to Picking', wip),
+      type: 'RECORD',
+      status: 'Drop count from Breakage',
+      cls: 'brk',
+      short: 'BR'
+    },
+    {
+      name: 'Replenishment',
+      label: 'Replenishment Count',
+      count: num(daily.replenishmentCountToday),
+      current: getWipFor('Replenishment', wip),
+      type: 'RECORD',
+      status: 'Drop count from Replenishment',
+      cls: 'brk',
+      short: 'RP'
+    }
+  ];
 
-  const html = TRACKED.map((name, i) => {
-    const cls = CLASS_MAP[name] || '';
-    const short = name === 'SF Scan & Verify'
-      ? 'SF'
-      : name === 'FSV Scan & Verify'
-        ? 'FSV'
-        : 'BR';
+  const maxCount = Math.max(...metrics.map(m => m.count), 1);
 
-    const done = getCompletedFor(name, completion);
-    const current = getWipFor(name, wip);
-    const evt = getLatestEventFor(name, completion);
-    const change = getChange(evt, name);
-    const bar = Math.min((done / maxDone) * 100, 100);
+  const html = metrics.map((m, i) => {
+    const bar = Math.min((m.count / maxCount) * 100, 100);
 
     return `
       <div class="tracking-row" style="animation-delay:${i * .05}s">
-        <div class="type-cell ${cls}">
-          <span class="type-badge">${short}</span>
-          ${name}
+        <div class="type-cell ${m.cls}">
+          <span class="type-badge">${m.short}</span>
+          ${escHtml(m.label)}
         </div>
 
         <div>
-          <span class="count ${cls}">${done.toLocaleString()}</span>
+          <span class="count ${m.cls}">${m.count.toLocaleString()}</span>
           <span class="progress-mini">
             <i style="width:${bar}%"></i>
           </span>
         </div>
 
-        <div class="count ${cls}">${current.toLocaleString()}</div>
-        <div class="last-change">${change.text}</div>
+        <div class="count ${m.cls}">${m.current.toLocaleString()}</div>
+        <div class="last-change">${escHtml(m.type)}</div>
 
-        <div class="${change.up ? 'trend-up' : 'trend-down'}">
-          ${change.icon} ${change.value.toLocaleString()}
+        <div class="trend-down">
+          ● ${escHtml(m.status)}
           <span class="trend-pulse"></span>
         </div>
       </div>
@@ -655,7 +760,9 @@ function renderWipRows(wip) {
           ? 'FSV'
           : r.picking === 'Breakage to Picking'
             ? 'BR'
-            : getQueueIcon(r.picking);
+            : r.picking === 'Replenishment'
+              ? 'RP'
+              : getQueueIcon(r.picking);
 
     const pct = Math.max(2, Math.round(r.total / max * 100));
 
@@ -750,8 +857,8 @@ function renderQueueBars(wip) {
   }).join('');
 }
 
-function renderFocus(wip, total) {
-  const focus = [...wip].sort((a, b) => b.total - a.total)[0];
+function renderFocus(wip, total, highest, totalProductive) {
+  const focus = highest || [...wip].sort((a, b) => b.total - a.total)[0];
 
   if (!focus) {
     setText('focusTitle', '--');
@@ -764,7 +871,7 @@ function renderFocus(wip, total) {
   setText('focusTitle', focus.picking);
   setText(
     'focusText',
-    `Highest WIP at ${focus.total.toLocaleString()} items (${pct}% of total). Monitor throughput and capacity to reduce backlog.`
+    `Highest WIP at ${focus.total.toLocaleString()} items (${pct}% of total). SF + FSV productivity today: ${Number(totalProductive || 0).toLocaleString()}.`
   );
 }
 
@@ -846,7 +953,7 @@ function renderQueuesTab(wip, total) {
               : '<span class="priority-low">○ LOW</span>';
 
           const icon = tracked
-            ? (r.picking === 'SF Scan & Verify' ? 'SF' : r.picking === 'FSV Scan & Verify' ? 'FSV' : 'BR')
+            ? (r.picking === 'SF Scan & Verify' ? 'SF' : r.picking === 'FSV Scan & Verify' ? 'FSV' : r.picking === 'Breakage to Picking' ? 'BR' : 'RP')
             : getQueueIcon(r.picking);
 
           return `
@@ -871,98 +978,73 @@ function renderQueuesTab(wip, total) {
 ────────────────────────────────────────────────── */
 
 function renderActivityTab() {
-  const completion = STATE.completion || [];
-  const history = STATE.history || [];
+  const daily = STATE.dailyStats || {};
+  const latest =
+    STATE.health?.lastImportTimestamp ||
+    new Date().toLocaleString();
 
-  const filter = (document.getElementById('actFilter') || {}).value || '';
+  const sf = num(daily.sfProductivityToday);
+  const fsv = num(daily.fsvProductivityToday);
+  const brk = num(daily.breakageCountToday);
+  const rep = num(daily.replenishmentCountToday);
 
-  let events = [...completion];
+  animateNumber('actSFProductive', sf);
+  animateNumber('actFSVProductive', fsv);
+  animateNumber('actBreakageCount', brk);
+  animateNumber('actReplenishmentCount', rep);
 
-  if (history.length) {
-    events = [...events, ...history];
-  }
-
-  events = events.filter(e => {
-    const p = e.picking || '';
-    if (!p || p === '--' || p === 'Unknown') return false;
-
-    const hasBefore = (e.before ?? e.wip_before) != null && (e.before ?? e.wip_before) !== '';
-    const hasAfter = (e.after ?? e.wip_after) != null && (e.after ?? e.wip_after) !== '';
-    const hasJobs = e.completed != null && e.completed !== '' && e.completed !== 0;
-
-    return hasBefore || hasAfter || hasJobs;
-  });
-
-  events = events.sort((a, b) => String(b.timestamp || b.ts || '').localeCompare(String(a.timestamp || a.ts || '')));
-
-  if (filter) {
-    events = events.filter(e => e.picking === filter);
-  }
-
-  const completed = completion
-    .filter(e => e.direction === 'completed')
-    .reduce((s, e) => s + e.completed, 0);
-
-  const added = completion
-    .filter(e => e.direction !== 'completed')
-    .reduce((s, e) => s + e.completed, 0);
-
-  const net = added - completed;
-
-  animateNumber('actTabEntries', completion.length);
-  animateNumber('actTabCompleted', completed);
-  animateNumber('actTabAdded', added);
-  animateNumber('actTabNet', Math.abs(net));
-  setText('actTabNetText', net > 0 ? '▲ WIP increasing' : net < 0 ? '▼ WIP decreasing' : 'No net change');
+  const rows = [
+    {
+      metric: 'SF Productive Today',
+      type: 'PRODUCTIVITY',
+      count: sf,
+      source: 'Gain into SF Scan & Verify',
+      status: 'Active',
+      value: sf
+    },
+    {
+      metric: 'FSV Productive Today',
+      type: 'PRODUCTIVITY',
+      count: fsv,
+      source: 'Gain into FSV Scan & Verify',
+      status: 'Active',
+      value: fsv
+    },
+    {
+      metric: 'Breakage Count Today',
+      type: 'RECORD',
+      count: brk,
+      source: 'Drop from Breakage to Picking',
+      status: 'Tracked',
+      value: brk
+    },
+    {
+      metric: 'Replenishment Count Today',
+      type: 'RECORD',
+      count: rep,
+      source: 'Drop from Replenishment',
+      status: 'Tracked',
+      value: rep
+    }
+  ];
 
   const logEl = document.getElementById('actLogRows');
   if (!logEl) return;
 
-  setText('actLogMeta', `${events.length} events`);
+  setText('actLogMeta', `${rows.length} metrics`);
 
-  if (!events.length) {
-    logEl.innerHTML = '<div class="error-log-empty"><span>◌</span>No activity recorded yet</div>';
-    return;
-  }
-
-  logEl.innerHTML = events.map((e, i) => {
-    const picking = e.picking || '--';
-
-    const typeCls =
-      picking === 'SF Scan & Verify'
-        ? 'sf'
-        : picking === 'FSV Scan & Verify'
-          ? 'fsv'
-          : picking === 'Breakage to Picking'
-            ? 'brk'
-            : 'other';
-
-    const dir = (e.direction || 'completed').toLowerCase();
-    const dirCls = dir === 'completed' ? 'act-dir-completed' : 'act-dir-added';
-    const dirLabel = dir === 'completed' ? '▼ Completed' : '▲ Added';
-
-    const beforeVal = e.before ?? e.wip_before;
-    const afterVal = e.after ?? e.wip_after;
-
-    const delta = afterVal != null && beforeVal != null
-      ? afterVal - beforeVal
-      : dir === 'completed'
-        ? -Math.abs(e.completed || 0)
-        : Math.abs(e.completed || 0);
-
-    const deltaCls = delta < 0 ? 'act-delta-down' : delta > 0 ? 'act-delta-up' : 'act-delta-zero';
-    const deltaStr = delta > 0 ? `+${delta}` : String(delta);
-    const ts = e.timestamp || e.ts || '--';
+  logEl.innerHTML = rows.map((r, i) => {
+    const typeCls = r.type === 'PRODUCTIVITY' ? 'act-dir-completed' : 'act-dir-added';
 
     return `
       <div class="act-row" style="animation-delay:${Math.min(i, 25) * 0.04}s">
-        <div class="act-ts">${escHtml(ts)}</div>
-        <div class="act-type ${typeCls}">${escHtml(picking)}</div>
-        <div class="act-num">${beforeVal ?? '--'}</div>
-        <div class="act-num">${afterVal ?? '--'}</div>
-        <div class="act-num">${e.completed ?? '--'}</div>
-        <div class="${dirCls}">${dirLabel}</div>
-        <div class="${deltaCls}">${deltaStr}</div>
+        <div class="act-type other">${escHtml(r.metric)}</div>
+        <div class="${typeCls}">${escHtml(r.type)}</div>
+        <div class="act-num">${r.count.toLocaleString()}</div>
+        <div class="act-num">${escHtml(r.source)}</div>
+        <div class="${typeCls}">${escHtml(r.status)}</div>
+        <div class="act-ts">${toEastern(latest)}</div>
+        <div class="act-num">${r.value.toLocaleString()}</div>
       </div>
     `;
   }).join('');
@@ -974,26 +1056,15 @@ function renderActivityTab() {
 
 function renderReportsTab() {
   const wip = STATE.wip || [];
-  const completion = STATE.completion || [];
+  const daily = STATE.dailyStats || {};
   const totalWip = STATE.totalWip || sum(wip, 'total');
   const sorted = [...wip].sort((a, b) => b.total - a.total);
 
-  const validEvents = completion.filter(e => {
-    const p = e.picking || '';
-    if (!p || p === '--') return false;
-
-    const hasBefore = (e.before ?? e.wip_before) != null;
-    const hasAfter = (e.after ?? e.wip_after) != null;
-    const hasJobs = e.completed != null && e.completed !== 0;
-
-    return hasBefore || hasAfter || hasJobs;
-  }).sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
-
-  const completedEvents = validEvents.filter(e => e.direction === 'completed');
-  const addedEvents = validEvents.filter(e => e.direction !== 'completed');
-  const totalCompleted = completedEvents.reduce((s, e) => s + (e.completed || 0), 0);
-  const totalAdded = addedEvents.reduce((s, e) => s + (e.completed || 0), 0);
-  const netChange = totalAdded - totalCompleted;
+  const sf = num(daily.sfProductivityToday);
+  const fsv = num(daily.fsvProductivityToday);
+  const brk = num(daily.breakageCountToday);
+  const rep = num(daily.replenishmentCountToday);
+  const totalProductivity = num(daily.totalProductivityToday);
 
   const now = new Date().toLocaleString('en-US', {
     weekday: 'long',
@@ -1011,17 +1082,12 @@ function renderReportsTab() {
 
   if (kpiGrid) {
     const kpiData = [
-      { label: 'Total WIP', val: totalWip, sub: 'Across all queues', cls: 'blue' },
-      { label: 'Completed Today', val: totalCompleted, sub: 'Jobs finished', cls: 'green' },
-      { label: 'Added Today', val: totalAdded, sub: 'Jobs entered queue', cls: 'orange' },
-      {
-        label: 'Net Change',
-        val: Math.abs(netChange),
-        sub: netChange <= 0 ? '▼ WIP decreasing' : '▲ WIP increasing',
-        cls: netChange <= 0 ? 'green' : 'orange'
-      },
-      { label: 'Active Lines', val: wip.filter(r => r.total > 0).length, sub: 'Non-zero queues', cls: 'purple' },
-      { label: 'Movement', val: STATE.movementStatus === 'VALID_MOVEMENT' ? 1 : 0, sub: STATE.movementStatus || 'Snapshot status', cls: 'blue' }
+      { label: 'Total WIP', val: totalWip, sub: 'Current live snapshot', cls: 'blue' },
+      { label: 'SF Productive', val: sf, sub: 'Moved into SF Scan Verify', cls: 'green' },
+      { label: 'FSV Productive', val: fsv, sub: 'Moved into FSV Scan Verify', cls: 'orange' },
+      { label: 'Total Productivity', val: totalProductivity, sub: 'SF + FSV productive count', cls: 'purple' },
+      { label: 'Breakage Count', val: brk, sub: 'Record count from Breakage', cls: 'orange' },
+      { label: 'Replenishment', val: rep, sub: 'Record count from Replenishment', cls: 'blue' }
     ];
 
     kpiGrid.innerHTML = kpiData.map(k => `
@@ -1036,38 +1102,56 @@ function renderReportsTab() {
   const trackedEl = document.getElementById('rptTrackedDetail');
 
   if (trackedEl) {
-    trackedEl.innerHTML = TRACKED.map(name => {
-      const wipRow = wip.find(r => r.picking === name) || { total: 0 };
-      const done = completedEvents.filter(e => e.picking === name).reduce((s, e) => s + (e.completed || 0), 0);
-      const added = addedEvents.filter(e => e.picking === name).reduce((s, e) => s + (e.completed || 0), 0);
-      const net = added - done;
+    const metrics = [
+      {
+        name: 'SF Productive Today',
+        short: 'SF',
+        cls: 'sf',
+        current: getWipFor('SF Scan & Verify', wip),
+        count: sf,
+        type: 'PRODUCTIVITY',
+        definition: 'Positive gain into SF Scan & Verify'
+      },
+      {
+        name: 'FSV Productive Today',
+        short: 'FSV',
+        cls: 'fsv',
+        current: getWipFor('FSV Scan & Verify', wip),
+        count: fsv,
+        type: 'PRODUCTIVITY',
+        definition: 'Positive gain into FSV Scan & Verify'
+      },
+      {
+        name: 'Breakage Count Today',
+        short: 'BR',
+        cls: 'brk',
+        current: getWipFor('Breakage to Picking', wip),
+        count: brk,
+        type: 'RECORD',
+        definition: 'Drops from Breakage to Picking'
+      },
+      {
+        name: 'Replenishment Count Today',
+        short: 'RP',
+        cls: 'brk',
+        current: getWipFor('Replenishment', wip),
+        count: rep,
+        type: 'RECORD',
+        definition: 'Drops from Replenishment'
+      }
+    ];
 
-      const cls = name === 'SF Scan & Verify'
-        ? 'sf'
-        : name === 'FSV Scan & Verify'
-          ? 'fsv'
-          : 'brk';
-
-      const short = name === 'SF Scan & Verify'
-        ? 'SF'
-        : name === 'FSV Scan & Verify'
-          ? 'FSV'
-          : 'BR';
-
-      const pct = totalWip ? (wipRow.total / totalWip * 100).toFixed(1) : '0.0';
-
-      return `
-        <div class="rpt-tracked-row">
-          <div class="rpt-tracked-badge ${cls}">${short}</div>
-          <div class="rpt-tracked-name">${escHtml(name)}</div>
-          <div class="rpt-tracked-stat"><span>Current WIP</span><strong class="${cls}">${wipRow.total.toLocaleString()}</strong></div>
-          <div class="rpt-tracked-stat"><span>% of Total</span><strong>${pct}%</strong></div>
-          <div class="rpt-tracked-stat"><span>Completed</span><strong style="color:var(--green)">${done.toLocaleString()}</strong></div>
-          <div class="rpt-tracked-stat"><span>Added</span><strong style="color:var(--orange)">${added.toLocaleString()}</strong></div>
-          <div class="rpt-tracked-stat"><span>Net</span><strong style="color:${net <= 0 ? 'var(--green)' : 'var(--red)'}">${net > 0 ? '+' : ''}${net.toLocaleString()}</strong></div>
-        </div>
-      `;
-    }).join('');
+    trackedEl.innerHTML = metrics.map(m => `
+      <div class="rpt-tracked-row">
+        <div class="rpt-tracked-badge ${m.cls}">${m.short}</div>
+        <div class="rpt-tracked-name">${escHtml(m.name)}</div>
+        <div class="rpt-tracked-stat"><span>Current WIP</span><strong class="${m.cls}">${m.current.toLocaleString()}</strong></div>
+        <div class="rpt-tracked-stat"><span>Count Today</span><strong>${m.count.toLocaleString()}</strong></div>
+        <div class="rpt-tracked-stat"><span>Type</span><strong style="color:var(--cyan)">${escHtml(m.type)}</strong></div>
+        <div class="rpt-tracked-stat"><span>Definition</span><strong style="font-size:12px">${escHtml(m.definition)}</strong></div>
+        <div class="rpt-tracked-stat"><span>Status</span><strong style="color:var(--green)">Tracked</strong></div>
+      </div>
+    `).join('');
   }
 
   setText('rptSnapshotMeta', `${sorted.length} picking types`);
@@ -1083,7 +1167,7 @@ function renderReportsTab() {
           const barPct = Math.max(2, Math.round(r.total / max * 100));
 
           const icon = tracked
-            ? (r.picking === 'SF Scan & Verify' ? 'SF' : r.picking === 'FSV Scan & Verify' ? 'FSV' : 'BR')
+            ? (r.picking === 'SF Scan & Verify' ? 'SF' : r.picking === 'FSV Scan & Verify' ? 'FSV' : r.picking === 'Breakage to Picking' ? 'BR' : 'RP')
             : getQueueIcon(r.picking);
 
           return `
@@ -1102,62 +1186,55 @@ function renderReportsTab() {
   const activitySummary = document.getElementById('rptActivitySummary');
 
   if (activitySummary) {
-    const byType = {};
+    activitySummary.innerHTML = `
+      <div class="rpt-summary-grid">
+        <div class="rpt-summary-head"><span>Metric</span><span>Type</span><span>Today</span><span>Current WIP</span><span>Definition</span></div>
 
-    validEvents.forEach(e => {
-      if (!byType[e.picking]) {
-        byType[e.picking] = {
-          completed: 0,
-          added: 0,
-          events: 0
-        };
-      }
-
-      if (e.direction === 'completed') {
-        byType[e.picking].completed += e.completed || 0;
-      } else {
-        byType[e.picking].added += e.completed || 0;
-      }
-
-      byType[e.picking].events++;
-    });
-
-    const summaryRows = Object.entries(byType)
-      .sort((a, b) => (b[1].completed + b[1].added) - (a[1].completed + a[1].added));
-
-    activitySummary.innerHTML = summaryRows.length
-      ? `
-        <div class="rpt-summary-grid">
-          <div class="rpt-summary-head"><span>Picking Type</span><span>Events</span><span>Completed</span><span>Added</span><span>Net</span></div>
-          ${summaryRows.map(([name, d]) => {
-            const net = d.added - d.completed;
-            const tracked = TRACKED.includes(name);
-
-            return `
-              <div class="rpt-summary-row ${tracked ? 'tracked' : ''}">
-                <span>${escHtml(name)}</span>
-                <span style="color:var(--muted)">${d.events}</span>
-                <span style="color:var(--green)">${d.completed.toLocaleString()}</span>
-                <span style="color:var(--orange)">${d.added.toLocaleString()}</span>
-                <span style="color:${net <= 0 ? 'var(--green)' : 'var(--red)'}">${net > 0 ? '+' : ''}${net.toLocaleString()}</span>
-              </div>
-            `;
-          }).join('')}
+        <div class="rpt-summary-row tracked">
+          <span>SF Productive Today</span>
+          <span style="color:var(--green)">PRODUCTIVITY</span>
+          <span style="color:var(--green)">${sf.toLocaleString()}</span>
+          <span>${getWipFor('SF Scan & Verify', wip).toLocaleString()}</span>
+          <span>Gain into SF Scan & Verify</span>
         </div>
-      `
-      : '<div class="error-log-empty"><span>◌</span>No activity data available from current backend</div>';
+
+        <div class="rpt-summary-row tracked">
+          <span>FSV Productive Today</span>
+          <span style="color:var(--green)">PRODUCTIVITY</span>
+          <span style="color:var(--green)">${fsv.toLocaleString()}</span>
+          <span>${getWipFor('FSV Scan & Verify', wip).toLocaleString()}</span>
+          <span>Gain into FSV Scan & Verify</span>
+        </div>
+
+        <div class="rpt-summary-row tracked">
+          <span>Breakage Count Today</span>
+          <span style="color:var(--orange)">RECORD</span>
+          <span style="color:var(--orange)">${brk.toLocaleString()}</span>
+          <span>${getWipFor('Breakage to Picking', wip).toLocaleString()}</span>
+          <span>Drop from Breakage to Picking</span>
+        </div>
+
+        <div class="rpt-summary-row tracked">
+          <span>Replenishment Count Today</span>
+          <span style="color:var(--orange)">RECORD</span>
+          <span style="color:var(--orange)">${rep.toLocaleString()}</span>
+          <span>${getWipFor('Replenishment', wip).toLocaleString()}</span>
+          <span>Drop from Replenishment</span>
+        </div>
+      </div>
+    `;
   }
 
-  renderNarrativeReport(validEvents, totalWip, totalCompleted, totalAdded, netChange);
+  renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity);
 }
 
-function renderNarrativeReport(validEvents, totalWip, totalCompleted, totalAdded, netChange) {
+function renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity) {
   const narrativeEl = document.getElementById('rptNarrative');
   if (!narrativeEl) return;
 
   setText(
     'rptNarrativeMeta',
-    `${validEvents.length} events · ${new Date().toLocaleDateString('en-US', {
+    `${new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
@@ -1177,9 +1254,6 @@ function renderNarrativeReport(validEvents, totalWip, totalCompleted, totalAdded
     minute: '2-digit'
   });
 
-  const overallTrend = netChange < 0 ? 'improving' : netChange === 0 ? 'stable' : 'building';
-  const trendColor = netChange < 0 ? 'var(--green)' : netChange === 0 ? 'var(--cyan)' : 'var(--orange)';
-
   const otherQueues = STATE.wip
     .filter(r => !TRACKED.includes(r.picking) && r.total > 0)
     .sort((a, b) => b.total - a.total);
@@ -1191,7 +1265,7 @@ function renderNarrativeReport(validEvents, totalWip, totalCompleted, totalAdded
 
   narrativeEl.innerHTML = `
     <div class="narr-block">
-      <div class="narr-dateline">📋 &nbsp; ${today} &nbsp;·&nbsp; As of ${timeNow} &nbsp;·&nbsp; ${validEvents.length} logged events</div>
+      <div class="narr-dateline">📋 &nbsp; ${today} &nbsp;·&nbsp; As of ${timeNow}</div>
     </div>
 
     <div class="narr-block">
@@ -1200,9 +1274,34 @@ function renderNarrativeReport(validEvents, totalWip, totalCompleted, totalAdded
         As of <strong>${timeNow}</strong>, total picking WIP stands at
         <span class="narr-num cyan">${totalWip.toLocaleString()}</span> items across
         <span class="narr-num">${STATE.wip.filter(r => r.total > 0).length}</span> active queues.
-        The current movement status is
-        <span class="narr-tag ${STATE.movementStatus === 'WARNING_REVIEW' ? 'orange' : STATE.movementStatus === 'DEMO' ? 'gray' : 'green'}">${escHtml(STATE.movementStatus || 'NORMAL')}</span>.
-        Overall WIP is <strong style="color:${trendColor}">${overallTrend}</strong>.
+        SF + FSV productive movement today is
+        <span class="narr-num green">${totalProductivity.toLocaleString()}</span>.
+      </p>
+    </div>
+
+    <div class="narr-block">
+      <div class="narr-section-title">Productivity Counts</div>
+      <p class="narr-text">
+        SF Productive Today:
+        <span class="narr-num cyan">${sf.toLocaleString()}</span>
+        <span class="narr-tag cyan">Gain into SF Scan Verify</span>
+        <br>
+        FSV Productive Today:
+        <span class="narr-num orange">${fsv.toLocaleString()}</span>
+        <span class="narr-tag orange">Gain into FSV Scan Verify</span>
+      </p>
+    </div>
+
+    <div class="narr-block">
+      <div class="narr-section-title">Record Counts</div>
+      <p class="narr-text">
+        Breakage Count Today:
+        <span class="narr-num orange">${brk.toLocaleString()}</span>
+        <span class="narr-tag orange">Drop from Breakage to Picking</span>
+        <br>
+        Replenishment Count Today:
+        <span class="narr-num cyan">${rep.toLocaleString()}</span>
+        <span class="narr-tag cyan">Drop from Replenishment</span>
       </p>
     </div>
 
@@ -1235,108 +1334,32 @@ function renderNarrativeReport(validEvents, totalWip, totalCompleted, totalAdded
    Helpers
 ────────────────────────────────────────────────── */
 
-function getCompletedFor(name, completion) {
-  const direct = completion
-    .filter(e => e.picking === name && e.direction === 'completed')
-    .reduce((s, e) => s + e.completed, 0);
-
-  if (direct) return direct;
-
-  const demoRow = DEMO.completion.find(e => e.picking === name);
-
-  return STATE.demo && demoRow ? demoRow.completed : 0;
-}
-
 function getWipFor(name, wip) {
   const row = wip.find(r => r.picking === name);
   return row ? row.total : 0;
 }
 
-function getLatestEventFor(name, completion) {
-  return completion
-    .filter(e => e.picking === name)
-    .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))[0];
-}
-
-function getChange(evt, name) {
-  if (!evt && STATE.demo) {
-    evt = DEMO.completion.find(e => e.picking === name);
-  }
-
-  if (!evt) {
+function getOverallTrend() {
+  if (STATE.movementStatus === 'VALID_MOVEMENT') {
     return {
-      text: '<span class="neg">0</span> no change',
+      arrow: '↔',
       value: 0,
-      up: false,
-      icon: '▼'
+      text: 'Valid station movement'
     };
   }
 
-  const delta = evt.after && evt.before
-    ? evt.after - evt.before
-    : evt.direction === 'completed'
-      ? -Math.abs(evt.completed)
-      : Math.abs(evt.completed);
-
-  const up = delta > 0;
-  const val = Math.abs(delta || evt.completed || 0);
-  const label = up ? 'added' : 'done';
-
-  return {
-    text: `<span class="${up ? 'pos' : 'neg'}">${up ? '+' : '-'} ${val.toLocaleString()}</span> ${label}`,
-    value: val,
-    up,
-    icon: up ? '▲' : '▼'
-  };
-}
-
-function getOverallTrend(completion) {
-  if (!completion || completion.length === 0) {
-    if (STATE.movementStatus === 'VALID_MOVEMENT') {
-      return {
-        arrow: '↔',
-        value: 0,
-        text: 'Valid station movement'
-      };
-    }
-
-    if (STATE.movementStatus === 'WARNING_REVIEW') {
-      return {
-        arrow: '⚠',
-        value: 0,
-        text: 'Movement review needed'
-      };
-    }
-
+  if (STATE.movementStatus === 'WARNING_REVIEW') {
     return {
-      arrow: '●',
+      arrow: '⚠',
       value: 0,
-      text: 'Live WIP snapshot'
-    };
-  }
-
-  const latest = TRACKED.map(t => getChange(getLatestEventFor(t, completion), t));
-
-  const up = latest
-    .filter(x => x.up)
-    .reduce((s, x) => s + x.value, 0);
-
-  const down = latest
-    .filter(x => !x.up)
-    .reduce((s, x) => s + x.value, 0);
-
-  if (up > down) {
-    return {
-      arrow: '▲',
-      value: up - down,
-      text: 'Backlog increasing'
+      text: 'Movement review needed'
     };
   }
 
   return {
-    arrow: '▼',
-    value: Math.max(0, down - up),
-    text: 'Overall improving'
+    arrow: '●',
+    value: 0,
+    text: 'Live WIP snapshot'
   };
 }
 
@@ -1347,6 +1370,7 @@ function getQueueIcon(name) {
   if (/hold/i.test(name)) return '▣';
   if (/scan verify/i.test(name)) return 'SV';
   if (/out queue/i.test(name)) return 'OQ';
+  if (/replenishment/i.test(name)) return 'RP';
   return '•';
 }
 
@@ -1528,23 +1552,21 @@ function initParticles() {
   }
 }
 
-function updateTicker(wip, completion) {
-  const sf = (wip.find(r => r.picking === 'SF Scan & Verify') || {}).total ?? '--';
-  const fsv = (wip.find(r => r.picking === 'FSV Scan & Verify') || {}).total ?? '--';
-  const brk = (wip.find(r => r.picking === 'Breakage to Picking') || {}).total ?? '--';
+function updateTicker(wip) {
+  const daily = STATE.dailyStats || {};
+
+  const sf = num(daily.sfProductivityToday);
+  const fsv = num(daily.fsvProductivityToday);
+  const brk = num(daily.breakageCountToday);
+  const rep = num(daily.replenishmentCountToday);
 
   const tot = STATE.totalWip || sum(wip, 'total');
-
-  const done = completion
-    .filter(e => e.direction === 'completed')
-    .reduce((s, e) => s + e.completed, 0);
-
   const lines = wip.filter(r => r.total > 0).length;
 
-  ['tk-sf', 'tk-sf2'].forEach(id => setText(id, sf));
-  ['tk-fsv', 'tk-fsv2'].forEach(id => setText(id, fsv));
-  ['tk-brk', 'tk-brk2'].forEach(id => setText(id, brk));
+  ['tk-sf', 'tk-sf2'].forEach(id => setText(id, sf.toLocaleString()));
+  ['tk-fsv', 'tk-fsv2'].forEach(id => setText(id, fsv.toLocaleString()));
+  ['tk-brk', 'tk-brk2'].forEach(id => setText(id, brk.toLocaleString()));
+  ['tk-rep', 'tk-rep2'].forEach(id => setText(id, rep.toLocaleString()));
   ['tk-total', 'tk-total2'].forEach(id => setText(id, tot.toLocaleString()));
-  ['tk-done', 'tk-done2'].forEach(id => setText(id, done.toLocaleString()));
   ['tk-lines', 'tk-lines2'].forEach(id => setText(id, lines));
 }
