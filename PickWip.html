@@ -4,9 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Picking WIP — Command Center</title>
+
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="Pickwip.css" />
 </head>
+
 <body>
   <div class="scan-line"></div>
 
@@ -19,6 +21,7 @@
       <span>Total WIP: <em id="tk-total">--</em></span>
       <span>Completed Today: <em id="tk-done">--</em></span>
       <span>Active Lines: <b id="tk-lines">--</b></span>
+
       <span>2b21 PICKING WIP COMMAND CENTER &nbsp;&middot;&nbsp; <em>LIVE</em></span>
       <span>SF Scan &amp; Verify: <b id="tk-sf2">--</b></span>
       <span>FSV Scan &amp; Verify: <b id="tk-fsv2">--</b></span>
@@ -45,8 +48,21 @@
           <span>⌘</span>
           <b>Command Center</b>
         </button>
-        <button class="side-link" type="button" data-tab="queues"><span>☷</span><b>Queues</b></button>
-        <button class="side-link" type="button" data-tab="reports"><span>▣</span><b>Reports</b></button>
+
+        <button class="side-link" type="button" data-tab="queues">
+          <span>☷</span>
+          <b>Queues</b>
+        </button>
+
+        <button class="side-link" type="button" data-tab="activity">
+          <span>◌</span>
+          <b>Activity Log</b>
+        </button>
+
+        <button class="side-link" type="button" data-tab="reports">
+          <span>▣</span>
+          <b>Reports</b>
+        </button>
       </nav>
 
       <div class="system-card">
@@ -61,15 +77,20 @@
         <div>
           <div class="title-row">
             <button class="back-btn" type="button" onclick="window.location.href='index.html'" title="Back to Dashboard">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 12H5M12 5l-7 7 7 7"/>
+              </svg>
               Dashboard
             </button>
+
             <h1>Picking WIP — Command Center</h1>
+
             <button class="live-pill" id="livePill" onclick="fetchAll(true)" type="button">
               <span id="liveDot"></span>
               <b id="liveText">LOADING</b>
             </button>
           </div>
+
           <p>Live operational picking workflow overview</p>
         </div>
 
@@ -85,136 +106,157 @@
       <!-- TAB: Command Center -->
       <div class="tab-content" id="tab-command-center">
 
-      <section class="kpi-strip">
-        <article class="kpi-card blue">
-          <div class="kpi-icon">▦</div>
-          <div>
-            <span>Total Picking WIP</span>
-            <strong id="kpiTotalWip">0</strong>
-            <small>Items in process</small>
-          </div>
-          <svg class="spark" viewBox="0 0 100 36">
-            <polyline points="0,28 12,27 20,30 31,20 43,26 55,13 68,21 82,4 100,14"/>
-          </svg>
-        </article>
-
-        <article class="kpi-card green">
-          <div class="kpi-icon">✓</div>
-          <div>
-            <span>Completed Today</span>
-            <strong id="kpiCompleted">0</strong>
-            <small>Items completed</small>
-          </div>
-          <div class="mini-bars"><i></i><i></i><i></i><i></i></div>
-        </article>
-
-        <article class="kpi-card orange">
-          <div class="kpi-icon">◷</div>
-          <div>
-            <span>Highest Queue</span>
-            <strong id="kpiHighestQueue">0</strong>
-            <small id="kpiHighestName">--</small>
-          </div>
-          <svg class="spark orange-spark" viewBox="0 0 100 36">
-            <polyline points="0,29 12,30 20,24 31,27 43,18 55,24 68,9 82,20 100,15"/>
-          </svg>
-        </article>
-
-        <article class="kpi-card purple">
-          <div class="kpi-icon">▥</div>
-          <div>
-            <span>Active Lines</span>
-            <strong id="kpiActiveLines">0</strong>
-            <small>Processing lines</small>
-          </div>
-          <div class="mini-bars purple-bars"><i></i><i></i><i></i><i></i></div>
-        </article>
-
-        <article class="kpi-card teal">
-          <div class="kpi-icon">↗</div>
-          <div>
-            <span>Trend Status</span>
-            <strong id="kpiTrend">▲ 0</strong>
-            <small id="kpiTrendText">Overall status</small>
-          </div>
-        </article>
-      </section>
-
-      <section class="dashboard-grid">
-        <div class="left-stack">
-          <section class="panel completion-panel">
-            <div class="panel-head">
-              <h2><span>◎</span> Completion Tracking <em>(SF · FSV · Breakage)</em></h2>
-              <button class="view-btn" type="button" onclick="fetchAll(true)">Refresh ›</button>
-            </div>
-
-            <div class="tracking-table">
-              <div class="tracking-head">
-                <span>Picking Type</span>
-                <span>Completed Today</span>
-                <span>Current WIP</span>
-                <span>Last Change</span>
-                <span>Trend</span>
-              </div>
-              <div id="trackingRows" class="tracking-rows"></div>
-            </div>
-          </section>
-
-          <section class="panel full-table-panel">
-            <div class="panel-head">
-              <h2><span>▤</span> Full WIP Breakdown</h2>
-              <small id="tableMeta">-- rows</small>
-            </div>
-
-            <div class="wip-table">
-              <div class="wip-head">
-                <span>Picking Type</span>
-                <span>Department</span>
-                <span>WIP Count</span>
-                <span>Last Updated</span>
-              </div>
-              <div id="wipRows"></div>
-            </div>
-          </section>
-        </div>
-
-        <aside class="right-stack">
-          <section class="panel donut-panel">
-            <h2>WIP Distribution</h2>
-            <div class="donut-layout">
-              <div class="donut" id="donutChart">
-                <div>
-                  <span>Total</span>
-                  <strong id="donutTotal">0</strong>
-                  <small>Items</small>
-                </div>
-              </div>
-              <div class="legend" id="wipLegend"></div>
-            </div>
-          </section>
-
-          <section class="panel bar-panel">
-            <h2>Queue Counts <em>(Top Queues)</em></h2>
-            <div class="bar-chart" id="queueBars"></div>
-          </section>
-
-          <section class="focus-card">
-            <div class="focus-icon">◎</div>
+        <section class="kpi-strip">
+          <article class="kpi-card blue">
+            <div class="kpi-icon">▦</div>
             <div>
-              <span>Top Focus</span>
-              <strong id="focusTitle">--</strong>
-              <p id="focusText">Waiting for live data...</p>
+              <span>Total Picking WIP</span>
+              <strong id="kpiTotalWip">0</strong>
+              <small>Items in process</small>
             </div>
-            <div class="chevrons">›››</div>
-          </section>
-        </aside>
-      </section>
+            <svg class="spark" viewBox="0 0 100 36">
+              <polyline points="0,28 12,27 20,30 31,20 43,26 55,13 68,21 82,4 100,14"/>
+            </svg>
+          </article>
 
-      </div><!-- /tab-command-center -->
+          <article class="kpi-card green">
+            <div class="kpi-icon">✓</div>
+            <div>
+              <span>Completed Today</span>
+              <strong id="kpiCompleted">0</strong>
+              <small>Items completed</small>
+            </div>
+            <div class="mini-bars"><i></i><i></i><i></i><i></i></div>
+          </article>
+
+          <article class="kpi-card orange">
+            <div class="kpi-icon">◷</div>
+            <div>
+              <span>Highest Queue</span>
+              <strong id="kpiHighestQueue">0</strong>
+              <small id="kpiHighestName">--</small>
+            </div>
+            <svg class="spark orange-spark" viewBox="0 0 100 36">
+              <polyline points="0,29 12,30 20,24 31,27 43,18 55,24 68,9 82,20 100,15"/>
+            </svg>
+          </article>
+
+          <article class="kpi-card purple">
+            <div class="kpi-icon">▥</div>
+            <div>
+              <span>Active Lines</span>
+              <strong id="kpiActiveLines">0</strong>
+              <small>Processing lines</small>
+            </div>
+            <div class="mini-bars purple-bars"><i></i><i></i><i></i><i></i></div>
+          </article>
+
+          <article class="kpi-card teal">
+            <div class="kpi-icon">↗</div>
+            <div>
+              <span>Trend Status</span>
+              <strong id="kpiTrend">● 0</strong>
+              <small id="kpiTrendText">Live WIP snapshot</small>
+            </div>
+          </article>
+        </section>
+
+        <!-- MOVEMENT CHECK PANEL -->
+        <section class="panel movement-panel">
+          <div class="panel-head">
+            <h2><span>↔</span> Movement Check <em>(Latest File vs Previous File)</em></h2>
+            <small id="movementStatus">LOADING</small>
+          </div>
+
+          <div class="movement-banner" id="movementMessage">
+            Waiting for movement comparison...
+          </div>
+
+          <div class="movement-table">
+            <div class="movement-head">
+              <span>Station</span>
+              <span>Previous</span>
+              <span>Current</span>
+              <span>Difference</span>
+              <span>Type</span>
+            </div>
+            <div id="movementRows"></div>
+          </div>
+        </section>
+
+        <section class="dashboard-grid">
+          <div class="left-stack">
+            <section class="panel completion-panel">
+              <div class="panel-head">
+                <h2><span>◎</span> Completion Tracking <em>(SF · FSV · Breakage)</em></h2>
+                <button class="view-btn" type="button" onclick="fetchAll(true)">Refresh ›</button>
+              </div>
+
+              <div class="tracking-table">
+                <div class="tracking-head">
+                  <span>Picking Type</span>
+                  <span>Completed Today</span>
+                  <span>Current WIP</span>
+                  <span>Last Change</span>
+                  <span>Trend</span>
+                </div>
+                <div id="trackingRows" class="tracking-rows"></div>
+              </div>
+            </section>
+
+            <section class="panel full-table-panel">
+              <div class="panel-head">
+                <h2><span>▤</span> Full WIP Breakdown</h2>
+                <small id="tableMeta">-- rows</small>
+              </div>
+
+              <div class="wip-table">
+                <div class="wip-head">
+                  <span>Picking Type</span>
+                  <span>Department</span>
+                  <span>WIP Count</span>
+                  <span>Last Updated</span>
+                </div>
+                <div id="wipRows"></div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="right-stack">
+            <section class="panel donut-panel">
+              <h2>WIP Distribution</h2>
+              <div class="donut-layout">
+                <div class="donut" id="donutChart">
+                  <div>
+                    <span>Total</span>
+                    <strong id="donutTotal">0</strong>
+                    <small>Items</small>
+                  </div>
+                </div>
+                <div class="legend" id="wipLegend"></div>
+              </div>
+            </section>
+
+            <section class="panel bar-panel">
+              <h2>Queue Counts <em>(Top Queues)</em></h2>
+              <div class="bar-chart" id="queueBars"></div>
+            </section>
+
+            <section class="focus-card">
+              <div class="focus-icon">◎</div>
+              <div>
+                <span>Top Focus</span>
+                <strong id="focusTitle">--</strong>
+                <p id="focusText">Waiting for live data...</p>
+              </div>
+              <div class="chevrons">›››</div>
+            </section>
+          </aside>
+        </section>
+      </div>
 
       <!-- TAB: Queues -->
       <div class="tab-content tab-hidden" id="tab-queues">
-
         <section class="kpi-strip q-kpi-strip">
           <article class="kpi-card blue">
             <div class="kpi-icon">☷</div>
@@ -224,6 +266,7 @@
               <small>Active picking types</small>
             </div>
           </article>
+
           <article class="kpi-card orange">
             <div class="kpi-icon">▦</div>
             <div>
@@ -232,6 +275,7 @@
               <small>Across all queues</small>
             </div>
           </article>
+
           <article class="kpi-card green">
             <div class="kpi-icon">↑</div>
             <div>
@@ -240,6 +284,7 @@
               <small id="qTabLargestName">--</small>
             </div>
           </article>
+
           <article class="kpi-card purple">
             <div class="kpi-icon">◎</div>
             <div>
@@ -251,7 +296,6 @@
         </section>
 
         <div class="q-grid">
-          <!-- Queue Cards -->
           <section class="panel q-cards-panel">
             <div class="panel-head">
               <h2><span>☷</span> All Queue Counts</h2>
@@ -260,7 +304,6 @@
             <div id="queueCardGrid" class="queue-card-grid"></div>
           </section>
 
-          <!-- Queue Bar Chart -->
           <section class="panel q-chart-panel">
             <div class="panel-head">
               <h2><span>▤</span> WIP by Queue</h2>
@@ -270,12 +313,12 @@
           </section>
         </div>
 
-        <!-- Full Queue Table -->
         <section class="panel q-table-panel">
           <div class="panel-head">
             <h2><span>▤</span> Full Queue Detail</h2>
             <small id="qTableMeta">-- rows</small>
           </div>
+
           <div class="wip-table">
             <div class="wip-head" style="grid-template-columns:1.8fr .9fr 1.1fr .8fr 1.25fr">
               <span>Queue / Picking Type</span>
@@ -287,12 +330,10 @@
             <div id="queueTableRows"></div>
           </div>
         </section>
+      </div>
 
-      </div><!-- /tab-queues -->
-
-      <!-- TAB: Activity Log (formerly WIP Overview) -->
+      <!-- TAB: Activity Log -->
       <div class="tab-content tab-hidden" id="tab-activity">
-
         <section class="kpi-strip">
           <article class="kpi-card blue">
             <div class="kpi-icon">◌</div>
@@ -302,6 +343,7 @@
               <small>Completion events</small>
             </div>
           </article>
+
           <article class="kpi-card green">
             <div class="kpi-icon">✓</div>
             <div>
@@ -310,6 +352,7 @@
               <small>Jobs done today</small>
             </div>
           </article>
+
           <article class="kpi-card orange">
             <div class="kpi-icon">▲</div>
             <div>
@@ -318,6 +361,7 @@
               <small>Jobs added today</small>
             </div>
           </article>
+
           <article class="kpi-card purple">
             <div class="kpi-icon">▥</div>
             <div>
@@ -334,13 +378,14 @@
             <div style="display:flex;gap:10px;align-items:center">
               <select id="actFilter" class="act-filter-select" onchange="renderActivityTab()">
                 <option value="">All Types</option>
-                <option value="SF Scan &amp; Verify">SF Scan &amp; Verify</option>
-                <option value="FSV Scan &amp; Verify">FSV Scan &amp; Verify</option>
+                <option value="SF Scan & Verify">SF Scan &amp; Verify</option>
+                <option value="FSV Scan & Verify">FSV Scan &amp; Verify</option>
                 <option value="Breakage to Picking">Breakage to Picking</option>
               </select>
               <small id="actLogMeta">-- events</small>
             </div>
           </div>
+
           <div class="act-log-head">
             <span>Timestamp</span>
             <span>Picking Type</span>
@@ -350,58 +395,64 @@
             <span>Direction</span>
             <span>Delta</span>
           </div>
+
           <div id="actLogRows" class="act-log-body"></div>
         </section>
-
-      </div><!-- /tab-activity -->
+      </div>
 
       <!-- TAB: Reports -->
       <div class="tab-content tab-hidden" id="tab-reports">
-
         <div class="rpt-header">
           <div>
             <h2 class="rpt-title">⬡ Automated WIP Report</h2>
             <p class="rpt-subtitle" id="rptGeneratedAt">Generated --</p>
           </div>
+
           <div class="rpt-actions">
             <button class="view-btn" type="button" onclick="renderReportsTab()">↻ Regenerate</button>
             <button class="rpt-print-btn" type="button" onclick="window.print()">⎙ Print / Save PDF</button>
           </div>
         </div>
 
-        <!-- Section 1: Executive Summary KPIs -->
         <section class="panel rpt-section">
-          <div class="panel-head"><h2><span>◎</span> Executive Summary</h2></div>
+          <div class="panel-head">
+            <h2><span>◎</span> Executive Summary</h2>
+          </div>
           <div class="rpt-kpi-grid" id="rptKpiGrid"></div>
         </section>
 
-        <!-- Section 2: Tracked Types Detail -->
         <section class="panel rpt-section">
-          <div class="panel-head"><h2><span>◌</span> Tracked Picking Types — SF · FSV · Breakage</h2></div>
+          <div class="panel-head">
+            <h2><span>◌</span> Tracked Picking Types — SF · FSV · Breakage</h2>
+          </div>
           <div id="rptTrackedDetail"></div>
         </section>
 
-        <!-- Section 3: Full WIP Snapshot -->
         <section class="panel rpt-section">
           <div class="panel-head">
             <h2><span>▤</span> Full WIP Snapshot</h2>
             <small id="rptSnapshotMeta">--</small>
           </div>
+
           <div class="wip-table">
             <div class="wip-head" style="grid-template-columns:1.8fr .9fr 1fr .8fr 1.4fr">
-              <span>Picking Type</span><span>Dept</span><span>WIP Count</span><span>% of Total</span><span>Last Updated</span>
+              <span>Picking Type</span>
+              <span>Dept</span>
+              <span>WIP Count</span>
+              <span>% of Total</span>
+              <span>Last Updated</span>
             </div>
             <div id="rptWipTable"></div>
           </div>
         </section>
 
-        <!-- Section 4: Activity Summary -->
         <section class="panel rpt-section">
-          <div class="panel-head"><h2><span>◷</span> Today's Activity Summary</h2></div>
+          <div class="panel-head">
+            <h2><span>◷</span> Today's Activity Summary</h2>
+          </div>
           <div id="rptActivitySummary"></div>
         </section>
 
-        <!-- Section 5: Narrative Day Summary -->
         <section class="panel rpt-section">
           <div class="panel-head">
             <h2><span>✦</span> Day Summary — Narrative Report</h2>
@@ -409,8 +460,7 @@
           </div>
           <div id="rptNarrative" class="rpt-narrative"></div>
         </section>
-
-      </div><!-- /tab-reports -->
+      </div>
     </main>
   </div>
 
