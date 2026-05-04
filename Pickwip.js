@@ -14,11 +14,12 @@
 const API = 'https://script.google.com/macros/s/AKfycbzaEX7HJODh0PhUm7GwDi4Htx9UYoUfVbIV9i20EM-Uef7JjfCBlGNVRK5enOhKYQpPCQ/exec';
 
 const AUTO_REFRESH_MS = 60000;
-const USE_DEMO_ON_ERROR = true;
+const USE_DEMO_ON_ERROR = false;
 
 const TRACKED = [
   'SF Scan & Verify',
   'FSV Scan & Verify',
+  'Frame Only Scan & Verify',
   'Breakage to Picking',
   'Replenishment'
 ];
@@ -36,6 +37,7 @@ const COLORS = [
 const CLASS_MAP = {
   'SF Scan & Verify': 'sf',
   'FSV Scan & Verify': 'fsv',
+  'Frame Only Scan & Verify': 'frame',
   'Breakage to Picking': 'brk',
   'Replenishment': 'brk'
 };
@@ -205,7 +207,67 @@ function escHtml(str) {
    Init
 ────────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────────
+   Loading Screen Controller — Industrial Terminal
+────────────────────────────────────────────────── */
+
+function loaderTick() {
+  const el = document.getElementById('loaderTime');
+  if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+function loaderSetBar(pct, label) {
+  const fill  = document.getElementById('loaderBarFill');
+  const lbl   = document.getElementById('loaderBarLabel');
+  const num   = document.getElementById('ldPctNum');
+  const fstat = document.getElementById('ldFooterStatus');
+  if (fill) fill.style.width = pct + '%';
+  if (lbl)  lbl.textContent  = label;
+  if (num)  num.innerHTML    = `${pct}<span>%</span>`;
+  if (fstat) fstat.textContent = pct >= 100 ? 'ONLINE' : 'BOOTING';
+}
+
+function loaderSetCheck(id, state, statusText) {
+  const row  = document.getElementById(id);
+  const fill = document.getElementById('lsf-' + id.replace('lc-', ''));
+  const val  = document.getElementById('lsv-' + id.replace('lc-', ''));
+  if (!row) return;
+  row.className = 'ld-status-row ' + (state === 'ok' ? 'done' : state === 'loading' ? 'active' : '');
+  if (fill) fill.style.width = state === 'ok' ? '100%' : state === 'loading' ? '55%' : '0%';
+  if (val)  val.textContent  = statusText || 'STANDBY';
+}
+
+function loaderAppendLog(tag, tagClass, text, delay = 0) {
+  const body = document.getElementById('ldLogBody');
+  if (!body) return;
+  setTimeout(() => {
+    const line = document.createElement('div');
+    line.className = 'ld-log-line';
+    line.innerHTML = `<span class="ld-tag ${tagClass}">[${tag}]</span> ${text}`;
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+  }, delay);
+}
+
+function loaderSetCursor(text) {
+  const el = document.getElementById('ldCursorText');
+  if (el) el.textContent = text;
+}
+
+function dismissLoader() {
+  const screen = document.getElementById('loaderScreen');
+  if (!screen || screen.classList.contains('hidden')) return;
+  screen.classList.add('hidden');
+  setTimeout(() => { if (screen && screen.parentNode) screen.parentNode.removeChild(screen); }, 600);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  loaderTick();
+  setInterval(loaderTick, 1000);
+
+  loaderSetBar(15, 'Initializing dashboard...');
+  loaderSetCheck('lc-api', 'loading', 'connecting');
+
   setupTabs();
 
   window.addEventListener('error', ev => {
@@ -257,7 +319,7 @@ function setupTabs() {
       const labelEl = btn.querySelector('b');
 
       if (titleEl && labelEl) {
-        titleEl.textContent = 'Picking WIP — ' + labelEl.textContent;
+        titleEl.textContent = 'Picking Floor — ' + labelEl.textContent;
       }
     });
   });
@@ -292,11 +354,20 @@ async function apiFetch(debug = true) {
 }
 
 async function fetchAll(showToast = false) {
+  /*
+   * Loading should not clear the dashboard.
+   * Keep last good numbers visible until a good API response arrives.
+   */
   setLiveState('loading', 'LOADING');
 
   if (showToast) {
     toast('Refreshing Picking WIP data...');
   }
+
+  // Loader: step 1 — hitting API
+  loaderSetBar(30, 'Fetching live WIP data...');
+  loaderSetCheck('lc-api', 'loading', 'FETCHING');
+  loaderSetCursor('Querying picking floor data source');
 
   try {
     const payload = await apiFetch(true);
@@ -305,20 +376,68 @@ async function fetchAll(showToast = false) {
       throw new Error(payload.message || 'API returned an error');
     }
 
-    STATE = {
-      wip: normalizeWip(payload.data || []),
-      completion: normalizeCompletion(payload.completion || []),
+    // Loader: step 2 — API OK
+    loaderSetBar(55, 'Processing WIP records...');
+    loaderSetCheck('lc-api', 'ok', 'ONLINE');
+    loaderSetCheck('lc-wip', 'loading', 'LOADING');
+    loaderSetCursor('Normalizing WIP queue records');
+    loaderAppendLog('  OK  ', 'ok', 'API connection established');
+
+    /*
+     * Build next state first.
+     * Do not replace STATE until payload is confirmed good.
+     */
+    const nextWip = normalizeWip(payload.wip || payload.data || []);
+    const nextDailyStats = normalizeDailyStats(payload.dailyStats || {});
+
+    // Loader: step 3 — WIP normalized
+    loaderSetBar(72, 'Analyzing station movement...');
+    loaderSetCheck('lc-wip', 'ok', 'LOADED');
+    loaderSetCheck('lc-movement', 'loading', 'CHECKING');
+    loaderSetCursor('Running movement delta analysis');
+    loaderAppendLog('  OK  ', 'ok', `WIP records loaded — ${nextWip.length} queue(s) found`);
+
+    const nextState = {
+      wip: nextWip,
+      completion: normalizeCompletion(
+        payload.completion && payload.completion.length
+          ? payload.completion
+          : buildCompletionFromDailyStats(nextDailyStats)
+      ),
       history: payload.history || [],
       movement: normalizeMovement(payload.movement || []),
       movementStatus: payload.movementStatus || 'NORMAL',
       movementMessage: payload.movementMessage || 'Normal WIP movement.',
       health: payload.health || {},
-      dailyStats: normalizeDailyStats(payload.dailyStats || {}),
-      totalWip: Number(payload.totalWip || 0),
+      dailyStats: nextDailyStats,
+      totalWip: Number(
+  payload.totalWip ??
+  sum(nextWip.filter(r => !isTrackingOnlyQueue(r.picking)), 'total')
+),
       demo: false
     };
 
+    // Loader: step 4 — all done
+    loaderSetBar(90, 'Loading daily stats...');
+    loaderSetCheck('lc-movement', 'ok', 'VALID');
+    loaderSetCheck('lc-stats', 'loading', 'LOADING');
+    loaderSetCursor('Compiling daily productivity metrics');
+    loaderAppendLog('  OK  ', 'ok', `Movement check — ${payload.movementStatus || 'NORMAL'}`);
+
+    /*
+     * Only now replace STATE and repaint the page.
+     */
+    STATE = nextState;
+
     setLiveState('ok', 'LIVE');
+    renderAll();
+
+    // Loader: complete — dismiss after brief hold
+    loaderSetBar(100, 'Picking floor online.');
+    loaderSetCheck('lc-stats', 'ok', 'READY');
+    loaderSetCursor('Dashboard ready — launching');
+    loaderAppendLog('  OK  ', 'ok', 'All systems online — launching dashboard');
+    setTimeout(dismissLoader, 900);
 
     if (showToast) {
       toast('Live data loaded.');
@@ -328,32 +447,19 @@ async function fetchAll(showToast = false) {
     console.warn(err);
     logError('error', 'Fetch Failed', err.message, 'fetchAll → Picking WIP API');
 
-    if (USE_DEMO_ON_ERROR) {
-      const demoWip = normalizeWip(DEMO.wip);
+    /*
+     * Do not replace STATE.
+     * Do not call renderAll().
+     * Keep last good dashboard values visible.
+     */
+    setLiveState('error', 'ERROR');
+    toast('API error. Keeping last good data on screen.');
 
-      STATE = {
-        wip: demoWip,
-        completion: buildCompletionFromDailyStats(DEMO.dailyStats),
-        history: [],
-        movement: normalizeMovement(DEMO.movement),
-        movementStatus: 'DEMO',
-        movementMessage: 'API unreachable — displaying demo data.',
-        health: {},
-        dailyStats: normalizeDailyStats(DEMO.dailyStats),
-        totalWip: sum(demoWip, 'total'),
-        demo: true
-      };
-
-      setLiveState('error', 'DEMO');
-      logError('warn', 'Demo Mode Active', 'API unreachable — displaying demo data', 'fetchAll');
-      toast('API not reachable. Showing demo layout so you can test the UI.');
-    } else {
-      setLiveState('error', 'ERROR');
-      toast('API error: ' + err.message);
-    }
+    // Dismiss loader even on error — don't block the UI forever
+    loaderSetBar(100, 'Connection error — showing cached data.');
+    loaderAppendLog(' FAIL ', 'err', 'API error: ' + err.message.slice(0, 50));
+    setTimeout(dismissLoader, 1200);
   }
-
-  renderAll();
 }
 
 /* ──────────────────────────────────────────────────
@@ -479,6 +585,7 @@ function normalizeDailyStats(stats) {
   return {
     sfProductivityToday: num(stats.sfProductivityToday),
     fsvProductivityToday: num(stats.fsvProductivityToday),
+    frameOnlyProductivityToday: num(stats.frameOnlyProductivityToday),
     breakageCountToday: num(stats.breakageCountToday),
     replenishmentCountToday: num(stats.replenishmentCountToday),
     totalProductivityToday: num(stats.totalProductivityToday)
@@ -648,7 +755,7 @@ function renderTrackingRows(wip, daily) {
       count: num(daily.sfProductivityToday),
       current: getWipFor('SF Scan & Verify', wip),
       type: 'PRODUCTIVITY',
-      status: 'Moved to SF Scan Verify',
+      status: 'Sent to Surface Unbox',
       cls: 'sf',
       short: 'SF'
     },
@@ -658,9 +765,19 @@ function renderTrackingRows(wip, daily) {
       count: num(daily.fsvProductivityToday),
       current: getWipFor('FSV Scan & Verify', wip),
       type: 'PRODUCTIVITY',
-      status: 'Moved to FSV Scan Verify',
+      status: 'Sent to Finish Unbox',
       cls: 'fsv',
       short: 'FSV'
+    },
+    {
+      name: 'Frame Only Scan & Verify',
+      label: 'Frame Only Productive Today',
+      count: num(daily.frameOnlyProductivityToday),
+      current: getWipFor('Frame Only Scan & Verify', wip),
+      type: 'PRODUCTIVITY',
+      status: 'Frame Only',
+      cls: 'frame',
+      short: 'FO'
     },
     {
       name: 'Breakage to Picking',
@@ -880,32 +997,51 @@ function renderFocus(wip, total, highest, totalProductive) {
 ────────────────────────────────────────────────── */
 
 function renderQueuesTab(wip, total) {
-  const sorted = [...wip].sort((a, b) => b.total - a.total);
-  const max = Math.max(...sorted.map(r => r.total), 1);
-  const empty = sorted.filter(r => r.total === 0).length;
-  const largest = sorted[0] || { picking: '--', total: 0 };
+  /*
+   * Queue tab rule:
+   * - Hide zero queues from cards/chart/table.
+   * - Total Queues = only queues with total > 0.
+   * - Empty Queues = how many source rows are zero.
+   * - Official Total WIP stays from backend total, so SF/FSV/Frame Only
+   *   can show without inflating Total WIP.
+   */
 
-  animateNumber('qTabTotalQueues', wip.length);
-  animateNumber('qTabTotalWip', total);
-  animateNumber('qTabLargest', largest.total);
-  setText('qTabLargestName', largest.picking);
-  animateNumber('qTabEmpty', empty);
+  const allQueues = Array.isArray(wip) ? wip : [];
+
+  const activeQueues = allQueues
+    .filter(r => Number(r.total || 0) > 0)
+    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
+
+  const emptyQueues = allQueues.filter(r => Number(r.total || 0) === 0).length;
+
+  const max = Math.max(...activeQueues.map(r => Number(r.total || 0)), 1);
+
+  const largest = activeQueues[0] || {
+    picking: '--',
+    total: 0
+  };
+
+  animateNumber('qTabTotalQueues', activeQueues.length);
+  animateNumber('qTabTotalWip', Number(total || 0));
+  animateNumber('qTabLargest', Number(largest.total || 0));
+  setText('qTabLargestName', largest.picking || '--');
+  animateNumber('qTabEmpty', emptyQueues);
 
   const cardGrid = document.getElementById('queueCardGrid');
 
   if (cardGrid) {
-    if (!sorted.length) {
-      cardGrid.innerHTML = '<div class="error-log-empty"><span>◌</span>No queue data available</div>';
+    if (!activeQueues.length) {
+      cardGrid.innerHTML = '<div class="error-log-empty"><span>◌</span>No active queue data available</div>';
     } else {
-      cardGrid.innerHTML = sorted.map(r => {
-        const tracked = TRACKED.includes(r.picking);
-        const pct = Math.max(2, Math.round(r.total / max * 100));
-        const cls = tracked ? 'tracked' : (r.total === 0 ? 'zero' : '');
+      cardGrid.innerHTML = activeQueues.map(r => {
+        const tracked = isTrackingOnlyQueue(r.picking);
+        const pct = Math.max(2, Math.round(Number(r.total || 0) / max * 100));
+        const cls = tracked ? 'tracked' : '';
 
         return `
           <div class="q-card ${cls}">
             <div class="q-card-name">${escHtml(r.picking)}</div>
-            <div class="q-card-count">${r.total.toLocaleString()}</div>
+            <div class="q-card-count">${Number(r.total || 0).toLocaleString()}</div>
             <div class="q-card-bar"><i style="width:${pct}%"></i></div>
             <div class="q-card-dept">${escHtml(r.department || 'Inventory')}</div>
           </div>
@@ -917,59 +1053,62 @@ function renderQueuesTab(wip, total) {
   const chartEl = document.getElementById('queueChartBars');
 
   if (chartEl) {
-    setText('qChartMeta', `${sorted.length} queues`);
+    setText('qChartMeta', `${activeQueues.length} queues`);
 
-    chartEl.innerHTML = sorted.length
-      ? sorted.map(r => {
-          const tracked = TRACKED.includes(r.picking);
-          const pct = Math.max(1, Math.round(r.total / max * 100));
+    chartEl.innerHTML = activeQueues.length
+      ? activeQueues.map(r => {
+          const tracked = isTrackingOnlyQueue(r.picking);
+          const pct = Math.max(1, Math.round(Number(r.total || 0) / max * 100));
 
           return `
             <div class="q-bar-row ${tracked ? 'tracked' : ''}">
               <div class="q-bar-row-label">${escHtml(r.picking)}</div>
               <div class="q-bar-track"><i style="width:${pct}%"></i></div>
-              <div class="q-bar-val">${r.total.toLocaleString()}</div>
+              <div class="q-bar-val">${Number(r.total || 0).toLocaleString()}</div>
             </div>
           `;
         }).join('')
-      : '<div class="error-log-empty"><span>◌</span>No queue chart data available</div>';
+      : '<div class="error-log-empty"><span>◌</span>No active queue chart data available</div>';
   }
 
   const tableEl = document.getElementById('queueTableRows');
 
   if (tableEl) {
-    setText('qTableMeta', `${sorted.length} rows`);
+    setText('qTableMeta', `${activeQueues.length} rows`);
 
-    tableEl.innerHTML = sorted.length
-      ? sorted.map((r, i) => {
-          const tracked = TRACKED.includes(r.picking);
-          const pct = Math.max(2, Math.round(r.total / max * 100));
+    tableEl.innerHTML = activeQueues.length
+      ? activeQueues.map((r, i) => {
+          const tracked = isTrackingOnlyQueue(r.picking);
+          const pct = Math.max(2, Math.round(Number(r.total || 0) / max * 100));
           const rowCls = tracked ? 'blue-row' : 'orange-row';
 
           const priority = tracked
-            ? '<span class="priority-high">● HIGH</span>'
-            : r.total >= 20
+            ? '<span class="priority-high">● TRACK</span>'
+            : Number(r.total || 0) >= 20
               ? '<span class="priority-med">● MED</span>'
               : '<span class="priority-low">○ LOW</span>';
 
           const icon = tracked
-            ? (r.picking === 'SF Scan & Verify' ? 'SF' : r.picking === 'FSV Scan & Verify' ? 'FSV' : r.picking === 'Breakage to Picking' ? 'BR' : 'RP')
+            ? getTrackingIcon(r.picking)
             : getQueueIcon(r.picking);
 
           return `
             <div class="wip-row ${rowCls}" style="grid-template-columns:1.8fr .9fr 1.1fr .8fr 1.25fr;animation-delay:${i * .03}s">
-              <div class="wip-name"><span class="wip-icon">${icon}</span>${escHtml(r.picking)}</div>
-              <div class="dept">${escHtml(r.department || 'Inventory')}</div>
-              <div class="wip-count">
-                <strong>${r.total.toLocaleString()}</strong>
-                <div class="row-bar"><i style="width:${pct}%"></i></div>
-              </div>
-              <div>${priority}</div>
-              <div class="wip-date">${toEastern(r.lastUpdated)}</div>
+              <span>
+                <b class="queue-mini-icon">${icon}</b>
+                ${escHtml(r.picking)}
+              </span>
+              <span>${escHtml(r.department || 'Inventory')}</span>
+              <span>
+                <b>${Number(r.total || 0).toLocaleString()}</b>
+                <em class="row-bar"><i style="width:${pct}%"></i></em>
+              </span>
+              <span>${priority}</span>
+              <span>${escHtml(r.lastUpdated || r.importedAt || '--')}</span>
             </div>
           `;
         }).join('')
-      : '<div class="error-log-empty"><span>◌</span>No queue table data available</div>';
+      : '<div class="error-log-empty"><span>◌</span>No active queue detail available</div>';
   }
 }
 
@@ -1083,11 +1222,11 @@ function renderReportsTab() {
   if (kpiGrid) {
     const kpiData = [
       { label: 'Total WIP', val: totalWip, sub: 'Current live snapshot', cls: 'blue' },
-      { label: 'SF Productive', val: sf, sub: 'Moved into SF Scan Verify', cls: 'green' },
-      { label: 'FSV Productive', val: fsv, sub: 'Moved into FSV Scan Verify', cls: 'orange' },
-      { label: 'Total Productivity', val: totalProductivity, sub: 'SF + FSV productive count', cls: 'purple' },
+      { label: 'Surface (SF) Total Jobs', val: sf, sub: 'Total Scan & Verify', cls: 'green' },
+      { label: 'FInish (FSV) Total Jobs', val: fsv, sub: 'Total Scan & Verify', cls: 'orange' },
+      { label: 'Total Jobs of the Day', val: totalProductivity, sub: 'SF + FSV productive count', cls: 'purple' },
       { label: 'Breakage Count', val: brk, sub: 'Record count from Breakage', cls: 'orange' },
-      { label: 'Replenishment', val: rep, sub: 'Record count from Replenishment', cls: 'blue' }
+      { label: 'Replenishment Count', val: rep, sub: 'Record count from Replenishment', cls: 'blue' }
     ];
 
     kpiGrid.innerHTML = kpiData.map(k => `
@@ -1284,11 +1423,11 @@ function renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity) {
       <p class="narr-text">
         SF Productive Today:
         <span class="narr-num cyan">${sf.toLocaleString()}</span>
-        <span class="narr-tag cyan">Gain into SF Scan Verify</span>
+        <span class="narr-tag cyan">Surface Unbox</span>
         <br>
         FSV Productive Today:
         <span class="narr-num orange">${fsv.toLocaleString()}</span>
-        <span class="narr-tag orange">Gain into FSV Scan Verify</span>
+        <span class="narr-tag orange">Finish Unbox</span>
       </p>
     </div>
 
@@ -1324,7 +1463,7 @@ function renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity) {
     ` : ''}
 
     <div class="narr-block narr-footer">
-      <span>⬡ Auto-generated by Picking WIP Command Center</span>
+      <span>⬡ Auto-generated by Zenni Lab — Picking Floor WIP Monitor</span>
       <span>Report time: ${new Date().toLocaleString()}</span>
     </div>
   `;
@@ -1509,6 +1648,42 @@ function toast(msg) {
   window.__toastTimer = setTimeout(() => {
     el.classList.remove('show');
   }, 3000);
+}
+
+function isTrackingOnlyQueue(name) {
+  const key = String(name || '')
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]/g, '');
+
+  return (
+    key === 'SFSCANANDVERIFY' ||
+    key === 'FSVSCANANDVERIFY' ||
+    key === 'FRAMEONLYSCANANDVERIFY'
+  );
+}
+
+function isTrackingOnlyQueue(name) {
+  const key = String(name || '')
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]/g, '');
+
+  return (
+    key === 'SFSCANANDVERIFY' ||
+    key === 'FSVSCANANDVERIFY' ||
+    key === 'FRAMEONLYSCANANDVERIFY'
+  );
+}
+
+function getTrackingIcon(name) {
+  const key = String(name || '').toUpperCase();
+
+  if (key.includes('SF SCAN')) return 'SF';
+  if (key.includes('FSV SCAN')) return 'FSV';
+  if (key.includes('FRAME ONLY')) return 'FO';
+
+  return 'TR';
 }
 
 /* ──────────────────────────────────────────────────

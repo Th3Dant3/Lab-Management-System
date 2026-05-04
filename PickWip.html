@@ -3,18 +3,109 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Picking WIP — Command Center</title>
+  <title>Picking Floor WIP — Zenni Lab</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="Pickwip.css" />
 </head>
 
 <body>
+
+  <!-- ── LOADING SCREEN ── -->
+  <div id="loaderScreen" class="loader-screen">
+
+    <!-- Horizontal sweep lines — industrial feel -->
+    <div class="ld-sweep-a"></div>
+    <div class="ld-sweep-b"></div>
+
+    <!-- Top bar — facility identity -->
+    <div class="ld-topbar">
+      <div class="ld-topbar-left">
+        <span class="ld-cube">▦</span>
+        <div>
+          <div class="ld-facility">ZENNI USA · OPTICAL MANUFACTURING</div>
+          <div class="ld-station">PICKING FLOOR — WIP MONITOR</div>
+        </div>
+      </div>
+      <div class="ld-topbar-right">
+        <span class="ld-live-dot"></span>
+        <span class="ld-clock" id="loaderTime">--:--:--</span>
+      </div>
+    </div>
+
+    <!-- Main terminal block -->
+    <div class="ld-terminal">
+
+      <!-- Left: boot log stream -->
+      <div class="ld-log-panel">
+        <div class="ld-log-title">// SYSTEM BOOT LOG</div>
+        <div class="ld-log-body" id="ldLogBody">
+          <div class="ld-log-line" style="animation-delay:.1s"><span class="ld-tag ok">[  OK  ]</span> Initializing picking floor monitor...</div>
+          <div class="ld-log-line" style="animation-delay:.4s"><span class="ld-tag ok">[  OK  ]</span> Loading UI components</div>
+          <div class="ld-log-line" style="animation-delay:.7s"><span class="ld-tag ok">[  OK  ]</span> Establishing API connection</div>
+          <div class="ld-log-line" style="animation-delay:1.0s"><span class="ld-tag wait">[ WAIT ]</span> Fetching live WIP data...</div>
+          <div class="ld-log-line ld-log-cursor" style="animation-delay:1.3s" id="ldCursorLine">
+            <span class="ld-tag pend">[ PEND ]</span> <span id="ldCursorText">Connecting to data source</span><span class="ld-blink">_</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: system status panels -->
+      <div class="ld-status-panel">
+        <div class="ld-status-title">// SUBSYSTEM STATUS</div>
+
+        <div class="ld-status-row" id="lc-api">
+          <div class="ld-status-name">LIVE API</div>
+          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-api"></div></div>
+          <div class="ld-status-val" id="lsv-api">STANDBY</div>
+        </div>
+
+        <div class="ld-status-row" id="lc-wip">
+          <div class="ld-status-name">WIP DATA</div>
+          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-wip"></div></div>
+          <div class="ld-status-val" id="lsv-wip">STANDBY</div>
+        </div>
+
+        <div class="ld-status-row" id="lc-movement">
+          <div class="ld-status-name">MOVEMENT CHK</div>
+          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-movement"></div></div>
+          <div class="ld-status-val" id="lsv-movement">STANDBY</div>
+        </div>
+
+        <div class="ld-status-row" id="lc-stats">
+          <div class="ld-status-name">DAILY STATS</div>
+          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-stats"></div></div>
+          <div class="ld-status-val" id="lsv-stats">STANDBY</div>
+        </div>
+
+        <!-- Big progress readout -->
+        <div class="ld-pct-block">
+          <div class="ld-pct-num" id="ldPctNum">0<span>%</span></div>
+          <div class="ld-pct-label" id="loaderBarLabel">Initializing...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom master progress bar — full width -->
+    <div class="ld-master-bar">
+      <div class="ld-master-fill" id="loaderBarFill"></div>
+      <div class="ld-master-shimmer"></div>
+    </div>
+
+    <!-- Bottom strip -->
+    <div class="ld-footer-strip">
+      <span>FACILITY: ZENNI USA OPTICAL LAB</span>
+      <span>MODULE: PICKING FLOOR WIP MONITOR v2.1</span>
+      <span>STATUS: <span id="ldFooterStatus" style="color:var(--cyan)">BOOTING</span></span>
+    </div>
+
+  </div>
+
   <div class="scan-line"></div>
 
   <div class="data-ticker">
     <div class="ticker-inner" id="tickerInner">
-      <span>2b21 PICKING WIP COMMAND CENTER &nbsp;&middot;&nbsp; <em>LIVE</em></span>
+      <span>ZENNI LAB &nbsp;&middot;&nbsp; PICKING FLOOR WIP MONITOR &nbsp;&middot;&nbsp; <em>LIVE</em></span>
       <span>SF Productive: <b id="tk-sf">--</b></span>
       <span>FSV Productive: <b id="tk-fsv">--</b></span>
       <span>Breakage Count: <b id="tk-brk">--</b></span>
@@ -22,7 +113,7 @@
       <span>Total WIP: <em id="tk-total">--</em></span>
       <span>Active Lines: <b id="tk-lines">--</b></span>
 
-      <span>2b21 PICKING WIP COMMAND CENTER &nbsp;&middot;&nbsp; <em>LIVE</em></span>
+      <span>ZENNI LAB &nbsp;&middot;&nbsp; PICKING FLOOR WIP MONITOR &nbsp;&middot;&nbsp; <em>LIVE</em></span>
       <span>SF Productive: <b id="tk-sf2">--</b></span>
       <span>FSV Productive: <b id="tk-fsv2">--</b></span>
       <span>Breakage Count: <b id="tk-brk2">--</b></span>
@@ -46,7 +137,7 @@
       <nav class="side-nav">
         <button class="side-link active" type="button" data-tab="command-center">
           <span>⌘</span>
-          <b>Command Center</b>
+          <b>WIP Monitor</b>
         </button>
 
         <button class="side-link" type="button" data-tab="queues">
@@ -83,7 +174,7 @@
               Dashboard
             </button>
 
-            <h1>Picking WIP — Command Center</h1>
+            <h1>Picking Floor — WIP Monitor</h1>
 
             <button class="live-pill" id="livePill" onclick="fetchAll(true)" type="button">
               <span id="liveDot"></span>
@@ -91,7 +182,7 @@
             </button>
           </div>
 
-          <p>Live operational picking workflow overview</p>
+          <p>Production · Optical · Zenni Lab — Real-time picking floor status</p>
         </div>
 
         <div class="header-right">
@@ -124,7 +215,7 @@
             <div>
               <span>SF Productive Today</span>
               <strong id="kpiSFProductive">0</strong>
-              <small>Moved into SF Scan Verify</small>
+              <small>Total Surface Scan & Verify</small>
             </div>
             <div class="mini-bars"><i></i><i></i><i></i><i></i></div>
           </article>
@@ -134,7 +225,7 @@
             <div>
               <span>FSV Productive Today</span>
               <strong id="kpiFSVProductive">0</strong>
-              <small>Moved into FSV Scan Verify</small>
+              <small>Total Finish Scan & Verify</small>
             </div>
             <svg class="spark orange-spark" viewBox="0 0 100 36">
               <polyline points="0,29 12,30 20,24 31,27 43,18 55,24 68,9 82,20 100,15"/>
@@ -340,7 +431,7 @@
             <div>
               <span>SF Productive</span>
               <strong id="actSFProductive">0</strong>
-              <small>Moved into SF Scan Verify</small>
+              <small>Total Surface Scan & Verify</small>
             </div>
           </article>
 
@@ -349,7 +440,7 @@
             <div>
               <span>FSV Productive</span>
               <strong id="actFSVProductive">0</strong>
-              <small>Moved into FSV Scan Verify</small>
+              <small>Total Finish Scan & Verify</small>
             </div>
           </article>
 
