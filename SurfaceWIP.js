@@ -7,7 +7,6 @@
 
 /* =============================================
    SAFE LOADING SCREEN HELPERS
-   These prevent JS from breaking if loader HTML is missing
 ============================================= */
 
 function setSurfaceLoaderProgress(percent, message) {
@@ -264,16 +263,6 @@ function buildDataSignature(payload) {
   ].join("|");
 }
 
-function hasUsablePayload(payload) {
-  if (!payload || payload.status !== "success") return false;
-
-  const flowRows = payload.surfaceFlow || [];
-
-  if (!flowRows.length) return false;
-
-  return true;
-}
-
 /* =============================================
    API FETCH
 ============================================= */
@@ -298,15 +287,7 @@ async function fetchData(forceRender = false) {
 
     const incomingFlow = Array.isArray(json.surfaceFlow) ? json.surfaceFlow : [];
     const incomingTransfers = Array.isArray(json.surfaceTransfers) ? json.surfaceTransfers : [];
-    const incomingDailyTotals = Array.isArray(json.surfaceTransferDailyTotals)
-      ? json.surfaceTransferDailyTotals
-      : [];
 
-    /*
-     * HARD SAFETY:
-     * If the API temporarily returns no Surface rows,
-     * DO NOT wipe the screen.
-     */
     if (!incomingFlow.length && state.hasRenderedOnce) {
       console.warn("[SurfaceWIP] Refresh returned empty surfaceFlow. Keeping last good data.");
       setSystemStatus("ok");
@@ -314,10 +295,6 @@ async function fetchData(forceRender = false) {
       return;
     }
 
-    /*
-     * If this is first load and there is no data,
-     * show the error/loading message.
-     */
     if (!incomingFlow.length && !state.hasRenderedOnce) {
       throw new Error("No Surface WIP rows returned from API.");
     }
@@ -325,10 +302,6 @@ async function fetchData(forceRender = false) {
     const newSignature = buildDataSignature(json);
     const isNewData = newSignature !== state.lastDataSignature;
 
-    /*
-     * Same data = do nothing.
-     * This prevents the page from constantly repainting.
-     */
     if (!forceRender && state.hasRenderedOnce && !isNewData) {
       state.lastFetch = new Date();
       setSystemStatus("ok");
@@ -336,10 +309,6 @@ async function fetchData(forceRender = false) {
       return;
     }
 
-    /*
-     * Only now update state.
-     * Never overwrite state before validating payload.
-     */
     state.summary = json.summary || state.summary || {};
     state.surfaceFlow = incomingFlow;
 
@@ -347,9 +316,14 @@ async function fetchData(forceRender = false) {
       ? incomingTransfers
       : state.surfaceTransfers || [];
 
-    state.surfaceTransferDailyTotals = incomingDailyTotals.length
-      ? incomingDailyTotals
-      : state.surfaceTransferDailyTotals || [];
+    /*
+     * EOS FIX:
+     * Daily totals are allowed to become empty after EOS.
+     * Do NOT preserve old daily totals when the API returns [].
+     */
+    state.surfaceTransferDailyTotals = Array.isArray(json.surfaceTransferDailyTotals)
+      ? json.surfaceTransferDailyTotals
+      : [];
 
     state.intervalMeta = json.intervalHistoryMeta || state.intervalMeta || {};
     state.lastFetch = new Date();
@@ -372,9 +346,6 @@ async function fetchData(forceRender = false) {
   } catch (err) {
     console.error("[SurfaceWIP] Fetch error:", err);
 
-    /*
-     * After first successful render, NEVER clear the dashboard on refresh error.
-     */
     if (state.hasRenderedOnce) {
       setSystemStatus("error");
       return;
@@ -634,7 +605,7 @@ function updateBottleneckLabel(rows) {
 }
 
 /* =============================================
-   TRANSFER TUNNEL
+   TRANSFER TUNNEL — FIXED STATION ACTIVITY MATH
 ============================================= */
 
 function renderTransferTunnel() {
@@ -719,33 +690,28 @@ function renderTransferTunnel() {
 }
 
 function renderConverterGroup(group, minutesBetween) {
-  let scanned = 0;
-  let reached = 0;
   let moving = 0;
+  const stationMap = {};
 
   group.rows.forEach(row => {
-    const transitionName = safeText(
-      row.TransitionName || `${row.FromDisplayName} → ${row.ToDisplayName}`
-    );
+    const lane = getDailyLane(row);
 
-    const daily = findDailyTransferForTransition(transitionName);
+    stationMap[lane.fromStep] = {
+      display: lane.fromDisplay,
+      activity: getStationActivity(lane.fromStep)
+    };
 
-    const laneScanned = daily ? num(daily.TotalLeftFromStep) : 0;
-    const laneReached = daily ? num(daily.TotalEnteredToStep) : 0;
+    stationMap[lane.toStep] = {
+      display: lane.toDisplay,
+      activity: getStationActivity(lane.toStep)
+    };
 
-    /*
-     * Correct movement logic:
-     * Backend already calculates the movement estimate.
-     * Do NOT use scanned - reached here.
-     */
-    const laneMoving = daily
-      ? num(daily.TotalEstimatedInTransfer)
-      : num(row.EstimatedInTransfer);
-
-    scanned += laneScanned;
-    reached += laneReached;
-    moving += laneMoving;
+    moving += lane.estimatedMoving;
   });
+
+  const totalActivity = Object.values(stationMap).reduce((sum, station) => {
+    return sum + num(station.activity);
+  }, 0);
 
   const severity =
     moving >= 100 ? "critical" :
@@ -762,8 +728,8 @@ function renderConverterGroup(group, minutesBetween) {
 
         <div class="converter-tab-metrics">
           <div>
-            <span>Total Scanned</span>
-            <strong>${scanned}</strong>
+            <span>Total Activity</span>
+            <strong>${totalActivity}</strong>
           </div>
 
           <div>
@@ -772,8 +738,8 @@ function renderConverterGroup(group, minutesBetween) {
           </div>
 
           <div>
-            <span>Total Reached</span>
-            <strong>${reached}</strong>
+            <span>Stations</span>
+            <strong>${Object.keys(stationMap).length}</strong>
           </div>
         </div>
       </div>
@@ -786,38 +752,25 @@ function renderConverterGroup(group, minutesBetween) {
 }
 
 function renderConverterMiniLane(row, minutesBetween) {
-  const transitionName = safeText(row.TransitionName || `${row.FromDisplayName} → ${row.ToDisplayName}`);
-  const fromDisplay = safeText(row.FromDisplayName || row.FromStep, "From");
-  const toDisplay = safeText(row.ToDisplayName || row.ToStep, "To");
+  const lane = getDailyLane(row);
 
-  const fromCurrent = num(row.FromCurrentWIP);
-  const toCurrent = num(row.ToCurrentWIP);
+  const fromActivity = getStationActivity(lane.fromStep);
+  const toActivity = getStationActivity(lane.toStep);
 
-  const latestLeft = num(row.LeftFromStep);
-  const latestReached = num(row.EnteredToStep);
+  const fromIn = getStationIn(lane.fromStep);
+  const fromOut = getStationOut(lane.fromStep);
 
-  const daily = findDailyTransferForTransition(transitionName);
-
-  const scannedToday = daily ? num(daily.TotalLeftFromStep) : 0;
-  const reachedToday = daily ? num(daily.TotalEnteredToStep) : 0;
-
-  /*
-   * Correct movement logic:
-   * Show backend daily estimated movement.
-   * If daily totals are missing, fall back to latest live estimate.
-   */
-  const movingBetween = daily
-    ? num(daily.TotalEstimatedInTransfer)
-    : num(row.EstimatedInTransfer);
+  const toIn = getStationIn(lane.toStep);
+  const toOut = getStationOut(lane.toStep);
 
   const severity =
-    movingBetween >= 100 || toCurrent >= CONFIG.WIP_CRITICAL ? "critical" :
-    movingBetween >= 35 || toCurrent >= CONFIG.WIP_HIGH ? "watch" :
+    lane.estimatedMoving >= 100 || lane.toCurrent >= CONFIG.WIP_CRITICAL ? "critical" :
+    lane.estimatedMoving >= 35 || lane.toCurrent >= CONFIG.WIP_HIGH ? "watch" :
     "normal";
 
   const packetsToShow = Math.max(
     3,
-    Math.min(10, movingBetween || latestLeft || latestReached || 3)
+    Math.min(10, lane.estimatedMoving || fromActivity || toActivity || 3)
   );
 
   const packets = Array.from(
@@ -829,25 +782,27 @@ function renderConverterMiniLane(row, minutesBetween) {
     <article class="converter-mini-lane ${severity}">
       <div class="converter-mini-top">
         <div>
-          <div class="converter-mini-title">${transitionName}</div>
-          <div class="converter-mini-subtitle">${fromDisplay} moving into ${toDisplay}</div>
+          <div class="converter-mini-title">${lane.transitionName}</div>
+          <div class="converter-mini-subtitle">${lane.fromDisplay} flowing into ${lane.toDisplay}</div>
         </div>
       </div>
 
       <div class="converter-mini-flow">
         <div class="converter-mini-box">
-          <div class="transfer-zone-label">Scanned Today</div>
-          <div class="transfer-zone-step">${fromDisplay}</div>
-          <div class="transfer-zone-value">${scannedToday}</div>
-          <div class="transfer-zone-note">Current WIP: ${fromCurrent}</div>
+          <div class="transfer-zone-label">Station Activity Today</div>
+          <div class="transfer-zone-step">${lane.fromDisplay}</div>
+          <div class="transfer-zone-value">${fromActivity}</div>
+          <div class="transfer-zone-note">
+            In: ${fromIn} · Out: ${fromOut} · Current WIP: ${lane.fromCurrent}
+          </div>
         </div>
 
         <div class="transfer-flow-arrow">→</div>
 
         <div class="converter-mini-conveyor">
           <div class="transfer-conveyor-head">
-            <div class="transfer-conveyor-title">Estimated Transfer Count</div>
-            <div class="transfer-conveyor-count">${movingBetween}</div>
+            <div class="transfer-conveyor-title">Estimated Moving Now</div>
+            <div class="transfer-conveyor-count">${lane.estimatedMoving}</div>
           </div>
 
           <div class="transfer-track">
@@ -858,113 +813,84 @@ function renderConverterMiniLane(row, minutesBetween) {
         <div class="transfer-flow-arrow">→</div>
 
         <div class="converter-mini-box">
-          <div class="transfer-zone-label">Reached Today</div>
-          <div class="transfer-zone-step">${toDisplay}</div>
-          <div class="transfer-zone-value">${reachedToday}</div>
-          <div class="transfer-zone-note">Current WIP: ${toCurrent}</div>
+          <div class="transfer-zone-label">Station Activity Today</div>
+          <div class="transfer-zone-step">${lane.toDisplay}</div>
+          <div class="transfer-zone-value">${toActivity}</div>
+          <div class="transfer-zone-note">
+            In: ${toIn} · Out: ${toOut} · Current WIP: ${lane.toCurrent}
+          </div>
         </div>
       </div>
     </article>
   `;
 }
 
-function renderConverterLane(row, minutesBetween) {
-  const transitionName = safeText(row.TransitionName || `${row.FromDisplayName} → ${row.ToDisplayName}`);
-  const fromDisplay = safeText(row.FromDisplayName || row.FromStep, "From");
-  const toDisplay = safeText(row.ToDisplayName || row.ToStep, "To");
-
-  const fromCurrent = num(row.FromCurrentWIP);
-  const toCurrent = num(row.ToCurrentWIP);
+function getDailyLane(row) {
+  const transitionName = safeText(
+    row.TransitionName || `${row.FromDisplayName} → ${row.ToDisplayName}`
+  );
 
   const daily = findDailyTransferForTransition(transitionName);
 
-  const totalScannedFromArea = daily ? num(daily.TotalLeftFromStep) : 0;
-  const totalReachedNextStation = daily ? num(daily.TotalEnteredToStep) : 0;
+  return {
+    transitionName,
+    daily,
 
-  /*
-   * Correct movement logic:
-   * Backend daily estimate is the conveyor number.
-   */
-  const estimatedMovingBetween = daily
-    ? num(daily.TotalEstimatedInTransfer)
-    : num(row.EstimatedInTransfer);
+    fromStep: safeText(row.FromStep, ""),
+    toStep: safeText(row.ToStep, ""),
 
-  const latestLeft = num(row.LeftFromStep);
-  const latestReached = num(row.EnteredToStep);
+    fromDisplay: safeText(row.FromDisplayName || row.FromStep, "From"),
+    toDisplay: safeText(row.ToDisplayName || row.ToStep, "To"),
 
-  let severity = "normal";
+    fromCurrent: num(row.FromCurrentWIP),
+    toCurrent: num(row.ToCurrentWIP),
 
-  if (estimatedMovingBetween >= 100 || toCurrent >= CONFIG.WIP_CRITICAL) {
-    severity = "critical";
-  } else if (estimatedMovingBetween >= 35 || toCurrent >= CONFIG.WIP_HIGH) {
-    severity = "watch";
+    inToStep: daily ? num(daily.TotalEnteredToStep) : 0,
+    outFromStep: daily ? num(daily.TotalLeftFromStep) : 0,
+
+    estimatedMoving: daily
+      ? num(daily.TotalEstimatedInTransfer)
+      : num(row.EstimatedInTransfer)
+  };
+}
+
+function getStationIn(stepName) {
+  const target = String(stepName || "").trim();
+
+  return (state.surfaceTransfers || []).reduce((sum, row) => {
+    const lane = getDailyLane(row);
+
+    return String(lane.toStep).trim() === target
+      ? sum + lane.inToStep
+      : sum;
+  }, 0);
+}
+
+function getStationOut(stepName) {
+  const target = String(stepName || "").trim();
+
+  return (state.surfaceTransfers || []).reduce((sum, row) => {
+    const lane = getDailyLane(row);
+
+    return String(lane.fromStep).trim() === target
+      ? sum + lane.outFromStep
+      : sum;
+  }, 0);
+}
+
+function getStationActivity(stepName) {
+  const inCount = getStationIn(stepName);
+  const outCount = getStationOut(stepName);
+
+  if (inCount > 0 && outCount > 0) {
+    return inCount + outCount;
   }
 
-  const packetsToShow = Math.max(
-    3,
-    Math.min(10, estimatedMovingBetween || latestLeft || latestReached || 3)
-  );
+  if (outCount > 0) {
+    return outCount;
+  }
 
-  const packets = Array.from(
-    { length: packetsToShow },
-    (_, i) => `<span class="transfer-packet" style="--delay:${i * 0.34}s"></span>`
-  ).join("");
-
-  return `
-    <article class="transfer-card converter-lane ${severity}">
-      <div class="transfer-top">
-        <div class="transfer-route">
-          <div class="transfer-route-name">${transitionName}</div>
-          <div class="transfer-route-steps">
-            ${fromDisplay} scan flow moving into ${toDisplay}
-          </div>
-        </div>
-      </div>
-
-      <div class="transfer-single-lane">
-
-        <div class="transfer-main-zone">
-          <div class="transfer-zone-label">Total Scanned Today</div>
-          <div class="transfer-zone-step">${fromDisplay}</div>
-          <div class="transfer-zone-value">${totalScannedFromArea}</div>
-          <div class="transfer-zone-note">Current ${fromDisplay} WIP: ${fromCurrent}</div>
-        </div>
-
-        <div class="transfer-flow-arrow">→</div>
-
-        <div class="transfer-main-conveyor is-moving">
-          <div class="transfer-conveyor-head">
-            <div class="transfer-conveyor-title">Estimated Moving Count</div>
-            <div class="transfer-conveyor-count">${estimatedMovingBetween}</div>
-          </div>
-
-          <div class="transfer-track">
-            ${packets}
-          </div>
-
-          <div class="transfer-zone-note transfer-center-note">
-            Backend estimated movement from interval snapshots
-          </div>
-        </div>
-
-        <div class="transfer-flow-arrow">→</div>
-
-        <div class="transfer-main-zone">
-          <div class="transfer-zone-label">Total Reached Today</div>
-          <div class="transfer-zone-step">${toDisplay}</div>
-          <div class="transfer-zone-value">${totalReachedNextStation}</div>
-          <div class="transfer-zone-note">Current ${toDisplay} WIP: ${toCurrent}</div>
-        </div>
-
-      </div>
-
-      <div class="transfer-bottom">
-        <span><strong>From:</strong> ${safeText(row.FromStep)}</span>
-        <span><strong>To:</strong> ${safeText(row.ToStep)}</span>
-        <span><strong>Logic:</strong> Moving Between = Backend Estimated Transfer</span>
-      </div>
-    </article>
-  `;
+  return inCount;
 }
 
 function converterIcon(type) {
