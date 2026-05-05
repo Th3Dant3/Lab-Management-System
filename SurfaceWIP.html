@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurfaceWIP</title>
+  <link rel="stylesheet" href="SurfaceWIP.css" />
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">⬢</div>
+        <div class="brand-title">
+          SurfaceWIP
+          <span>Control Center</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-tab="overview">Overview</button>
+        <button class="nav-item" data-tab="flow">Flow</button>
+        <button class="nav-item" data-tab="lines">Lines</button>
+
+        <button class="nav-item" data-tab="alerts">
+          Alerts
+          <span class="nav-badge" id="alertBadge" style="display:none">0</span>
+        </button>
+
+        <button class="nav-item" data-tab="analytics">Analytics</button>
+        <button class="nav-item" data-tab="reports">Summary</button>
+      </nav>
+
+      <div class="system-card">
+        <div class="system-title">System Status</div>
+
+        <div class="system-ok">
+          <span class="dot green-dot"></span>
+          <span id="systemStatusText">Connecting…</span>
+        </div>
+
+        <div class="refresh-mini">
+          <span class="spin-icon">↻</span>
+          <div>Auto Refresh<br><strong>30s</strong></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <!-- OVERVIEW TAB -->
+      <section class="tab-panel active" id="tab-overview">
+        <header class="page-header">
+          <div>
+            <h1>SurfaceWIP</h1>
+            <p class="subtitle">
+              Real-time Surface WIP monitoring with estimated transfer tunnel.
+            </p>
+
+            <div class="header-actions">
+              <div class="live-pill">
+                <span class="pulse-dot"></span>
+                LIVE MODE
+              </div>
+
+              <div class="auto-refresh">
+                <span class="dot green-dot"></span>
+                Auto-refreshing every 30s
+              </div>
+
+              <div class="report-meta" id="reportMeta">
+                Loading report…
+              </div>
+
+              <div class="latest-update-pill" id="latestUpdatePill">
+                Latest Update: —
+              </div>
+            </div>
+          </div>
+
+          <div class="clock-card">
+            <div id="clockTime">--:--:--</div>
+            <span id="clockDate">--</span>
+          </div>
+        </header>
+
+        <!-- KPI CARDS -->
+        <section class="kpi-grid">
+          <article class="kpi-card">
+            <div class="kpi-label">Total Surface WIP</div>
+            <div class="kpi-value" id="kpiTotal">—</div>
+            <div class="kpi-note" id="kpiActiveSteps">—</div>
+          </article>
+
+          <article class="kpi-card red">
+            <div class="kpi-label">Highest Bottleneck</div>
+            <div class="kpi-value" id="kpiBottleneck">—</div>
+            <div class="kpi-note" id="kpiBottleneckSub">—</div>
+          </article>
+
+          <article class="kpi-card green">
+            <div class="kpi-label">Surface Main WIP</div>
+            <div class="kpi-value" id="kpiMain">—</div>
+            <div class="kpi-note" id="kpiIntake">—</div>
+          </article>
+
+          <article class="kpi-card orange">
+            <div class="kpi-label">Empty / Missing Steps</div>
+            <div class="kpi-value" id="kpiEmpty">—</div>
+            <div class="kpi-note">of 14 flow steps</div>
+          </article>
+        </section>
+
+        <!-- FILTERS -->
+        <div class="filters">
+          <button class="filter-btn active" data-filter="all">All Surface</button>
+          <button class="filter-btn" data-filter="lineA" style="display:none">Line A</button>
+          <button class="filter-btn" data-filter="lineB">Line B</button>
+          <button class="filter-btn filter-btn--alert" data-filter="critical">High WIP Only</button>
+        </div>
+
+        <!-- FLOW CARDS -->
+        <section class="flow-shell">
+          <div class="bottleneck-label" id="bottleneckLabel">BOTTLENECK</div>
+
+          <div class="flow-grid" id="flowGrid">
+            <div class="flow-loading">
+              <div class="spinner"></div>
+              <span>Loading live data…</span>
+            </div>
+          </div>
+
+          <div class="flow-track">
+            <span class="particle" style="--delay:0s"></span>
+            <span class="particle" style="--delay:1.8s"></span>
+            <span class="particle" style="--delay:3.6s"></span>
+          </div>
+        </section>
+
+        <!-- TRANSFER TUNNEL -->
+        <section class="transfer-shell">
+          <div class="transfer-shell__header">
+            <div>
+              <h2 class="transfer-title">Surface Transfer Converter</h2>
+              <p class="transfer-subtitle">
+                Snapshot-based movement estimate from the latest two WIP reports.
+                High WIP can exist even when transfer movement is low.
+              </p>
+            </div>
+
+            <div class="transfer-meta" id="transferMeta">
+              Waiting for transfer data…
+            </div>
+          </div>
+
+          <div class="transfer-grid" id="transferGrid">
+            <div class="transfer-loading">
+              <div class="spinner"></div>
+              <span>Loading transfer metrics…</span>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- FLOW TAB -->
+      <section class="tab-panel" id="tab-flow">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Flow Detail</h1>
+            <p class="subtitle">Full Surface flow breakdown.</p>
+          </div>
+        </header>
+
+        <div class="flow-detail-grid" id="flowDetailGrid">
+          <div class="flow-loading">
+            <div class="spinner"></div>
+            <span>Loading…</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- LINES TAB -->
+      <section class="tab-panel" id="tab-lines">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Line Breakdown</h1>
+            <p class="subtitle">Line A and Line B WIP distribution.</p>
+          </div>
+        </header>
+
+        <div class="lines-grid" id="linesGrid">
+          <div class="flow-loading">
+            <div class="spinner"></div>
+            <span>Loading…</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ALERTS TAB -->
+      <section class="tab-panel" id="tab-alerts">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Action Alerts</h1>
+            <p class="subtitle">Auto-generated alerts from WIP thresholds.</p>
+          </div>
+        </header>
+
+        <div class="alerts-panel" id="alertsPanel">
+          <div class="flow-loading">
+            <div class="spinner"></div>
+            <span>Loading…</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ANALYTICS TAB -->
+      <section class="tab-panel" id="tab-analytics">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Analytics</h1>
+            <p class="subtitle">Summary and group distribution.</p>
+          </div>
+        </header>
+
+        <div class="analytics-grid" id="analyticsGrid">
+          <div class="flow-loading">
+            <div class="spinner"></div>
+            <span>Loading…</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SUMMARY TAB -->
+      <section class="tab-panel" id="tab-reports">
+        <header class="page-header page-header--slim summary-header">
+          <div>
+            <h1>Summary</h1>
+            <p class="subtitle">
+              Executive Surface WIP summary, bottleneck view, and transfer tunnel overview.
+            </p>
+          </div>
+
+          <div class="summary-header-actions">
+            <div class="latest-update-pill" id="summaryLatestUpdate">
+              Latest Update: —
+            </div>
+
+            <button class="btn-export" id="btnExportCsv">
+              Export CSV
+            </button>
+          </div>
+        </header>
+
+        <div class="report-table-wrap" id="reportTableWrap">
+          <div class="flow-loading">
+            <div class="spinner"></div>
+            <span>Loading summary…</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- LOADING SCREEN -->
+  <div id="surfaceLoader" class="surface-loader">
+    <div class="loader-grid-bg"></div>
+
+    <div class="surface-loader-card">
+      <div class="loader-orbit">
+        <div class="loader-core"><span></span></div>
+        <div class="orbit-ring ring-1"></div>
+        <div class="orbit-ring ring-2"></div>
+        <div class="orbit-dot dot-1"></div>
+        <div class="orbit-dot dot-2"></div>
+        <div class="orbit-dot dot-3"></div>
+      </div>
+
+      <div class="loader-title">Surface</div>
+      <div class="loader-subtitle">Surface Work In Progress Flow</div>
+
+      <div class="loader-flow">
+        <div class="loader-node active"><span>SF</span></div>
+        <div class="loader-track"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="loader-node"><span>BX</span></div>
+        <div class="loader-track"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="loader-node"><span>54R</span></div>
+      </div>
+
+      <div class="loader-progress">
+        <div id="surfaceLoaderFill" class="loader-progress-fill"></div>
+      </div>
+
+      <div id="surfaceLoaderStatus" class="loader-status-text">Initializing Surface dashboard…</div>
+    </div>
+  </div>
+
+  <script src="SurfaceWIP.js"></script>
+</body>
+</html>
