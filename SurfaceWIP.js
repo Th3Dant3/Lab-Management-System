@@ -767,7 +767,7 @@ function renderConverterGroup(group, minutesBetween) {
           </div>
 
           <div>
-            <span>Moving</span>
+            <span>Estimated Count</span>
             <strong>${moving}</strong>
           </div>
 
@@ -846,7 +846,7 @@ function renderConverterMiniLane(row, minutesBetween) {
 
         <div class="converter-mini-conveyor">
           <div class="transfer-conveyor-head">
-            <div class="transfer-conveyor-title">Moving Between</div>
+            <div class="transfer-conveyor-title">Estimated Transfer Count</div>
             <div class="transfer-conveyor-count">${movingBetween}</div>
           </div>
 
@@ -934,7 +934,7 @@ function renderConverterLane(row, minutesBetween) {
 
         <div class="transfer-main-conveyor is-moving">
           <div class="transfer-conveyor-head">
-            <div class="transfer-conveyor-title">Estimated Moving Between Scans</div>
+            <div class="transfer-conveyor-title">Estimated Moving Count</div>
             <div class="transfer-conveyor-count">${estimatedMovingBetween}</div>
           </div>
 
