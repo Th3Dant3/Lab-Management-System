@@ -757,12 +757,6 @@ function renderConverterMiniLane(row, minutesBetween) {
   const fromActivity = getStationActivity(lane.fromStep);
   const toActivity = getStationActivity(lane.toStep);
 
-  const fromIn = getStationIn(lane.fromStep);
-  const fromOut = getStationOut(lane.fromStep);
-
-  const toIn = getStationIn(lane.toStep);
-  const toOut = getStationOut(lane.toStep);
-
   const severity =
     lane.estimatedMoving >= 100 || lane.toCurrent >= CONFIG.WIP_CRITICAL ? "critical" :
     lane.estimatedMoving >= 35 || lane.toCurrent >= CONFIG.WIP_HIGH ? "watch" :
@@ -793,7 +787,7 @@ function renderConverterMiniLane(row, minutesBetween) {
           <div class="transfer-zone-step">${lane.fromDisplay}</div>
           <div class="transfer-zone-value">${fromActivity}</div>
           <div class="transfer-zone-note">
-            In: ${fromIn} · Out: ${fromOut} · Current WIP: ${lane.fromCurrent}
+            Current WIP: ${lane.fromCurrent}
           </div>
         </div>
 
@@ -817,7 +811,7 @@ function renderConverterMiniLane(row, minutesBetween) {
           <div class="transfer-zone-step">${lane.toDisplay}</div>
           <div class="transfer-zone-value">${toActivity}</div>
           <div class="transfer-zone-note">
-            In: ${toIn} · Out: ${toOut} · Current WIP: ${lane.toCurrent}
+            Current WIP: ${lane.toCurrent}
           </div>
         </div>
       </div>
