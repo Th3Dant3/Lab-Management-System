@@ -1042,17 +1042,22 @@ function applyVisibilityRules() {
   });
 
   // ── 2. Feature cards — hide individual cards ──
-  const featureCardMap = {
-    "LMS_Command_InvestigationHold": "#investigation-card",
-    "LMS_Command_LensIntake":        "#tools-card",
-    "LMS_Command_TrueCurve":         "#truecurve-card",
-    "Production_CoatingBreakage":    "#coating-card",
-    "Production_PowerAnalysis":      "#power-card",
-    "System_ScannerMap":             "#scanner-card",
-    "Inventory_IncomingJobs":        "#incoming-card",
-    "Inventory_PickingWIP":          "#pickwip-card",
-    "Training_TrainingPortal":       "#facility-breakage-card"
-  };
+const featureCardMap = {
+  "LMS_Command_InvestigationHold": "#investigation-card",
+  "LMS_Command_LensIntake":        "#tools-card",
+  "LMS_Command_TrueCurve":         "#truecurve-card",
+
+  "Production_SurfaceFlow":        "#surfaceflow-card",
+  "Production_CoatingBreakage":    "#coating-card",
+  "Production_PowerAnalysis":      "#power-card",
+
+  "System_ScannerMap":             "#scanner-card",
+
+  "Inventory_IncomingJobs":        "#incoming-card",
+  "Inventory_PickingWIP":          "#pickwip-card",
+
+  "Training_TrainingPortal":       "#facility-breakage-card"
+};
 
   // Hide all feature cards first
   Object.values(featureCardMap).forEach(sel => {

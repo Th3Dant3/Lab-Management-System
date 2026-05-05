@@ -334,59 +334,107 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
   </section>
 
   <!-- PRODUCTION TAB -->
-  <section id="production" class="tab-content">
-    <div class="module-head">
-      <div class="module-label">Production Modules</div>
-    </div>
-    <div class="cards-grid">
+<section id="production" class="tab-content">
+  <div class="module-head">
+    <div class="module-label">Production Modules</div>
+  </div>
 
-      <div id="coating-card" class="card" data-gated>
-        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>
-        <div class="card-inner">
-          <div class="card-top">
-            <div class="card-title-row">
-              <h3 class="card-title">Coating Breakage Analytics</h3>
-              <span class="badge badge--lms">Production</span>
-            </div>
-            <p class="card-desc">Breakage trends and root cause analysis by line</p>
+  <div class="cards-grid">
+
+    <!-- ── Surface Flow / WIP Dashboard ── -->
+    <div id="surfaceflow-card" class="card card--featured" data-gated>
+      <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#22d3ee"></canvas>
+      <div class="card-accent card-accent--cyan"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Surface Transfer Flow</h3>
+            <span class="badge badge--lms-live">Production Live</span>
           </div>
-          <div class="card-tags">
-            <span class="tag">54R</span>
-            <span class="tag">44R</span>
-            <span class="tag">Trends</span>
-          </div>
-          <button class="card-btn" onclick="openPage('coating.html')">
-            Open Dashboard
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </button>
+
+          <p class="card-desc">
+            Live Surface WIP flow, bottleneck visibility, transfer movement, BOS/EOS history, and station-level production status.
+          </p>
         </div>
-      </div>
 
-      <div id="power-card" class="card card--power" data-gated>
-        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#9b6bff"></canvas>
-        <div class="card-accent card-accent--violet"></div>
-        <div class="card-inner">
-          <div class="card-top">
-            <div class="card-title-row">
-              <h3 class="card-title">Power Analysis Tool</h3>
-              <span class="badge badge--violet">Production</span>
-            </div>
-            <p class="card-desc">Power metrics, performance monitoring, and production analysis</p>
-          </div>
-          <div class="card-tags">
-            <span class="tag">Blocking</span>            
-            <span class="tag">Generator</span>
-            <span class="tag">Trends</span>
-          </div>
-          <button class="card-btn card-btn--violet" onclick="openPage('power.html')">
-            Open Tool
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </button>
+        <div class="card-tags">
+          <span class="tag">Surface WIP</span>
+          <span class="tag">Transfer Flow</span>
+          <span class="tag">BOS / EOS</span>
+          <span class="tag">Bottleneck</span>
         </div>
-      </div>
 
+        <button class="card-btn" onclick="openPage('SurfaceWIP.html')">
+          Open Surface Flow
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
     </div>
-  </section>
+
+    <!-- ── Coating Breakage Analytics ── -->
+    <div id="coating-card" class="card" data-gated>
+      <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Coating Breakage Analytics</h3>
+            <span class="badge badge--lms">Production</span>
+          </div>
+
+          <p class="card-desc">Breakage trends and root cause analysis by line</p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">54R</span>
+          <span class="tag">44R</span>
+          <span class="tag">Trends</span>
+        </div>
+
+        <button class="card-btn" onclick="openPage('coating.html')">
+          Open Dashboard
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Power Analysis Tool ── -->
+    <div id="power-card" class="card card--power" data-gated>
+      <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#9b6bff"></canvas>
+      <div class="card-accent card-accent--violet"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Power Analysis Tool</h3>
+            <span class="badge badge--violet">Production</span>
+          </div>
+
+          <p class="card-desc">Power metrics, performance monitoring, and production analysis</p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">Blocking</span>
+          <span class="tag">Generator</span>
+          <span class="tag">Trends</span>
+        </div>
+
+        <button class="card-btn card-btn--violet" onclick="openPage('power.html')">
+          Open Tool
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</section>
 
   <!-- SYSTEM TAB -->
   <section id="system" class="tab-content">
