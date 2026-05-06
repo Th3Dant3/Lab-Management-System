@@ -907,7 +907,7 @@ function renderContinuousSurfaceFlow(rows) {
         <div>
           <div class="continuous-flow-title">Surface Live Flow</div>
           <div class="continuous-flow-subtitle">
-            Total Scan Today → Current WIP Up Now → Next Station
+            Workflow Metrics
           </div>
         </div>
       </div>
@@ -986,20 +986,11 @@ function renderSnakeRow(row, rowIndex) {
     });
   }
 
-  const nextFirstTransition = getNextRowFirstTransition(rowIndex);
-
-  return `
-    <div class="snake-row ${row.reverse ? "reverse no-repeat-start" : ""}" data-row-index="${rowIndex}">
-      ${pieces.join("")}
-    </div>
-
-    ${
-      nextFirstTransition
-        ? renderSnakeBridge(nextFirstTransition, row.reverse)
-        : ""
-    }
-  `;
-}
+return `
+  <div class="snake-row ${row.reverse ? "reverse no-repeat-start" : ""}" data-row-index="${rowIndex}">
+    ${pieces.join("")}
+  </div>
+`;
 
 function getNextRowFirstTransition(rowIndex) {
   const allRows = window.__surfaceSnakeRows || [];
@@ -1081,7 +1072,7 @@ function renderContinuousConveyor(row) {
   return `
     <article class="continuous-conveyor ${severity}">
       <div class="transfer-conveyor-head">
-        <div class="transfer-conveyor-title">Current WIP Up Now</div>
+        <div class="transfer-conveyor-title">Current WIP Moving</div>
         <div class="transfer-conveyor-count">${wip.toLocaleString()}</div>
       </div>
 
