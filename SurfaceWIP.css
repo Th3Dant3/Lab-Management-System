@@ -2632,6 +2632,13 @@ h1 {
   font-size: 34px;
 }
 
+.transfer-zone-sub {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 4px;
+  letter-spacing: 0.03em;
+}
+
 .transfer-conveyor-count {
   font-size: 34px;
 }
@@ -3137,4 +3144,372 @@ h1 {
 
 .surface-back-btn-bottom {
   margin-top: 28px;
+}
+
+.continuous-flow-shell {
+  border: 1px solid rgba(34,211,238,0.28);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(34,211,238,0.08), transparent 30%),
+    linear-gradient(145deg, rgba(6,20,42,0.94), rgba(2,10,22,0.92));
+  padding: 24px;
+  overflow: hidden;
+}
+
+.continuous-flow-shell.watch {
+  border-color: rgba(249,115,22,0.5);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(249,115,22,0.13), transparent 32%),
+    linear-gradient(145deg, rgba(30,14,4,0.95), rgba(2,10,22,0.94));
+}
+
+.continuous-flow-shell.critical {
+  border-color: rgba(255,71,87,0.58);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,71,87,0.18), transparent 36%),
+    linear-gradient(145deg, rgba(35,6,13,0.96), rgba(2,10,22,0.95));
+}
+
+.continuous-flow-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.continuous-flow-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--cyan);
+}
+
+.continuous-flow-subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.continuous-flow-metrics {
+  display: flex;
+  gap: 12px;
+}
+
+.continuous-flow-metrics > div {
+  min-width: 150px;
+  border: 1px solid rgba(56,189,248,0.18);
+  border-radius: var(--radius-md);
+  background: rgba(8,18,38,0.72);
+  padding: 13px 14px;
+}
+
+.continuous-flow-metrics span {
+  display: block;
+  color: #8bb8d8;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.continuous-flow-metrics strong {
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: var(--cyan);
+  line-height: 1;
+}
+
+.continuous-flow-chain {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+.continuous-station-card,
+.continuous-conveyor {
+  flex: 0 0 210px;
+  border: 1px solid rgba(34,211,238,0.22);
+  border-radius: var(--radius-lg);
+  background: rgba(6,18,36,0.78);
+  padding: 14px;
+  min-height: 145px;
+}
+
+.continuous-station-card {
+  box-shadow: inset 0 0 18px rgba(34,211,238,0.05);
+}
+
+.continuous-conveyor {
+  flex-basis: 230px;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(7,18,38,0.88), rgba(2,10,22,0.92));
+}
+
+.continuous-conveyor::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 62%;
+  height: 10px;
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(34,211,238,0.07) 0 14px,
+      rgba(34,211,238,0.28) 14px 22px
+    );
+  box-shadow: inset 0 0 16px rgba(34,211,238,0.24);
+}
+
+.continuous-conveyor.watch {
+  border-color: rgba(249,115,22,0.36);
+}
+
+.continuous-conveyor.watch .transfer-conveyor-count {
+  color: var(--yellow);
+}
+
+.continuous-conveyor.critical {
+  border-color: rgba(255,71,87,0.48);
+}
+
+.continuous-conveyor.critical .transfer-conveyor-count {
+  color: var(--red);
+}
+
+.continuous-conveyor-route {
+  position: relative;
+  z-index: 2;
+  margin-top: 8px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.continuous-conveyor .transfer-track,
+.continuous-conveyor .transfer-conveyor-head {
+  position: relative;
+  z-index: 2;
+}
+
+/* =========================================================
+   SNAKE LIVE FLOW — 2 TRANSITIONS PER ROW
+========================================================= */
+
+.snake-flow-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.snake-row {
+  display: grid;
+  grid-template-columns: 1fr 1.05fr 1fr 1.05fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.snake-row.reverse {
+  direction: rtl;
+}
+
+.snake-row.reverse > * {
+  direction: ltr;
+}
+
+.snake-row .continuous-station-card,
+.snake-row .continuous-conveyor {
+  min-width: 0;
+  min-height: 145px;
+}
+
+/* =========================================================
+   SNAKE BRIDGE — DOWN THEN LEFT / RIGHT
+========================================================= */
+
+.snake-bridge {
+  display: flex;
+  align-items: center;
+  min-height: 92px;
+  padding: 4px 0 8px;
+  gap: 16px;
+}
+
+.snake-bridge.right {
+  justify-content: flex-end;
+  padding-right: 24px;
+}
+
+.snake-bridge.left {
+  justify-content: flex-start;
+  padding-left: 24px;
+}
+
+.snake-bridge-path {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 60px;
+}
+
+.snake-bridge-down,
+.snake-bridge-turn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.snake-bridge-down {
+  position: relative;
+  width: 2px;
+  height: 42px;
+  background: linear-gradient(
+    180deg,
+    rgba(34, 211, 238, 0.95),
+    rgba(34, 211, 238, 0.18)
+  );
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.35);
+  border-radius: 999px;
+}
+
+.snake-bridge-down .snake-bridge-arrow {
+  position: absolute;
+  bottom: -14px;
+}
+
+.snake-bridge-turn {
+  width: 52px;
+  height: 30px;
+}
+
+.snake-bridge-arrow {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--cyan);
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.22);
+}
+
+.snake-bridge-info {
+  min-width: 230px;
+  max-width: 280px;
+  border: 1px solid rgba(34, 211, 238, 0.26);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(34, 211, 238, 0.10), transparent 40%),
+    linear-gradient(145deg, rgba(7, 18, 38, 0.92), rgba(2, 10, 22, 0.9));
+  padding: 12px 14px;
+}
+
+.snake-bridge.watch .snake-bridge-info {
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.snake-bridge.critical .snake-bridge-info {
+  border-color: rgba(255, 71, 87, 0.55);
+}
+
+.snake-bridge-label {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #8bb8d8;
+  margin-bottom: 4px;
+}
+
+.snake-bridge-count {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+  color: var(--cyan);
+}
+
+.snake-bridge.watch .snake-bridge-count {
+  color: var(--yellow);
+}
+
+.snake-bridge.critical .snake-bridge-count {
+  color: var(--red);
+}
+
+.snake-bridge-route {
+  margin-top: 6px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* row layout */
+.snake-flow-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.snake-row {
+  display: grid;
+  grid-template-columns: 1fr 1.05fr 1fr 1.05fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.snake-row.reverse {
+  direction: rtl;
+}
+
+.snake-row.reverse > * {
+  direction: ltr;
+}
+
+/* reverse rows that do NOT repeat the previous ending station */
+.snake-row.reverse.no-repeat-start {
+  grid-template-columns: 1.05fr 1fr 1.05fr 1fr;
+}
+
+.snake-row .continuous-station-card,
+.snake-row .continuous-conveyor {
+  min-width: 0;
+  min-height: 145px;
+}
+
+@media (max-width: 1100px) {
+  .snake-row,
+  .snake-row.reverse,
+  .snake-row.reverse.no-repeat-start {
+    display: flex;
+    flex-direction: column;
+    direction: ltr;
+  }
+}
+  .snake-bridge,
+  .snake-bridge.left,
+  .snake-bridge.right {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .snake-bridge-info {
+    width: 100%;
+    max-width: 100%;
+  }
+/* Peak scan text */
+.transfer-zone-sub {
+  color: #ffffff;
+  font-weight: 800;
 }

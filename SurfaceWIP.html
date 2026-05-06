@@ -6,7 +6,7 @@
 
   <title>Surface WIP Flow</title>
 
-  <link rel="stylesheet" href="SurfaceWIP.css" />
+  <link rel="stylesheet" href="SurfaceWIP.css?v=20260506-cleanflow" />
 </head>
 
 <body>
@@ -31,7 +31,7 @@
       </div>
 
       <div class="loader-title">SurfaceWIP</div>
-      <div class="loader-subtitle">Building Surface transfer flow</div>
+      <div class="loader-subtitle">Building live Surface flow</div>
 
       <div class="loader-flow">
         <div class="loader-node active">
@@ -68,7 +68,6 @@
 
   <!-- =====================================================
        APP LAYOUT
-       IMPORTANT: CSS expects .app, .sidebar, .main
   ====================================================== -->
   <div class="app">
 
@@ -87,7 +86,7 @@
 
       <nav class="nav">
         <button class="nav-item active" data-tab="overview">Overview</button>
-        <button class="nav-item" data-tab="transfer">Transfer Tunnel</button>
+        <button class="nav-item" data-tab="transfer">Live Flow</button>
         <button class="nav-item" data-tab="detail">Flow Detail</button>
         <button class="nav-item" data-tab="lines">Lines</button>
 
@@ -140,7 +139,7 @@
           <h1>Surface WIP Flow</h1>
 
           <p class="subtitle">
-            Real-time Surface WIP monitoring with estimated transfer tunnel.
+            Live Surface flow using scan totals and current WIP up now.
           </p>
 
           <div class="header-actions">
@@ -153,7 +152,7 @@
               <span class="dot green-dot"></span>
               Auto-refreshing every 30s
             </div>
-           
+
             <div id="latestUpdatePill" class="latest-update-pill">
               Latest Update: —
             </div>
@@ -191,11 +190,11 @@
           <div id="kpiIntake" class="kpi-note">Intake: —</div>
         </article>
 
-        <article class="kpi-card orange">
-          <div class="kpi-label">Empty / Missing Steps</div>
-          <div id="kpiEmpty" class="kpi-value">—</div>
-          <div class="kpi-note">Visible workflow gaps</div>
-        </article>
+       <article class="kpi-card orange">
+  <div class="kpi-label">Total Surface Inspection</div>
+  <div id="kpiInspection" class="kpi-value">—</div>
+  <div class="kpi-note">Total Scan of Inspection</div>
+</article>
 
       </section>
 
@@ -230,21 +229,21 @@
         <section class="transfer-shell">
           <div class="transfer-shell__header">
             <div>
-              <div class="transfer-title">Surface Transfer Converter</div>
+              <div class="transfer-title">Surface Live Flow</div>
               <div class="transfer-subtitle">
-                Snapshot-based movement estimate from the latest WIP reports. High WIP can exist even when transfer movement is low.
+                Total Scan Today → Current WIP Up Now → Next Station.
               </div>
             </div>
 
             <div id="transferMeta" class="transfer-meta">
-              Waiting for interval snapshots…
+              Live Surface WIP
             </div>
           </div>
 
           <div id="transferGrid" class="transfer-grid">
             <div class="transfer-loading">
               <div class="spinner"></div>
-              <span>Loading transfer movement…</span>
+              <span>Loading live Surface flow…</span>
             </div>
           </div>
         </section>
@@ -253,15 +252,15 @@
 
 
       <!-- =====================================================
-           TRANSFER TAB
+           LIVE FLOW TAB
       ====================================================== -->
       <section id="tab-transfer" class="tab-panel">
 
         <header class="page-header page-header--slim">
           <div>
-            <h1>Transfer Tunnel</h1>
+            <h1>Live Flow</h1>
             <p class="subtitle">
-              Detailed movement estimate between Surface stations.
+              Current Surface flow: station scan totals and WIP feeding the next station.
             </p>
           </div>
         </header>
@@ -269,20 +268,20 @@
         <section class="transfer-shell">
           <div class="transfer-shell__header">
             <div>
-              <div class="transfer-title">Surface Transfer Converter</div>
+              <div class="transfer-title">Surface Live Flow</div>
               <div class="transfer-subtitle">
-                Uses daily totals and backend estimated transfer movement.
+                Open Overview to view the live Surface flow chain.
               </div>
             </div>
 
             <div id="transferMetaSecondary" class="transfer-meta">
-              Transfer data
+              Live flow
             </div>
           </div>
 
           <div id="transferGridSecondary" class="transfer-grid">
             <div class="transfer-loading">
-              Open Overview to view the live transfer tunnel.
+              Open Overview to view the live Surface flow.
             </div>
           </div>
         </section>
@@ -409,7 +408,7 @@
   <!-- =====================================================
        PAGE JS
   ====================================================== -->
-  <script src="SurfaceWIP.js"></script>
+  <script src="SurfaceWIP.js?v=20260506-cleanflow"></script>
 
 </body>
 </html>

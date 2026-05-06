@@ -1,78 +1,15 @@
-/* =================================================
-   SurfaceWIP — Frontend JS
-   Production Surface WIP + Transfer Tunnel + Daily Totals
-================================================= */
+/* =========================================================
+   SurfaceWIP.js
+   Production Surface WIP Dashboard
+   Live Flow = Total Scan Today → Current WIP Up Now → Next Station
+========================================================= */
 
 "use strict";
 
-/* =============================================
-   SAFE LOADING SCREEN HELPERS
-============================================= */
 
-function setSurfaceLoaderProgress(percent, message) {
-  const fill = document.getElementById("surfaceLoaderFill");
-  const status = document.getElementById("surfaceLoaderStatus");
-
-  if (fill) {
-    fill.style.width = Math.max(0, Math.min(100, percent)) + "%";
-  }
-
-  if (status && message) {
-    status.textContent = message;
-  }
-}
-
-function hideSurfaceLoader() {
-  const loader = document.getElementById("surfaceLoader");
-
-  if (!loader) {
-    return;
-  }
-
-  setSurfaceLoaderProgress(100, "Surface dashboard ready");
-
-  setTimeout(() => {
-    loader.classList.add("is-hidden");
-  }, 350);
-
-  setTimeout(() => {
-    if (loader && loader.parentNode) {
-      loader.remove();
-    }
-  }, 1200);
-}
-
-function startSurfaceLoaderAnimation() {
-  const loader = document.getElementById("surfaceLoader");
-
-  if (!loader) {
-    return;
-  }
-
-  const steps = [
-    { pct: 18, msg: "Authenticating Surface access…" },
-    { pct: 38, msg: "Loading WIP stations…" },
-    { pct: 58, msg: "Reading transfer snapshots…" },
-    { pct: 76, msg: "Building movement tunnel…" },
-    { pct: 92, msg: "Rendering dashboard…" }
-  ];
-
-  let index = 0;
-
-  window.surfaceLoaderTimer = setInterval(() => {
-    if (index >= steps.length) {
-      clearInterval(window.surfaceLoaderTimer);
-      return;
-    }
-
-    const step = steps[index++];
-    setSurfaceLoaderProgress(step.pct, step.msg);
-  }, 420);
-}
-
-/* =============================================
-   CONFIG
-============================================= */
+/* =========================================================
+   SECTION 01 — CONFIG
+========================================================= */
 
 const CONFIG = {
   API_URL: "https://script.google.com/macros/s/AKfycbzXB24Hq39ymhHnh5QYtHsGsRTdfUNtVq3gxx1IPDxmpV7uuzqXLLfRHP29ypwPIgl1ng/exec",
@@ -101,21 +38,54 @@ const CONFIG = {
   ]
 };
 
-/* =============================================
-   ICONS
-============================================= */
+
+/* =========================================================
+   SECTION 02 — GLOBAL STATE
+========================================================= */
+
+let state = {
+  summary: null,
+  surfaceFlow: [],
+  surfaceTransfers: [],
+  surfaceTransferDailyTotals: [],
+  surfaceScanSummary: [],
+  intervalMeta: null,
+
+  lastFetch: null,
+  lastSnapshotKey: null,
+  lastDataSignature: null,
+
+  filter: "all",
+  activeTab: "overview",
+  hasRenderedOnce: false
+};
+
+
+/* =========================================================
+   SECTION 03 — SVG ICONS
+========================================================= */
 
 const ICONS = {
   scan: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><path d="M8 8h3v3H8zM13 8h3M13 11h3M8 13h3M13 13h3v3h-3zM8 16h3"/></svg>`,
+
   box: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="M3 7v10l9 5 9-5V7"/><path d="M12 12v10"/></svg>`,
+
   blocking: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 8h6M8 20v2M16 20v2"/></svg>`,
+
   snow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M4.9 4.9l14.2 14.2M2 12h20M4.9 19.1 19.1 4.9"/><path d="m8 4 4 4 4-4M8 20l4-4 4 4M4 8l4 4-4 4M20 8l-4 4 4 4"/></svg>`,
+
   gear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1-.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 19.4 9c.2.6.8 1 1.5 1h.1a2 2 0 1 1 0 4h-.2c-.6 0-1.2.4-1.4 1Z"/></svg>`,
+
   sparkle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m12 2 2.2 6.8L21 11l-6.8 2.2L12 20l-2.2-6.8L3 11l6.8-2.2L12 2Z"/></svg>`,
+
   engrave: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v12"/><path d="m8 10 4 4 4-4"/><path d="M5 22h14M9 18h6M12 14v4"/></svg>`,
+
   tape: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="12" r="7"/><circle cx="9" cy="12" r="3"/><path d="M9 19h11l-3-4h-2"/></svg>`,
+
   droplet: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/></svg>`,
+
   shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2 20 5v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3Z"/><path d="m8 12 3 3 5-6"/></svg>`,
+
   gearDefault: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>`
 };
 
@@ -136,27 +106,10 @@ function iconForStep(step) {
   return ICONS.gearDefault;
 }
 
-/* =============================================
-   STATE
-============================================= */
 
-let state = {
-  summary: null,
-  surfaceFlow: [],
-  surfaceTransfers: [],
-  surfaceTransferDailyTotals: [],
-  intervalMeta: null,
-  lastFetch: null,
-  lastSnapshotKey: null,
-  lastDataSignature: null,
-  filter: "all",
-  activeTab: "overview",
-  hasRenderedOnce: false
-};
-
-/* =============================================
-   HELPERS
-============================================= */
+/* =========================================================
+   SECTION 04 — BASIC HELPERS
+========================================================= */
 
 function num(value) {
   const n = Number(String(value ?? "").replace(/,/g, ""));
@@ -238,17 +191,87 @@ function filterRows(rows, filter) {
   }
 }
 
-function findDailyTransferForTransition(transitionName) {
-  const rows = state.surfaceTransferDailyTotals || [];
 
-  return rows.find(row => {
-    return String(row.TransitionName || "").trim() === String(transitionName || "").trim();
-  }) || null;
+/* =========================================================
+   SECTION 05 — LOADER HELPERS
+========================================================= */
+
+function setSurfaceLoaderProgress(percent, message) {
+  const fill = document.getElementById("surfaceLoaderFill");
+  const status = document.getElementById("surfaceLoaderStatus");
+
+  if (fill) {
+    fill.style.width = Math.max(0, Math.min(100, percent)) + "%";
+  }
+
+  if (status && message) {
+    status.textContent = message;
+  }
 }
+
+function hideSurfaceLoader() {
+  const loader = document.getElementById("surfaceLoader");
+
+  if (!loader) return;
+
+  setSurfaceLoaderProgress(100, "Surface dashboard ready");
+
+  setTimeout(() => {
+    loader.classList.add("is-hidden");
+  }, 350);
+
+  setTimeout(() => {
+    if (loader && loader.parentNode) {
+      loader.remove();
+    }
+  }, 1200);
+}
+
+function startSurfaceLoaderAnimation() {
+  const loader = document.getElementById("surfaceLoader");
+
+  if (!loader) return;
+
+  const steps = [
+    { pct: 18, msg: "Authenticating Surface access…" },
+    { pct: 38, msg: "Loading WIP stations…" },
+    { pct: 58, msg: "Reading scan summary…" },
+    { pct: 76, msg: "Building live surface flow…" },
+    { pct: 92, msg: "Rendering dashboard…" }
+  ];
+
+  let index = 0;
+
+  window.surfaceLoaderTimer = setInterval(() => {
+    if (index >= steps.length) {
+      clearInterval(window.surfaceLoaderTimer);
+      return;
+    }
+
+    const step = steps[index++];
+    setSurfaceLoaderProgress(step.pct, step.msg);
+  }, 420);
+}
+
+
+/* =========================================================
+   SECTION 06 — API FETCH + DATA SIGNATURE
+========================================================= */
 
 function buildDataSignature(payload) {
   const summary = payload.summary || {};
   const meta = payload.intervalHistoryMeta || {};
+  const scanRows = Array.isArray(payload.surfaceScanSummary)
+    ? payload.surfaceScanSummary
+    : [];
+
+  const scanSignature = scanRows
+    .map(row => [
+      row.StationKey || "",
+      row.TotalScansToday || "",
+      row.LastUpdated || ""
+    ].join(":"))
+    .join("|");
 
   return [
     summary.ReportDate || "",
@@ -259,13 +282,10 @@ function buildDataSignature(payload) {
     meta.currentTime || "",
     (payload.surfaceFlow || []).length,
     (payload.surfaceTransfers || []).length,
-    (payload.surfaceTransferDailyTotals || []).length
+    scanRows.length,
+    scanSignature
   ].join("|");
 }
-
-/* =============================================
-   API FETCH
-============================================= */
 
 async function fetchData(forceRender = false) {
   setSystemStatus("loading");
@@ -287,6 +307,9 @@ async function fetchData(forceRender = false) {
 
     const incomingFlow = Array.isArray(json.surfaceFlow) ? json.surfaceFlow : [];
     const incomingTransfers = Array.isArray(json.surfaceTransfers) ? json.surfaceTransfers : [];
+    const incomingScanSummary = Array.isArray(json.surfaceScanSummary)
+      ? json.surfaceScanSummary
+      : [];
 
     if (!incomingFlow.length && state.hasRenderedOnce) {
       console.warn("[SurfaceWIP] Refresh returned empty surfaceFlow. Keeping last good data.");
@@ -311,16 +334,11 @@ async function fetchData(forceRender = false) {
 
     state.summary = json.summary || state.summary || {};
     state.surfaceFlow = incomingFlow;
-
     state.surfaceTransfers = incomingTransfers.length
       ? incomingTransfers
       : state.surfaceTransfers || [];
+    state.surfaceScanSummary = incomingScanSummary;
 
-    /*
-     * EOS FIX:
-     * Daily totals are allowed to become empty after EOS.
-     * Do NOT preserve old daily totals when the API returns [].
-     */
     state.surfaceTransferDailyTotals = Array.isArray(json.surfaceTransferDailyTotals)
       ? json.surfaceTransferDailyTotals
       : [];
@@ -362,6 +380,11 @@ async function fetchData(forceRender = false) {
     setTimeout(hideSurfaceLoader, 700);
   }
 }
+
+
+/* =========================================================
+   SECTION 07 — STATUS + META UI
+========================================================= */
 
 function setSystemStatus(status) {
   const dot = document.querySelector(".system-ok .dot");
@@ -442,7 +465,6 @@ function formatDisplayDateTime(value) {
   if (!value) return "—";
 
   const raw = String(value).replace(/^'/, "").trim();
-
   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/);
 
   if (match) {
@@ -488,9 +510,10 @@ function renderError(message) {
   }
 }
 
-/* =============================================
-   RENDER ALL
-============================================= */
+
+/* =========================================================
+   SECTION 08 — MASTER RENDER
+========================================================= */
 
 function renderAll() {
   renderKPIs();
@@ -503,25 +526,26 @@ function renderAll() {
   renderReports();
 }
 
-/* =============================================
-   KPI
-============================================= */
+
+/* =========================================================
+   SECTION 09 — KPI CARDS
+========================================================= */
 
 function renderKPIs() {
   const s = state.summary;
-
   if (!s) return;
 
   const total = num(s.SurfaceTotalWIP);
   const largestTotal = num(s.LargestStepTotal);
   const largestStep = safeText(s.LargestStep);
   const pctLargest = total > 0 ? Math.round((largestTotal / total) * 100) : 0;
+  const inspectionTotal = getStationScanTotal("Surface Inspection");
 
   setText("kpiTotal", total.toLocaleString());
   setText("kpiMain", num(s.SurfaceMainWIP).toLocaleString());
   setText("kpiActiveSteps", `${num(s.ActiveSteps)} active · ${num(s.EmptySteps)} empty steps`);
   setText("kpiIntake", `Intake (SF Scan): ${num(s.SurfaceIntakeWIP).toLocaleString()}`);
-  setText("kpiEmpty", num(s.EmptySteps).toString());
+  setText("kpiInspection", inspectionTotal.toLocaleString());
 
   const bottleneck = document.getElementById("kpiBottleneck");
   if (bottleneck) {
@@ -531,13 +555,13 @@ function renderKPIs() {
   setText("kpiBottleneckSub", `${pctLargest}% of total Surface WIP`);
 }
 
-/* =============================================
-   FLOW GRID
-============================================= */
+
+/* =========================================================
+   SECTION 10 — TOP FLOW GRID
+========================================================= */
 
 function renderFlowGrid() {
   const grid = document.getElementById("flowGrid");
-
   if (!grid) return;
 
   let rows = filterRows(state.surfaceFlow, state.filter);
@@ -593,7 +617,6 @@ function renderFlowGrid() {
 
 function updateBottleneckLabel(rows) {
   const label = document.getElementById("bottleneckLabel");
-
   if (!label) return;
 
   const hasCritical = rows.some(row => {
@@ -604,9 +627,11 @@ function updateBottleneckLabel(rows) {
   label.classList.toggle("visible", hasCritical);
 }
 
-/* =============================================
-   TRANSFER TUNNEL — FIXED STATION ACTIVITY MATH
-============================================= */
+
+/* =========================================================
+   SECTION 11 — LIVE SNAKE FLOW MAIN RENDER
+   NEW STUFF: No duplicate station cards between rows.
+========================================================= */
 
 function renderTransferTunnel() {
   const grid = document.getElementById("transferGrid");
@@ -614,157 +639,307 @@ function renderTransferTunnel() {
 
   if (!grid || !meta) return;
 
-  const rows = (state.surfaceTransfers || [])
-    .slice()
-    .sort((a, b) => num(a.FromOrder) - num(b.FromOrder));
-
-  const intervalSnapshots = num(state.intervalMeta?.intervalSnapshots);
-  const minutesBetween = num(state.intervalMeta?.minutesBetween);
+  const rows = buildLiveTransferRowsFromSurfaceFlow_();
 
   if (!rows.length) {
-    meta.textContent =
-      intervalSnapshots >= 2
-        ? "No transfer rows available."
-        : "Waiting for at least 2 interval snapshots…";
+    meta.textContent = "Waiting for live Surface WIP data…";
 
     grid.innerHTML = `
       <div class="transfer-loading">
         <div class="spinner"></div>
-        <span>Need at least 2 interval snapshots before movement estimates can render.</span>
+        <span>Waiting for current Surface WIP rows before the live flow can render.</span>
       </div>
     `;
     return;
   }
 
   meta.style.display = "none";
-
-  const converters = [
-    {
-      title: "Surface Transfer Flow",
-      subtitle: "Incoming from SF S&V → SF Unbox → Blocking Line",
-      rows: rows.filter(row => {
-        const fromOrder = num(row.FromOrder);
-        return fromOrder === 1 || fromOrder === 2;
-      })
-    },
-    {
-      title: "Surface Transfer Flow",
-      subtitle: "Blocking Line → IQ Star → Generating Line → Polishing Line",
-      rows: rows.filter(row => {
-        const fromOrder = num(row.FromOrder);
-        return fromOrder === 4 || fromOrder === 5 || fromOrder === 7;
-      })
-    },
-    {
-      title: "Surface Transfer Flow",
-      subtitle: "Polishing Line → Engraving Line → Detaper Line → Coater Line (54R)",
-      rows: rows.filter(row => {
-        const fromOrder = num(row.FromOrder);
-        return fromOrder === 9 || fromOrder === 11 || fromOrder === 12;
-      })
-    },
-    {
-      title: "Surface Transfer Flow",
-      subtitle: "Coater Line (54R) → Surface Inspection",
-      rows: rows.filter(row => {
-        const fromOrder = num(row.FromOrder);
-        return fromOrder === 13;
-      })
-    }
-  ];
-
-  const visibleGroups = converters.filter(group => group.rows.length > 0);
-
-  if (!visibleGroups.length) {
-    grid.innerHTML = `
-      <div class="transfer-loading" style="color:var(--red)">
-        Transfer rows exist, but no FromOrder groups matched. Check FromOrder values from the API.
-      </div>
-    `;
-    return;
-  }
-
-  grid.innerHTML = visibleGroups
-    .map(group => renderConverterGroup(group, minutesBetween))
-    .join("");
+  grid.innerHTML = renderContinuousSurfaceFlow(rows);
 }
 
-function renderConverterGroup(group, minutesBetween) {
-  let moving = 0;
-  const stationMap = {};
+function buildLiveTransferRowsFromSurfaceFlow_() {
+  const rows = state.surfaceFlow || [];
+  if (!rows.length) return [];
 
-  group.rows.forEach(row => {
-    const lane = getDailyLane(row);
+  const map = {};
 
-    stationMap[lane.fromStep] = {
-      display: lane.fromDisplay,
-      activity: getStationActivity(lane.fromStep)
-    };
-
-    stationMap[lane.toStep] = {
-      display: lane.toDisplay,
-      activity: getStationActivity(lane.toStep)
-    };
-
-    moving += lane.estimatedMoving;
+  rows.forEach(row => {
+    const step = String(row.FlowStep || "").trim();
+    if (step) map[step] = row;
   });
 
-  const totalActivity = Object.values(stationMap).reduce((sum, station) => {
-    return sum + num(station.activity);
+  const transitions = [
+    { from: "SF Scan & Verify", to: "Surface Unbox", transitionName: "SF Scan & Verify → SF Unbox" },
+    { from: "Surface Unbox", to: "Blocking Line B", transitionName: "SF Unbox → Auto Blockers" },
+    { from: "Blocking Line B", to: "Cooling Storage", transitionName: "Auto Blockers → IQ Star" },
+    { from: "Cooling Storage", to: "Generating Line B", transitionName: "IQ Star → Orbit Generator" },
+    { from: "Generating Line B", to: "Polishing Line B", transitionName: "Orbit Generator → Polisher" },
+    { from: "Polishing Line B", to: "Engraving Line B", transitionName: "Polisher → Engraver" },
+    { from: "Engraving Line B", to: "Detaping Line B", transitionName: "Engraver → Detaper" },
+    { from: "Detaping Line B", to: "Coating Line B", transitionName: "Detaper → 54R Coater" },
+    { from: "Coating Line B", to: "Surface Inspection", transitionName: "54R Coater → Inspection" }
+  ];
+
+  return transitions.map(pair => {
+    const fromRow = map[pair.from] || {};
+    const toRow = map[pair.to] || {};
+    const fromWip = num(fromRow.CurrentJobTotal);
+    const toWip = num(toRow.CurrentJobTotal);
+
+    return {
+      GeneratedAt: state.summary?.ImportedAt || state.lastFetch || "",
+      TransitionName: pair.transitionName,
+
+      FromOrder: num(fromRow.FlowOrder),
+      FromStep: pair.from,
+      FromDisplayName: safeText(fromRow.DisplayName || pair.from),
+      FromCurrentWIP: fromWip,
+
+      ToOrder: num(toRow.FlowOrder),
+      ToStep: pair.to,
+      ToDisplayName: safeText(toRow.DisplayName || pair.to),
+      ToCurrentWIP: toWip,
+
+      /*
+        Current WIP Up Now:
+        This is not interval movement.
+        This is current WIP at the previous station feeding the next station.
+      */
+      EstimatedInTransfer: fromWip,
+
+      Confidence: "Live",
+      Notes: "Live WIP from current Facility WIP report."
+    };
+  });
+}
+
+function calcEstimatedMoving(row) {
+  return num(row.EstimatedInTransfer);
+}
+
+
+/* =========================================================
+   SECTION 12 — LIVE SNAKE FLOW ROW BUILDING
+   NEW STUFF: Rows are grouped by transitions, not station count.
+========================================================= */
+
+function renderContinuousSurfaceFlow(rows) {
+  const orderedRows = rows
+    .slice()
+    .sort((a, b) => num(a.FromOrder) - num(b.FromOrder));
+
+  const totalMoving = orderedRows.reduce((sum, row) => {
+    return sum + calcEstimatedMoving(row);
   }, 0);
 
   const severity =
-    moving >= 100 ? "critical" :
-    moving >= 35 ? "watch" :
+    totalMoving >= 300 ? "critical" :
+    totalMoving >= 100 ? "watch" :
     "normal";
 
+  /*
+    2 transitions per row =:
+    Station → Conveyor → Station → Conveyor → Station
+
+    Next row does NOT repeat the previous ending station.
+  */
+  const transitionsPerRow = 2;
+  const snakeRows = buildSnakeRowsByTransitions(orderedRows, transitionsPerRow);
+  window.__surfaceSnakeRows = snakeRows;
+
+  const stationCount = (() => {
+    const seen = new Set();
+
+    orderedRows.forEach((row, index) => {
+      if (index === 0) seen.add(String(row.FromStep || "").trim());
+      seen.add(String(row.ToStep || "").trim());
+    });
+
+    return seen.size;
+  })();
+
   return `
-    <section class="converter-tab ${severity}">
-      <div class="converter-tab-header">
+    <section class="continuous-flow-shell ${severity}">
+      <div class="continuous-flow-header">
         <div>
-          <div class="converter-tab-title">${group.title}</div>
-          <div class="converter-tab-subtitle">${group.subtitle}</div>
+          <div class="continuous-flow-title">Surface Live Flow</div>
+          <div class="continuous-flow-subtitle">
+            Total Scan Today → Current WIP Up Now → Next Station
+          </div>
         </div>
 
-        <div class="converter-tab-metrics">
+        <div class="continuous-flow-metrics">
           <div>
-            <span>Total Activity</span>
-            <strong>${totalActivity}</strong>
-          </div>
-
-          <div>
-            <span>Estimated Count</span>
-            <strong>${moving}</strong>
+            <span>Total Current WIP Up Now</span>
+            <strong>${totalMoving.toLocaleString()}</strong>
           </div>
 
           <div>
             <span>Stations</span>
-            <strong>${Object.keys(stationMap).length}</strong>
+            <strong>${stationCount}</strong>
           </div>
         </div>
       </div>
 
-      <div class="converter-tab-body">
-        ${group.rows.map(row => renderConverterMiniLane(row, minutesBetween)).join("")}
+      <div class="snake-flow-wrap">
+        ${snakeRows.map((row, rowIndex) => renderSnakeRow(row, rowIndex)).join("")}
       </div>
     </section>
   `;
 }
 
-function renderConverterMiniLane(row, minutesBetween) {
-  const lane = getDailyLane(row);
+function buildSnakeRowsByTransitions(orderedRows, transitionsPerRow) {
+  const rows = [];
 
-  const fromActivity = getStationActivity(lane.fromStep);
-  const toActivity = getStationActivity(lane.toStep);
+  for (let i = 0; i < orderedRows.length; i += transitionsPerRow) {
+    rows.push({
+      reverse: rows.length % 2 === 1,
+      transitions: orderedRows.slice(i, i + transitionsPerRow)
+    });
+  }
+
+  return rows;
+}
+
+
+/* =========================================================
+   SECTION 13 — LIVE SNAKE FLOW ROW RENDERERS
+   NEW STUFF: Reverse rows skip repeated starting station.
+========================================================= */
+
+function renderSnakeRow(row, rowIndex) {
+  const transitions = row.transitions || [];
+  const pieces = [];
+
+  if (!transitions.length) return "";
+
+  if (!row.reverse) {
+    /*
+      Normal row:
+      Station → Conveyor → Station → Conveyor → Station
+    */
+    transitions.forEach((transition, index) => {
+      if (index === 0) {
+        pieces.push(renderContinuousStationCard({
+          step: transition.FromStep,
+          display: transition.FromDisplayName
+        }));
+      }
+
+      pieces.push(renderContinuousConveyor(transition));
+
+      pieces.push(renderContinuousStationCard({
+        step: transition.ToStep,
+        display: transition.ToDisplayName
+      }));
+    });
+  } else {
+    /*
+      Reverse row:
+      Do NOT repeat the previous row's ending station.
+
+      Example:
+      Previous row ended on Auto Blockers.
+      Next row starts with conveyor Auto Blockers → IQ Star,
+      then shows IQ Star, then next conveyor, then Orbit Generator.
+    */
+    const reversedTransitions = transitions.slice().reverse();
+
+    reversedTransitions.forEach(transition => {
+      pieces.push(renderContinuousConveyor(transition));
+
+      pieces.push(renderContinuousStationCard({
+        step: transition.FromStep,
+        display: transition.FromDisplayName
+      }));
+    });
+  }
+
+  const nextFirstTransition = getNextRowFirstTransition(rowIndex);
+
+  return `
+    <div class="snake-row ${row.reverse ? "reverse no-repeat-start" : ""}" data-row-index="${rowIndex}">
+      ${pieces.join("")}
+    </div>
+
+    ${
+      nextFirstTransition
+        ? renderSnakeBridge(nextFirstTransition, row.reverse)
+        : ""
+    }
+  `;
+}
+
+function getNextRowFirstTransition(rowIndex) {
+  const allRows = window.__surfaceSnakeRows || [];
+  const nextRow = allRows[rowIndex + 1];
+
+  if (!nextRow || !nextRow.transitions || !nextRow.transitions.length) {
+    return null;
+  }
+
+  return nextRow.transitions[0];
+}
+
+function renderSnakeBridge(row, previousReverse) {
+  const wip = calcEstimatedMoving(row);
 
   const severity =
-    lane.estimatedMoving >= 100 || lane.toCurrent >= CONFIG.WIP_CRITICAL ? "critical" :
-    lane.estimatedMoving >= 35 || lane.toCurrent >= CONFIG.WIP_HIGH ? "watch" :
+    wip >= 200 ? "critical" :
+    wip >= 75 ? "watch" :
+    "normal";
+
+  const nextDirectionArrow = previousReverse ? "→" : "←";
+
+  return `
+    <div class="snake-bridge ${previousReverse ? "left" : "right"} ${severity}">
+      <div class="snake-bridge-path">
+        <div class="snake-bridge-down">
+          <span class="snake-bridge-arrow arrow-down">↓</span>
+        </div>
+
+        <div class="snake-bridge-turn">
+          <span class="snake-bridge-arrow arrow-turn">${nextDirectionArrow}</span>
+        </div>
+      </div>
+
+      <div class="snake-bridge-info compact">
+        <div class="snake-bridge-label">Next Flow</div>
+        <div class="snake-bridge-count">${wip.toLocaleString()}</div>
+        <div class="snake-bridge-route">
+          ${row.FromDisplayName} → ${row.ToDisplayName}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderContinuousStationCard(station) {
+  const scanTotal = getStationScanTotal(station.step);
+  const display = getStationScanDisplay(station.step, station.display);
+  const peak = getStationPeakText(station.step);
+
+  return `
+    <article class="continuous-station-card">
+      <div class="transfer-zone-label">Total Scan Today</div>
+      <div class="transfer-zone-step">${display}</div>
+      <div class="transfer-zone-value">${scanTotal.toLocaleString()}</div>
+      ${peak ? `<div class="transfer-zone-sub">${peak}</div>` : ""}
+    </article>
+  `;
+}
+
+function renderContinuousConveyor(row) {
+  const wip = calcEstimatedMoving(row);
+
+  const severity =
+    wip >= 200 ? "critical" :
+    wip >= 75 ? "watch" :
     "normal";
 
   const packetsToShow = Math.max(
     3,
-    Math.min(10, lane.estimatedMoving || fromActivity || toActivity || 3)
+    Math.min(10, wip > 0 ? Math.ceil(wip / 30) : 3)
   );
 
   const packets = Array.from(
@@ -773,134 +948,105 @@ function renderConverterMiniLane(row, minutesBetween) {
   ).join("");
 
   return `
-    <article class="converter-mini-lane ${severity}">
-      <div class="converter-mini-top">
-        <div>
-          <div class="converter-mini-title">${lane.transitionName}</div>
-          <div class="converter-mini-subtitle">${lane.fromDisplay} flowing into ${lane.toDisplay}</div>
-        </div>
+    <article class="continuous-conveyor ${severity}">
+      <div class="transfer-conveyor-head">
+        <div class="transfer-conveyor-title">Current WIP Up Now</div>
+        <div class="transfer-conveyor-count">${wip.toLocaleString()}</div>
       </div>
 
-      <div class="converter-mini-flow">
-        <div class="converter-mini-box">
-          <div class="transfer-zone-label">Station Activity Today</div>
-          <div class="transfer-zone-step">${lane.fromDisplay}</div>
-          <div class="transfer-zone-value">${fromActivity}</div>
-          <div class="transfer-zone-note">
-            Current WIP: ${lane.fromCurrent}
-          </div>
-        </div>
+      <div class="transfer-track">
+        ${packets}
+      </div>
 
-        <div class="transfer-flow-arrow">→</div>
-
-        <div class="converter-mini-conveyor">
-          <div class="transfer-conveyor-head">
-            <div class="transfer-conveyor-title">Estimated Moving Now</div>
-            <div class="transfer-conveyor-count">${lane.estimatedMoving}</div>
-          </div>
-
-          <div class="transfer-track">
-            ${packets}
-          </div>
-        </div>
-
-        <div class="transfer-flow-arrow">→</div>
-
-        <div class="converter-mini-box">
-          <div class="transfer-zone-label">Station Activity Today</div>
-          <div class="transfer-zone-step">${lane.toDisplay}</div>
-          <div class="transfer-zone-value">${toActivity}</div>
-          <div class="transfer-zone-note">
-            Current WIP: ${lane.toCurrent}
-          </div>
-        </div>
+      <div class="continuous-conveyor-route">
+        ${row.FromDisplayName} → ${row.ToDisplayName}
       </div>
     </article>
   `;
 }
 
-function getDailyLane(row) {
-  const transitionName = safeText(
-    row.TransitionName || `${row.FromDisplayName} → ${row.ToDisplayName}`
-  );
 
-  const daily = findDailyTransferForTransition(transitionName);
+/* =========================================================
+   SECTION 14 — SCAN SUMMARY HELPERS
+========================================================= */
 
-  return {
-    transitionName,
-    daily,
+const SCAN_STEP_ALIASES = {
+  "SF Scan & Verify": ["SF Scan & Verify", "Incoming SF Scan & Verify"],
 
-    fromStep: safeText(row.FromStep, ""),
-    toStep: safeText(row.ToStep, ""),
+  "Surface Unbox": ["Surface Unbox", "SF Unbox"],
+  "SF Unbox": ["Surface Unbox", "SF Unbox"],
 
-    fromDisplay: safeText(row.FromDisplayName || row.FromStep, "From"),
-    toDisplay: safeText(row.ToDisplayName || row.ToStep, "To"),
+  "Blocking Line B": ["Blocking Line B", "Auto Blockers", "Blocking Line"],
+  "Auto Blockers": ["Blocking Line B", "Auto Blockers", "Blocking Line"],
 
-    fromCurrent: num(row.FromCurrentWIP),
-    toCurrent: num(row.ToCurrentWIP),
+  "Cooling Storage": ["Cooling Storage", "IQ Star"],
+  "IQ Star": ["Cooling Storage", "IQ Star"],
 
-    inToStep: daily ? num(daily.TotalEnteredToStep) : 0,
-    outFromStep: daily ? num(daily.TotalLeftFromStep) : 0,
+  "Generating Line B": ["Generating Line B", "Orbit Generator", "Generating Line"],
+  "Orbit Generator": ["Generating Line B", "Orbit Generator", "Generating Line"],
 
-    estimatedMoving: daily
-      ? num(daily.TotalEstimatedInTransfer)
-      : num(row.EstimatedInTransfer)
-  };
+  "Polishing Line B": ["Polishing Line B", "Polisher", "Polisher B", "Polishing Line"],
+  "Polisher": ["Polishing Line B", "Polisher", "Polisher B", "Polishing Line"],
+
+  "Engraving Line B": ["Engraving Line B", "Engraver", "Engraving Line"],
+  "Engraver": ["Engraving Line B", "Engraver", "Engraving Line"],
+
+  "Detaping Line B": ["Detaping Line B", "Detaper", "Detaper Line"],
+  "Detaper": ["Detaping Line B", "Detaper", "Detaper Line"],
+
+  "Coating Line B": ["Coating Line B", "54R Coater", "Coater Line"],
+  "54R Coater": ["Coating Line B", "54R Coater", "Coater Line"],
+
+  "Surface Inspection": ["Surface Inspection", "Inspection"],
+  "Inspection": ["Surface Inspection", "Inspection"]
+};
+
+function getScanAliases(value) {
+  const key = String(value || "").trim();
+  if (!key) return [];
+
+  const aliases = SCAN_STEP_ALIASES[key] || [key];
+  return aliases.map(v => String(v || "").trim()).filter(Boolean);
 }
 
-function getStationIn(stepName) {
-  const target = String(stepName || "").trim();
+function getScanRowForStep(flowStepOrDisplay) {
+  const aliases = getScanAliases(flowStepOrDisplay);
+  if (!aliases.length) return null;
 
-  return (state.surfaceTransfers || []).reduce((sum, row) => {
-    const lane = getDailyLane(row);
+  return (state.surfaceScanSummary || []).find(row => {
+    const stationKey = String(row.StationKey || "").trim();
+    const displayName = String(row.DisplayName || "").trim();
 
-    return String(lane.toStep).trim() === target
-      ? sum + lane.inToStep
-      : sum;
-  }, 0);
+    return aliases.includes(stationKey) || aliases.includes(displayName);
+  }) || null;
 }
 
-function getStationOut(stepName) {
-  const target = String(stepName || "").trim();
-
-  return (state.surfaceTransfers || []).reduce((sum, row) => {
-    const lane = getDailyLane(row);
-
-    return String(lane.fromStep).trim() === target
-      ? sum + lane.outFromStep
-      : sum;
-  }, 0);
+function getStationScanTotal(flowStepOrDisplay) {
+  const row = getScanRowForStep(flowStepOrDisplay);
+  return row ? num(row.TotalScansToday) : 0;
 }
 
-function getStationActivity(stepName) {
-  const inCount = getStationIn(stepName);
-  const outCount = getStationOut(stepName);
-
-  if (inCount > 0 && outCount > 0) {
-    return inCount + outCount;
-  }
-
-  if (outCount > 0) {
-    return outCount;
-  }
-
-  return inCount;
+function getStationScanDisplay(flowStepOrDisplay, fallback = "") {
+  const row = getScanRowForStep(flowStepOrDisplay);
+  return row ? safeText(row.DisplayName, fallback) : safeText(fallback || flowStepOrDisplay);
 }
 
-function converterIcon(type) {
-  const map = {
-    scan: ICONS.scan,
-    gear: ICONS.gear,
-    engrave: ICONS.engrave,
-    inspect: ICONS.shield
-  };
+function getStationPeakText(flowStepOrDisplay) {
+  const row = getScanRowForStep(flowStepOrDisplay);
+  if (!row) return "";
 
-  return map[type] || ICONS.gearDefault;
+  const peakHour = safeText(row.PeakHour, "");
+  const peakScans = num(row.PeakHourScans);
+
+  if (!peakHour || peakHour === "—") return "";
+
+  return `Peak: ${peakHour} · ${peakScans.toLocaleString()} scans`;
 }
 
-/* =============================================
-   FLOW DETAIL TAB
-============================================= */
+
+/* =========================================================
+   SECTION 15 — FLOW DETAIL TAB
+========================================================= */
 
 function renderFlowDetail() {
   const grid = document.getElementById("flowDetailGrid");
@@ -944,7 +1090,6 @@ function renderFlowDetail() {
       <div class="fd-row">
         <article class="${cardCls}" style="animation-delay:${index * 60}ms">
           <div class="fd-card-inner">
-
             <div class="fd-step-num">${index + 1}</div>
 
             <div class="fd-icon-wrap" style="color:${statusColor}">
@@ -965,9 +1110,9 @@ function renderFlowDetail() {
                 <div class="fd-bar-fill fd-bar-${status}" style="--fw:${barPct}%"></div>
               </div>
             </div>
-
           </div>
         </article>
+
         ${!isLast ? `<div class="fd-connector"><span class="fd-conn-line"></span><span class="fd-conn-arrow">▼</span></div>` : ""}
       </div>
     `;
@@ -977,15 +1122,17 @@ function renderFlowDetail() {
     grid.querySelectorAll(".fd-bar-fill").forEach(el => {
       el.style.width = el.style.getPropertyValue("--fw") || "0%";
     });
+
     grid.querySelectorAll(".fd-card").forEach(el => {
       el.classList.add("fd-visible");
     });
   });
 }
 
-/* =============================================
-   LINES TAB
-============================================= */
+
+/* =========================================================
+   SECTION 16 — LINES TAB
+========================================================= */
 
 function renderLines() {
   const grid = document.getElementById("linesGrid");
@@ -1064,6 +1211,7 @@ function renderLines() {
       el.style.width = "0%";
       requestAnimationFrame(() => { el.style.width = target; });
     });
+
     grid.querySelectorAll(".ln-share-bar-fill").forEach(el => {
       const target = el.style.width;
       el.style.width = "0%";
@@ -1072,9 +1220,10 @@ function renderLines() {
   });
 }
 
-/* =============================================
-   ALERTS TAB
-============================================= */
+
+/* =========================================================
+   SECTION 17 — ALERTS TAB
+========================================================= */
 
 function renderAlerts() {
   const panel = document.getElementById("alertsPanel");
@@ -1168,13 +1317,13 @@ function generateAlerts(rows, summary) {
   return alerts;
 }
 
-/* =============================================
-   ANALYTICS TAB
-============================================= */
+
+/* =========================================================
+   SECTION 18 — ANALYTICS TAB
+========================================================= */
 
 function renderAnalytics() {
   const grid = document.getElementById("analyticsGrid");
-
   if (!grid) return;
 
   const rows = state.surfaceFlow || [];
@@ -1211,9 +1360,9 @@ function renderAnalytics() {
     </article>
 
     <article class="analytics-card">
-      <div class="kpi-label">Transfer Snapshots</div>
-      <div class="ac-value">${num(state.intervalMeta?.intervalSnapshots)}</div>
-      <div class="ac-sub">Gap: ${num(state.intervalMeta?.minutesBetween)} minutes</div>
+      <div class="kpi-label">Live Surface Flow</div>
+      <div class="ac-value">${num(state.surfaceScanSummary.length)}</div>
+      <div class="ac-sub">Scan summary stations available</div>
     </article>
 
     <article class="analytics-card" style="grid-column:1/-1">
@@ -1234,13 +1383,13 @@ function renderAnalytics() {
   `;
 }
 
-/* =============================================
-   SUMMARY TAB
-============================================= */
+
+/* =========================================================
+   SECTION 19 — SUMMARY TAB
+========================================================= */
 
 function renderReports() {
   const wrap = document.getElementById("reportTableWrap");
-
   if (!wrap) return;
 
   const rows = state.surfaceFlow || [];
@@ -1283,18 +1432,8 @@ function renderReports() {
   const groupEntries = Object.entries(groups).sort((a, b) => b[1] - a[1]);
   const maxGroup = Math.max(...groupEntries.map(([, value]) => value), 1);
 
-  const topTransfers = (state.surfaceTransferDailyTotals || [])
-    .slice()
-    .sort((a, b) => num(b.TotalEstimatedInTransfer) - num(a.TotalEstimatedInTransfer))
-    .slice(0, 5);
-
-  const totalEstimatedTransfer = (state.surfaceTransferDailyTotals || []).reduce((sum, row) => {
-    return sum + num(row.TotalEstimatedInTransfer);
-  }, 0);
-
-  const highTransferCount = (state.surfaceTransferDailyTotals || []).filter(row => {
-    return num(row.TotalEstimatedInTransfer) >= 5;
-  }).length;
+  const liveRows = buildLiveTransferRowsFromSurfaceFlow_();
+  const totalCurrentUpNow = liveRows.reduce((sum, row) => sum + num(row.EstimatedInTransfer), 0);
 
   wrap.innerHTML = `
     <section class="report-summary-shell">
@@ -1308,7 +1447,7 @@ function renderReports() {
 
             <p class="report-hero-sub">
               Current total Surface WIP from the latest Facility WIP report.
-              This view focuses on decision-ready metrics instead of the raw table.
+              Live flow uses station scan totals plus current WIP up now.
             </p>
 
             <div class="report-hero-metrics">
@@ -1325,9 +1464,9 @@ function renderReports() {
               </div>
 
               <div class="report-mini-metric">
-                <div class="report-mini-label">Daily Transfer Estimate</div>
-                <div class="report-mini-value">${totalEstimatedTransfer.toLocaleString()}</div>
-                <div class="report-mini-note">All snapshot pairs today</div>
+                <div class="report-mini-label">Current Up Now</div>
+                <div class="report-mini-value">${totalCurrentUpNow.toLocaleString()}</div>
+                <div class="report-mini-note">Live previous-station WIP</div>
               </div>
             </div>
           </div>
@@ -1367,14 +1506,6 @@ function renderReports() {
                 <div class="report-status-sub">Visible non-Line-A steps at zero</div>
               </div>
               <div class="report-status-count">${emptyRows.length}</div>
-            </div>
-
-            <div class="report-status-row">
-              <div>
-                <div class="report-status-name">High Daily Transfer Lanes</div>
-                <div class="report-status-sub">Daily estimated lanes at 5+ jobs</div>
-              </div>
-              <div class="report-status-count">${highTransferCount}</div>
             </div>
           </div>
         </article>
@@ -1450,60 +1581,17 @@ function renderReports() {
 
       </div>
 
-      <div class="report-section-grid">
-
-        <article class="report-section-card">
-          <div class="report-section-head">
-            <div>
-              <div class="report-section-title">Daily Transfer Summary</div>
-              <div class="report-section-sub">
-                Cumulative estimate across all snapshot pairs today. Not exact job tracking.
-              </div>
-            </div>
-
-            <div class="report-chip">
-              Pairs: ${num(state.surfaceTransferDailyTotals?.[0]?.SnapshotPairs)}
-            </div>
-          </div>
-
-          <div class="report-transfer-list">
-            ${
-              topTransfers.length
-                ? topTransfers.map(row => {
-                    const value = num(row.TotalEstimatedInTransfer);
-                    const cls = value >= 15 ? "critical" : value >= 5 ? "warn" : "";
-
-                    return `
-                      <div class="report-transfer-row">
-                        <div>
-                          <div class="report-transfer-name">${safeText(row.TransitionName)}</div>
-                          <div class="report-transfer-sub">
-                            Daily Left: ${num(row.TotalLeftFromStep)} · Daily Entered: ${num(row.TotalEnteredToStep)} · Max Gap: ${num(row.MaxEstimatedInTransfer)}
-                          </div>
-                        </div>
-
-                        <div class="report-transfer-value ${cls}">${value}</div>
-                      </div>
-                    `;
-                  }).join("")
-                : `<div class="flow-loading">No daily transfer metrics available yet.</div>`
-            }
-          </div>
-        </article>
-
-      </div>
-
     </section>
   `;
 }
 
-/* =============================================
-   EXPORT CSV
-============================================= */
+
+/* =========================================================
+   SECTION 20 — EXPORT CSV
+========================================================= */
 
 function exportCSV() {
   const rows = state.surfaceFlow || [];
-
   if (!rows.length) return;
 
   const total = num(state.summary?.SurfaceTotalWIP) || 1;
@@ -1551,9 +1639,10 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
-/* =============================================
-   CLOCK
-============================================= */
+
+/* =========================================================
+   SECTION 21 — CLOCK
+========================================================= */
 
 function updateClock() {
   const now = new Date();
@@ -1578,9 +1667,10 @@ function updateClock() {
   }
 }
 
-/* =============================================
-   EVENTS
-============================================= */
+
+/* =========================================================
+   SECTION 22 — EVENTS
+========================================================= */
 
 function initTabs() {
   const navItems = document.querySelectorAll(".nav-item[data-tab]");
@@ -1629,9 +1719,10 @@ function initExport() {
   }
 }
 
-/* =============================================
-   BOOT
-============================================= */
+
+/* =========================================================
+   SECTION 23 — BOOT
+========================================================= */
 
 function boot() {
   startSurfaceLoaderAnimation();
