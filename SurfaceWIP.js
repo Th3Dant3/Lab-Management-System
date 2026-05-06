@@ -3,8 +3,9 @@
    Production Surface WIP Dashboard
    Live Flow = Total Scan Today → Current WIP Up Now → Next Station
 ========================================================= */
-
 "use strict";
+
+let hourlyInOutChart = null;
 
 
 /* =========================================================
@@ -49,11 +50,19 @@ let state = {
   surfaceTransfers: [],
   surfaceTransferDailyTotals: [],
   surfaceScanSummary: [],
+  surfaceHourlyInOut: [],
   intervalMeta: null,
 
   lastFetch: null,
   lastSnapshotKey: null,
   lastDataSignature: null,
+
+  lastWipSignature: null,
+  lastActivitySignature: null,
+  lastUpdateSource: "—",
+  lastUpdateTime: null,
+
+  activeComparisonIndex: 0,
 
   filter: "all",
   activeTab: "overview",
@@ -191,6 +200,133 @@ function filterRows(rows, filter) {
   }
 }
 
+/* =========================================================
+   SECTION 04B — FORMAT HELPERS
+   Used by Hourly In / Out chart and table
+========================================================= */
+
+function formatSignedNumber(value) {
+  const n = num(value);
+
+  if (n > 0) return "+" + n.toLocaleString();
+  if (n < 0) return n.toLocaleString();
+
+  return "0";
+}
+
+function formatHourLabel(hour) {
+  const h = num(hour);
+
+  if (h === 0) return "12 AM";
+  if (h < 12) return h + " AM";
+  if (h === 12) return "12 PM";
+
+  return (h - 12) + " PM";
+}
+
+/* =========================================================
+   SECTION — UPDATE SOURCE HELPERS
+========================================================= */
+
+function buildWipSignature(payload) {
+  const summary = payload.summary || {};
+  const flow = Array.isArray(payload.surfaceFlow) ? payload.surfaceFlow : [];
+
+  return [
+    summary.ReportDate || "",
+    summary.SourceFile || "",
+    summary.FileUpdatedTime || "",
+    summary.ImportedAt || "",
+    flow.length,
+    flow.map(row => [
+      row.FlowStep || "",
+      row.CurrentJobTotal || "",
+      row.PercentOfSurfaceTotal || ""
+    ].join(":")).join("|")
+  ].join("||");
+}
+
+function buildActivitySignature(payload) {
+  const scanRows = Array.isArray(payload.surfaceScanSummary)
+    ? payload.surfaceScanSummary
+    : [];
+
+  return [
+    scanRows.length,
+    scanRows.map(row => [
+      row.StationKey || "",
+      row.TotalScansToday || "",
+      row.PeakHour || "",
+      row.PeakHourScans || "",
+      row.LastUpdated || ""
+    ].join(":")).join("|")
+  ].join("||");
+}
+
+function getLatestActivityTimestamp(scanRows) {
+  if (!Array.isArray(scanRows) || !scanRows.length) return null;
+
+  const values = scanRows
+    .map(row => String(row.LastUpdated || "").trim())
+    .filter(Boolean);
+
+  if (!values.length) return null;
+
+  // if all scan rows share same timestamp, first is enough
+  return values[0];
+}
+
+function determineUpdateSource(payload) {
+  const newWipSignature = buildWipSignature(payload);
+  const newActivitySignature = buildActivitySignature(payload);
+
+  const wipChanged =
+    state.lastWipSignature !== null &&
+    newWipSignature !== state.lastWipSignature;
+
+  const activityChanged =
+    state.lastActivitySignature !== null &&
+    newActivitySignature !== state.lastActivitySignature;
+
+  let source = "—";
+  let timeValue = state.lastFetch || new Date();
+
+  if (wipChanged && activityChanged) {
+    source = "WIP + Activity";
+    timeValue =
+      payload.summary?.ImportedAt ||
+      getLatestActivityTimestamp(payload.surfaceScanSummary) ||
+      new Date();
+  } else if (wipChanged) {
+    source = "WIP";
+    timeValue =
+      payload.summary?.ImportedAt ||
+      new Date();
+  } else if (activityChanged) {
+    source = "Activity";
+    timeValue =
+      getLatestActivityTimestamp(payload.surfaceScanSummary) ||
+      new Date();
+  } else if (!state.hasRenderedOnce) {
+    // first load
+    source = "WIP + Activity";
+    timeValue =
+      payload.summary?.ImportedAt ||
+      getLatestActivityTimestamp(payload.surfaceScanSummary) ||
+      new Date();
+  } else {
+    source = state.lastUpdateSource || "—";
+    timeValue = state.lastUpdateTime || state.lastFetch || new Date();
+  }
+
+  return {
+    newWipSignature,
+    newActivitySignature,
+    source,
+    timeValue
+  };
+}
+
 
 /* =========================================================
    SECTION 05 — LOADER HELPERS
@@ -323,29 +459,39 @@ async function fetchData(forceRender = false) {
     }
 
     const newSignature = buildDataSignature(json);
-    const isNewData = newSignature !== state.lastDataSignature;
+const isNewData = newSignature !== state.lastDataSignature;
+const updateInfo = determineUpdateSource(json);
 
-    if (!forceRender && state.hasRenderedOnce && !isNewData) {
-      state.lastFetch = new Date();
-      setSystemStatus("ok");
-      updateLatestUpdatePill();
-      return;
-    }
+if (!forceRender && state.hasRenderedOnce && !isNewData) {
+  state.lastFetch = new Date();
+  setSystemStatus("ok");
+  updateLatestUpdatePill();
+  return;
+}
 
-    state.summary = json.summary || state.summary || {};
-    state.surfaceFlow = incomingFlow;
-    state.surfaceTransfers = incomingTransfers.length
-      ? incomingTransfers
-      : state.surfaceTransfers || [];
-    state.surfaceScanSummary = incomingScanSummary;
+state.summary = json.summary || state.summary || {};
+state.surfaceFlow = incomingFlow;
+state.surfaceTransfers = incomingTransfers.length
+  ? incomingTransfers
+  : state.surfaceTransfers || [];
+state.surfaceScanSummary = incomingScanSummary;
+
+state.surfaceHourlyInOut = Array.isArray(json.surfaceHourlyInOut)
+  ? json.surfaceHourlyInOut
+  : [];
 
     state.surfaceTransferDailyTotals = Array.isArray(json.surfaceTransferDailyTotals)
       ? json.surfaceTransferDailyTotals
       : [];
 
-    state.intervalMeta = json.intervalHistoryMeta || state.intervalMeta || {};
-    state.lastFetch = new Date();
-    state.lastDataSignature = newSignature;
+state.intervalMeta = json.intervalHistoryMeta || state.intervalMeta || {};
+state.lastFetch = new Date();
+state.lastDataSignature = newSignature;
+
+state.lastWipSignature = updateInfo.newWipSignature;
+state.lastActivitySignature = updateInfo.newActivitySignature;
+state.lastUpdateSource = updateInfo.source;
+state.lastUpdateTime = updateInfo.timeValue;
 
     setSystemStatus("ok");
     updateReportMeta();
@@ -421,26 +567,33 @@ function updateLatestUpdatePill() {
 
   if (!pill && !summaryPill) return;
 
-  const latestSnapshotTime =
-    state.intervalMeta?.currentTime ||
+  const timeValue =
+    state.lastUpdateTime ||
     state.summary?.ImportedAt ||
     state.lastFetch;
 
-  const currentKey =
-    state.intervalMeta?.currentKey ||
-    state.summary?.SourceFile ||
-    "";
+  const source =
+    state.lastUpdateSource || "—";
 
-  if (!latestSnapshotTime) {
+  if (!timeValue) {
     if (pill) pill.textContent = "Latest Update: —";
     if (summaryPill) summaryPill.textContent = "Latest Update: —";
     return;
   }
 
-  const label = "Latest Update: " + formatDisplayDateTime(latestSnapshotTime);
+  const label =
+    "Latest Update: " +
+    formatDisplayDateTime(timeValue) +
+    " · " +
+    source;
 
   if (pill) pill.textContent = label;
   if (summaryPill) summaryPill.textContent = label;
+
+  const currentKey =
+    state.intervalMeta?.currentKey ||
+    state.summary?.SourceFile ||
+    "";
 
   if (currentKey && state.lastSnapshotKey && currentKey !== state.lastSnapshotKey) {
     if (pill) {
@@ -519,6 +672,7 @@ function renderAll() {
   renderKPIs();
   renderFlowGrid();
   renderTransferTunnel();
+  renderHourlyInOutComparison();
   renderFlowDetail();
   renderLines();
   renderAlerts();
@@ -965,6 +1119,313 @@ function renderContinuousConveyor(row) {
   `;
 }
 
+/* =========================================================
+   HOURLY IN / OUT COMPARISON TAB
+========================================================= */
+
+/* =========================================================
+   HOURLY IN / OUT COMPARISON TAB
+   TREND CHART VERSION
+========================================================= */
+
+function renderHourlyInOutComparison() {
+  const meta = document.getElementById("transferMetaSecondary");
+  const grid = document.getElementById("transferGridSecondary");
+
+  if (!grid) return;
+
+  const comparisons = state.surfaceHourlyInOut || [];
+
+  if (!comparisons.length) {
+    if (meta) meta.textContent = "No hourly activity data";
+
+    grid.innerHTML = `
+      <div class="transfer-loading">
+        Waiting for SURFACE_SCAN_RAW hourly activity data.
+      </div>
+    `;
+    return;
+  }
+
+  const selectedIndex = Math.min(
+    Math.max(state.activeComparisonIndex || 0, 0),
+    comparisons.length - 1
+  );
+
+  const selected = comparisons[selectedIndex];
+
+  if (meta) {
+    meta.textContent = selected.overallStatus || "Hourly Comparison";
+  }
+
+  const totalDeltaClass =
+    selected.totalDelta >= 25 ? "building" :
+    selected.totalDelta <= -25 ? "draining" :
+    "even";
+
+  grid.innerHTML = `
+    <section class="hourly-compare-shell">
+
+      <div class="hourly-compare-header">
+        <div>
+          <div class="hourly-compare-title">Hourly In / Out Comparison</div>
+          <div class="hourly-compare-subtitle">
+            Received this hour = current activity hour minus previous activity hour.
+          </div>
+        </div>
+
+        <div class="hourly-compare-status ${totalDeltaClass}">
+          ${selected.overallStatus}
+        </div>
+      </div>
+
+      <div class="hourly-transition-tabs">
+        ${comparisons.map((item, index) => `
+          <button
+            class="hourly-transition-btn ${index === selectedIndex ? "active" : ""}"
+            data-comparison-index="${index}">
+            ${item.toStep}
+          </button>
+        `).join("")}
+      </div>
+
+      <div class="hourly-compare-main">
+        <article class="hourly-compare-card">
+          <div class="hourly-card-label">Previous Step Received</div>
+          <div class="hourly-card-step">${selected.fromStep}</div>
+          <div class="hourly-card-value">${num(selected.totalFromReceived).toLocaleString()}</div>
+        </article>
+
+        <article class="hourly-compare-card">
+          <div class="hourly-card-label">Current Step Received</div>
+          <div class="hourly-card-step">${selected.toStep}</div>
+          <div class="hourly-card-value">${num(selected.totalToReceived).toLocaleString()}</div>
+        </article>
+
+        <article class="hourly-compare-card ${totalDeltaClass}">
+          <div class="hourly-card-label">Net Delta</div>
+          <div class="hourly-card-step">${selected.transitionName}</div>
+          <div class="hourly-card-value">${formatSignedNumber(selected.totalDelta)}</div>
+        </article>
+      </div>
+
+      <div class="hourly-chart-shell">
+        <div class="hourly-chart-head">
+          <div class="hourly-chart-title">${selected.transitionName} Trend</div>
+          <div class="hourly-chart-subtitle">
+            Previous step vs current step with delta by hour
+          </div>
+        </div>
+
+        <div class="hourly-chart-wrap">
+          <canvas id="hourlyInOutTrendChart"></canvas>
+        </div>
+      </div>
+
+      <div class="hourly-compare-table-wrap">
+        <table class="hourly-compare-table">
+          <thead>
+            <tr>
+              <th>Hour</th>
+              <th>${selected.fromStep}</th>
+              <th>${selected.toStep}</th>
+              <th>Delta</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${selected.hourly.map(row => {
+              const rowClass =
+                row.delta >= 25 ? "building" :
+                row.delta <= -25 ? "draining" :
+                "even";
+
+              return `
+                <tr class="${rowClass}">
+                  <td>${formatHourLabel(row.hour)}</td>
+                  <td>${num(row.fromReceived).toLocaleString()}</td>
+                  <td>${num(row.toReceived).toLocaleString()}</td>
+                  <td>${formatSignedNumber(row.delta)}</td>
+                  <td><span class="hourly-status-pill ${rowClass}">${row.status}</span></td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+  `;
+
+  grid.querySelectorAll(".hourly-transition-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      state.activeComparisonIndex = num(button.dataset.comparisonIndex);
+      renderHourlyInOutComparison();
+    });
+  });
+
+  renderHourlyInOutTrendChart(selected);
+}
+
+function renderHourlyInOutTrendChart(selected) {
+  const canvas = document.getElementById("hourlyInOutTrendChart");
+  if (!canvas) return;
+
+  if (typeof Chart === "undefined") {
+    console.error("Chart.js is not loaded.");
+    return;
+  }
+
+  if (hourlyInOutChart) {
+    hourlyInOutChart.destroy();
+    hourlyInOutChart = null;
+  }
+
+  const labels = (selected.hourly || []).map(row => formatHourLabel(row.hour));
+  const fromData = (selected.hourly || []).map(row => num(row.fromReceived));
+  const toData = (selected.hourly || []).map(row => num(row.toReceived));
+  const deltaData = (selected.hourly || []).map(row => num(row.delta));
+
+  const ctx = canvas.getContext("2d");
+
+  hourlyInOutChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          type: "line",
+          label: selected.fromStep,
+          data: fromData,
+          borderColor: "#58d8ff",
+          backgroundColor: "rgba(88, 216, 255, 0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: false,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          yAxisID: "y"
+        },
+        {
+          type: "line",
+          label: selected.toStep,
+          data: toData,
+          borderColor: "#50dc96",
+          backgroundColor: "rgba(80, 220, 150, 0.15)",
+          borderWidth: 3,
+          tension: 0.35,
+          fill: false,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          yAxisID: "y"
+        },
+        {
+          type: "bar",
+          label: "Delta",
+          data: deltaData,
+          backgroundColor: deltaData.map(value =>
+            value >= 25
+              ? "rgba(255, 71, 87, 0.55)"
+              : value <= -25
+              ? "rgba(34, 211, 238, 0.55)"
+              : "rgba(80, 220, 150, 0.45)"
+          ),
+          borderColor: deltaData.map(value =>
+            value >= 25
+              ? "rgba(255, 71, 87, 1)"
+              : value <= -25
+              ? "rgba(34, 211, 238, 1)"
+              : "rgba(80, 220, 150, 1)"
+          ),
+          borderWidth: 1,
+          yAxisID: "y1"
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: "index",
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: "#d8ecff",
+            font: {
+              weight: "700"
+            }
+          }
+        },
+        tooltip: {
+          backgroundColor: "rgba(5, 16, 34, 0.96)",
+          titleColor: "#ffffff",
+          bodyColor: "#dff4ff",
+          borderColor: "rgba(88,216,255,0.3)",
+          borderWidth: 1
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#9fc7df",
+            font: {
+              weight: "700"
+            }
+          },
+          grid: {
+            color: "rgba(88,216,255,0.08)"
+          }
+        },
+        y: {
+          position: "left",
+          beginAtZero: true,
+          ticks: {
+            color: "#9fc7df",
+            font: {
+              weight: "700"
+            }
+          },
+          grid: {
+            color: "rgba(88,216,255,0.08)"
+          },
+          title: {
+            display: true,
+            text: "Received",
+            color: "#58d8ff",
+            font: {
+              weight: "800"
+            }
+          }
+        },
+        y1: {
+          position: "right",
+          beginAtZero: true,
+          ticks: {
+            color: "#ff8b99",
+            font: {
+              weight: "700"
+            }
+          },
+          grid: {
+            drawOnChartArea: false
+          },
+          title: {
+            display: true,
+            text: "Delta",
+            color: "#ff5a6f",
+            font: {
+              weight: "800"
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 
 /* =========================================================
    SECTION 14 — SCAN SUMMARY HELPERS
@@ -1322,6 +1783,11 @@ function generateAlerts(rows, summary) {
    SECTION 18 — ANALYTICS TAB
 ========================================================= */
 
+/* =========================================================
+   SECTION 18 — ANALYTICS TAB
+   Professional Optical Operations Analytics
+========================================================= */
+
 function renderAnalytics() {
   const grid = document.getElementById("analyticsGrid");
   if (!grid) return;
@@ -1340,46 +1806,134 @@ function renderAnalytics() {
   const entries = Object.entries(groups).sort((a, b) => b[1] - a[1]);
   const max = Math.max(...entries.map(([, value]) => value), 1);
 
+  const largestStep = safeText(s.LargestStep);
+  const largestStepTotal = num(s.LargestStepTotal);
+  const largestPct = Math.round((largestStepTotal / total) * 100);
+
+  const mainWip = num(s.SurfaceMainWIP);
+  const intakeWip = num(s.SurfaceIntakeWIP);
+  const inspectionTotal = getStationScanTotal("Surface Inspection");
+
+  const criticalRows = rows.filter(row => statusFromBackend(row) === "Critical");
+  const watchRows = rows.filter(row => statusFromBackend(row) === "Watch");
+
+  const operationalRisk =
+    criticalRows.length > 0 ? "High" :
+    watchRows.length >= 3 ? "Moderate" :
+    "Controlled";
+
+  const recommendedAction =
+    criticalRows.length > 0
+      ? `Immediate support should be directed toward ${largestStep}. This area is carrying the highest load and may restrict downstream movement.`
+      : watchRows.length > 0
+      ? `Monitor the elevated stations and rebalance labor before the next report cycle.`
+      : `Surface flow is currently stable. Continue monitoring intake, inspection, and downstream movement.`;
+
   grid.innerHTML = `
-    <article class="analytics-card">
-      <div class="kpi-label">Total Surface WIP</div>
-      <div class="ac-value">${num(s.SurfaceTotalWIP).toLocaleString()}</div>
-      <div class="ac-sub">Report date: ${safeText(s.ReportDate)}</div>
-    </article>
+    <section class="optical-analytics-report">
 
-    <article class="analytics-card">
-      <div class="kpi-label">Main Surface WIP</div>
-      <div class="ac-value">${num(s.SurfaceMainWIP).toLocaleString()}</div>
-      <div class="ac-sub">Excludes SF Scan intake.</div>
-    </article>
+      <article class="optical-report-hero">
+        <div>
+          <div class="report-eyebrow">Optical Operations Analytics</div>
+          <h2>Surface Production Health Report</h2>
+          <p>
+            This report evaluates the current Surface workflow using live WIP, scan activity,
+            bottleneck concentration, and station-level distribution. The goal is to identify
+            where jobs are accumulating and where operational support should be focused.
+          </p>
+        </div>
 
-    <article class="analytics-card">
-      <div class="kpi-label">Largest Step</div>
-      <div class="ac-value">${safeText(s.LargestStep)}</div>
-      <div class="ac-sub">${num(s.LargestStepTotal).toLocaleString()} jobs · ${Math.round((num(s.LargestStepTotal) / total) * 100)}%</div>
-    </article>
+        <div class="optical-risk-card">
+          <span>Operational Risk</span>
+          <strong class="${operationalRisk.toLowerCase()}">${operationalRisk}</strong>
+        </div>
+      </article>
 
-    <article class="analytics-card">
-      <div class="kpi-label">Live Surface Flow</div>
-      <div class="ac-value">${num(state.surfaceScanSummary.length)}</div>
-      <div class="ac-sub">Scan summary stations available</div>
-    </article>
+      <div class="optical-insight-grid">
 
-    <article class="analytics-card" style="grid-column:1/-1">
-      <div class="kpi-label">WIP by Flow Group</div>
+        <article class="optical-insight-card">
+          <div class="insight-label">Total Surface WIP</div>
+          <div class="insight-value">${total.toLocaleString()}</div>
+          <p>
+            Current jobs staged within the Surface workflow. This includes intake,
+            active production areas, and downstream Surface stations.
+          </p>
+        </article>
 
-      <div class="group-bars" style="margin-top:14px">
-        ${entries.map(([name, value]) => `
-          <div class="group-bar-row">
-            <div class="gb-name">${name}</div>
-            <div class="gb-track">
-              <div class="gb-fill" style="width:${Math.round((value / max) * 100)}%"></div>
-            </div>
-            <div class="gb-val">${value.toLocaleString()}</div>
-          </div>
-        `).join("")}
+        <article class="optical-insight-card">
+          <div class="insight-label">Main Surface WIP</div>
+          <div class="insight-value">${mainWip.toLocaleString()}</div>
+          <p>
+            Jobs beyond initial intake. This is the strongest indicator of workload
+            already inside the Surface production path.
+          </p>
+        </article>
+
+        <article class="optical-insight-card warning">
+          <div class="insight-label">Primary Constraint</div>
+          <div class="insight-value">${largestStep}</div>
+          <p>
+            ${largestStepTotal.toLocaleString()} jobs are currently concentrated here,
+            representing ${largestPct}% of total Surface WIP.
+          </p>
+        </article>
+
+        <article class="optical-insight-card">
+          <div class="insight-label">Inspection Scan Activity</div>
+          <div class="insight-value">${inspectionTotal.toLocaleString()}</div>
+          <p>
+            Total Surface Inspection scan activity. This helps indicate downstream
+            release movement after jobs complete the Surface path.
+          </p>
+        </article>
+
       </div>
-    </article>
+
+      <article class="optical-narrative-card">
+        <div class="report-section-title">Operational Interpretation</div>
+        <p>
+          Surface is currently showing <strong>${total.toLocaleString()}</strong> jobs in WIP.
+          The largest workload concentration is <strong>${largestStep}</strong> with
+          <strong>${largestStepTotal.toLocaleString()}</strong> jobs. When one Surface station
+          carries a large share of total WIP, it can slow the flow into downstream steps such as
+          coating, inspection, and release.
+        </p>
+
+        <p>
+          Intake currently shows <strong>${intakeWip.toLocaleString()}</strong> jobs at SF Scan.
+          Comparing intake against main Surface WIP helps separate new arrivals from jobs already
+          moving through blocking, generating, polishing, coating, and inspection.
+        </p>
+
+        <div class="recommendation-box">
+          <span>Recommended Action</span>
+          <strong>${recommendedAction}</strong>
+        </div>
+      </article>
+
+      <article class="optical-distribution-card">
+        <div class="report-section-title">WIP Distribution by Flow Group</div>
+        <p class="report-section-sub">
+          This view ranks Surface workload by process group to show where jobs are accumulating.
+        </p>
+
+        <div class="group-bars optical-bars">
+          ${entries.map(([name, value]) => {
+            const percent = Math.round((value / total) * 100);
+            return `
+              <div class="group-bar-row">
+                <div class="gb-name">${name}</div>
+                <div class="gb-track">
+                  <div class="gb-fill" style="width:${Math.round((value / max) * 100)}%"></div>
+                </div>
+                <div class="gb-val">${value.toLocaleString()} <span>${percent}%</span></div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </article>
+
+    </section>
   `;
 }
 
@@ -1446,27 +2000,25 @@ function renderReports() {
             <div class="report-hero-title">${total.toLocaleString()}</div>
 
             <p class="report-hero-sub">
-              Current total Surface WIP from the latest Facility WIP report.
-              Live flow uses station scan totals plus current WIP up now.
-            </p>
+           Executive summary of the current Surface operation.</p>
 
             <div class="report-hero-metrics">
               <div class="report-mini-metric">
                 <div class="report-mini-label">Main WIP</div>
                 <div class="report-mini-value">${main.toLocaleString()}</div>
-                <div class="report-mini-note">Excludes SF Scan intake</div>
+                <div class="report-mini-note">Jobs already inside Surface production</div>
               </div>
 
               <div class="report-mini-metric">
                 <div class="report-mini-label">Intake WIP</div>
                 <div class="report-mini-value">${intake.toLocaleString()}</div>
-                <div class="report-mini-note">SF Scan & Verify</div>
+                <div class="report-mini-note">New intake entering Surface</div>
               </div>
 
               <div class="report-mini-metric">
                 <div class="report-mini-label">Current Up Now</div>
                 <div class="report-mini-value">${totalCurrentUpNow.toLocaleString()}</div>
-                <div class="report-mini-note">Live previous-station WIP</div>
+                <div class="report-mini-note">Estimated workload feeding next steps</div>
               </div>
             </div>
           </div>

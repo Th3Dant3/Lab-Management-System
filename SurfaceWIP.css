@@ -3513,3 +3513,427 @@ h1 {
   color: #ffffff;
   font-weight: 800;
 }
+
+/* =========================================================
+   HOURLY IN / OUT COMPARISON
+========================================================= */
+
+.hourly-compare-shell {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(34, 211, 238, 0.08), transparent 35%),
+    linear-gradient(145deg, rgba(6, 20, 42, 0.94), rgba(2, 10, 22, 0.92));
+  padding: 24px;
+}
+
+.hourly-compare-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.hourly-compare-title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 900;
+  color: var(--cyan);
+}
+
+.hourly-compare-subtitle {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hourly-compare-status {
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  border-radius: 999px;
+  padding: 10px 16px;
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.1);
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.hourly-compare-status.building,
+.hourly-compare-card.building,
+.hourly-status-pill.building {
+  border-color: rgba(255, 71, 87, 0.55);
+  color: var(--red);
+}
+
+.hourly-compare-status.draining,
+.hourly-compare-card.draining,
+.hourly-status-pill.draining {
+  border-color: rgba(34, 211, 238, 0.45);
+  color: var(--cyan);
+}
+
+.hourly-compare-status.even,
+.hourly-compare-card.even,
+.hourly-status-pill.even {
+  border-color: rgba(80, 220, 150, 0.42);
+  color: var(--green);
+}
+
+.hourly-transition-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.hourly-transition-btn {
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 999px;
+  background: rgba(7, 18, 38, 0.82);
+  color: #9fc7df;
+  padding: 9px 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.hourly-transition-btn.active {
+  color: #ffffff;
+  border-color: rgba(34, 211, 238, 0.7);
+  background: rgba(34, 211, 238, 0.16);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.22);
+}
+
+.hourly-compare-main {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.hourly-compare-card {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(34, 211, 238, 0.08), transparent 38%),
+    rgba(7, 18, 38, 0.86);
+  padding: 16px;
+}
+
+.hourly-card-label {
+  color: #8bb8d8;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 900;
+}
+
+.hourly-card-step {
+  color: #ffffff;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.hourly-card-value {
+  margin-top: 8px;
+  font-family: var(--font-display);
+  font-size: 38px;
+  color: var(--cyan);
+  font-weight: 900;
+}
+
+.hourly-compare-card.building .hourly-card-value {
+  color: var(--red);
+}
+
+.hourly-compare-card.draining .hourly-card-value {
+  color: var(--cyan);
+}
+
+.hourly-compare-card.even .hourly-card-value {
+  color: var(--green);
+}
+
+.hourly-compare-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(34, 211, 238, 0.15);
+  border-radius: var(--radius-lg);
+}
+
+.hourly-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.hourly-compare-table th,
+.hourly-compare-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.11);
+  text-align: left;
+}
+
+.hourly-compare-table th {
+  color: #8bb8d8;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 900;
+  background: rgba(7, 18, 38, 0.88);
+}
+
+.hourly-compare-table td {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.hourly-status-pill {
+  display: inline-flex;
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  background: rgba(7, 18, 38, 0.7);
+}
+
+@media (max-width: 1000px) {
+  .hourly-compare-main {
+    grid-template-columns: 1fr;
+  }
+
+  .hourly-compare-header {
+    flex-direction: column;
+  }
+}
+
+/* =========================================================
+   HOURLY TREND CHART
+========================================================= */
+
+.hourly-chart-shell {
+  margin-bottom: 20px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(34, 211, 238, 0.06), transparent 38%),
+    rgba(7, 18, 38, 0.82);
+  padding: 18px;
+}
+
+.hourly-chart-head {
+  margin-bottom: 14px;
+}
+
+.hourly-chart-title {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.hourly-chart-subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hourly-chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 340px;
+}
+
+/* =========================================================
+   PROFESSIONAL OPTICAL ANALYTICS REPORT
+========================================================= */
+
+.optical-analytics-report {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.optical-report-hero {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(34, 211, 238, 0.08), transparent 38%),
+    linear-gradient(145deg, rgba(7, 18, 38, 0.94), rgba(2, 10, 22, 0.9));
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.optical-report-hero h2 {
+  margin: 8px 0 10px;
+  color: #ffffff;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.optical-report-hero p,
+.optical-narrative-card p,
+.optical-distribution-card p {
+  color: #a9c6da;
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 650;
+}
+
+.optical-risk-card {
+  min-width: 210px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: var(--radius-lg);
+  background: rgba(7, 18, 38, 0.78);
+  padding: 18px;
+}
+
+.optical-risk-card span {
+  display: block;
+  color: #8bb8d8;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.optical-risk-card strong {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-size: 34px;
+}
+
+.optical-risk-card strong.high {
+  color: var(--red);
+}
+
+.optical-risk-card strong.moderate {
+  color: var(--orange);
+}
+
+.optical-risk-card strong.controlled {
+  color: var(--green);
+}
+
+.optical-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.optical-insight-card {
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 90% 10%, rgba(34, 211, 238, 0.07), transparent 38%),
+    rgba(7, 18, 38, 0.84);
+  padding: 18px;
+}
+
+.optical-insight-card.warning {
+  border-color: rgba(255, 71, 87, 0.45);
+}
+
+.insight-label {
+  color: #8bb8d8;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.insight-value {
+  margin-top: 10px;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.optical-insight-card.warning .insight-value {
+  color: var(--red);
+}
+
+.optical-insight-card p {
+  margin-top: 10px;
+  color: #9fb8cc;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+
+.optical-narrative-card,
+.optical-distribution-card {
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: var(--radius-xl);
+  background: rgba(7, 18, 38, 0.78);
+  padding: 22px;
+}
+
+.recommendation-box {
+  margin-top: 16px;
+  border: 1px solid rgba(80, 220, 150, 0.28);
+  border-radius: var(--radius-lg);
+  background: rgba(80, 220, 150, 0.08);
+  padding: 16px;
+}
+
+.recommendation-box span {
+  display: block;
+  color: #8bb8d8;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.recommendation-box strong {
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.optical-bars .gb-val span {
+  color: #8bb8d8;
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.executive-summary-text {
+  margin-top: 18px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(7, 18, 38, 0.68);
+  padding: 14px 16px;
+  color: #bfd8ea;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.executive-summary-text strong {
+  color: #ffffff;
+}
+
+@media (max-width: 1200px) {
+  .optical-insight-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .optical-report-hero {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 700px) {
+  .optical-insight-grid {
+    grid-template-columns: 1fr;
+  }
+}
