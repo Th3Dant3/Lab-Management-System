@@ -892,7 +892,7 @@ function renderContinuousSurfaceFlow(rows) {
     "normal";
 
   /*
-    2 transitions per row =:
+    2 transitions per row:
     Station → Conveyor → Station → Conveyor → Station
 
     Next row does NOT repeat the previous ending station.
@@ -901,17 +901,6 @@ function renderContinuousSurfaceFlow(rows) {
   const snakeRows = buildSnakeRowsByTransitions(orderedRows, transitionsPerRow);
   window.__surfaceSnakeRows = snakeRows;
 
-  const stationCount = (() => {
-    const seen = new Set();
-
-    orderedRows.forEach((row, index) => {
-      if (index === 0) seen.add(String(row.FromStep || "").trim());
-      seen.add(String(row.ToStep || "").trim());
-    });
-
-    return seen.size;
-  })();
-
   return `
     <section class="continuous-flow-shell ${severity}">
       <div class="continuous-flow-header">
@@ -919,18 +908,6 @@ function renderContinuousSurfaceFlow(rows) {
           <div class="continuous-flow-title">Surface Live Flow</div>
           <div class="continuous-flow-subtitle">
             Total Scan Today → Current WIP Up Now → Next Station
-          </div>
-        </div>
-
-        <div class="continuous-flow-metrics">
-          <div>
-            <span>Total Current WIP Up Now</span>
-            <strong>${totalMoving.toLocaleString()}</strong>
-          </div>
-
-          <div>
-            <span>Stations</span>
-            <strong>${stationCount}</strong>
           </div>
         </div>
       </div>
