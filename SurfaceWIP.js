@@ -991,6 +991,7 @@ return `
     ${pieces.join("")}
   </div>
 `;
+}
 
 function getNextRowFirstTransition(rowIndex) {
   const allRows = window.__surfaceSnakeRows || [];
@@ -2347,5 +2348,4 @@ document.addEventListener("DOMContentLoaded", boot);
 
 function goBackToDashboard() {
   window.location.href = "index.html";
-}
 }
