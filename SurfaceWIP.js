@@ -1940,6 +1940,7 @@ function renderAnalytics() {
 
 /* =========================================================
    SECTION 19 — SUMMARY TAB
+   Executive Optical Operations Summary
 ========================================================= */
 
 function renderReports() {
@@ -1959,6 +1960,9 @@ function renderReports() {
   const intake = num(s.SurfaceIntakeWIP);
   const largestStep = safeText(s.LargestStep);
   const largestStepTotal = num(s.LargestStepTotal);
+  const largestPct = total > 0 ? Math.round((largestStepTotal / total) * 100) : 0;
+
+  const inspectionTotal = getStationScanTotal("Surface Inspection");
 
   const visibleRows = rows.filter(row => {
     const flowStep = safeText(row.FlowStep, "");
@@ -1989,88 +1993,155 @@ function renderReports() {
   const liveRows = buildLiveTransferRowsFromSurfaceFlow_();
   const totalCurrentUpNow = liveRows.reduce((sum, row) => sum + num(row.EstimatedInTransfer), 0);
 
+  const riskLevel =
+    criticalRows.length > 0 ? "High" :
+    watchRows.length >= 2 ? "Moderate" :
+    "Controlled";
+
+  const riskClass =
+    riskLevel === "High" ? "high" :
+    riskLevel === "Moderate" ? "moderate" :
+    "controlled";
+
+  const productionRead =
+    criticalRows.length > 0
+      ? `${largestStep} is the primary constraint and should receive immediate attention.`
+      : watchRows.length > 0
+      ? `Surface is carrying elevated WIP in ${watchRows.length} watch area(s), but the flow is still manageable.`
+      : `Surface is currently balanced with no critical WIP concentration.`;
+
+  const actionRead =
+    criticalRows.length > 0
+      ? `Shift support toward ${largestStep}, verify staffing coverage, and monitor whether downstream stations begin to lose flow.`
+      : watchRows.length > 0
+      ? `Continue monitoring elevated stations and prepare to rebalance labor if WIP increases in the next refresh cycle.`
+      : `Maintain current staffing and continue normal monitoring.`;
+
   wrap.innerHTML = `
-    <section class="report-summary-shell">
+    <section class="executive-summary-shell">
 
-      <div class="report-hero-grid">
+      <div class="executive-summary-hero">
 
-        <article class="report-hero-card">
-          <div class="report-hero-content">
-            <div class="report-eyebrow">Surface WIP Summary</div>
-            <div class="report-hero-title">${total.toLocaleString()}</div>
+        <article class="executive-main-card">
+          <div class="report-eyebrow">Executive Surface Summary</div>
 
-            <p class="report-hero-sub">
-           Executive summary of the current Surface operation.</p>
-
-            <div class="report-hero-metrics">
-              <div class="report-mini-metric">
-                <div class="report-mini-label">Main WIP</div>
-                <div class="report-mini-value">${main.toLocaleString()}</div>
-                <div class="report-mini-note">Jobs already inside Surface production</div>
-              </div>
-
-              <div class="report-mini-metric">
-                <div class="report-mini-label">Intake WIP</div>
-                <div class="report-mini-value">${intake.toLocaleString()}</div>
-                <div class="report-mini-note">New intake entering Surface</div>
-              </div>
-
-              <div class="report-mini-metric">
-                <div class="report-mini-label">Current Up Now</div>
-                <div class="report-mini-value">${totalCurrentUpNow.toLocaleString()}</div>
-                <div class="report-mini-note">Estimated workload feeding next steps</div>
-              </div>
+          <div class="executive-main-row">
+            <div>
+              <div class="executive-total">${total.toLocaleString()}</div>
+              <div class="executive-total-label">Total Surface WIP</div>
             </div>
+
+            <div class="executive-risk-badge ${riskClass}">
+              <span>Operational Risk</span>
+              <strong>${riskLevel}</strong>
+            </div>
+          </div>
+
+          <p class="executive-read">
+            <strong>Production Read:</strong> Surface currently has
+            <strong>${total.toLocaleString()}</strong> jobs in WIP, with
+            <strong>${main.toLocaleString()}</strong> jobs already inside active Surface production
+            and <strong>${intake.toLocaleString()}</strong> jobs at intake.
+            ${productionRead}
+          </p>
+
+          <div class="executive-metric-grid">
+
+            <div class="executive-metric">
+              <span>Main Surface WIP</span>
+              <strong>${main.toLocaleString()}</strong>
+              <small>Jobs past intake and inside production flow</small>
+            </div>
+
+            <div class="executive-metric">
+              <span>Surface Intake</span>
+              <strong>${intake.toLocaleString()}</strong>
+              <small>Jobs entering through SF Scan & Verify</small>
+            </div>
+
+            <div class="executive-metric">
+              <span>Current Up Now</span>
+              <strong>${totalCurrentUpNow.toLocaleString()}</strong>
+              <small>Workload feeding downstream stations</small>
+            </div>
+
+            <div class="executive-metric orange">
+              <span>Inspection Activity</span>
+              <strong>${inspectionTotal.toLocaleString()}</strong>
+              <small>Total Surface Inspection scans today</small>
+            </div>
+
           </div>
         </article>
 
-        <article class="report-status-panel">
-          <div class="report-panel-title">Operational Status</div>
+        <article class="executive-status-card">
+          <div class="report-section-title">Operational Status</div>
 
-          <div class="report-status-list">
-            <div class="report-status-row">
+          <div class="executive-status-list">
+
+            <div class="executive-status-row critical">
               <div>
-                <div class="report-status-name">Critical Steps</div>
-                <div class="report-status-sub">Visible stations above critical threshold</div>
+                <strong>Critical Steps</strong>
+                <span>Stations above critical threshold</span>
               </div>
-              <div class="report-status-count">${criticalRows.length}</div>
+              <b>${criticalRows.length}</b>
             </div>
 
-            <div class="report-status-row">
+            <div class="executive-status-row watch">
               <div>
-                <div class="report-status-name">Watch Steps</div>
-                <div class="report-status-sub">Elevated WIP requiring monitoring</div>
+                <strong>Watch Steps</strong>
+                <span>Stations requiring monitoring</span>
               </div>
-              <div class="report-status-count">${watchRows.length}</div>
+              <b>${watchRows.length}</b>
             </div>
 
-            <div class="report-status-row">
+            <div class="executive-status-row active">
               <div>
-                <div class="report-status-name">Active Steps</div>
-                <div class="report-status-sub">Steps currently holding work</div>
+                <strong>Active Steps</strong>
+                <span>Stations currently holding work</span>
               </div>
-              <div class="report-status-count">${activeRows.length + lowRows.length}</div>
+              <b>${activeRows.length + lowRows.length}</b>
             </div>
 
-            <div class="report-status-row">
+            <div class="executive-status-row">
               <div>
-                <div class="report-status-name">Empty Visible Steps</div>
-                <div class="report-status-sub">Visible non-Line-A steps at zero</div>
+                <strong>Empty Visible Steps</strong>
+                <span>Visible non-Line-A stations at zero</span>
               </div>
-              <div class="report-status-count">${emptyRows.length}</div>
+              <b>${emptyRows.length}</b>
             </div>
+
           </div>
         </article>
 
       </div>
 
-      <div class="report-section-grid">
+      <article class="executive-action-card">
+        <div>
+          <div class="report-section-title">Supervisor Action Read</div>
+          <p>
+            ${actionRead}
+            The largest WIP concentration is <strong>${largestStep}</strong> with
+            <strong>${largestStepTotal.toLocaleString()}</strong> jobs, representing
+            <strong>${largestPct}%</strong> of total Surface WIP.
+          </p>
+        </div>
 
-        <article class="report-section-card">
-          <div class="report-section-head">
+        <div class="action-priority ${riskClass}">
+          <span>Priority</span>
+          <strong>${riskLevel}</strong>
+        </div>
+      </article>
+
+      <div class="executive-bottom-grid">
+
+        <article class="executive-panel">
+          <div class="executive-panel-head">
             <div>
               <div class="report-section-title">Top WIP Stations</div>
-              <div class="report-section-sub">Highest current WIP by visible station.</div>
+              <p class="report-section-sub">
+                Highest current WIP by visible station. These are the areas most likely to restrict Surface flow.
+              </p>
             </div>
 
             <div class="report-chip">
@@ -2078,7 +2149,7 @@ function renderReports() {
             </div>
           </div>
 
-          <div class="report-list">
+          <div class="executive-top-list">
             ${topSteps.map((row, index) => {
               const wip = num(row.CurrentJobTotal);
               const displayName = safeText(row.DisplayName || row.FlowStep);
@@ -2086,45 +2157,57 @@ function renderReports() {
               const group = safeText(row.FlowGroup);
               const status = statusFromBackend(row);
 
-              return `
-                <div class="report-step-row">
-                  <div class="report-rank">${index + 1}</div>
+              const statusClass =
+                status === "Critical" ? "critical" :
+                status === "Watch" ? "watch" :
+                status === "ACTIVE" ? "active" :
+                "low";
 
-                  <div>
-                    <div class="report-step-name">${displayName}</div>
-                    <div class="report-step-meta">${flowStep} · ${group} · ${status}</div>
+              return `
+                <div class="executive-step-row ${statusClass}">
+                  <div class="executive-rank">${index + 1}</div>
+
+                  <div class="executive-step-body">
+                    <strong>${displayName}</strong>
+                    <span>${flowStep} · ${group} · ${status}</span>
                   </div>
 
-                  <div class="report-step-value">${wip.toLocaleString()}</div>
+                  <div class="executive-step-value">${wip.toLocaleString()}</div>
                 </div>
               `;
             }).join("")}
           </div>
         </article>
 
-        <article class="report-section-card">
-          <div class="report-section-head">
+        <article class="executive-panel">
+          <div class="executive-panel-head">
             <div>
-              <div class="report-section-title">WIP by Group</div>
-              <div class="report-section-sub">Group-level distribution from visible Surface flow.</div>
+              <div class="report-section-title">WIP by Flow Group</div>
+              <p class="report-section-sub">
+                Group-level distribution showing where Surface work is accumulating.
+              </p>
             </div>
 
             <div class="report-chip">${groupEntries.length} groups</div>
           </div>
 
-          <div class="report-list">
+          <div class="executive-group-bars">
             ${groupEntries.map(([name, value]) => {
               const width = Math.round((value / maxGroup) * 100);
+              const percent = total > 0 ? Math.round((value / total) * 100) : 0;
 
               return `
-                <div class="report-bar-row">
-                  <div class="report-bar-name">${name}</div>
+                <div class="executive-group-row">
+                  <div class="executive-group-name">${name}</div>
 
-                  <div class="report-bar-track">
-                    <div class="report-bar-fill" style="width:${width}%"></div>
+                  <div class="executive-group-track">
+                    <div class="executive-group-fill" style="width:${width}%"></div>
                   </div>
 
-                  <div class="report-bar-value">${value.toLocaleString()}</div>
+                  <div class="executive-group-value">
+                    ${value.toLocaleString()}
+                    <span>${percent}%</span>
+                  </div>
                 </div>
               `;
             }).join("")}
@@ -2136,7 +2219,6 @@ function renderReports() {
     </section>
   `;
 }
-
 
 /* =========================================================
    SECTION 20 — EXPORT CSV
