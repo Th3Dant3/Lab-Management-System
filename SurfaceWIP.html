@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>Surface WIP Flow</title>
+  <title>Surface Live Flow Command Center</title>
 
-  <link rel="stylesheet" href="SurfaceWIP.css?v=20260506-cleanflow" />
+  <link rel="stylesheet" href="SurfaceWIP.css?v=20260506-option3-command-center" />
 </head>
 
 <body>
@@ -31,7 +31,7 @@
       </div>
 
       <div class="loader-title">Surface</div>
-<div class="loader-subtitle">Surface Workflow</div>
+      <div class="loader-subtitle">Surface Workflow</div>
 
       <div class="loader-flow">
         <div class="loader-node active">
@@ -78,25 +78,96 @@
 
       <div class="brand">
         <div class="brand-logo">⬢</div>
-       <div class="brand-title">
-  Surface
-  <span>Workflow</span>
-</div>
+
+        <div class="brand-title">
+          Surface
+          <span>Workflow</span>
+        </div>
       </div>
 
       <nav class="nav">
-        <button class="nav-item active" data-tab="overview">Overview</button>
-        <button class="nav-item" data-tab="transfer">Live Flow</button>
-        <button class="nav-item" data-tab="detail">Flow Detail</button>
-        <button class="nav-item" data-tab="lines">Lines</button>
+
+        <button class="nav-item active" data-tab="overview">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            </svg>
+          </span>
+          Overview
+        </button>
+
+        <button class="nav-item" data-tab="transfer">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12h18"></path>
+              <path d="M3 6l6 6-6 6"></path>
+              <path d="M21 6l-6 6 6 6"></path>
+            </svg>
+          </span>
+          Live Flow
+        </button>
+
+        <button class="nav-item" data-tab="detail">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="16" y2="17"></line>
+            </svg>
+          </span>
+          Flow Detail
+        </button>
+
+        <button class="nav-item" data-tab="lines">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+          </span>
+          Lines
+        </button>
 
         <button class="nav-item" data-tab="alerts">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </span>
           Alerts
           <span id="alertBadge" class="nav-badge" style="display:none;">0</span>
         </button>
 
-        <button class="nav-item" data-tab="analytics">Analytics</button>
-        <button class="nav-item" data-tab="summary">Summary</button>
+        <button class="nav-item" data-tab="analytics">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+              <line x1="2" y1="20" x2="22" y2="20"></line>
+            </svg>
+          </span>
+          Analytics
+        </button>
+
+        <button class="nav-item" data-tab="summary">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+              <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+            </svg>
+          </span>
+          Summary
+        </button>
+
       </nav>
 
       <div class="system-card">
@@ -136,11 +207,7 @@
         <div>
           <div class="brand-kicker">Production Surface</div>
 
-          <h1>Surface WIP Flow</h1>
-
-          <p class="subtitle">
-            Live Surface flow using scan totals and current WIP up now.
-          </p>
+          <h1>Surface Live Flow Command Center</h1>
 
           <div class="header-actions">
             <div class="live-pill">
@@ -190,11 +257,11 @@
           <div id="kpiIntake" class="kpi-note">Intake: —</div>
         </article>
 
-       <article class="kpi-card orange">
-  <div class="kpi-label">Total Surface Inspection</div>
-  <div id="kpiInspection" class="kpi-value">—</div>
-  <div class="kpi-note">Total Scan of Inspection</div>
-</article>
+        <article class="kpi-card orange">
+          <div class="kpi-label">Total Surface Inspection</div>
+          <div id="kpiInspection" class="kpi-value">—</div>
+          <div class="kpi-note">Total Scan of Inspection</div>
+        </article>
 
       </section>
 
@@ -204,34 +271,16 @@
       ====================================================== -->
       <section id="tab-overview" class="tab-panel active">
 
-        <div class="filters">
-          <button class="filter-btn active" data-filter="all">All Surface</button>
-          <button class="filter-btn" data-filter="lineB">Line B</button>
-          <button class="filter-btn filter-btn--alert" data-filter="critical">High WIP Only</button>
-        </div>
-
-        <section class="flow-shell">
-          <div id="bottleneckLabel" class="bottleneck-label">
-            BOTTLENECK
-          </div>
-
-          <div id="flowGrid" class="flow-grid">
-            <div class="flow-loading">Loading Surface WIP…</div>
-          </div>
-
-          <div class="flow-track">
-            <span class="particle" style="--delay:0s"></span>
-            <span class="particle" style="--delay:2s"></span>
-            <span class="particle" style="--delay:4s"></span>
-          </div>
-        </section>
-
-        <section class="transfer-shell">
+        <!-- =====================================================
+             SURFACE LIVE FLOW OPTION 3 — SINGLE VIEW
+             Old duplicate station-card wall removed.
+        ====================================================== -->
+        <section class="transfer-shell surface-live-flow-v3-host">
           <div class="transfer-shell__header">
             <div>
               <div class="transfer-title">Surface Live Flow</div>
               <div class="transfer-subtitle">
-                Total Scan Today → Current WIP Up Now → Next Station.
+                Total Scan Today → Current WIP Moving → Next Station.
               </div>
             </div>
 
@@ -258,10 +307,10 @@
 
         <header class="page-header page-header--slim">
           <div>
-           <h1>Hourly In / Out</h1>
-<p class="subtitle">
-  Compare received activity by hour between each Surface station.
-</p>
+            <h1>Hourly In / Out</h1>
+            <p class="subtitle">
+              Compare received activity by hour between each Surface station.
+            </p>
           </div>
         </header>
 
@@ -269,9 +318,9 @@
           <div class="transfer-shell__header">
             <div>
               <div class="transfer-title">Hourly In / Out Comparison</div>
-<div class="transfer-subtitle">
-  Current hour received compared against the previous station.
-</div>
+              <div class="transfer-subtitle">
+                Current hour received compared against the previous station.
+              </div>
             </div>
 
             <div id="transferMetaSecondary" class="transfer-meta">
@@ -409,8 +458,7 @@
        PAGE JS
   ====================================================== -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="SurfaceWIP.js?v=20260506-hourly-trend"></script>
-    
-  
+  <script src="SurfaceWIP.js?v=20260506-v3-clean-blue"></script>
+
 </body>
 </html>

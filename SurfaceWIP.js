@@ -886,156 +886,182 @@ function renderContinuousSurfaceFlow(rows) {
     return sum + calcEstimatedMoving(row);
   }, 0);
 
-  const severity =
-    totalMoving >= 300 ? "critical" :
-    totalMoving >= 100 ? "watch" :
-    "normal";
+  const totalScansToday = (state.surfaceScanSummary || []).reduce((sum, row) => {
+    return sum + num(row.TotalScansToday);
+  }, 0);
 
-  /*
-    2 transitions per row:
-    Station → Conveyor → Station → Conveyor → Station
+  const activeStations = (state.surfaceFlow || []).filter(row => {
+    return num(row.CurrentJobTotal) > 0 && !(CONFIG.LINE_A_OFFLINE && isLineA(row.FlowStep));
+  }).length;
 
-    Next row does NOT repeat the previous ending station.
-  */
-  const transitionsPerRow = 2;
-  const snakeRows = buildSnakeRowsByTransitions(orderedRows, transitionsPerRow);
-  window.__surfaceSnakeRows = snakeRows;
+  const bottleneckRow = (state.surfaceFlow || [])
+    .filter(row => !(CONFIG.LINE_A_OFFLINE && isLineA(row.FlowStep)))
+    .slice()
+    .sort((a, b) => num(b.CurrentJobTotal) - num(a.CurrentJobTotal))[0] || {};
+
+  const bottleneckName = safeText(bottleneckRow.DisplayName || bottleneckRow.FlowStep, "No bottleneck");
+  const bottleneckWip = num(bottleneckRow.CurrentJobTotal);
+  const bottleneckStatus = bottleneckWip >= CONFIG.WIP_CRITICAL ? "Critical" : bottleneckWip >= CONFIG.WIP_HIGH ? "Watch" : "Stable";
+
+  const watchCount = (state.surfaceFlow || []).filter(row => {
+    const wip = num(row.CurrentJobTotal);
+    return wip >= CONFIG.WIP_HIGH && !(CONFIG.LINE_A_OFFLINE && isLineA(row.FlowStep));
+  }).length;
+
+  const flowCards = buildSerpentineFlowCards(orderedRows);
+  const flowRows = chunkCards(flowCards, 5);
+
+  const updateTime =
+    state.lastUpdateTime ||
+    state.summary?.ImportedAt ||
+    state.lastFetch ||
+    new Date();
 
   return `
-    <section class="continuous-flow-shell ${severity}">
-      <div class="continuous-flow-header">
+    <section class="continuous-flow-shell surface-v3-flow option3-command-shell option3-clean-shell">
+
+      <div class="surface-v3-bg-orb orb-one"></div>
+      <div class="surface-v3-bg-orb orb-two"></div>
+      <div class="surface-v3-bg-orb orb-three"></div>
+
+      <div class="option3-clean-toolbar">
         <div>
-          <div class="continuous-flow-title">Surface Live Flow</div>
-          <div class="continuous-flow-subtitle">
-            Workflow Metrics
-          </div>
+          <span class="option3-section-label">Snake Flow Map</span>
+          <strong>Station → WIP Moving → Next Station</strong>
+        </div>
+
+        <div class="option3-clean-meta">
+          <span class="option3-status-chip ${bottleneckStatus.toLowerCase()}">${bottleneckStatus}</span>
+          <span class="surface-v3-live-pill"><span></span>Live</span>
+          <span class="surface-v3-updated">${formatDisplayDateTime(updateTime)}</span>
         </div>
       </div>
 
-      <div class="snake-flow-wrap">
-        ${snakeRows.map((row, rowIndex) => renderSnakeRow(row, rowIndex)).join("")}
+      <div class="option3-layout option3-layout-clean">
+<main class="option3-flow-stage option3-flow-stage-clean">
+          <div class="serpentine-flow-wrap surface-v3-serpentine option3-serpentine">
+            ${flowRows.map((rowCards, rowIndex) => renderSerpentineRow(rowCards, rowIndex, flowRows.length)).join("")}
+          </div>
+        </main>
+      </div>
+
+      <div class="surface-v3-bottom-strip option3-bottom-strip option3-bottom-strip-clean">
+        <div class="surface-v3-status-card">
+          <div class="surface-v3-mini-icon">🛡</div>
+          <div><span>System Health</span><strong>Operational</strong></div>
+        </div>
+
+        <div class="surface-v3-mini-metric"><span>Stations Online</span><strong>${activeStations.toLocaleString()}/10</strong></div>
+        <div class="surface-v3-mini-metric"><span>Watch Areas</span><strong>${watchCount.toLocaleString()}</strong></div>
+        <div class="surface-v3-mini-metric"><span>Moving WIP</span><strong>${totalMoving.toLocaleString()}</strong></div>
+        <div class="surface-v3-live-note"><span></span>Live data updates every 30 seconds</div>
       </div>
     </section>
   `;
 }
 
-function buildSnakeRowsByTransitions(orderedRows, transitionsPerRow) {
-  const rows = [];
 
-  for (let i = 0; i < orderedRows.length; i += transitionsPerRow) {
-    rows.push({
-      reverse: rows.length % 2 === 1,
-      transitions: orderedRows.slice(i, i + transitionsPerRow)
+function buildSerpentineFlowCards(orderedRows) {
+  const cards = [];
+
+  orderedRows.forEach((row, index) => {
+    if (index === 0) {
+      cards.push({
+        type: "station",
+        step: row.FromStep,
+        display: row.FromDisplayName
+      });
+    }
+
+    cards.push({
+      type: "wip",
+      row: row
     });
-  }
 
-  return rows;
+    cards.push({
+      type: "station",
+      step: row.ToStep,
+      display: row.ToDisplayName
+    });
+  });
+
+  return cards;
 }
 
+function chunkCards(cards, size) {
+  const chunks = [];
 
-/* =========================================================
-   SECTION 13 — LIVE SNAKE FLOW ROW RENDERERS
-   NEW STUFF: Reverse rows skip repeated starting station.
-========================================================= */
-
-function renderSnakeRow(row, rowIndex) {
-  const transitions = row.transitions || [];
-  const pieces = [];
-
-  if (!transitions.length) return "";
-
-  if (!row.reverse) {
-    /*
-      Normal row:
-      Station → Conveyor → Station → Conveyor → Station
-    */
-    transitions.forEach((transition, index) => {
-      if (index === 0) {
-        pieces.push(renderContinuousStationCard({
-          step: transition.FromStep,
-          display: transition.FromDisplayName
-        }));
-      }
-
-      pieces.push(renderContinuousConveyor(transition));
-
-      pieces.push(renderContinuousStationCard({
-        step: transition.ToStep,
-        display: transition.ToDisplayName
-      }));
-    });
-  } else {
-    /*
-      Reverse row:
-      Do NOT repeat the previous row's ending station.
-
-      Example:
-      Previous row ended on Auto Blockers.
-      Next row starts with conveyor Auto Blockers → IQ Star,
-      then shows IQ Star, then next conveyor, then Orbit Generator.
-    */
-    const reversedTransitions = transitions.slice().reverse();
-
-    reversedTransitions.forEach(transition => {
-      pieces.push(renderContinuousConveyor(transition));
-
-      pieces.push(renderContinuousStationCard({
-        step: transition.FromStep,
-        display: transition.FromDisplayName
-      }));
-    });
+  for (let i = 0; i < cards.length; i += size) {
+    chunks.push(cards.slice(i, i + size));
   }
 
-return `
-  <div class="snake-row ${row.reverse ? "reverse no-repeat-start" : ""}" data-row-index="${rowIndex}">
-    ${pieces.join("")}
-  </div>
-`;
+  return chunks;
 }
 
-function getNextRowFirstTransition(rowIndex) {
-  const allRows = window.__surfaceSnakeRows || [];
-  const nextRow = allRows[rowIndex + 1];
+function renderSerpentineRow(rowCards, rowIndex, totalRows) {
+  const isReverseRow = rowIndex % 2 === 1;
 
-  if (!nextRow || !nextRow.transitions || !nextRow.transitions.length) {
-    return null;
-  }
+  const visualCards = isReverseRow
+    ? rowCards.slice().reverse()
+    : rowCards;
 
-  return nextRow.transitions[0];
-}
+  const inlineArrow = isReverseRow ? "←" : "→";
+  const hasNextRow = rowIndex < totalRows - 1;
 
-function renderSnakeBridge(row, previousReverse) {
-  const wip = calcEstimatedMoving(row);
+  const rowPieces = [];
 
-  const severity =
-    wip >= 200 ? "critical" :
-    wip >= 75 ? "watch" :
-    "normal";
+  visualCards.forEach((card, index) => {
+    rowPieces.push(renderSerpentineCard(card));
 
-  const nextDirectionArrow = previousReverse ? "→" : "←";
+    if (index < visualCards.length - 1) {
+      rowPieces.push(`
+        <div class="serpentine-inline-arrow ${isReverseRow ? "reverse" : "forward"}" aria-hidden="true">
+          ${inlineArrow}
+        </div>
+      `);
+    }
+  });
 
   return `
-    <div class="snake-bridge ${previousReverse ? "left" : "right"} ${severity}">
-      <div class="snake-bridge-path">
-        <div class="snake-bridge-down">
-          <span class="snake-bridge-arrow arrow-down">↓</span>
-        </div>
-
-        <div class="snake-bridge-turn">
-          <span class="snake-bridge-arrow arrow-turn">${nextDirectionArrow}</span>
-        </div>
+    <div class="serpentine-row-block ${isReverseRow ? "reverse-row" : "forward-row"}" data-row-index="${rowIndex}">
+      <div class="serpentine-row ${isReverseRow ? "reverse-row" : ""}">
+        ${rowPieces.join("")}
       </div>
 
-      <div class="snake-bridge-info compact">
-        <div class="snake-bridge-label">Next Flow</div>
-        <div class="snake-bridge-count">${wip.toLocaleString()}</div>
-        <div class="snake-bridge-route">
-          ${row.FromDisplayName} → ${row.ToDisplayName}
-        </div>
-      </div>
+      ${
+        hasNextRow
+          ? renderSerpentineDropArrow(isReverseRow)
+          : ""
+      }
     </div>
   `;
 }
+
+function renderSerpentineDropArrow(isReverseRow) {
+  return `
+    <div class="serpentine-row-drop ${isReverseRow ? "left" : "right"}" aria-hidden="true">
+      <div class="serpentine-drop-line"></div>
+      <div class="serpentine-drop-arrow">↓</div>
+    </div>
+  `;
+}
+
+function renderSerpentineCard(card) {
+  if (card.type === "station") {
+    return renderContinuousStationCard({
+      step: card.step,
+      display: card.display
+    });
+  }
+
+  if (card.type === "wip") {
+    return renderContinuousConveyor(card.row);
+  }
+
+  return "";
+}
+
+
 
 function renderContinuousStationCard(station) {
   const scanTotal = getStationScanTotal(station.step);
@@ -1044,6 +1070,10 @@ function renderContinuousStationCard(station) {
 
   return `
     <article class="continuous-station-card">
+      <div class="surface-v3-station-icon" aria-hidden="true">
+        ${iconForStep(station.step)}
+      </div>
+
       <div class="transfer-zone-label">Total Scan Today</div>
       <div class="transfer-zone-step">${display}</div>
       <div class="transfer-zone-value">${scanTotal.toLocaleString()}</div>
@@ -1056,8 +1086,8 @@ function renderContinuousConveyor(row) {
   const wip = calcEstimatedMoving(row);
 
   const severity =
-    wip >= 200 ? "critical" :
-    wip >= 75 ? "watch" :
+    wip >= CONFIG.WIP_CRITICAL ? "critical" :
+    wip >= CONFIG.WIP_HIGH ? "watch" :
     "normal";
 
   const packetsToShow = Math.max(
@@ -2029,7 +2059,7 @@ function renderReports() {
             </div>
 
             <div class="executive-metric">
-              <span>Current Up Now</span>
+              <span>Current WIP Moving</span>
               <strong>${totalCurrentUpNow.toLocaleString()}</strong>
               <small>Workload feeding downstream stations</small>
             </div>
@@ -2310,6 +2340,7 @@ function initFilters() {
 
       state.filter = button.dataset.filter;
       renderFlowGrid();
+      renderTransferTunnel();
     });
   });
 }
@@ -2343,6 +2374,32 @@ function boot() {
     fetchData(false);
   }, CONFIG.REFRESH_MS);
 }
+
+/* =================================================
+   SIDEBAR TAB ACTIVE STATE
+   Add only if your existing tab click logic does not already do this
+================================================= */
+
+document.querySelectorAll(".nav-item").forEach(button => {
+  button.addEventListener("click", () => {
+    const tab = button.dataset.tab;
+
+    document.querySelectorAll(".nav-item").forEach(item => {
+      item.classList.remove("active");
+    });
+
+    button.classList.add("active");
+
+    document.querySelectorAll(".tab-panel").forEach(panel => {
+      panel.classList.remove("active");
+    });
+
+    const targetPanel = document.getElementById(tab);
+    if (targetPanel) {
+      targetPanel.classList.add("active");
+    }
+  });
+});
 
 document.addEventListener("DOMContentLoaded", boot);
 
