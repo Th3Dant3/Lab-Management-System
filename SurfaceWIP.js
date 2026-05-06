@@ -1501,7 +1501,7 @@ function getStationPeakText(flowStepOrDisplay) {
 
   if (!peakHour || peakHour === "—") return "";
 
-  return `Peak: ${peakHour} · ${peakScans.toLocaleString()} scans`;
+  return `Peak: ${formatHourLabel(peakHour)} · ${peakScans.toLocaleString()} scans`;
 }
 
 
