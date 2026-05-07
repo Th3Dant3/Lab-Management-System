@@ -2406,3 +2406,4 @@ document.addEventListener("DOMContentLoaded", boot);
 function goBackToDashboard() {
   window.location.href = "index.html";
 }
+

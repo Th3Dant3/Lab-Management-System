@@ -44,16 +44,19 @@ const SCANNER_STORAGE_KEY = "lms_scanner_attention";
    LOADING SCREEN
 ===================================================== */
 (function initLoader() {
-  const loader   = document.getElementById("lms-loader");
-  const fill     = document.getElementById("loaderFill");
-  const status   = document.getElementById("loaderStatus");
-  const canvas   = document.getElementById("loaderCanvas");
-  const cursor   = document.getElementById("lms-cursor");
+  const loader  = document.getElementById("lms-loader");
+  const status  = document.getElementById("loaderStatus");
+  const canvas  = document.getElementById("loaderCanvas");
+  const cursor  = document.getElementById("lms-cursor");
+  const goldEl  = document.getElementById("loaderFillGold");
+  const cyanEl  = document.getElementById("loaderFillCyan");
+  const dotEl   = document.getElementById("loaderFillDot");
+  const pctEl   = document.getElementById("loaderPct");
   if (!loader) return;
 
   document.body.classList.add("lms-loading");
 
-  /* Particle background on the loader canvas */
+  /* ── Constellation particle canvas ── */
   const ctx = canvas.getContext("2d");
   function resizeCanvas() {
     canvas.width  = window.innerWidth;
@@ -62,86 +65,132 @@ const SCANNER_STORAGE_KEY = "lms_scanner_attention";
   resizeCanvas();
   window.addEventListener("resize", resizeCanvas);
 
-  const GOLD  = "rgba(245,200,66,";
-  const STEEL = "rgba(100,160,220,";
-  const particles = Array.from({ length: 55 }, () => ({
-    x:     Math.random() * window.innerWidth,
-    y:     Math.random() * window.innerHeight,
-    vx:    (Math.random() - 0.5) * 0.5,
-    vy:    (Math.random() - 0.5) * 0.5,
-    r:     1 + Math.random() * 2,
-    alpha: 0.1 + Math.random() * 0.35,
-    color: Math.random() > 0.5 ? GOLD : STEEL,
-  }));
+  const COLORS = [
+    { r:240, g:180, b:41  },  // gold
+    { r:79,  g:195, b:247 },  // cyan
+    { r:232, g:147, b:26  },  // amber
+    { r:200, g:220, b:255 },  // white
+  ];
+  const COUNT = Math.min(Math.floor(window.innerWidth * window.innerHeight / 7000), 130);
+  const particles = Array.from({ length: COUNT }, () => {
+    const c = COLORS[Math.floor(Math.random() * COLORS.length)];
+    return {
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - 0.5) * 0.38,
+      vy: (Math.random() - 0.5) * 0.38,
+      r:  0.7 + Math.random() * 2.2,
+      alpha: 0.15 + Math.random() * 0.5,
+      glow: Math.random() > 0.78,
+      c,
+    };
+  });
 
   let loaderRaf;
   function drawParticles() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    particles.forEach(p => {
-      p.x += p.vx; p.y += p.vy;
-      if (p.x < 0) p.x = canvas.width;
-      if (p.x > canvas.width) p.x = 0;
-      if (p.y < 0) p.y = canvas.height;
-      if (p.y > canvas.height) p.y = 0;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = p.color + p.alpha + ")";
-      ctx.fill();
-    });
-    /* faint connecting lines between close particles */
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    /* connection lines */
     for (let i = 0; i < particles.length; i++) {
       for (let j = i + 1; j < particles.length; j++) {
         const dx = particles[i].x - particles[j].x;
         const dy = particles[i].y - particles[j].y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 120) {
+        const d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < 135) {
+          const a = (1 - d / 135) * 0.16;
+          const c = particles[i].c;
           ctx.beginPath();
           ctx.moveTo(particles[i].x, particles[i].y);
           ctx.lineTo(particles[j].x, particles[j].y);
-          ctx.strokeStyle = `rgba(100,160,220,${0.06 * (1 - dist / 120)})`;
+          ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${a})`;
           ctx.lineWidth = 0.5;
           ctx.stroke();
         }
       }
     }
+
+    /* dots */
+    for (const p of particles) {
+      if (p.glow) {
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 5);
+        g.addColorStop(0, `rgba(${p.c.r},${p.c.g},${p.c.b},${p.alpha * 0.9})`);
+        g.addColorStop(1, `rgba(${p.c.r},${p.c.g},${p.c.b},0)`);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 5, 0, Math.PI * 2);
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${p.c.r},${p.c.g},${p.c.b},${p.alpha})`;
+      ctx.fill();
+
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < -10) p.x = W + 10;
+      if (p.x > W+10) p.x = -10;
+      if (p.y < -10) p.y = H + 10;
+      if (p.y > H+10) p.y = -10;
+    }
     loaderRaf = requestAnimationFrame(drawParticles);
   }
   drawParticles();
 
-  /* Progress bar steps */
+  /* ── Dual-tone progress helper ── */
+  function setProgress(pct) {
+    const half = 50;
+    if (pct <= half) {
+      if (goldEl) goldEl.style.width = (pct * 2) + "%";
+      if (cyanEl) { cyanEl.style.left = (pct * 2) + "%"; cyanEl.style.width = "0%"; }
+      if (dotEl)  dotEl.style.left = (pct * 2) + "%";
+    } else {
+      if (goldEl) goldEl.style.width = "100%";
+      const cw = ((pct - half) / half) * 100;
+      if (cyanEl) { cyanEl.style.left = "50%"; cyanEl.style.width = cw + "%"; }
+      if (dotEl)  dotEl.style.left = (50 + cw / 2) + "%";
+    }
+    if (pctEl) pctEl.textContent = Math.round(pct) + "%";
+  }
+
+  function activateTag(id) {
+    const el = document.getElementById("ltag-" + id);
+    if (el) el.classList.add("active");
+  }
+
+  /* ── Steps ── */
   const steps = [
-    { pct: 20, msg: "Authenticating session…" },
-    { pct: 45, msg: "Loading modules…"        },
-    { pct: 70, msg: "Fetching live data…"     },
-    { pct: 90, msg: "Building dashboard…"     },
-    { pct: 100, msg: "Ready"                  },
+    { pct: 12, msg: "Establishing secure connection…", tag: null      },
+    { pct: 28, msg: "Authenticating session…",         tag: null      },
+    { pct: 42, msg: "Loading AR department…",          tag: "ar"      },
+    { pct: 55, msg: "Syncing Finish operations…",      tag: "finish"  },
+    { pct: 67, msg: "Loading Surface workflow…",       tag: "surface" },
+    { pct: 78, msg: "Indexing inventory records…",     tag: "inventory"},
+    { pct: 88, msg: "Booting LMS core systems…",       tag: "lms"     },
+    { pct: 95, msg: "Applying permissions…",           tag: null      },
   ];
   let stepIdx = 0;
 
-  function advanceLoader(targetPct, msg) {
-    if (fill)   fill.style.width = targetPct + "%";
-    if (status) status.textContent = msg;
-  }
-
-  /* Tick through fake progress while real data loads */
   const stepTimer = setInterval(() => {
-    if (stepIdx < steps.length - 1) {
+    if (stepIdx < steps.length) {
       const s = steps[stepIdx++];
-      advanceLoader(s.pct, s.msg);
+      setProgress(s.pct);
+      if (status) status.textContent = s.msg;
+      if (s.tag)  activateTag(s.tag);
     }
-  }, 480);
+  }, 460);
 
-  /* Called by renderDashboard when real data is ready */
+  /* ── Called by renderDashboard when real data is ready ── */
   window.dismissLoader = function () {
     clearInterval(stepTimer);
-    advanceLoader(100, "Ready");
+    setProgress(100);
+    if (status) status.textContent = "Ready";
     setTimeout(() => {
       cancelAnimationFrame(loaderRaf);
       loader.classList.add("fade-out");
       document.body.classList.remove("lms-loading");
       if (cursor) cursor.classList.add("hidden");
       if (window._stopCursorAnim) window._stopCursorAnim();
-    }, 400);
+    }, 450);
   };
 })();
 

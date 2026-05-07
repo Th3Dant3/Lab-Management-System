@@ -89,6 +89,44 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
      LOADING SCREEN (unchanged)
      ============================================================ -->
 <div id="lms-loader" class="lms-loader">
+  <canvas id="loaderCanvas" class="loader-canvas"></canvas>
+
+  <!-- vignette -->
+  <div class="loader-vignette"></div>
+
+  <!-- corner reticles -->
+  <div class="loader-reticle lr-tl"></div>
+  <div class="loader-reticle lr-tr"></div>
+  <div class="loader-reticle lr-bl"></div>
+  <div class="loader-reticle lr-br"></div>
+
+  <!-- orbital rings -->
+  <div class="loader-rings">
+    <svg class="lring lring-outer" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="260" cy="260" r="240" stroke="url(#lgold)" stroke-width="1" stroke-dasharray="130 50 200 70" stroke-linecap="round"/>
+      <defs>
+        <linearGradient id="lgold" x1="0" y1="0" x2="520" y2="0">
+          <stop offset="0%" stop-color="rgba(240,180,41,0)"/>
+          <stop offset="40%" stop-color="rgba(240,180,41,0.85)"/>
+          <stop offset="70%" stop-color="rgba(232,147,26,0.5)"/>
+          <stop offset="100%" stop-color="rgba(240,180,41,0)"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <svg class="lring lring-inner" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="260" cy="260" r="220" stroke="url(#lcyan)" stroke-width="0.8" stroke-dasharray="90 70 150 100" stroke-linecap="round"/>
+      <defs>
+        <linearGradient id="lcyan" x1="0" y1="520" x2="520" y2="0">
+          <stop offset="0%" stop-color="rgba(79,195,247,0)"/>
+          <stop offset="40%" stop-color="rgba(79,195,247,0.75)"/>
+          <stop offset="70%" stop-color="rgba(66,197,183,0.45)"/>
+          <stop offset="100%" stop-color="rgba(79,195,247,0)"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  </div>
+
+  <!-- center content -->
   <div class="loader-inner">
     <div class="loader-logo">
       <div class="loader-bar"></div>
@@ -97,12 +135,25 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
     <div class="loader-brand">Zenni USA</div>
     <div class="loader-sub">Dashboard</div>
+
     <div class="loader-track">
-      <div class="loader-fill" id="loaderFill"></div>
+      <div class="loader-fill-gold" id="loaderFillGold"></div>
+      <div class="loader-fill-cyan" id="loaderFillCyan"></div>
+      <div class="loader-fill-dot" id="loaderFillDot"></div>
     </div>
+
     <div class="loader-status" id="loaderStatus">Initializing…</div>
+    <div class="loader-pct" id="loaderPct">0%</div>
   </div>
-  <canvas id="loaderCanvas" class="loader-canvas"></canvas>
+
+  <!-- dept tags -->
+  <div class="loader-dept-tags">
+    <div class="ldt" id="ltag-ar">AR</div>
+    <div class="ldt" id="ltag-finish">Finish</div>
+    <div class="ldt" id="ltag-surface">Surface</div>
+    <div class="ldt" id="ltag-inventory">Inventory</div>
+    <div class="ldt" id="ltag-lms">LMS Core</div>
+  </div>
 </div>
 
 <!-- Custom cursor (unchanged) -->

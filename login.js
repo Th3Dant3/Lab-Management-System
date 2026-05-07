@@ -14,7 +14,8 @@ const LOADER_MAP = {
   "AIVANOVSKI":    "loader_AIVANOVSKI.html",
   "SANDERSON":     "loader_SANDERSON.html",
    "BDADE":         "loader_BDADE.html",
-  "BBLAKE":        "loader_BBLAKE.html"
+   "BBLAKE":        "loader_BBLAKE.html",
+   "KMANACK": "loader_KMANACK.html"
 };
 document.addEventListener("DOMContentLoaded", () => {
   const userEl     = document.getElementById("username");

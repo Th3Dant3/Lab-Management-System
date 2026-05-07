@@ -7582,3 +7582,65 @@ body {
     min-width: 1320px !important;
   }
 }
+
+/* =========================================================
+   REVERSE CONVEYOR FIX
+   Rows 1 / 3 flow right.
+   Rows 2 / 4 flow left.
+========================================================= */
+
+/* Normal rows: packets move LEFT -> RIGHT */
+.serpentine-row:not(.reverse-row) .continuous-conveyor .transfer-packet {
+  animation: surfaceV3PacketMove 2.8s ease-in-out infinite !important;
+  animation-delay: var(--delay, 0s) !important;
+}
+
+.serpentine-row:not(.reverse-row) .continuous-conveyor .transfer-track::before {
+  animation: surfaceV3TrackFlow 2.2s linear infinite !important;
+}
+
+/* Reverse rows: packets move RIGHT -> LEFT */
+.serpentine-row.reverse-row .continuous-conveyor .transfer-packet {
+  animation: surfaceV3PacketMoveLeft 2.8s ease-in-out infinite !important;
+  animation-delay: var(--delay, 0s) !important;
+}
+
+.serpentine-row.reverse-row .continuous-conveyor .transfer-track::before {
+  animation: surfaceV3TrackFlowLeft 2.2s linear infinite !important;
+}
+
+/* Reverse shimmer */
+@keyframes surfaceV3TrackFlowLeft {
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Reverse packet movement */
+@keyframes surfaceV3PacketMoveLeft {
+  0% {
+    left: 92%;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+
+  100% {
+    left: 10%;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.72);
+  }
+}
+

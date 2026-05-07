@@ -7,128 +7,156 @@
   <link rel="stylesheet" href="login.css" />
 </head>
 <body>
-  <div class="grid"></div>
 
-  <div class="shell">
-    <div class="frame">
-      <div class="topbar">
-        <div class="brandline">
-          <div class="brandmark"><img src="zenni-logo.png" alt="Zenni logo" /></div>
-          <div>Zenni USA Optical Dashboard</div>
-        </div>
+  <div class="frame"></div>
 
-        <div class="top-right">
-          <div class="pill"><span class="dot"></span>Secure Live</div>
-          <div class="pill">USA Manufacturing</div>
-        </div>
-      </div>
+  <main class="page">
 
-      <div class="layout">
-        <section class="left">
-          <div>
-            <h1>LMS Dashboard</h1>
-
-            <div class="command-panel">
-              <div class="info-card">
-                <div>
-                  <div class="card-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M4 19h16"></path>
-                      <path d="M6 16V9"></path>
-                      <path d="M12 16V5"></path>
-                      <path d="M18 16v-3"></path>
-                    </svg>
-                  </div>
-                  <div class="info-value">Production Monitoring</div>
-                </div>
-                <div class="info-sub">Real time visibility across production & incoming jobs.</div>
-              </div>
-
-              <div class="info-card">
-                <div>
-                  <div class="card-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z"></path>
-                      <path d="M9.5 12l1.7 1.7L14.8 10"></path>
-                    </svg>
-                  </div>
-                  <div class="info-value">Quality Control</div>
-                </div>
-                <div class="info-sub">Track defects, breakage, and validation metrics with precision.</div>
-              </div>
-
-              <div class="info-card">
-                <div>
-                  <div class="card-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="3"></circle>
-                      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .62 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-.4-1.1 1.7 1.7 0 0 0-1-.62 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.62-1 1.7 1.7 0 0 0-1.1-.4H2.8a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.1-.4 1.7 1.7 0 0 0 .62-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.62 1.7 1.7 0 0 0 .4-1.1V2.8a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 .4 1.1 1.7 1.7 0 0 0 1 .62 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.28.3.48.65.58 1.05.1.39.11.81.04 1.22"></path>
-                    </svg>
-                  </div>
-                  <div class="info-value">System Intelligence</div>
-                </div>
-                <div class="info-sub">Monitor performance, trends, and operational efficiency.</div>
-              </div>
-            </div>
-
-            <div class="hero-logo">
-              <img src="zenni-dashboard.png" alt="Zenni USA Dashboard" />
-            </div>
-          </div>
-        </section>
-
-        <section class="right">
-          <div class="login-card">
-            <div class="card-top">
-              <div class="logo-row">
-                <div class="logo-box"><img src="zenni-logo.png" alt="Zenni logo" /></div>
-                <div class="logo-copy">
-                  <small>Secure Portal</small>
-                  <h2>Sign In</h2>
-                  <p>Sign in to continue to the Zenni USA Optical operational dashboard.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="form">
-              <div class="field">
-                <label for="username">Username</label>
-                <input id="username" type="text" placeholder="Enter username" autocomplete="username" />
-              </div>
-
-              <div class="field password-wrap">
-                <label for="password">Password</label>
-                <input id="password" type="password" placeholder="Enter password" autocomplete="current-password" />
-                <button type="button" id="togglePassword" class="toggle-password" aria-label="Show password">Show</button>
-              </div>
-
-              <div class="form-row">
-                <label class="check" for="rememberMe">
-                  <input type="checkbox" id="rememberMe" />
-                  <span class="checkbox"></span>
-                  <span>Remember me</span>
-                </label>
-                <button type="button" class="link-btn">Need access help?</button>
-              </div>
-
-              <button class="btn" id="loginBtn" type="button" onclick="login()">
-                <span id="loginBtnText">Sign In</span>
-              </button>
-
-              <div id="progressWrap" class="progress"><div id="progressBar"></div></div>
-
-              <div class="status warning" id="messageWrap">
-                <div class="status-dot"></div>
-                <div id="message">Secure authentication ready. Please enter your credentials to continue.</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="micro-grid"></div>
-        </section>
+    <!-- ── BRAND ── -->
+    <div class="brand">
+      <div class="z-mark">Z</div>
+      <div class="brand-copy">
+        <strong>ZENNI USA</strong>
+        <span>Optical Dashboard</span>
       </div>
     </div>
-  </div>
+
+    <!-- ── PILLS ── -->
+    <div class="pills">
+      <div class="pill"><span class="dot"></span>Secure Live</div>
+      <div class="pill">USA Manufacturing</div>
+    </div>
+
+    <!-- ── LEFT: headline + modules ── -->
+    <section class="left">
+      <h1>LMS<br>DASHBOARD</h1>
+      <div class="accent-line"></div>
+      <p class="tagline">Real-time visibility across operations,<br>quality and system intelligence.</p>
+
+      <div class="module-list">
+        <div class="module">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19h16"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/>
+            </svg>
+          </div>
+          <div class="mod-copy">
+            <strong>Production Monitoring</strong>
+            <p>Track production in real time with end-to-end visibility.</p>
+          </div>
+          <div class="arr">›</div>
+        </div>
+
+        <div class="module">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z"/>
+              <path d="M9.5 12l1.8 1.8L15 10"/>
+            </svg>
+          </div>
+          <div class="mod-copy">
+            <strong>Quality Control</strong>
+            <p>Ensure precision and compliance at every step.</p>
+          </div>
+          <div class="arr">›</div>
+        </div>
+
+        <div class="module">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v4"/><path d="M12 18v4"/>
+              <path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/>
+              <path d="M2 12h4"/><path d="M18 12h4"/>
+              <path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </div>
+          <div class="mod-copy">
+            <strong>System Intelligence</strong>
+            <p>Optimize performance and decisions.</p>
+          </div>
+          <div class="arr">›</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CENTER: orbital sphere ── -->
+    <section class="center">
+      <div class="orb">
+        <div class="orbit-wrap ow1"><div class="circle c1"></div></div>
+        <div class="orbit-wrap ow2"><div class="circle c2"></div></div>
+        <div class="orbit-wrap ow3"><div class="circle c3"></div></div>
+        <div class="core"><span class="core-z">Z</span></div>
+        <div class="base"></div>
+      </div>
+    </section>
+
+    <!-- ── RIGHT: login panel ── -->
+    <section class="right">
+      <div class="login-card">
+
+        <div class="secure-head">
+          <div class="lock-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              <circle cx="12" cy="16" r="1" fill="currentColor"/>
+            </svg>
+          </div>
+          <h2>SECURE PORTAL</h2>
+          <p>Sign in to access the Zenni USA Optical Dashboard</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label for="username">Username</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+              <path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/>
+            </svg>
+            <input id="username" type="text" placeholder="Enter your username" autocomplete="username" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+              <rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+            </svg>
+            <input id="password" type="password" placeholder="Enter your password" autocomplete="current-password" />
+            <button type="button" id="togglePassword" class="toggle-password">Show</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="check" for="rememberMe">
+            <input type="checkbox" id="rememberMe" />
+            <span class="checkbox"></span>
+            <span>Remember me</span>
+          </label>
+          <button type="button" class="link-btn">Need access help?</button>
+        </div>
+
+        <button class="btn" id="loginBtn" type="button" onclick="login()">
+          <span id="loginBtnText">SIGN IN</span>
+          <span class="btn-arrow">→</span>
+        </button>
+
+        <div id="progressWrap" class="progress">
+          <div id="progressBar"></div>
+        </div>
+
+        <div class="status warning" id="messageWrap">
+          <span class="status-dot"></span>
+          <span id="message">Secure authentication ready. Please enter your credentials to continue.</span>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
 
   <script src="login.js"></script>
 </body>
