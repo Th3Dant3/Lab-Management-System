@@ -13,7 +13,8 @@ let hourlyInOutChart = null;
 ========================================================= */
 
 const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/AKfycbzXB24Hq39ymhHnh5QYtHsGsRTdfUNtVq3gxx1IPDxmpV7uuzqXLLfRHP29ypwPIgl1ng/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec",
+  AREA: "Surface",
   REFRESH_MS: 30_000,
 
   WIP_CRITICAL: 200,
@@ -423,11 +424,104 @@ function buildDataSignature(payload) {
   ].join("|");
 }
 
+function normalizeProductionFlowPayload(payload) {
+  if (!payload || payload.status !== "success") return payload;
+
+  const rows = Array.isArray(payload.productionFlow)
+    ? payload.productionFlow
+    : Array.isArray(payload.surfaceFlow)
+      ? payload.surfaceFlow
+      : [];
+
+  const apiSummary = payload.summary || {};
+  const totalWip = num(apiSummary.TotalWIP);
+  const totalActivity = num(apiSummary.TotalActivityToday);
+  const outputActivity = num(apiSummary.OutputActivity);
+  const bridgeInputWip = num(apiSummary.BridgeInputWIP);
+
+  const flowRows = rows.map(row => {
+    const currentWip = num(row.CurrentWIP ?? row.CurrentJobTotal);
+    const activityToday = num(row.ActivityToday ?? row.TotalScansToday);
+    const flowStep = safeText(row.FlowStep, "");
+    const displayName = safeText(row.DisplayName || row.FlowStep, "");
+    const metricMode = safeText(row.MetricMode, "WIP_AND_ACTIVITY");
+    const percent = totalWip > 0 ? currentWip / totalWip : 0;
+
+    return {
+      ...row,
+      FlowOrder: num(row.FlowOrder),
+      FlowStep: flowStep,
+      DisplayName: displayName,
+      CurrentWIP: currentWip,
+      ActivityToday: activityToday,
+      CurrentJobTotal: currentWip,
+      PercentOfSurfaceTotal: percent,
+      FlowGroup: safeText(row.RollupArea || row.Area || row.ReportDepartment, "Surface"),
+      Status: metricMode === "OUTPUT_ONLY" ? "OUTPUT" : "",
+      Notes: metricMode === "OUTPUT_ONLY"
+        ? "Output/activity row. WIP is intentionally excluded."
+        : metricMode === "WIP_ONLY"
+          ? "Input queue row. Activity is intentionally excluded."
+          : "",
+      TotalScansToday: activityToday
+    };
+  });
+
+  const intakeRow = flowRows.find(row => row.FlowStep === "SF Scan & Verify") || {};
+  const activeSteps = flowRows.filter(row => num(row.CurrentJobTotal) > 0).length;
+  const emptySteps = flowRows.filter(row => num(row.CurrentJobTotal) === 0).length;
+
+  const normalizedSummary = {
+    ...apiSummary,
+    SurfaceTotalWIP: totalWip,
+    SurfaceMainWIP: Math.max(0, totalWip - num(intakeRow.CurrentJobTotal)),
+    SurfaceIntakeWIP: num(intakeRow.CurrentJobTotal),
+    SurfaceTotalActivityToday: totalActivity,
+    SurfaceOutputActivity: outputActivity,
+    BridgeInputWIP: bridgeInputWip,
+    LargestStep: apiSummary.LargestWIPStation || apiSummary.LargestStep || "—",
+    LargestStepTotal: apiSummary.LargestWIPTotal || apiSummary.LargestStepTotal || 0,
+    ActiveSteps: apiSummary.ActiveWIPStations || activeSteps,
+    EmptySteps: emptySteps,
+    ImportedAt: apiSummary.LastUpdated || payload.generatedAt || new Date().toISOString(),
+    SourceFile: "PRODUCTION_FLOW_CURRENT",
+    FileUpdatedTime: apiSummary.LastUpdated || payload.generatedAt || ""
+  };
+
+  const scanSummary = flowRows.map(row => ({
+    StationKey: row.FlowStep,
+    DisplayName: row.DisplayName,
+    TotalScansToday: num(row.ActivityToday),
+    PeakHour: "—",
+    PeakHourScans: 0,
+    LastUpdated: row.LastUpdated || normalizedSummary.ImportedAt
+  }));
+
+  return {
+    ...payload,
+    summary: normalizedSummary,
+    surfaceCurrent: flowRows,
+    surfaceFlow: flowRows,
+    surfaceTransfers: Array.isArray(payload.productionTransfers) ? payload.productionTransfers : [],
+    surfaceTransferDailyTotals: [],
+    surfaceScanSummary: scanSummary,
+    surfaceHourlyInOut: [],
+    intervalHistoryMeta: {
+      currentKey: `${payload.requestedArea || CONFIG.AREA}|${normalizedSummary.LastUpdated || normalizedSummary.ImportedAt}`,
+      currentTime: normalizedSummary.LastUpdated || normalizedSummary.ImportedAt,
+      intervalRows: flowRows.length,
+      intervalSnapshots: 1
+    }
+  };
+}
+
 async function fetchData(forceRender = false) {
   setSystemStatus("loading");
 
   try {
-    const res = await fetch(CONFIG.API_URL + "?debug=true&t=" + Date.now(), {
+    const url = `${CONFIG.API_URL}?action=productionFlow&area=${encodeURIComponent(CONFIG.AREA || "Surface")}&t=${Date.now()}`;
+
+    const res = await fetch(url, {
       cache: "no-store"
     });
 
@@ -435,7 +529,8 @@ async function fetchData(forceRender = false) {
       throw new Error("HTTP " + res.status);
     }
 
-    const json = await res.json();
+    const rawJson = await res.json();
+    const json = normalizeProductionFlowPayload(rawJson);
 
     if (!json || json.status !== "success") {
       throw new Error(json?.message || "API returned error");
@@ -448,50 +543,50 @@ async function fetchData(forceRender = false) {
       : [];
 
     if (!incomingFlow.length && state.hasRenderedOnce) {
-      console.warn("[SurfaceWIP] Refresh returned empty surfaceFlow. Keeping last good data.");
+      console.warn("[SurfaceWIP] Refresh returned empty productionFlow. Keeping last good data.");
       setSystemStatus("ok");
       updateLatestUpdatePill();
       return;
     }
 
     if (!incomingFlow.length && !state.hasRenderedOnce) {
-      throw new Error("No Surface WIP rows returned from API.");
+      throw new Error("No Production Flow rows returned from API.");
     }
 
     const newSignature = buildDataSignature(json);
-const isNewData = newSignature !== state.lastDataSignature;
-const updateInfo = determineUpdateSource(json);
+    const isNewData = newSignature !== state.lastDataSignature;
+    const updateInfo = determineUpdateSource(json);
 
-if (!forceRender && state.hasRenderedOnce && !isNewData) {
-  state.lastFetch = new Date();
-  setSystemStatus("ok");
-  updateLatestUpdatePill();
-  return;
-}
+    if (!forceRender && state.hasRenderedOnce && !isNewData) {
+      state.lastFetch = new Date();
+      setSystemStatus("ok");
+      updateLatestUpdatePill();
+      return;
+    }
 
-state.summary = json.summary || state.summary || {};
-state.surfaceFlow = incomingFlow;
-state.surfaceTransfers = incomingTransfers.length
-  ? incomingTransfers
-  : state.surfaceTransfers || [];
-state.surfaceScanSummary = incomingScanSummary;
+    state.summary = json.summary || state.summary || {};
+    state.surfaceFlow = incomingFlow;
+    state.surfaceTransfers = incomingTransfers.length
+      ? incomingTransfers
+      : state.surfaceTransfers || [];
+    state.surfaceScanSummary = incomingScanSummary;
 
-state.surfaceHourlyInOut = Array.isArray(json.surfaceHourlyInOut)
-  ? json.surfaceHourlyInOut
-  : [];
+    state.surfaceHourlyInOut = Array.isArray(json.surfaceHourlyInOut)
+      ? json.surfaceHourlyInOut
+      : [];
 
     state.surfaceTransferDailyTotals = Array.isArray(json.surfaceTransferDailyTotals)
       ? json.surfaceTransferDailyTotals
       : [];
 
-state.intervalMeta = json.intervalHistoryMeta || state.intervalMeta || {};
-state.lastFetch = new Date();
-state.lastDataSignature = newSignature;
+    state.intervalMeta = json.intervalHistoryMeta || state.intervalMeta || {};
+    state.lastFetch = new Date();
+    state.lastDataSignature = newSignature;
 
-state.lastWipSignature = updateInfo.newWipSignature;
-state.lastActivitySignature = updateInfo.newActivitySignature;
-state.lastUpdateSource = updateInfo.source;
-state.lastUpdateTime = updateInfo.timeValue;
+    state.lastWipSignature = updateInfo.newWipSignature;
+    state.lastActivitySignature = updateInfo.newActivitySignature;
+    state.lastUpdateSource = updateInfo.source;
+    state.lastUpdateTime = updateInfo.timeValue;
 
     setSystemStatus("ok");
     updateReportMeta();
@@ -526,7 +621,6 @@ state.lastUpdateTime = updateInfo.timeValue;
     setTimeout(hideSurfaceLoader, 700);
   }
 }
-
 
 /* =========================================================
    SECTION 07 — STATUS + META UI
