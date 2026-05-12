@@ -425,6 +425,40 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
       </div>
     </div>
 
+    <!-- ── AR Dashboard ── -->
+<div id="ar-card" class="card card--ar" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#ff9900"></canvas>
+  <div class="card-accent card-accent--ar"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">AR Thermal Flow Command Center</h3>
+        <span class="badge badge--ar">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        Live AR WIP, basket buildup, oven load, sectoring chamber capacity, AR-OUT movement, and daily performance summary.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">AR-IN</span>
+      <span class="tag">Basket</span>
+      <span class="tag">Oven</span>
+      <span class="tag">Sectoring</span>
+      <span class="tag">AR-OUT</span>
+    </div>
+
+    <button class="card-btn card-btn--ar" onclick="openPage('ARDash.html')">
+      Open AR Dashboard
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
     <!-- ── Coating Breakage Analytics ── -->
     <div id="coating-card" class="card" data-gated>
       <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>

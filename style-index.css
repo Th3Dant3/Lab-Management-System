@@ -1184,3 +1184,49 @@ body.lms-loading * { cursor: none !important; }
   .cards-grid { grid-template-columns: 1fr; }
   .user-name  { display: none; }
 }
+
+/* =====================================================
+   AR PRODUCTION CARD
+===================================================== */
+.card--ar {
+  border-color: rgba(255, 153, 0, 0.24);
+}
+
+.card--ar:hover {
+  border-color: rgba(255, 153, 0, 0.58);
+  box-shadow:
+    0 20px 50px rgba(0,0,0,0.5),
+    0 0 34px rgba(255,153,0,0.12);
+}
+
+.card-accent--ar {
+  background: linear-gradient(90deg, #ff9900, #ffbf4a, #9b6bff);
+}
+
+.badge--ar {
+  background: rgba(255,153,0,0.13);
+  color: #ffbf4a;
+  border: 1px solid rgba(255,153,0,0.30);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge--ar::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ff9900;
+  box-shadow: 0 0 8px #ff9900;
+  animation: blink 1.8s ease infinite;
+}
+
+.card-btn--ar {
+  background: linear-gradient(135deg, #ff9900, #ffbf4a);
+  color: #1a0d00;
+}
+
+.card-btn--ar:hover {
+  box-shadow: 0 8px 24px rgba(255,153,0,0.38);
+}
