@@ -4,90 +4,105 @@
  *********************************************************/
 
 /* ─────────────────────────────────────────────────────
-   LOADING SCREEN — OPTION 1 (LENS SCANNER)
-   ───────────────────────────────────────────────────── */
+   LOADING SCREEN
+───────────────────────────────────────────────────── */
 (function initLoader() {
   const BOOT_LINES = [
-    { tag: "tag-init", prefix: "INIT", text: "AR Thermal Flow Command Center v2.1" },
-    { tag: "tag-sys",  prefix: "SYS",  text: "Connecting to Google Apps Script API..." },
-    { tag: "tag-ok",   prefix: "OK",   text: "Chamber telemetry stream established" },
-    { tag: "tag-ok",   prefix: "OK",   text: "Station map loaded — 8 active nodes" },
-    { tag: "tag-sys",  prefix: "SYS",  text: "Fetching production flow & capacity..." },
-    { tag: "tag-ok",   prefix: "OK",   text: "Rendering dashboard components" },
+    { tag: "tag-init", prefix: "INIT", text: "AR Dashboard v2.2" },
+    { tag: "tag-sys", prefix: "SYS", text: "Connecting to Google Apps Script API..." },
+    { tag: "tag-ok", prefix: "OK", text: "AR station map loaded" },
+    { tag: "tag-sys", prefix: "SYS", text: "Fetching WIP, capacity, and output..." },
+    { tag: "tag-ok", prefix: "OK", text: "Rendering dashboard components" }
   ];
 
-  const log  = document.getElementById("arlLog");
+  const log = document.getElementById("arlLog");
   const fill = document.getElementById("arlFill");
-  const pct  = document.getElementById("arlPct");
+  const pct = document.getElementById("arlPct");
   let lineIdx = 0;
 
   function addLine(entry) {
     if (!log) return;
+
     const el = document.createElement("div");
     el.className = "arl-log-line";
     el.innerHTML = `<span class="${entry.tag}">${entry.prefix}</span><span>${entry.text}</span>`;
     log.appendChild(el);
-    if (log.children.length > 4) log.removeChild(log.firstChild);
+
+    if (log.children.length > 4) {
+      log.removeChild(log.firstChild);
+    }
   }
 
   function tick() {
     if (lineIdx >= BOOT_LINES.length) return;
+
     addLine(BOOT_LINES[lineIdx++]);
+
     const progress = Math.min(92, Math.round((lineIdx / BOOT_LINES.length) * 92));
-    if (fill) fill.style.width  = progress + "%";
-    if (pct)  pct.textContent   = progress + "%";
+
+    if (fill) fill.style.width = progress + "%";
+    if (pct) pct.textContent = progress + "%";
   }
 
-  /* Subtle particle scatter matching dashboard palette */
   const canvas = document.getElementById("arl-canvas");
+
   if (canvas) {
-    const ctx  = canvas.getContext("2d");
-    const COLS = [
+    const ctx = canvas.getContext("2d");
+    const colors = [
       "rgba(255,153,0,",
       "rgba(155,92,255,",
       "rgba(86,227,109,",
-      "rgba(255,191,63,",
-      "rgba(199,167,255,",
+      "rgba(255,191,63,"
     ];
     const pts = [];
 
     function resizeCanvas() {
-      canvas.width  = window.innerWidth;
+      canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     }
+
     resizeCanvas();
     window.addEventListener("resize", resizeCanvas);
 
     for (let i = 0; i < 55; i++) {
       pts.push({
-        x:   Math.random() * window.innerWidth,
-        y:   Math.random() * window.innerHeight,
-        r:   Math.random() * 1.6 + 0.4,
-        vx:  (Math.random() - 0.5) * 0.24,
-        vy:  (Math.random() - 0.5) * 0.24,
-        col: COLS[Math.floor(Math.random() * COLS.length)],
-        a:   Math.random() * 0.28 + 0.06,
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        r: Math.random() * 1.6 + 0.4,
+        vx: (Math.random() - 0.5) * 0.24,
+        vy: (Math.random() - 0.5) * 0.24,
+        col: colors[Math.floor(Math.random() * colors.length)],
+        a: Math.random() * 0.28 + 0.06
       });
     }
 
     let raf;
+
     function drawFrame() {
       if (!document.getElementById("ar-loader")) return;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
       pts.forEach(p => {
-        p.x += p.vx; p.y += p.vy;
+        p.x += p.vx;
+        p.y += p.vy;
+
         if (p.x < 0) p.x = canvas.width;
-        if (p.x > canvas.width)  p.x = 0;
+        if (p.x > canvas.width) p.x = 0;
         if (p.y < 0) p.y = canvas.height;
         if (p.y > canvas.height) p.y = 0;
+
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fillStyle = p.col + p.a + ")";
         ctx.fill();
       });
+
       raf = requestAnimationFrame(drawFrame);
     }
+
     drawFrame();
+
     window._arlCancelRaf = () => cancelAnimationFrame(raf);
   }
 
@@ -96,26 +111,34 @@
 
   window._arlDismiss = function(isLive) {
     clearInterval(logInterval);
-    const finalLine = isLive
-      ? { tag: "tag-ok",   prefix: "OK",   text: "Dashboard ready — all systems nominal" }
-      : { tag: "tag-warn", prefix: "WARN", text: "API unavailable — showing demo data"   };
-    addLine(finalLine);
+
+    addLine(
+      isLive
+        ? { tag: "tag-ok", prefix: "OK", text: "Dashboard ready" }
+        : { tag: "tag-warn", prefix: "WARN", text: "API unavailable" }
+    );
+
     if (fill) fill.style.width = "100%";
-    if (pct)  pct.textContent  = "100%";
+    if (pct) pct.textContent = "100%";
 
     setTimeout(() => {
       const loader = document.getElementById("ar-loader");
       if (!loader) return;
+
       loader.classList.add("arl-exit");
-      if (window._arlCancelRaf) window._arlCancelRaf();
+
+      if (window._arlCancelRaf) {
+        window._arlCancelRaf();
+      }
+
       loader.addEventListener("transitionend", () => loader.remove(), { once: true });
     }, 400);
   };
 })();
-/* ─────────────────────────────────────────────────────
-   /LOADING SCREEN
-   ───────────────────────────────────────────────────── */
 
+/* ─────────────────────────────────────────────────────
+   CONFIG
+───────────────────────────────────────────────────── */
 const API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec";
 
 const REFRESH_MS = 5 * 60 * 1000;
@@ -139,70 +162,6 @@ const STATION_COLORS = {
   "AR-OUT": "#d9d9d9"
 };
 
-function getStationColor(name, fallback = "#ff9900") {
-  return STATION_COLORS[name] || fallback;
-}
-
-const DEMO_FLOW_PAYLOAD = {
-  status: "success",
-  version: "Demo Production Flow",
-  generatedAt: new Date().toISOString(),
-  requestedArea: "AR",
-  summary: {
-    ReportDate: new Date().toISOString(),
-    Area: "AR",
-    TotalWIP: 971,
-    TotalActivityToday: 4642,
-    OutputActivity: 753,
-    BridgeInputWIP: 86,
-    LargestWIPStation: "Oven",
-    LargestWIPTotal: 281,
-    ActiveWIPStations: 6,
-    LastUpdated: new Date().toISOString()
-  },
-  productionFlow: [
-    { Area: "AR", FlowOrder: 110, FlowStep: "Surface Inspection", DisplayName: "Surface Inspection WIP", CurrentWIP: 86, ActivityToday: 0, MetricMode: "WIP_ONLY", BridgeRole: "AR_INPUT", SourceWIP: "RAW_WIP_CURRENT", SourceActivity: "RAW_ACTIVITY_CURRENT" },
-    { Area: "AR", FlowOrder: 120, FlowStep: "AR-IN", DisplayName: "AR-IN", CurrentWIP: 113, ActivityToday: 780, MetricMode: "WIP_AND_ACTIVITY", BridgeRole: "", SourceWIP: "RAW_WIP_CURRENT", SourceActivity: "RAW_ACTIVITY_CURRENT" },
-    { Area: "AR", FlowOrder: 130, FlowStep: "Basket", DisplayName: "Basket", CurrentWIP: 171, ActivityToday: 842, MetricMode: "WIP_AND_ACTIVITY", BridgeRole: "", SourceWIP: "RAW_WIP_CURRENT", SourceActivity: "RAW_ACTIVITY_CURRENT" },
-    { Area: "AR", FlowOrder: 140, FlowStep: "Oven", DisplayName: "Oven", CurrentWIP: 281, ActivityToday: 797, MetricMode: "WIP_AND_ACTIVITY", BridgeRole: "", SourceWIP: "RAW_WIP_CURRENT", SourceActivity: "RAW_ACTIVITY_CURRENT" },
-    { Area: "AR", FlowOrder: 150, FlowStep: "Sectoring", DisplayName: "Sectoring", CurrentWIP: 241, ActivityToday: 745, MetricMode: "WIP_AND_ACTIVITY", BridgeRole: "", SourceWIP: "RAW_WIP_CURRENT", SourceActivity: "RAW_ACTIVITY_CURRENT" },
-    { Area: "AR", FlowOrder: 160, FlowStep: "DeRing", DisplayName: "DeRing", CurrentWIP: 79, ActivityToday: 725, MetricMode: "WIP_AND_ACTIVITY", BridgeRole: "", SourceWIP: "RAW_WIP_CURRENT", SourceActivity: "RAW_ACTIVITY_CURRENT" },
-    { Area: "AR", FlowOrder: 170, FlowStep: "AR-OUT", DisplayName: "AR-OUT", CurrentWIP: 0, ActivityToday: 753, MetricMode: "OUTPUT_ONLY", BridgeRole: "AR_OUTPUT", SourceWIP: "RAW_WIP_CURRENT", SourceActivity: "RAW_ACTIVITY_CURRENT" }
-  ]
-};
-
-const DEMO_CAPACITY_PAYLOAD = {
-  status: "success",
-  version: "Demo Capacity",
-  generatedAt: new Date().toISOString(),
-  area: "AR",
-  capacity: AR_CAPACITY_RULES,
-  summary: {
-    ReportDate: new Date().toISOString(),
-    Area: "AR",
-    SurfaceInspectionInputWIP: 86,
-    ARInWIP: 113,
-    BasketLensWIP: 171,
-    ActiveBaskets: Math.ceil(171 / AR_CAPACITY_RULES.BASKET_LENS),
-    BasketTotalCapacity: Math.ceil(171 / AR_CAPACITY_RULES.BASKET_LENS) * AR_CAPACITY_RULES.BASKET_LENS,
-    LastBasketLoad: "11 / 32",
-    OvenLensWIP: 281,
-    OvenBasketLoad: Math.ceil(281 / AR_CAPACITY_RULES.BASKET_LENS),
-    ActiveOvens: Math.ceil(281 / AR_CAPACITY_RULES.OVEN_LENS),
-    OvenTotalBasketCapacity: AR_CAPACITY_RULES.OVEN_BASKETS,
-    LastOvenLoad: "9 / 27",
-    SectoringLensWIP: 241,
-    ActiveChambers: Math.ceil(241 / AR_CAPACITY_RULES.CHAMBER_LENS),
-    ChamberTotalCapacity: Math.ceil(241 / AR_CAPACITY_RULES.CHAMBER_LENS) * AR_CAPACITY_RULES.CHAMBER_LENS,
-    LastChamberLoad: "49 / 192",
-    DeRingWIP: 79,
-    AROutActivity: 753,
-    LargestCapacityPressure: "Oven",
-    LastUpdated: new Date().toISOString()
-  },
-  units: []
-};
-
 let LAST_FLOW_PAYLOAD = null;
 let LAST_CAPACITY_PAYLOAD = null;
 let LAST_AR_ROWS = [];
@@ -210,10 +169,12 @@ let LAST_VALUES = null;
 
 let chartInstances = {
   outputTrend: null,
-  wipTrend: null,
-  bottleneck: null
+  wipTrend: null
 };
 
+/* ─────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
 
 function toNumber(value) {
@@ -225,31 +186,21 @@ function fmt(value) {
   return toNumber(value).toLocaleString("en-US");
 }
 
-function fmtDateTime(value) {
-  if (!value) return "--";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
-}
-
 function pct(value, total) {
   const v = toNumber(value);
   const t = toNumber(total);
+
   if (!t) return 0;
+
   return Math.max(0, Math.min(100, Math.round((v / t) * 100)));
 }
 
 function ceilUnit(value, capacity) {
   const v = toNumber(value);
   const c = toNumber(capacity);
+
   if (v <= 0 || c <= 0) return 0;
+
   return Math.ceil(v / c);
 }
 
@@ -267,6 +218,22 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function fmtDateTime(value) {
+  if (!value) return "--";
+
+  const d = new Date(value);
+
+  if (Number.isNaN(d.getTime())) return String(value);
+
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
 function showToast(message) {
   const el = $("toast");
   if (!el) return;
@@ -275,6 +242,7 @@ function showToast(message) {
   el.classList.add("show");
 
   window.clearTimeout(showToast._timer);
+
   showToast._timer = window.setTimeout(() => {
     el.classList.remove("show");
   }, 2800);
@@ -286,17 +254,22 @@ function makeDiv(className) {
   return div;
 }
 
-function makeOverflow(count) {
-  const div = makeDiv("basket-overflow");
-  div.textContent = `+${count}`;
-  return div;
+function getStationColor(name, fallback = "#ff9900") {
+  return STATION_COLORS[name] || fallback;
 }
 
+/* ─────────────────────────────────────────────────────
+   API
+───────────────────────────────────────────────────── */
 async function fetchJson(url) {
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`API failed: ${res.status}`);
+
+  if (!res.ok) {
+    throw new Error(`API failed: ${res.status}`);
+  }
 
   const payload = await res.json();
+
   if (payload.status && String(payload.status).toLowerCase() !== "success") {
     throw new Error(payload.message || "API returned an error.");
   }
@@ -320,22 +293,44 @@ async function loadARData() {
     ]);
 
     LAST_FLOW_PAYLOAD = flowPayload;
-    LAST_CAPACITY_PAYLOAD = capacityPayload || DEMO_CAPACITY_PAYLOAD;
+    LAST_CAPACITY_PAYLOAD = capacityPayload || null;
+
+    console.log("REAL AR FLOW PAYLOAD:", flowPayload);
+    console.table(flowPayload.productionFlow || []);
 
     setLiveState(true);
     renderDashboard(LAST_FLOW_PAYLOAD, LAST_CAPACITY_PAYLOAD);
-    if (window._arlDismiss) window._arlDismiss(true);
+
+    if (window._arlDismiss) {
+      window._arlDismiss(true);
+    }
 
   } catch (err) {
-    console.error(err);
-
-    LAST_FLOW_PAYLOAD = DEMO_FLOW_PAYLOAD;
-    LAST_CAPACITY_PAYLOAD = DEMO_CAPACITY_PAYLOAD;
+    console.error("AR API ERROR:", err);
 
     setLiveState(false);
-    showToast(err.message + " — showing demo data");
-    renderDashboard(LAST_FLOW_PAYLOAD, LAST_CAPACITY_PAYLOAD);
-    if (window._arlDismiss) window._arlDismiss(false);
+    showToast("AR API failed. Real output data not loaded.");
+
+    const emptyPayload = {
+      status: "error",
+      generatedAt: new Date().toISOString(),
+      summary: {
+        LastUpdated: new Date().toISOString(),
+        TotalWIP: 0,
+        ActiveWIPStations: 0,
+        LargestWIPStation: "API Error"
+      },
+      productionFlow: []
+    };
+
+    LAST_FLOW_PAYLOAD = emptyPayload;
+    LAST_CAPACITY_PAYLOAD = null;
+
+    renderDashboard(emptyPayload, null);
+
+    if (window._arlDismiss) {
+      window._arlDismiss(false);
+    }
   }
 }
 
@@ -343,13 +338,16 @@ function setLiveState(isLive) {
   const live = $("liveState");
 
   if (live) {
-    live.textContent = isLive ? "Live" : "Demo";
+    live.textContent = isLive ? "Live" : "API Error";
     live.classList.toggle("offline", !isLive);
   }
 
-  setText("liveMiniStatus", isLive ? "Connected" : "Demo fallback");
+  setText("liveMiniStatus", isLive ? "Connected" : "API Failed");
 }
 
+/* ─────────────────────────────────────────────────────
+   ROW / DATA HELPERS
+───────────────────────────────────────────────────── */
 function getARRows(flowPayload) {
   const rows = Array.isArray(flowPayload?.productionFlow)
     ? flowPayload.productionFlow
@@ -410,6 +408,26 @@ function getTopRowName(rows, fieldName) {
   return top.DisplayName || top.FlowStep || "—";
 }
 
+function getLargestWipStation(rows) {
+  const wipRows = getCleanStationRows(getWipRows(rows)).filter(row => {
+    const name = String(row.DisplayName || row.FlowStep || "").trim().toUpperCase();
+    return name && name !== "AR-OUT";
+  });
+
+  if (!wipRows.length) {
+    return { name: "--", value: 0 };
+  }
+
+  const top = wipRows.reduce((best, row) => {
+    return toNumber(row.CurrentWIP) > toNumber(best.CurrentWIP) ? row : best;
+  }, wipRows[0]);
+
+  return {
+    name: top.DisplayName || top.FlowStep || "--",
+    value: toNumber(top.CurrentWIP)
+  };
+}
+
 function buildUnitsFromWip(total, capacity, unitType) {
   const output = [];
   const count = ceilUnit(total, capacity);
@@ -430,6 +448,9 @@ function buildUnitsFromWip(total, capacity, unitType) {
   return output;
 }
 
+/* ─────────────────────────────────────────────────────
+   MAIN RENDER
+───────────────────────────────────────────────────── */
 function renderDashboard(flowPayload, capacityPayload) {
   const flowSummary = flowPayload?.summary || {};
   const arRows = getARRows(flowPayload);
@@ -471,12 +492,17 @@ function renderDashboard(flowPayload, capacityPayload) {
 
   const ovenBasketLoad = ceilUnit(ovenWip, AR_CAPACITY_RULES.BASKET_LENS);
   const ovenUnits = buildUnitsFromWip(ovenWip, AR_CAPACITY_RULES.OVEN_LENS, "Oven");
-  const activeOvens = Math.max(1, ovenUnits.length);
-  const ovenTotalLensCapacity = activeOvens * AR_CAPACITY_RULES.OVEN_LENS;
+  const activeOvens = ovenWip > 0 ? Math.max(1, ovenUnits.length) : 0;
+  const ovenTotalLensCapacity = activeOvens > 0
+    ? activeOvens * AR_CAPACITY_RULES.OVEN_LENS
+    : AR_CAPACITY_RULES.OVEN_LENS;
 
   const chamberUnits = buildUnitsFromWip(sectoringWip, AR_CAPACITY_RULES.CHAMBER_LENS, "Chamber");
   const activeChambers = chamberUnits.length;
-  const chamberTotalCapacity = Math.max(activeChambers * AR_CAPACITY_RULES.CHAMBER_LENS, AR_CAPACITY_RULES.CHAMBER_LENS);
+  const chamberTotalCapacity = Math.max(
+    activeChambers * AR_CAPACITY_RULES.CHAMBER_LENS,
+    AR_CAPACITY_RULES.CHAMBER_LENS
+  );
 
   const lastBasket = basketUnits.length
     ? basketUnits[basketUnits.length - 1]
@@ -486,7 +512,20 @@ function renderDashboard(flowPayload, capacityPayload) {
     ? chamberUnits[chamberUnits.length - 1]
     : { Used: 0, Capacity: AR_CAPACITY_RULES.CHAMBER_LENS };
 
+  const fullBasketCount = basketUnits.filter(u =>
+    toNumber(u.Used) >= toNumber(u.Capacity)
+  ).length;
+
+  const partialBasketCount = basketUnits.filter(u =>
+    toNumber(u.Used) > 0 && toNumber(u.Used) < toNumber(u.Capacity)
+  ).length;
+
   const lastOvenBasketText = `${ovenBasketLoad} / ${AR_CAPACITY_RULES.OVEN_BASKETS}`;
+
+  const ovenLensRemaining = Math.max(0, ovenTotalLensCapacity - ovenWip);
+  const chamberLensRemaining = Math.max(0, chamberTotalCapacity - sectoringWip);
+
+  const largestWip = getLargestWipStation(arRows);
 
   LAST_VALUES = {
     surfaceInputWip,
@@ -505,19 +544,25 @@ function renderDashboard(flowPayload, capacityPayload) {
     totalActivityToday,
     activeWipStations,
     basketUnits,
+    fullBasketCount,
+    partialBasketCount,
     ovenBasketLoad,
     ovenUnits,
     activeOvens,
     ovenTotalLensCapacity,
+    ovenLensRemaining,
     chamberUnits,
     activeChambers,
     chamberTotalCapacity,
+    chamberLensRemaining,
     lastBasket,
-    lastChamber
+    lastChamber,
+    largestWip
   };
 
   setText("lastUpdated", fmtDateTime(flowSummary.LastUpdated || capacityPayload?.summary?.LastUpdated || flowPayload?.generatedAt));
-  setText("largestPressure", flowSummary.LargestWIPStation || capacityPayload?.summary?.LargestCapacityPressure || "--");
+  setText("largestWIP", largestWip.name);
+  setText("largestPressure", largestWip.name);
 
   animateValue("totalArWip", totalArWip);
   animateValue("surfaceInputWip", surfaceInputWip);
@@ -539,18 +584,35 @@ function renderDashboard(flowPayload, capacityPayload) {
   setText("stationDeRing", fmt(deringWip));
   setText("stationArOut", fmt(arOutActivity));
 
-  setText("lastBasketLoad", `Last basket: ${fmt(lastBasket.Used)} / ${fmt(lastBasket.Capacity)}`);
-  setText("lastOvenLoad", `Basket equivalent: ${lastOvenBasketText} | Lens cap: ${fmt(ovenTotalLensCapacity)}`);
+  setText(
+    "lastBasketLoad",
+    `${fullBasketCount} full · ${partialBasketCount} partial | Last basket: ${fmt(lastBasket.Used)} / ${fmt(lastBasket.Capacity)}`
+  );
 
-  setText("perfBasketLoad", `${fmt(lastBasket.Used)} / ${fmt(lastBasket.Capacity)}`);
-  setText("perfOvenLoad", lastOvenBasketText);
-  setText("perfChamberLoad", `${fmt(lastChamber.Used)} / ${fmt(lastChamber.Capacity)}`);
+  setText("lastOvenLoad", `Basket equivalent: ${lastOvenBasketText} | Lens cap: ${fmt(ovenTotalLensCapacity)}`);
+  setText("ovenBasketBadge", lastOvenBasketText);
 
   setText("queueSurface", fmt(surfaceInputWip));
   setText("queueArIn", fmt(arInWip));
   setText("queueBasket", fmt(basketWip));
   setText("queueOven", fmt(ovenWip));
+  setText("queueSectoring", fmt(sectoringWip));
   setText("queueDeRing", fmt(deringWip));
+
+  setText("capBasketTotalWip", fmt(basketWip));
+  setText("capBasketFull", fmt(fullBasketCount));
+  setText("capBasketPartial", fmt(partialBasketCount));
+  setText("capBasketCurrent", `${fmt(lastBasket.Used)} / ${fmt(lastBasket.Capacity)}`);
+
+  setText("capOvenTotalWip", fmt(ovenWip));
+  setText("capOvenBasketLoad", lastOvenBasketText);
+  setText("capOvenLensCap", fmt(ovenTotalLensCapacity));
+  setText("capOvenRemaining", fmt(ovenLensRemaining));
+
+  setText("capChamberTotalWip", fmt(sectoringWip));
+  setText("capChamberActive", fmt(activeChambers));
+  setText("capChamberCurrent", `${fmt(lastChamber.Used)} / ${fmt(lastChamber.Capacity)}`);
+  setText("capChamberRemaining", fmt(chamberLensRemaining));
 
   renderSplitDetailTabs(arRows, flowSummary);
   renderBaskets(basketUnits, AR_CAPACITY_RULES.BASKET_LENS);
@@ -558,52 +620,15 @@ function renderDashboard(flowPayload, capacityPayload) {
   renderChambers(chamberUnits, AR_CAPACITY_RULES.CHAMBER_LENS, sectoringWip, chamberTotalCapacity);
   renderUtilList(chamberUnits, AR_CAPACITY_RULES.CHAMBER_LENS);
   renderAlerts(LAST_VALUES);
-  renderDailyBrief(LAST_VALUES, flowSummary);
+  renderDailyBrief(LAST_VALUES);
   renderSummaryBreakdown(LAST_VALUES);
   renderCharts(flowPayload, arRows, LAST_VALUES);
   placeArrows();
 }
 
-function bindPageNavigation() {
-  document.querySelectorAll(".nav-item").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const section = btn.dataset.section;
-
-      document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-
-      document.querySelectorAll(".page-section").forEach(panel => {
-        panel.classList.remove("active");
-        panel.hidden = true;
-      });
-
-      const target = document.querySelector(`.page-section[data-page="${section}"]`);
-
-      if (target) {
-        target.hidden = false;
-
-        requestAnimationFrame(() => {
-          target.classList.add("active");
-        });
-      }
-
-      if (section === "flow") {
-        setTimeout(placeArrows, 80);
-      }
-
-      if (section === "trends") {
-        setTimeout(resizeCharts, 120);
-      }
-
-      if (section === "summary") {
-        renderSummaryBreakdown(LAST_VALUES);
-      }
-
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  });
-}
-
+/* ─────────────────────────────────────────────────────
+   SPLIT DETAIL
+───────────────────────────────────────────────────── */
 function renderSplitDetailTabs(arRows, flowSummary) {
   const panel = $("arSplitDetailPanel");
   const body = $("arSplitBody");
@@ -616,13 +641,13 @@ function renderSplitDetailTabs(arRows, flowSummary) {
 
   if (activeTab === "output") {
     if (subtitle) {
-      subtitle.textContent = "Completed activity by each AR station from RAW_ACTIVITY_CURRENT.";
+      subtitle.textContent = "Completed output by each AR station.";
     }
 
-    renderOutputTotals(body, summary, getCleanStationRows(getOutputRows(arRows)), flowSummary);
+    renderOutputTotals(body, summary, getCleanStationRows(getOutputRows(arRows)));
   } else {
     if (subtitle) {
-      subtitle.textContent = "Current WIP sitting at each AR station from RAW_WIP_CURRENT.";
+      subtitle.textContent = "Current WIP sitting at each AR station.";
     }
 
     renderWipTotals(body, summary, getCleanStationRows(getWipRows(arRows)), flowSummary);
@@ -636,9 +661,7 @@ function renderWipTotals(body, summaryBox, rows, flowSummary) {
   const bridgeInput = toNumber(flowSummary.BridgeInputWIP) ||
     toNumber(getSurfaceInputRow(rows).CurrentWIP);
 
-  const largestStation = flowSummary.LargestWIPStation ||
-    getTopRowName(rows, "CurrentWIP");
-
+  const largest = getLargestWipStation(LAST_AR_ROWS);
   const maxValue = Math.max(...rows.map(row => toNumber(row.CurrentWIP)), 1);
 
   summaryBox.innerHTML = `
@@ -654,7 +677,7 @@ function renderWipTotals(body, summaryBox, rows, flowSummary) {
 
     <div class="ar-summary-card">
       <span>Largest WIP Station</span>
-      <strong>${escapeHtml(largestStation)}</strong>
+      <strong>${escapeHtml(largest.name)}</strong>
     </div>
   `;
 
@@ -682,7 +705,7 @@ function renderWipTotals(body, summaryBox, rows, flowSummary) {
   }).join("");
 }
 
-function renderOutputTotals(body, summaryBox, rows, flowSummary) {
+function renderOutputTotals(body, summaryBox, rows) {
   const cleanRows = getCleanStationRows(rows);
   const maxValue = Math.max(...cleanRows.map(row => toNumber(row.ActivityToday)), 1);
 
@@ -722,24 +745,9 @@ function renderOutputTotals(body, summaryBox, rows, flowSummary) {
   }).join("");
 }
 
-function bindSplitTabs() {
-  document.querySelectorAll(".ar-split-tab").forEach(button => {
-    button.addEventListener("click", () => {
-      const panel = $("arSplitDetailPanel");
-      if (!panel) return;
-
-      panel.querySelectorAll(".ar-split-tab").forEach(btn => {
-        btn.classList.remove("active");
-      });
-
-      button.classList.add("active");
-      panel.dataset.activeTab = button.dataset.tab || "wip";
-
-      renderSplitDetailTabs(LAST_AR_ROWS, LAST_FLOW_PAYLOAD?.summary || {});
-    });
-  });
-}
-
+/* ─────────────────────────────────────────────────────
+   VISUAL RENDERERS
+───────────────────────────────────────────────────── */
 function renderBaskets(units, basketCap) {
   const fullGrid = $("basketFullGrid");
   const partGrid = $("basketPartialGrid");
@@ -758,32 +766,44 @@ function renderBaskets(units, basketCap) {
   if (!full.length) {
     fullGrid.innerHTML = '<div class="basket-empty-msg">none</div>';
   } else {
-    const shown = Math.min(full.length, 19);
-    for (let i = 0; i < shown; i++) fullGrid.appendChild(makeDiv("b-full"));
-    if (full.length > shown) fullGrid.appendChild(makeOverflow(full.length - shown));
+    full.forEach((basket, index) => {
+      const cell = document.createElement("div");
+      cell.className = "basket-unit full-basket-unit";
+      cell.innerHTML = `
+        <strong>B${index + 1}</strong>
+        <span>32 / 32</span>
+      `;
+      fullGrid.appendChild(cell);
+    });
   }
 
   if (!partial.length) {
     partGrid.innerHTML = '<div class="basket-empty-msg">none</div>';
   } else {
-    const shown = Math.min(partial.length, 23);
+    partial.forEach((basket, index) => {
+      const used = toNumber(basket.Used);
+      const cap = toNumber(basket.Capacity || basketCap);
+      const fillPct = pct(used, cap);
 
-    for (let i = 0; i < shown; i++) {
-      const b = makeDiv("b-part");
-      const fill = makeDiv("pfill");
-      fill.style.height = `${pct(partial[i].Used, partial[i].Capacity || basketCap)}%`;
-      b.appendChild(fill);
-      partGrid.appendChild(b);
-    }
-
-    if (partial.length > shown) partGrid.appendChild(makeOverflow(partial.length - shown));
+      const cell = document.createElement("div");
+      cell.className = "basket-unit partial-basket-unit";
+      cell.innerHTML = `
+        <div class="basket-fill" style="height:${fillPct}%"></div>
+        <strong>P${index + 1}</strong>
+        <span>${used} / ${cap}</span>
+      `;
+      partGrid.appendChild(cell);
+    });
   }
 }
 
 function renderOvens(ovenWip, ovenBasketLoad, ovenTotalLensCapacity) {
   const fillPct = pct(ovenWip, ovenTotalLensCapacity);
   const ovenHeat = document.querySelector(".oven-door .heat");
-  if (ovenHeat) ovenHeat.style.opacity = String(Math.max(.35, fillPct / 100));
+
+  if (ovenHeat) {
+    ovenHeat.style.opacity = String(Math.max(0.35, fillPct / 100));
+  }
 }
 
 function renderChambers(units, chamberCap, sectoringWip, chamberTotalCapacity) {
@@ -833,7 +853,9 @@ function renderChambers(units, chamberCap, sectoringWip, chamberTotalCapacity) {
   if (bar) bar.style.width = `${utilPct}%`;
 
   const donut = $("bigDonutFill");
-  if (donut) donut.setAttribute("stroke-dashoffset", String(263.9 * (1 - utilPct / 100)));
+  if (donut) {
+    donut.setAttribute("stroke-dashoffset", String(263.9 * (1 - utilPct / 100)));
+  }
 }
 
 function renderUtilList(chambers, chamberCap) {
@@ -864,6 +886,9 @@ function renderUtilList(chambers, chamberCap) {
   }
 }
 
+/* ─────────────────────────────────────────────────────
+   SUMMARY / ALERTS
+───────────────────────────────────────────────────── */
 function renderAlerts(values) {
   if (!values) return;
 
@@ -875,13 +900,13 @@ function renderAlerts(values) {
     alerts.push({
       level: "red",
       title: "Sectoring Utilization Critical",
-      desc: `Carousel utilization is ${chamberUtil}%. Watch AR coating backlog.`
+      desc: `Sectoring utilization is ${chamberUtil}%. Watch AR coating backlog.`
     });
   } else if (chamberUtil >= 70) {
     alerts.push({
       level: "amber",
       title: "Sectoring Utilization High",
-      desc: `Carousel utilization is ${chamberUtil}%. Keep load balanced.`
+      desc: `Sectoring utilization is ${chamberUtil}%. Keep load balanced.`
     });
   }
 
@@ -907,11 +932,11 @@ function renderAlerts(values) {
     });
   }
 
-  if (values.ovenWip > values.basketWip && values.ovenWip > values.sectoringWip) {
+  if (values.deringWip <= 0 && values.sectoringWip > 0) {
     alerts.push({
       level: "amber",
-      title: "Oven Is Largest WIP Point",
-      desc: "Oven has the largest current WIP. Watch degas flow and release timing."
+      title: "No DeRing WIP",
+      desc: "Sectoring has WIP, but DeRing is empty. Confirm if unload movement is expected."
     });
   }
 
@@ -949,21 +974,21 @@ function renderAlerts(values) {
   setText("alertPageBadge", `${active} Active`);
 }
 
-function renderDailyBrief(values, flowSummary) {
+function renderDailyBrief(values) {
   const box = $("dailyBriefList");
   if (!box || !values) return;
 
-  const largest = flowSummary.LargestWIPStation || "—";
+  const largest = values.largestWip || getLargestWipStation(LAST_AR_ROWS);
 
   box.innerHTML = `
     <div class="brief-item station-brief">
       <strong>${fmt(values.totalArWip)}</strong>
-      <span>Total AR WIP currently sitting in the process.</span>
+      <span>Currently AR Work In Progress.</span>
     </div>
 
     <div class="brief-item station-brief">
-      <strong>${escapeHtml(largest)}</strong>
-      <span>Largest current pressure point.</span>
+      <strong>${escapeHtml(largest.name)}</strong>
+      <span>Largest WIP station with ${fmt(largest.value)} lenses.</span>
     </div>
 
     <div class="brief-item station-brief">
@@ -973,7 +998,7 @@ function renderDailyBrief(values, flowSummary) {
 
     <div class="brief-item station-brief">
       <strong>${fmt(values.activeChambers)}</strong>
-      <span>Active sectoring chambers based on 192 lenses per chamber.</span>
+      <span>Active sectoring chambers.</span>
     </div>
   `;
 }
@@ -998,13 +1023,7 @@ function renderSummaryBreakdown(values) {
     return toNumber(row.ActivityToday) < toNumber(lowest.ActivityToday) ? row : lowest;
   }, activityRows[0] || {});
 
-  const largestWip = wipRows.reduce((best, row) => {
-    return toNumber(row.CurrentWIP) > toNumber(best.CurrentWIP) ? row : best;
-  }, wipRows[0] || {});
-
-  const topName = topStation.DisplayName || topStation.FlowStep || "--";
-  const lowName = lowestStation.DisplayName || lowestStation.FlowStep || "--";
-  const pressureName = largestWip.DisplayName || largestWip.FlowStep || "--";
+  const largestWip = getLargestWipStation(LAST_AR_ROWS);
 
   if (activityBox) {
     activityBox.innerHTML = activityRows.map(row => {
@@ -1042,10 +1061,10 @@ function renderSummaryBreakdown(values) {
     }).join("");
   }
 
-  setText("summaryTopStation", topName);
+  setText("summaryTopStation", topStation.DisplayName || topStation.FlowStep || "--");
   setText("summaryTopStationText", `${fmt(topStation.ActivityToday)} completed scans today.`);
 
-  setText("summaryLowestStation", lowName);
+  setText("summaryLowestStation", lowestStation.DisplayName || lowestStation.FlowStep || "--");
   setText("summaryLowestStationText", `${fmt(lowestStation.ActivityToday)} completed scans today. Review if this station should be higher.`);
 
   setText("summaryArOut", fmt(values.arOutActivity));
@@ -1054,18 +1073,21 @@ function renderSummaryBreakdown(values) {
     values.ovenWip > values.sectoringWip && values.ovenWip > values.basketWip
       ? "Oven Pressure"
       : values.sectoringWip > values.ovenWip
-        ? "Sectoring Pressure"
+        ? "Sectoring WIP"
         : "Balanced";
 
   const balanceText =
     balanceStatus === "Balanced"
       ? "No single station is dominating the current WIP load."
-      : `${pressureName} is currently carrying the largest WIP pressure.`;
+      : `${largestWip.name} is currently carrying the largest WIP pressure.`;
 
   setText("summaryBalanceStatus", balanceStatus);
   setText("summaryBalanceText", balanceText);
 }
 
+/* ─────────────────────────────────────────────────────
+   CHARTS
+───────────────────────────────────────────────────── */
 function renderCharts(flowPayload, arRows, values) {
   renderTrendCharts(flowPayload, arRows, values);
 }
@@ -1073,25 +1095,23 @@ function renderCharts(flowPayload, arRows, values) {
 function renderTrendCharts(flowPayload, arRows, values) {
   if (typeof Chart === "undefined") return;
 
-  const cleanRows = getCleanStationRows(arRows);
+  const activityRows = getCleanStationRows(getOutputRows(arRows));
+  const wipRows = getCleanStationRows(getWipRows(arRows));
 
   chartInstances.outputTrend = makeChart("outputTrendChart", chartInstances.outputTrend, {
-    type: "line",
+    type: "bar",
     data: {
-      labels: cleanRows.map(row => row.DisplayName || row.FlowStep),
+      labels: activityRows.map(row => row.DisplayName || row.FlowStep),
       datasets: [
         {
           label: "Station Activity",
-          data: cleanRows.map(row => toNumber(row.ActivityToday)),
-          borderColor: "#ff9900",
-          backgroundColor: "rgba(255,153,0,0.18)",
-          pointBackgroundColor: cleanRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
-          pointBorderColor: cleanRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          borderWidth: 3,
-          tension: 0.35,
-          fill: true
+          data: activityRows.map(row => toNumber(row.ActivityToday)),
+          backgroundColor: activityRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
+          borderColor: activityRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
+          borderWidth: 1,
+          borderRadius: 8,
+          barThickness: 42,
+          maxBarThickness: 50
         }
       ]
     },
@@ -1099,59 +1119,39 @@ function renderTrendCharts(flowPayload, arRows, values) {
   });
 
   chartInstances.wipTrend = makeChart("wipTrendChart", chartInstances.wipTrend, {
-    type: "line",
+    type: "bar",
     data: {
-      labels: cleanRows.map(row => row.DisplayName || row.FlowStep),
+      labels: wipRows.map(row => row.DisplayName || row.FlowStep),
       datasets: [
         {
           label: "Current WIP",
-          data: cleanRows.map(row => toNumber(row.CurrentWIP)),
-          borderColor: "#9b5cff",
-          backgroundColor: "rgba(155,92,255,0.18)",
-          pointBackgroundColor: cleanRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
-          pointBorderColor: cleanRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          borderWidth: 3,
-          tension: 0.35,
-          fill: true
+          data: wipRows.map(row => toNumber(row.CurrentWIP)),
+          backgroundColor: wipRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
+          borderColor: wipRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
+          borderWidth: 1,
+          borderRadius: 8,
+          barThickness: 42,
+          maxBarThickness: 50
         }
       ]
     },
-    options: chartOptions("WIP Pressure Trend")
+    options: chartOptions("Work In Progress Trend")
   });
 
-  chartInstances.bottleneck = makeChart("bottleneckChart", chartInstances.bottleneck, {
-    type: "doughnut",
-    data: {
-      labels: cleanRows.map(row => row.DisplayName || row.FlowStep),
-      datasets: [
-        {
-          label: "Current WIP",
-          data: cleanRows.map(row => toNumber(row.CurrentWIP)),
-          backgroundColor: cleanRows.map(row => getStationColor(row.DisplayName || row.FlowStep)),
-          borderColor: "#11131b",
-          borderWidth: 2
-        }
-      ]
-    },
-    options: chartOptions("Bottleneck Profile")
-  });
-
-  const largest = getTopRowName(cleanRows, "CurrentWIP");
-  setText("bottleneckTrendLabel", largest);
+  const largest = getLargestWipStation(wipRows);
+  renderFlowRiskSummary(values, largest.name);
 
   const box = $("trendBriefList");
 
   if (box) {
-    const topActivity = cleanRows.reduce((best, row) => {
+    const topActivity = activityRows.reduce((best, row) => {
       return toNumber(row.ActivityToday) > toNumber(best.ActivityToday) ? row : best;
-    }, cleanRows[0] || {});
+    }, activityRows[0] || {});
 
     box.innerHTML = `
       <div class="brief-item station-brief">
-        <strong>${escapeHtml(largest)}</strong>
-        <span>Current largest WIP station.</span>
+        <strong>${escapeHtml(largest.name)}</strong>
+        <span>Current largest WIP station with ${fmt(largest.value)} lenses.</span>
       </div>
 
       <div class="brief-item station-brief">
@@ -1167,8 +1167,67 @@ function renderTrendCharts(flowPayload, arRows, values) {
   }
 }
 
+function renderFlowRiskSummary(values, largestStation) {
+  const box = $("flowRiskList");
+
+  if (!box || !values) return;
+
+  const risks = [];
+
+  const ovenBasketPct = pct(values.ovenBasketLoad, AR_CAPACITY_RULES.OVEN_BASKETS);
+  const chamberPct = pct(
+    values.sectoringWip,
+    Math.max(values.chamberTotalCapacity, AR_CAPACITY_RULES.CHAMBER_LENS)
+  );
+
+  risks.push({
+    title: largestStation,
+    text: "Largest current WIP pressure point.",
+    level: "watch"
+  });
+
+  risks.push({
+    title: `${values.fullBasketCount} full · ${values.partialBasketCount} partial baskets`,
+    text: `${fmt(values.basketWip)} total basket-stage lens WIP.`,
+    level: values.partialBasketCount > 0 ? "active" : "stable"
+  });
+
+  risks.push({
+    title: `${fmt(values.ovenBasketLoad)} / ${AR_CAPACITY_RULES.OVEN_BASKETS} oven basket load`,
+    text: `Oven is ${ovenBasketPct}% loaded by basket equivalent.`,
+    level: ovenBasketPct >= 70 ? "watch" : "stable"
+  });
+
+  risks.push({
+    title: `${fmt(values.activeChambers)} active sectoring chambers`,
+    text: `Sectoring utilization is ${chamberPct}%.`,
+    level: chamberPct >= 70 ? "watch" : "stable"
+  });
+
+  if (values.deringWip <= 0 && values.sectoringWip > 0) {
+    risks.push({
+      title: "DeRing has no current WIP",
+      text: "Confirm if chamber unload movement is expected or delayed.",
+      level: "watch"
+    });
+  }
+
+  box.innerHTML = risks.map(item => `
+    <div class="flow-risk-item ${item.level}">
+      <strong>${escapeHtml(item.title)}</strong>
+      <span>${escapeHtml(item.text)}</span>
+    </div>
+  `).join("");
+
+  setText(
+    "flowRiskStatus",
+    risks.some(r => r.level === "watch") ? "Needs Review" : "Stable"
+  );
+}
+
 function makeChart(canvasId, existingChart, config) {
   const canvas = $(canvasId);
+
   if (!canvas) return existingChart;
 
   if (existingChart) {
@@ -1179,9 +1238,7 @@ function makeChart(canvasId, existingChart, config) {
 }
 
 function chartOptions(title) {
-  const hasScales = title !== "Bottleneck Profile";
-
-  const base = {
+  return {
     responsive: true,
     maintainAspectRatio: false,
     animation: {
@@ -1203,11 +1260,8 @@ function chartOptions(title) {
         text: title,
         color: "#f5f5f7"
       }
-    }
-  };
-
-  if (hasScales) {
-    base.scales = {
+    },
+    scales: {
       x: {
         ticks: {
           color: "#8b8f9d",
@@ -1227,10 +1281,8 @@ function chartOptions(title) {
           color: "rgba(255,255,255,.05)"
         }
       }
-    };
-  }
-
-  return base;
+    }
+  };
 }
 
 function resizeCharts() {
@@ -1238,6 +1290,68 @@ function resizeCharts() {
     if (chart && typeof chart.resize === "function") {
       chart.resize();
     }
+  });
+}
+
+/* ─────────────────────────────────────────────────────
+   NAVIGATION / CLOCK / EVENTS
+───────────────────────────────────────────────────── */
+function bindPageNavigation() {
+  document.querySelectorAll(".nav-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const section = btn.dataset.section;
+
+      document.querySelectorAll(".nav-item").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      document.querySelectorAll(".page-section").forEach(panel => {
+        panel.classList.remove("active");
+        panel.hidden = true;
+      });
+
+      const target = document.querySelector(`.page-section[data-page="${section}"]`);
+
+      if (target) {
+        target.hidden = false;
+
+        requestAnimationFrame(() => {
+          target.classList.add("active");
+        });
+      }
+
+      if (section === "flow") {
+        setTimeout(placeArrows, 80);
+      }
+
+      if (section === "trends") {
+        setTimeout(resizeCharts, 120);
+      }
+
+      if (section === "summary") {
+        renderSummaryBreakdown(LAST_VALUES);
+      }
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+}
+
+function bindSplitTabs() {
+  document.querySelectorAll(".ar-split-tab").forEach(button => {
+    button.addEventListener("click", () => {
+      const panel = $("arSplitDetailPanel");
+
+      if (!panel) return;
+
+      panel.querySelectorAll(".ar-split-tab").forEach(btn => {
+        btn.classList.remove("active");
+      });
+
+      button.classList.add("active");
+      panel.dataset.activeTab = button.dataset.tab || "wip";
+
+      renderSplitDetailTabs(LAST_AR_ROWS, LAST_FLOW_PAYLOAD?.summary || {});
+    });
   });
 }
 
@@ -1295,39 +1409,11 @@ function updateClock() {
     hour: "numeric",
     minute: "2-digit"
   }));
-
-  updateShift(now);
-}
-
-function updateShift(now) {
-  const day = now.getDay();
-  const minutes = now.getHours() * 60 + now.getMinutes();
-
-  const isWeekdayShift = day >= 1 && day <= 4;
-
-  const start = isWeekdayShift ? 420 : 390;
-  const end = isWeekdayShift ? 1050 : 1110;
-
-  const name = isWeekdayShift ? "Weekday Shift" : "Weekend Shift";
-  const label = isWeekdayShift ? "7:00 AM – 5:30 PM" : "6:30 AM – 6:30 PM";
-
-  const rawPct = Math.round(((minutes - start) / (end - start)) * 100);
-  const p = Math.max(0, Math.min(100, rawPct));
-
-  setText("shiftName", name.toUpperCase());
-  setText("shiftTime", label);
-  setText("shiftPct", `${p}%`);
-  setText("shiftMiniStatus", `${name} · ${p}%`);
-
-  const ring = $("shiftRing");
-
-  if (ring) {
-    ring.setAttribute("stroke-dashoffset", String(263.9 * (1 - p / 100)));
-  }
 }
 
 function animateValue(id, target) {
   const el = $(id);
+
   if (!el) return;
 
   const start = toNumber(el.textContent);

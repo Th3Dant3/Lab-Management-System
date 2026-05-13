@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AR Thermal Flow Command Center</title>
+  <title>AR Dashboard</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,9 +15,9 @@
 
 <body>
 
-  <!-- ═══════════════════ AR LOADER ═══════════════════ -->
   <div id="ar-loader" aria-label="AR Dashboard initializing">
     <canvas id="arl-canvas"></canvas>
+
     <div class="arl-center">
       <div class="arl-lens-wrap">
         <div class="arl-outer-ring">
@@ -25,20 +25,24 @@
           <div class="arl-cross-v"></div>
           <div class="arl-scan-line"></div>
           <div class="arl-orbit-dot"></div>
+
           <div class="arl-mid-ring">
             <div class="arl-core-ring">
               <span>AR</span>
             </div>
           </div>
+
           <div class="arl-tick t0"></div>
           <div class="arl-tick t1"></div>
           <div class="arl-tick t2"></div>
           <div class="arl-tick t3"></div>
         </div>
       </div>
-      <div class="arl-title">AR Thermal Flow Command Center</div>
+
+      <div class="arl-title">AR Dashboard</div>
       <div class="arl-sub">Anti-Reflective Coating Operations</div>
       <div class="arl-log" id="arlLog"></div>
+
       <div class="arl-prog-wrap">
         <div class="arl-prog-track">
           <div class="arl-prog-fill" id="arlFill"></div>
@@ -47,7 +51,6 @@
       </div>
     </div>
   </div>
-  <!-- ═══════════════════ /AR LOADER ═══════════════════ -->
 
   <aside class="sidebar">
     <div class="logo">
@@ -84,39 +87,13 @@
         <span class="nav-badge" id="alertBadge">0</span>
       </button>
     </nav>
-
-    <div class="shift-card">
-      <div class="shift-head">
-        <span id="shiftName">LIVE SHIFT</span>
-        <span class="chev">▾</span>
-      </div>
-
-      <div class="shift-time" id="shiftTime">Loading shift window</div>
-
-      <div class="shift-ring">
-        <svg viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="50" cy="50" r="42" fill="none" stroke="#1f1f25" stroke-width="6"></circle>
-          <circle id="shiftRing" cx="50" cy="50" r="42" fill="none" stroke="url(#shiftGrad)" stroke-width="6" stroke-dasharray="263.9" stroke-dashoffset="263.9" stroke-linecap="round"></circle>
-          <defs>
-            <linearGradient id="shiftGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#ff9900"></stop>
-              <stop offset="100%" stop-color="#ffbf4a"></stop>
-            </linearGradient>
-          </defs>
-        </svg>
-
-        <div class="pct" id="shiftPct">0%</div>
-      </div>
-
-      <div class="shift-label">Shift Progress</div>
-    </div>
   </aside>
 
   <main class="main">
 
     <header class="header">
       <div class="title">
-        <h1>AR Thermal Flow Command Center</h1>
+        <h1>AR Dashboard</h1>
         <p>Live AR WIP, basket buildup, oven load, chamber utilization, output movement, and daily summary</p>
       </div>
 
@@ -143,13 +120,8 @@
       </div>
 
       <div class="status-pill hot">
-        <strong>Largest Pressure</strong>
-        <em id="largestPressure">--</em>
-      </div>
-
-      <div class="status-pill">
-        <strong>Shift Status</strong>
-        <em id="shiftMiniStatus">--</em>
+        <strong>Largest WIP</strong>
+        <em id="largestWIP">--</em>
       </div>
 
       <div class="status-pill">
@@ -176,7 +148,7 @@
 
         <article class="kpi">
           <div class="kpi-head">
-            <div class="kpi-icon">⇥</div>AR Input WIP
+            <div class="kpi-icon">⇥</div>AR WIP
           </div>
           <div class="kpi-value" id="surfaceInputWip">0</div>
           <div class="kpi-foot">
@@ -186,7 +158,7 @@
 
         <article class="kpi">
           <div class="kpi-head">
-            <div class="kpi-icon">▤</div>Active Baskets
+            <div class="kpi-icon">▤</div>Currently Active Baskets
           </div>
           <div class="kpi-value" id="activeBasketsKpi">0</div>
           <div class="kpi-foot">
@@ -206,7 +178,7 @@
 
         <article class="kpi">
           <div class="kpi-head">
-            <div class="kpi-icon">◉</div>Active Chambers
+            <div class="kpi-icon">◉</div>Active Sectoring
           </div>
           <div class="kpi-value" id="activeChambersKpi">0</div>
           <div class="kpi-foot">
@@ -216,11 +188,11 @@
 
         <article class="kpi">
           <div class="kpi-head">
-            <div class="kpi-icon">⇢</div>AR-OUT Today
+            <div class="kpi-icon">⇢</div>AR-OUT Output
           </div>
           <div class="kpi-value" id="arOutActivity">0</div>
           <div class="kpi-foot">
-            <span>Output to Finish</span>
+            <span>Output sent to Finish</span>
           </div>
         </article>
       </section>
@@ -228,7 +200,7 @@
       <section class="overview-grid">
         <article class="card summary-card">
           <div class="card-head">
-            <h3>Daily Performance Summary</h3>
+            <h3>Daily Summary</h3>
             <span class="badge-active" id="summaryHealthBadge">Live</span>
           </div>
 
@@ -242,12 +214,12 @@
 
         <article class="card">
           <div class="card-head">
-            <h3>Queue Status</h3>
+            <h3>Work In Progress</h3>
             <span class="chev">▾</span>
           </div>
 
           <div class="q-item orange">
-            <span class="name">Surface Input WIP</span>
+            <span class="name">Incoming to AR WIP</span>
             <span class="val" id="queueSurface">0</span>
           </div>
 
@@ -266,12 +238,16 @@
             <span class="val" id="queueOven">0</span>
           </div>
 
+          <div class="q-item orange">
+            <span class="name">Sectoring WIP</span>
+            <span class="val" id="queueSectoring">0</span>
+          </div>
+
           <div class="q-item green">
             <span class="name">DeRing WIP</span>
             <span class="val" id="queueDeRing">0</span>
           </div>
         </article>
-
       </section>
 
     </section>
@@ -281,7 +257,7 @@
       <section class="flow-panel">
         <div class="flow-head">
           <h2>AR Process Flow</h2>
-          <span>Surface Inspection → AR-IN → Basket → Oven → Sectoring → DeRing → AR-OUT</span>
+          <span>Incoming from Surface → AR-IN → Basket → Oven → Sectoring → DeRing → AR-OUT</span>
         </div>
 
         <div class="stations" id="stations">
@@ -290,8 +266,8 @@
             <div class="station-head">
               <div class="station-num">1</div>
               <div>
-                <div class="station-name">Surface Inspection</div>
-                <div class="station-sub">AR Input WIP</div>
+                <div class="station-name">Incoming to AR WIP</div>
+                <div class="station-sub">Surface Inspection to AR WIP</div>
               </div>
               <div class="status-dot"></div>
             </div>
@@ -303,7 +279,7 @@
             </div>
 
             <div class="station-foot">
-              <div class="status-line">Input From Surface</div>
+              <div class="status-line">WIP Incoming from Surface to AR-IN</div>
               <div class="metric-label">WIP Count</div>
               <div class="metric-value" id="stationSurfaceInput">0</div>
               <div class="metric-sub">Bridge into AR</div>
@@ -315,7 +291,7 @@
               <div class="station-num">2</div>
               <div>
                 <div class="station-name">AR-IN</div>
-                <div class="station-sub">Receiving Station</div>
+                <div class="station-sub">AR-IN to Basket</div>
               </div>
               <div class="status-dot"></div>
             </div>
@@ -327,8 +303,8 @@
             </div>
 
             <div class="station-foot">
-              <div class="status-line">Receiving Jobs</div>
-              <div class="metric-label">Current WIP</div>
+              <div class="status-line">Currently on Cookie Sheets</div>
+              <div class="metric-label">AR-IN WIP</div>
               <div class="metric-value" id="stationArIn">0</div>
               <div class="metric-sub">Computer receiving</div>
             </div>
@@ -338,8 +314,8 @@
             <div class="station-head">
               <div class="station-num">3</div>
               <div>
-                <div class="station-name">Basket</div>
-                <div class="station-sub">Lens Basket Rack</div>
+                <div class="station-name">Basket WIP</div>
+                <div class="station-sub">Basket → T40 → Oven</div>
               </div>
               <div class="status-dot"></div>
             </div>
@@ -370,8 +346,8 @@
             </div>
 
             <div class="station-foot">
-              <div class="status-line">Rack Ready</div>
-              <div class="metric-label">Baskets In Use</div>
+              <div class="status-line">Basket Transfer Ready</div>
+              <div class="metric-label">Basket WIP</div>
               <div class="metric-value" id="stationBaskets">0</div>
               <div class="metric-sub" id="lastBasketLoad">Last basket: 0 / 32</div>
             </div>
@@ -381,15 +357,15 @@
             <div class="station-head">
               <div class="station-num">4</div>
               <div>
-                <div class="station-name">Oven</div>
-                <div class="station-sub">De-Gas Oven</div>
+                <div class="station-name">Oven WIP</div>
+                <div class="station-sub">De-Gas</div>
               </div>
               <div class="status-dot"></div>
             </div>
 
             <div class="station-visual">
-              <div class="badge-corner">
-                27
+              <div class="badge-corner oven-badge">
+                <span id="ovenBasketBadge">0 / 27</span>
                 <small>Baskets</small>
               </div>
 
@@ -406,7 +382,7 @@
 
             <div class="station-foot">
               <div class="status-line heat-line">De-Gassing</div>
-              <div class="metric-label">Current WIP</div>
+              <div class="metric-label">Oven WIP</div>
               <div class="metric-value" id="stationOven">0</div>
               <div class="metric-sub" id="lastOvenLoad">Basket load: 0 / 27</div>
             </div>
@@ -416,8 +392,8 @@
             <div class="station-head">
               <div class="station-num">5</div>
               <div>
-                <div class="station-name">Sectoring</div>
-                <div class="station-sub">AR Coating Chamber</div>
+                <div class="station-name">Sectoring WIP</div>
+                <div class="station-sub">Lens Assembly to Chambers</div>
               </div>
               <div class="status-dot"></div>
             </div>
@@ -433,7 +409,7 @@
 
             <div class="station-foot">
               <div class="status-line">Applying AR Coating</div>
-              <div class="metric-label">Total Lenses</div>
+              <div class="metric-label">Sectoring WIP</div>
               <div class="metric-value" id="stationChamberLoad">0</div>
               <div class="metric-sub" id="chamberUtilText">Utilization: 0%</div>
 
@@ -447,8 +423,8 @@
             <div class="station-head">
               <div class="station-num">6</div>
               <div>
-                <div class="station-name">DeRing</div>
-                <div class="station-sub">Unload & Cookie Sheet</div>
+                <div class="station-name">DeRing WIP</div>
+                <div class="station-sub">Unload Lenses & Placement on Cookie Sheet</div>
               </div>
               <div class="status-dot"></div>
             </div>
@@ -462,7 +438,7 @@
 
             <div class="station-foot">
               <div class="status-line">Unload & Place</div>
-              <div class="metric-label">Current WIP</div>
+              <div class="metric-label">DeRing WIP</div>
               <div class="metric-value" id="stationDeRing">0</div>
               <div class="metric-sub">After chamber unload</div>
             </div>
@@ -486,7 +462,7 @@
 
             <div class="station-foot">
               <div class="status-line">Send To Finish</div>
-              <div class="metric-label">Output Activity</div>
+              <div class="metric-label">Total Output</div>
               <div class="metric-value" id="stationArOut">0</div>
               <div class="metric-sub">Not AR WIP</div>
             </div>
@@ -503,12 +479,12 @@
         <div class="ar-split-head">
           <div>
             <h2>AR Live Tracking</h2>
-            <p id="arSplitSubtitle">Current WIP sitting at each AR station from RAW_WIP_CURRENT.</p>
+            <p id="arSplitSubtitle">Current Work in Progress on each AR area.</p>
           </div>
 
           <div class="ar-split-tabs">
             <button type="button" class="ar-split-tab active" data-tab="wip">WIP View</button>
-            <button type="button" class="ar-split-tab" data-tab="output">Station Activity</button>
+            <button type="button" class="ar-split-tab" data-tab="output">Output Activity</button>
           </div>
         </div>
 
@@ -523,7 +499,7 @@
       <div class="page-head">
         <div>
           <h2>Summary Breakdown</h2>
-          <p>Daily AR station activity, current WIP pressure, AR-OUT movement, and process balance.</p>
+          <p>Daily AR station output, current WIP pressure, AR-OUT movement, and process balance.</p>
         </div>
 
         <div class="page-pill" id="summaryBreakdownStatus">Live Summary</div>
@@ -533,7 +509,7 @@
 
         <article class="card summary-wide">
           <div class="card-head">
-            <h3>Daily Station Activity</h3>
+            <h3>Daily Station Output</h3>
             <span>Completed scans by station</span>
           </div>
 
@@ -543,7 +519,7 @@
         <article class="card">
           <div class="card-head">
             <h3>Top Performer</h3>
-            <span>Highest station activity</span>
+            <span>Highest station output</span>
           </div>
 
           <div class="summary-hero">
@@ -566,8 +542,8 @@
 
         <article class="card summary-wide">
           <div class="card-head">
-            <h3>WIP Pressure Breakdown</h3>
-            <span>Current load by station</span>
+            <h3>Work In Progress Breakdown</h3>
+            <span>Current WIP by station</span>
           </div>
 
           <div id="summaryWipPressure" class="summary-station-list"></div>
@@ -611,52 +587,89 @@
       </div>
 
       <section class="capacity-grid">
-        <article class="card">
+
+        <article class="card capacity-card">
           <div class="card-head">
             <h3>Basket Capacity</h3>
-            <span class="badge-active">32 lenses</span>
+            <span class="badge-active">32 lenses each</span>
           </div>
 
-          <div class="perf-row">
-            <div class="perf-label">Last Basket Load</div>
-            <div class="perf-value-row">
-              <span class="perf-value" id="perfBasketLoad">0 / 32</span>
+          <div class="capacity-metric">
+            <div class="capacity-label">Total Basket WIP</div>
+            <div class="capacity-value" id="capBasketTotalWip">0</div>
+            <div class="capacity-sub">Total lenses in Basket / T40 transfer</div>
+          </div>
+
+          <div class="capacity-breakdown">
+            <div>
+              <strong id="capBasketFull">0</strong>
+              <span>Full Baskets</span>
+            </div>
+            <div>
+              <strong id="capBasketPartial">0</strong>
+              <span>Partial Baskets</span>
+            </div>
+            <div>
+              <strong id="capBasketCurrent">0 / 32</strong>
+              <span>Current Basket</span>
             </div>
           </div>
-
-          <div class="perf-foot">Tracks live Basket WIP into 32-lens basket units</div>
         </article>
 
-        <article class="card">
+        <article class="card capacity-card">
           <div class="card-head">
             <h3>Oven Capacity</h3>
-            <span class="badge-active">27 baskets</span>
+            <span class="badge-active">27 baskets max</span>
           </div>
 
-          <div class="perf-row">
-            <div class="perf-label">Oven Basket Load</div>
-            <div class="perf-value-row">
-              <span class="perf-value" id="perfOvenLoad">0 / 27</span>
+          <div class="capacity-metric">
+            <div class="capacity-label">Total Oven WIP</div>
+            <div class="capacity-value" id="capOvenTotalWip">0</div>
+            <div class="capacity-sub">Total lenses currently inside Oven WIP</div>
+          </div>
+
+          <div class="capacity-breakdown">
+            <div>
+              <strong id="capOvenBasketLoad">0 / 27</strong>
+              <span>Basket Load</span>
+            </div>
+            <div>
+              <strong id="capOvenLensCap">864</strong>
+              <span>Lens Capacity</span>
+            </div>
+            <div>
+              <strong id="capOvenRemaining">0</strong>
+              <span>Lens Space Left</span>
             </div>
           </div>
-
-          <div class="perf-foot">27 baskets equals 864 lenses</div>
         </article>
 
-        <article class="card">
+        <article class="card capacity-card">
           <div class="card-head">
-            <h3>Chamber Capacity</h3>
-            <span class="badge-active">192 lenses</span>
+            <h3>Sectoring Capacity</h3>
+            <span class="badge-active">192 lenses each</span>
           </div>
 
-          <div class="perf-row">
-            <div class="perf-label">Last Chamber Load</div>
-            <div class="perf-value-row">
-              <span class="perf-value" id="perfChamberLoad">0 / 192</span>
+          <div class="capacity-metric">
+            <div class="capacity-label">Total Sectoring WIP</div>
+            <div class="capacity-value" id="capChamberTotalWip">0</div>
+            <div class="capacity-sub">Total lenses loaded toward sectoring chambers</div>
+          </div>
+
+          <div class="capacity-breakdown">
+            <div>
+              <strong id="capChamberActive">0</strong>
+              <span>Active Chambers</span>
+            </div>
+            <div>
+              <strong id="capChamberCurrent">0 / 192</strong>
+              <span>Current Chamber</span>
+            </div>
+            <div>
+              <strong id="capChamberRemaining">0</strong>
+              <span>Lens Space Left</span>
             </div>
           </div>
-
-          <div class="perf-foot">Sectoring chamber load based on 192 lenses per chamber</div>
         </article>
 
         <article class="card chamber-card">
@@ -682,6 +695,7 @@
             <div class="util-list" id="utilList"></div>
           </div>
         </article>
+
       </section>
 
     </section>
@@ -691,13 +705,14 @@
       <div class="page-head">
         <div>
           <h2>Station Trends</h2>
-          <p>Station activity, WIP pressure, and bottleneck behavior by AR step.</p>
+          <p>Station activity, WIP pressure, and flow behavior by AR step.</p>
         </div>
 
         <div class="page-pill" id="trendDataStatus">Live Summary Trend</div>
       </div>
 
       <section class="production-grid">
+
         <article class="chart-card wide">
           <div class="card-head">
             <h3>Station Activity Trend</h3>
@@ -708,18 +723,24 @@
 
         <article class="chart-card wide">
           <div class="card-head">
-            <h3>WIP Pressure Trend</h3>
+            <h3>Work In Progress Trend</h3>
             <span>Current WIP by station</span>
           </div>
           <canvas id="wipTrendChart"></canvas>
         </article>
 
-        <article class="chart-card">
+        <article class="chart-card flow-risk-card">
           <div class="card-head">
-            <h3>Bottleneck Profile</h3>
-            <span id="bottleneckTrendLabel">--</span>
+            <h3>Flow Risk Summary</h3>
+            <span id="flowRiskStatus">Live Review</span>
           </div>
-          <canvas id="bottleneckChart"></canvas>
+
+          <div class="flow-risk-list" id="flowRiskList">
+            <div class="flow-risk-item">
+              <strong>Waiting for data</strong>
+              <span>Flow risk will appear after refresh.</span>
+            </div>
+          </div>
         </article>
 
         <article class="chart-card">
@@ -728,6 +749,7 @@
           </div>
           <div class="brief-list" id="trendBriefList"></div>
         </article>
+
       </section>
 
     </section>

@@ -2225,6 +2225,284 @@ button {
   to   { opacity: 1; transform: translateY(0);   }
 }
 
+
 /* ═══════════════════════════════════════════════════════
    /AR LOADING SCREEN
    ═══════════════════════════════════════════════════════ */
+
+   /* =====================================================
+   AR Basket + Oven Alignment Fix
+===================================================== */
+
+.basket-viz {
+  justify-content: center;
+  gap: 8px;
+}
+
+.basket-grid.full,
+.basket-grid.partial {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+  gap: 5px;
+  align-items: stretch;
+  min-height: 42px;
+}
+
+.basket-unit {
+  position: relative;
+  min-height: 36px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  text-align: center;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.basket-unit strong {
+  position: relative;
+  z-index: 2;
+  color: #160900;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.basket-unit span {
+  position: relative;
+  z-index: 2;
+  display: block;
+  color: rgba(22, 9, 0, 0.75);
+  font-size: 7px;
+  font-weight: 900;
+}
+
+.full-basket-unit {
+  border: 1px solid rgba(255, 191, 63, 0.9);
+  background: linear-gradient(180deg, #ffbf3f, #ff9900 58%, #8b5200);
+  box-shadow: 0 0 12px rgba(255, 153, 0, 0.35);
+  animation: basketGlow 1.8s infinite ease-in-out;
+}
+
+.partial-basket-unit {
+  border: 1px solid rgba(255, 153, 0, 0.45);
+  background: rgba(255, 153, 0, 0.08);
+}
+
+.partial-basket-unit strong,
+.partial-basket-unit span {
+  color: var(--orange-bright);
+}
+
+.basket-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #ffbf3f, #ff9900);
+  opacity: 0.9;
+}
+
+.basket-empty-msg {
+  color: var(--text-mute);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* =====================================================
+   DeRing Motion Animation
+===================================================== */
+
+.cookie-viz {
+  position: relative;
+  overflow: hidden;
+}
+
+.cookie-viz .arm {
+  position: absolute;
+  top: 22px;
+  left: 54%;
+  width: 54px;
+  height: 42px;
+  border-top: 5px solid rgba(95, 100, 112, 0.75);
+  border-right: 5px solid rgba(95, 100, 112, 0.75);
+  transform-origin: 8px 8px;
+  animation: deringArmMove 2.4s infinite ease-in-out;
+}
+
+.cookie-viz .arm::after {
+  content: "";
+  position: absolute;
+  right: -8px;
+  bottom: -10px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--orange);
+  box-shadow: 0 0 12px rgba(255, 153, 0, 0.65);
+  background: rgba(255, 153, 0, 0.12);
+}
+
+.cookie-viz .sheet {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  width: 108px;
+  height: 28px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  animation: cookieSheetSlide 2.4s infinite ease-in-out;
+}
+
+.cookie-viz .sheet span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 153, 0, 0.18);
+  border: 1px solid var(--orange);
+  box-shadow: 0 0 8px rgba(255, 153, 0, 0.45);
+  animation: lensDrop 2.4s infinite ease-in-out;
+}
+
+.cookie-viz .sheet span:nth-child(2) { animation-delay: .12s; }
+.cookie-viz .sheet span:nth-child(3) { animation-delay: .24s; }
+.cookie-viz .sheet span:nth-child(4) { animation-delay: .36s; }
+.cookie-viz .sheet span:nth-child(5) { animation-delay: .48s; }
+.cookie-viz .sheet span:nth-child(6) { animation-delay: .60s; }
+
+@keyframes deringArmMove {
+  0%, 100% {
+    transform: rotate(-12deg) translateY(0);
+  }
+  45% {
+    transform: rotate(15deg) translateY(8px);
+  }
+  65% {
+    transform: rotate(7deg) translateY(4px);
+  }
+}
+
+@keyframes cookieSheetSlide {
+  0%, 100% {
+    transform: translateX(-50%);
+  }
+  50% {
+    transform: translateX(-44%);
+  }
+}
+
+@keyframes lensDrop {
+  0%, 35%, 100% {
+    transform: translateY(0);
+    opacity: .75;
+  }
+  55% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+/* Remove shift UI from AR dashboard */
+.shift-card {
+  display: none !important;
+}
+
+.status-pill:has(#shiftMiniStatus) {
+  display: none !important;
+}
+
+.status-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* =====================================================
+   Basket badge overlap fix
+===================================================== */
+
+.station[data-step="BasketLensWIP"] .station-visual {
+  padding-top: 34px;
+  align-items: stretch;
+}
+
+.station[data-step="BasketLensWIP"] .badge-corner {
+  top: 6px;
+  right: 6px;
+  min-width: 52px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  z-index: 6;
+}
+
+.station[data-step="BasketLensWIP"] .badge-corner small {
+  font-size: 6px;
+  letter-spacing: 0.8px;
+}
+
+.station[data-step="BasketLensWIP"] .basket-viz {
+  width: 100%;
+  height: 100%;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.station[data-step="BasketLensWIP"] .basket-group {
+  min-height: 0;
+}
+
+/* =====================================================
+   Flow Risk Summary - replaces redundant bottleneck donut
+===================================================== */
+
+.flow-risk-card {
+  min-height: 310px;
+}
+
+.flow-risk-list {
+  display: grid;
+  gap: 10px;
+}
+
+.flow-risk-item {
+  border: 1px solid rgba(255, 153, 0, 0.14);
+  background: rgba(255, 153, 0, 0.045);
+  border-radius: 13px;
+  padding: 12px 13px;
+}
+
+.flow-risk-item strong {
+  display: block;
+  color: var(--orange-bright);
+  font-size: 16px;
+  line-height: 1.1;
+  font-weight: 950;
+}
+
+.flow-risk-item span {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.flow-risk-item.watch {
+  border-color: rgba(255, 191, 63, 0.34);
+  background: rgba(255, 191, 63, 0.07);
+}
+
+.flow-risk-item.active {
+  border-color: rgba(86, 227, 109, 0.22);
+  background: rgba(86, 227, 109, 0.055);
+}
+
+.flow-risk-item.stable {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.025);
+}
