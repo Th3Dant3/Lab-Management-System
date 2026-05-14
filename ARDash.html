@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="ARDash.css" />
+  <link rel="stylesheet" href="ARDash.css?v=sectoring-84-dashboard-back" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -104,6 +104,11 @@
           <span class="live" id="liveState">Live</span>
         </div>
 
+        <a class="back-dashboard-tag" href="index.html" title="Back to Dashboard">
+          <span>←</span>
+          Dashboard
+        </a>
+
         <button class="icon-btn" id="refreshBtn" title="Refresh data">⟳</button>
 
         <div class="avatar">
@@ -182,7 +187,7 @@
           </div>
           <div class="kpi-value" id="activeChambersKpi">0</div>
           <div class="kpi-foot">
-            <span id="chamberLensText">0 lenses / 192 each</span>
+            <span id="chamberLensText">0 WIP jobs × 2 = 0 lenses | 84 jobs per chamber</span>
           </div>
         </article>
 
@@ -401,7 +406,7 @@
             <div class="station-visual">
               <div class="chamber-viz">
                 <div class="chamber-header">
-                  <strong id="chambersActive">0</strong> Active Chambers
+                  <strong id="chambersActive">0</strong> Full Chambers
                 </div>
                 <div class="chamber-grid" id="chamberGrid"></div>
               </div>
@@ -647,27 +652,27 @@
         <article class="card capacity-card">
           <div class="card-head">
             <h3>Sectoring Capacity</h3>
-            <span class="badge-active">192 lenses each</span>
+            <span class="badge-active">84 jobs / 168 lenses each</span>
           </div>
 
           <div class="capacity-metric">
-            <div class="capacity-label">Total Sectoring WIP</div>
+            <div class="capacity-label">Sectoring WIP Load</div>
             <div class="capacity-value" id="capChamberTotalWip">0</div>
-            <div class="capacity-sub">Total lenses loaded toward sectoring chambers</div>
+            <div class="capacity-sub">Scanned job WIP with lens equivalent</div>
           </div>
 
           <div class="capacity-breakdown">
             <div>
               <strong id="capChamberActive">0</strong>
-              <span>Active Chambers</span>
+              <span>Full / Partial Chambers</span>
             </div>
             <div>
-              <strong id="capChamberCurrent">0 / 192</strong>
+              <strong id="capChamberCurrent">0 / 84 jobs</strong>
               <span>Current Chamber</span>
             </div>
             <div>
               <strong id="capChamberRemaining">0</strong>
-              <span>Lens Space Left</span>
+              <span>Job / Lens Space Left</span>
             </div>
           </div>
         </article>
@@ -687,7 +692,7 @@
 
               <div class="center">
                 <div class="pct" id="bigDonutPct">0%</div>
-                <div class="frac" id="bigDonutFrac">0 / 192</div>
+                <div class="frac" id="bigDonutFrac">0 / 84 jobs</div>
                 <div class="lbl">Utilization</div>
               </div>
             </div>
@@ -780,6 +785,6 @@
 
   </main>
 
-  <script src="ARDash.js"></script>
+  <script src="ARDash.js?v=sectoring-84-dashboard-back"></script>
 </body>
 </html>

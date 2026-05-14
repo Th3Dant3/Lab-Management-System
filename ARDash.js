@@ -148,7 +148,14 @@ const AR_CAPACITY_RULES = {
   BASKET_LENS: 32,
   OVEN_BASKETS: 27,
   OVEN_LENS: 864,
-  CHAMBER_LENS: 192
+
+  // Sectoring rules:
+  // CurrentWIP is scanned JOB WIP, not lens count.
+  // 1 chamber holds 84 jobs.
+  // 1 job normally equals 2 lenses.
+  CHAMBER_JOB: 84,
+  CHAMBER_LENS: 168,
+  LENSES_PER_JOB: 2
 };
 
 const STATION_COLORS = {
@@ -202,6 +209,15 @@ function ceilUnit(value, capacity) {
   if (v <= 0 || c <= 0) return 0;
 
   return Math.ceil(v / c);
+}
+
+function floorUnit(value, capacity) {
+  const v = toNumber(value);
+  const c = toNumber(capacity);
+
+  if (v <= 0 || c <= 0) return 0;
+
+  return Math.floor(v / c);
 }
 
 function setText(id, value) {
@@ -469,7 +485,14 @@ function renderDashboard(flowPayload, capacityPayload) {
   const arInWip = toNumber(arInRow.CurrentWIP);
   const basketWip = toNumber(basketRow.CurrentWIP);
   const ovenWip = toNumber(ovenRow.CurrentWIP);
+
+  // CRITICAL FIX:
+  // Sectoring CurrentWIP is scanned job WIP.
+  // Chamber visuals must be calculated by 84 jobs per chamber.
+  // Lens equivalent is only supporting text: jobs × 2.
   const sectoringWip = toNumber(sectoringRow.CurrentWIP);
+  const sectoringLensLoad = sectoringWip * AR_CAPACITY_RULES.LENSES_PER_JOB;
+
   const deringWip = toNumber(deringRow.CurrentWIP);
   const arOutActivity = toNumber(arOutRow.ActivityToday);
 
@@ -497,11 +520,31 @@ function renderDashboard(flowPayload, capacityPayload) {
     ? activeOvens * AR_CAPACITY_RULES.OVEN_LENS
     : AR_CAPACITY_RULES.OVEN_LENS;
 
-  const chamberUnits = buildUnitsFromWip(sectoringWip, AR_CAPACITY_RULES.CHAMBER_LENS, "Chamber");
-  const activeChambers = chamberUnits.length;
+  // Sectoring chamber build uses JOBS, not lenses.
+  const chamberUnits = buildUnitsFromWip(
+    sectoringWip,
+    AR_CAPACITY_RULES.CHAMBER_JOB,
+    "Chamber"
+  );
+
+  const fullChambers = chamberUnits.filter(u =>
+    toNumber(u.Used) >= AR_CAPACITY_RULES.CHAMBER_JOB
+  ).length;
+
+  const partialChambers = chamberUnits.filter(u =>
+    toNumber(u.Used) > 0 && toNumber(u.Used) < AR_CAPACITY_RULES.CHAMBER_JOB
+  ).length;
+
+  // Header should show active/full chambers only.
+  // Example: 298 WIP = 3 active chambers + 1 partial chamber.
+  const activeChambers = fullChambers;
+
+  // Total loaded chamber cards include full + partial.
+  const loadedChambers = chamberUnits.length;
+
   const chamberTotalCapacity = Math.max(
-    activeChambers * AR_CAPACITY_RULES.CHAMBER_LENS,
-    AR_CAPACITY_RULES.CHAMBER_LENS
+    loadedChambers * AR_CAPACITY_RULES.CHAMBER_JOB,
+    AR_CAPACITY_RULES.CHAMBER_JOB
   );
 
   const lastBasket = basketUnits.length
@@ -510,7 +553,7 @@ function renderDashboard(flowPayload, capacityPayload) {
 
   const lastChamber = chamberUnits.length
     ? chamberUnits[chamberUnits.length - 1]
-    : { Used: 0, Capacity: AR_CAPACITY_RULES.CHAMBER_LENS };
+    : { Used: 0, Capacity: AR_CAPACITY_RULES.CHAMBER_JOB };
 
   const fullBasketCount = basketUnits.filter(u =>
     toNumber(u.Used) >= toNumber(u.Capacity)
@@ -523,7 +566,8 @@ function renderDashboard(flowPayload, capacityPayload) {
   const lastOvenBasketText = `${ovenBasketLoad} / ${AR_CAPACITY_RULES.OVEN_BASKETS}`;
 
   const ovenLensRemaining = Math.max(0, ovenTotalLensCapacity - ovenWip);
-  const chamberLensRemaining = Math.max(0, chamberTotalCapacity - sectoringWip);
+  const chamberJobRemaining = Math.max(0, chamberTotalCapacity - sectoringWip);
+  const chamberLensRemaining = chamberJobRemaining * AR_CAPACITY_RULES.LENSES_PER_JOB;
 
   const largestWip = getLargestWipStation(arRows);
 
@@ -533,6 +577,7 @@ function renderDashboard(flowPayload, capacityPayload) {
     basketWip,
     ovenWip,
     sectoringWip,
+    sectoringLensLoad,
     deringWip,
     arOutActivity,
     arInActivity,
@@ -553,7 +598,11 @@ function renderDashboard(flowPayload, capacityPayload) {
     ovenLensRemaining,
     chamberUnits,
     activeChambers,
+    fullChambers,
+    partialChambers,
+    loadedChambers,
     chamberTotalCapacity,
+    chamberJobRemaining,
     chamberLensRemaining,
     lastBasket,
     lastChamber,
@@ -574,7 +623,11 @@ function renderDashboard(flowPayload, capacityPayload) {
   setText("activeStations", `${fmt(activeWipStations)} active WIP stations`);
   setText("basketLensText", `${fmt(basketWip)} lenses / ${AR_CAPACITY_RULES.BASKET_LENS} each`);
   setText("ovenBasketText", `${fmt(ovenBasketLoad)} baskets / ${AR_CAPACITY_RULES.OVEN_BASKETS} each (${fmt(AR_CAPACITY_RULES.OVEN_LENS)} lenses)`);
-  setText("chamberLensText", `${fmt(sectoringWip)} lenses / ${AR_CAPACITY_RULES.CHAMBER_LENS} each`);
+
+  setText(
+    "chamberLensText",
+    `${fmt(sectoringWip)} WIP jobs × 2 = ${fmt(sectoringLensLoad)} lenses | ${AR_CAPACITY_RULES.CHAMBER_JOB} jobs per chamber`
+  );
 
   setText("stationSurfaceInput", fmt(surfaceInputWip));
   setText("stationArIn", fmt(arInWip));
@@ -609,16 +662,16 @@ function renderDashboard(flowPayload, capacityPayload) {
   setText("capOvenLensCap", fmt(ovenTotalLensCapacity));
   setText("capOvenRemaining", fmt(ovenLensRemaining));
 
-  setText("capChamberTotalWip", fmt(sectoringWip));
-  setText("capChamberActive", fmt(activeChambers));
-  setText("capChamberCurrent", `${fmt(lastChamber.Used)} / ${fmt(lastChamber.Capacity)}`);
-  setText("capChamberRemaining", fmt(chamberLensRemaining));
+  setText("capChamberTotalWip", `${fmt(sectoringWip)} jobs / ${fmt(sectoringLensLoad)} lenses`);
+  setText("capChamberActive", `${fmt(fullChambers)} full · ${fmt(partialChambers)} partial`);
+  setText("capChamberCurrent", `${fmt(lastChamber.Used)} / ${fmt(lastChamber.Capacity)} jobs`);
+  setText("capChamberRemaining", `${fmt(chamberJobRemaining)} jobs / ${fmt(chamberLensRemaining)} lenses`);
 
   renderSplitDetailTabs(arRows, flowSummary);
   renderBaskets(basketUnits, AR_CAPACITY_RULES.BASKET_LENS);
   renderOvens(ovenWip, ovenBasketLoad, ovenTotalLensCapacity);
-  renderChambers(chamberUnits, AR_CAPACITY_RULES.CHAMBER_LENS, sectoringWip, chamberTotalCapacity);
-  renderUtilList(chamberUnits, AR_CAPACITY_RULES.CHAMBER_LENS);
+  renderChambers(chamberUnits, AR_CAPACITY_RULES.CHAMBER_JOB, sectoringWip, chamberTotalCapacity, fullChambers);
+  renderUtilList(chamberUnits, AR_CAPACITY_RULES.CHAMBER_JOB);
   renderAlerts(LAST_VALUES);
   renderDailyBrief(LAST_VALUES);
   renderSummaryBreakdown(LAST_VALUES);
@@ -806,15 +859,15 @@ function renderOvens(ovenWip, ovenBasketLoad, ovenTotalLensCapacity) {
   }
 }
 
-function renderChambers(units, chamberCap, sectoringWip, chamberTotalCapacity) {
+function renderChambers(units, chamberCap, sectoringWip, chamberTotalCapacity, fullChambers) {
   const grid = $("chamberGrid");
   if (!grid) return;
 
   grid.innerHTML = "";
 
   const visibleCount = Math.max(TOTAL_VISIBLE_CHAMBERS, units.length || 0);
-  let activeCount = 0;
-  let totalLenses = 0;
+  let loadedCount = 0;
+  let totalJobs = 0;
 
   for (let i = 0; i < visibleCount; i++) {
     const unit = units[i];
@@ -827,8 +880,11 @@ function renderChambers(units, chamberCap, sectoringWip, chamberTotalCapacity) {
         ? "full active"
         : "partial";
 
-    if (used > 0) activeCount++;
-    totalLenses += used;
+    if (used > 0) loadedCount++;
+    totalJobs += used;
+
+    const lensUsed = used * AR_CAPACITY_RULES.LENSES_PER_JOB;
+    const lensCap = cap * AR_CAPACITY_RULES.LENSES_PER_JOB;
 
     const div = makeDiv(`chamber ${state}`);
 
@@ -836,18 +892,21 @@ function renderChambers(units, chamberCap, sectoringWip, chamberTotalCapacity) {
       <div class="chamber-num">C${i + 1}</div>
       <div class="chamber-count">${used > 0 ? `${used} / ${cap}` : "— / " + cap}</div>
       <div class="chamber-label">${used <= 0 ? "Empty" : used >= cap ? "Full" : "Partial"}</div>
+      <div class="chamber-lens">${used > 0 ? `${lensUsed} / ${lensCap} lenses` : ""}</div>
     `;
 
     grid.appendChild(div);
   }
 
   const totalCap = Math.max(toNumber(chamberTotalCapacity), chamberCap);
-  const utilPct = pct(sectoringWip || totalLenses, totalCap);
+  const utilPct = pct(sectoringWip || totalJobs, totalCap);
 
-  setText("chambersActive", activeCount);
-  setText("chamberUtilText", `Utilization: ${utilPct}%`);
+  // Shows full active chambers only.
+  // Example: 298 jobs = 3 active/full chambers and 1 partial chamber.
+  setText("chambersActive", fullChambers);
+  setText("chamberUtilText", `Utilization: ${utilPct}% | ${fmt(loadedCount)} loaded chambers`);
   setText("bigDonutPct", `${utilPct}%`);
-  setText("bigDonutFrac", `${fmt(sectoringWip || totalLenses)} / ${fmt(totalCap)}`);
+  setText("bigDonutFrac", `${fmt(sectoringWip || totalJobs)} / ${fmt(totalCap)} jobs`);
 
   const bar = $("chamberUtilBar");
   if (bar) bar.style.width = `${utilPct}%`;
@@ -988,7 +1047,7 @@ function renderDailyBrief(values) {
 
     <div class="brief-item station-brief">
       <strong>${escapeHtml(largest.name)}</strong>
-      <span>Largest WIP station with ${fmt(largest.value)} lenses.</span>
+      <span>Largest WIP station with ${fmt(largest.value)} WIP jobs.</span>
     </div>
 
     <div class="brief-item station-brief">
@@ -997,8 +1056,8 @@ function renderDailyBrief(values) {
     </div>
 
     <div class="brief-item station-brief">
-      <strong>${fmt(values.activeChambers)}</strong>
-      <span>Active sectoring chambers.</span>
+      <strong>${fmt(values.fullChambers)}</strong>
+      <span>Full active sectoring chambers. ${fmt(values.partialChambers)} partial chamber loaded.</span>
     </div>
   `;
 }
@@ -1151,7 +1210,7 @@ function renderTrendCharts(flowPayload, arRows, values) {
     box.innerHTML = `
       <div class="brief-item station-brief">
         <strong>${escapeHtml(largest.name)}</strong>
-        <span>Current largest WIP station with ${fmt(largest.value)} lenses.</span>
+        <span>Current largest WIP station with ${fmt(largest.value)} WIP jobs.</span>
       </div>
 
       <div class="brief-item station-brief">
@@ -1177,7 +1236,7 @@ function renderFlowRiskSummary(values, largestStation) {
   const ovenBasketPct = pct(values.ovenBasketLoad, AR_CAPACITY_RULES.OVEN_BASKETS);
   const chamberPct = pct(
     values.sectoringWip,
-    Math.max(values.chamberTotalCapacity, AR_CAPACITY_RULES.CHAMBER_LENS)
+    Math.max(values.chamberTotalCapacity, AR_CAPACITY_RULES.CHAMBER_JOB)
   );
 
   risks.push({
@@ -1199,8 +1258,8 @@ function renderFlowRiskSummary(values, largestStation) {
   });
 
   risks.push({
-    title: `${fmt(values.activeChambers)} active sectoring chambers`,
-    text: `Sectoring utilization is ${chamberPct}%.`,
+    title: `${fmt(values.fullChambers)} full · ${fmt(values.partialChambers)} partial sectoring chambers`,
+    text: `Sectoring utilization is ${chamberPct}% by job chamber load. Lens equivalent: ${fmt(values.sectoringLensLoad)} lenses.`,
     level: chamberPct >= 70 ? "watch" : "stable"
   });
 
