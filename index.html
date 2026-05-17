@@ -459,6 +459,39 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
   </div>
 </div>
 
+<!-- ── Finish Dashboard ── -->
+<div id="finishdash-card" class="card card--featured" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#00d9ff"></canvas>
+  <div class="card-accent card-accent--cyan"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">Finish Dashboard</h3>
+        <span class="badge badge--lms-live">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        Live Finish WIP flow, MEI output, Mounting, Drill, Final Inspection, and hourly station health.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">Finish Unbox</span>
+      <span class="tag">MEI Line B/C</span>
+      <span class="tag">Mounting</span>
+      <span class="tag">Final Inspection</span>
+    </div>
+
+    <button class="card-btn" onclick="openPage('FinishDash.html')">
+      Open Finish Dashboard
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
     <!-- ── Coating Breakage Analytics ── -->
     <div id="coating-card" class="card" data-gated>
       <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>
