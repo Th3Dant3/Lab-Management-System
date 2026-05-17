@@ -93,8 +93,7 @@
 
     <header class="header">
       <div class="title">
-        <h1>AR Dashboard</h1>
-        <p>Live AR WIP, basket buildup, oven load, chamber utilization, output movement, and daily summary</p>
+        <h1>AR Dashboard</h1>        
       </div>
 
       <div class="header-right">
@@ -104,11 +103,10 @@
           <span class="live" id="liveState">Live</span>
         </div>
 
-        <a class="back-dashboard-tag" href="index.html" title="Back to Dashboard">
-          <span>←</span>
-          Dashboard
-        </a>
-
+       <a href="index.html" class="hud-back-btn" aria-label="Back to dashboard">
+       <span>←</span>
+        Back to Dashboard
+       </a>
         <button class="icon-btn" id="refreshBtn" title="Refresh data">⟳</button>
 
         <div class="avatar">
@@ -261,8 +259,7 @@
 
       <section class="flow-panel">
         <div class="flow-head">
-          <h2>AR Process Flow</h2>
-          <span>Incoming from Surface → AR-IN → Basket → Oven → Sectoring → DeRing → AR-OUT</span>
+          <h2>AR Process Flow</h2>          
         </div>
 
         <div class="stations" id="stations">
@@ -271,7 +268,7 @@
             <div class="station-head">
               <div class="station-num">1</div>
               <div>
-                <div class="station-name">Incoming to AR WIP</div>
+                <div class="station-name">Incoming SF to AR WIP</div>
                 <div class="station-sub">Surface Inspection to AR WIP</div>
               </div>
               <div class="status-dot"></div>
@@ -284,10 +281,9 @@
             </div>
 
             <div class="station-foot">
-              <div class="status-line">WIP Incoming from Surface to AR-IN</div>
-              <div class="metric-label">WIP Count</div>
-              <div class="metric-value" id="stationSurfaceInput">0</div>
-              <div class="metric-sub">Bridge into AR</div>
+              <div class="status-line status-line-white">Incoming from Surface to AR-IN</div>
+              <div class="metric-label">Current WIP</div>
+              <div class="metric-value" id="stationSurfaceInput">0</div>              
             </div>
           </article>
 
@@ -295,8 +291,8 @@
             <div class="station-head">
               <div class="station-num">2</div>
               <div>
-                <div class="station-name">AR-IN</div>
-                <div class="station-sub">AR-IN to Basket</div>
+                <div class="station-name">AR-IN WIP</div>
+                <div class="station-sub station-sub-white">AR-IN to AR WIP</div>
               </div>
               <div class="status-dot"></div>
             </div>

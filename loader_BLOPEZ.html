@@ -4,220 +4,448 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Welcome</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;600;700;900&family=Barlow+Condensed:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#050008;overflow:hidden;height:100vh;width:100vw;}
-.bg-base{position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 100%,rgba(180,0,20,.15) 0%,transparent 65%),radial-gradient(ellipse 60% 40% at 20% 50%,rgba(100,0,10,.1) 0%,transparent 55%),radial-gradient(ellipse 50% 40% at 80% 30%,rgba(0,30,180,.06) 0%,transparent 55%),#050008;animation:bgp 5s ease-in-out infinite;}
-@keyframes bgp{0%,100%{opacity:.8}50%{opacity:1}}
-.pr-bg-stripes{position:fixed;inset:0;pointer-events:none;z-index:1;display:flex;flex-direction:column;}
-.pr-stripe{flex:1;}
-.pr-s1{background:rgba(200,0,40,.07);}
-.pr-s2{background:rgba(255,255,255,.025);}
-.pr-s3{background:rgba(200,0,40,.07);}
-.pr-s4{background:rgba(255,255,255,.025);}
-.pr-s5{background:rgba(200,0,40,.07);}
-.pr-bg-stripes::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.04) 40%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.04) 60%,transparent 100%);animation:prShine 4s ease-in-out infinite;}
-@keyframes prShine{0%,100%{transform:translateX(-100%)}50%{transform:translateX(200%)}}
-.slashes{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1;}
-.sl{position:absolute;width:1px;height:200%;background:linear-gradient(180deg,transparent,rgba(200,0,30,.1),transparent);animation:sa 4s ease-in-out infinite;}
-.sl:nth-child(1){left:10%;transform:rotate(20deg);animation-delay:0s;}
-.sl:nth-child(2){left:28%;transform:rotate(20deg);animation-delay:.6s;}
-.sl:nth-child(3){left:50%;transform:rotate(20deg);animation-delay:1.2s;}
-.sl:nth-child(4){left:72%;transform:rotate(20deg);animation-delay:1.8s;}
-.sl:nth-child(5){left:90%;transform:rotate(20deg);animation-delay:2.4s;}
-@keyframes sa{0%,100%{opacity:0}50%{opacity:1}}
-.pr-triangle{position:fixed;top:0;bottom:0;left:0;width:0;border-top:50vh solid transparent;border-bottom:50vh solid transparent;border-left:35vw solid rgba(0,40,180,.08);pointer-events:none;z-index:1;animation:triGlow 4s ease-in-out infinite;}
-@keyframes triGlow{0%,100%{opacity:.6}50%{opacity:1}}
-.penta{position:fixed;top:50%;left:50%;width:500px;height:500px;transform:translate(-50%,-50%);opacity:.04;animation:pr 28s linear infinite;pointer-events:none;z-index:1;}
-@keyframes pr{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
-.sparks{position:fixed;inset:0;pointer-events:none;z-index:2;}
-.sp{position:absolute;width:2px;height:2px;border-radius:50%;background:#c8001a;animation:sf 3s ease-out infinite;}
-@keyframes sf{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(0)}}
-.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(200,0,30,.2),transparent);animation:sc 5s linear infinite;pointer-events:none;z-index:2;}
+body{background:#000;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── Deep LoL atmosphere ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 50%,  rgba(120,0,0,.28) 0%,transparent 65%),
+    radial-gradient(ellipse 55% 60% at 15% 50%,  rgba(0,140,60,.1) 0%,transparent 55%),
+    radial-gradient(ellipse 55% 60% at 85% 50%,  rgba(140,60,0,.1) 0%,transparent 55%),
+    radial-gradient(ellipse 100% 35% at 50% 100%,rgba(200,0,10,.2) 0%,transparent 55%),
+    radial-gradient(ellipse 60%  25% at 50% 0%,  rgba(160,0,10,.12) 0%,transparent 50%),
+    linear-gradient(180deg,#08000a 0%,#060008 50%,#080202 100%);
+  animation:bgp 5s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.88}50%{opacity:1}}
+
+
+/* ── DMC diagonal slashes ── */
+.dmc-slashes{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1;}
+.dmcs{position:absolute;width:1px;height:200%;background:linear-gradient(180deg,transparent,rgba(200,0,10,.12),transparent);animation:dmcsa 4s ease-in-out infinite;}
+@keyframes dmcsa{0%,100%{opacity:0}50%{opacity:1}}
+
+/* ── DMC pentagram watermark ── */
+.dmc-penta{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:580px;height:580px;
+  opacity:.04;
+  animation:pentaRot 25s linear infinite;
+  pointer-events:none;z-index:1;
+}
+@keyframes pentaRot{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+/* ── Red sparks DMC ── */
+.rspark{position:fixed;border-radius:50%;background:#cc0010;animation:rsparkfly linear infinite;pointer-events:none;z-index:3;}
+@keyframes rsparkfly{0%{transform:translate(0,0) scale(1);opacity:var(--op);}100%{transform:translate(var(--rx),var(--ry)) scale(0);opacity:0;}}
+
+/* ── Rift floor glow ── */
+.rift-floor{
+  position:fixed;bottom:0;left:0;right:0;height:180px;
+  background:linear-gradient(180deg,transparent,rgba(0,180,80,.04),rgba(0,160,60,.08));
+  pointer-events:none;z-index:1;
+}
+.rift-line{
+  position:fixed;bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(0,200,80,.3),rgba(0,255,100,.5),rgba(0,200,80,.3),transparent);
+  box-shadow:0 0 12px rgba(0,200,80,.3);
+  pointer-events:none;z-index:2;
+}
+
+/* ── Split background: Wukong green left / Jax orange right ── */
+.split-l{
+  position:fixed;top:0;left:0;bottom:0;right:50%;
+  background:radial-gradient(ellipse 120% 100% at 0% 50%,rgba(0,160,60,.12) 0%,transparent 65%);
+  pointer-events:none;z-index:1;
+}
+.split-r{
+  position:fixed;top:0;left:50%;bottom:0;right:0;
+  background:radial-gradient(ellipse 120% 100% at 100% 50%,rgba(200,100,0,.12) 0%,transparent 65%);
+  pointer-events:none;z-index:1;
+}
+
+/* ── Champion reveal flash ── */
+.reveal{
+  position:fixed;inset:0;pointer-events:none;z-index:8;
+  animation:revFlash 3s .4s ease forwards;opacity:0;
+}
+@keyframes revFlash{
+  0%{background:transparent;opacity:0;}
+  5%{background:rgba(200,0,10,.7);opacity:1;}
+  10%{background:transparent;opacity:0;}
+  14%{background:rgba(0,200,100,.35);opacity:.6;}
+  18%{background:transparent;opacity:0;}
+  22%{background:rgba(220,120,0,.3);opacity:.5;}
+  26%{opacity:0;}
+}
+
+/* LOCKED IN */
+.locked{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  font-family:'Bebas Neue',sans-serif;
+  font-size:88px;letter-spacing:8px;
+  color:transparent;white-space:nowrap;
+  pointer-events:none;z-index:9;
+  animation:lockFlash 3s .4s ease forwards;
+}
+@keyframes lockFlash{
+  0%{color:transparent;text-shadow:none;}
+  7%{color:rgba(255,40,20,.95);text-shadow:0 0 40px rgba(220,0,10,1),0 0 80px rgba(200,0,10,.6);}
+  14%{color:transparent;text-shadow:none;}
+}
+
+/* ── Hex grid ── */
+.hex{position:fixed;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(200,0,10,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(200,0,10,.04) 1px,transparent 1px);
+  background-size:44px 44px;}
+
+/* ── Energy lines ── */
+.eline{position:fixed;height:1px;pointer-events:none;z-index:2;animation:efly linear infinite;}
+@keyframes efly{from{left:-55%;width:40%}to{left:110%;width:40%}}
+
+/* ── Particles ── */
+.pt{position:fixed;border-radius:50%;animation:ptfly linear infinite;pointer-events:none;z-index:3;}
+@keyframes ptfly{0%{transform:translate(0,0) scale(1);opacity:var(--op);}100%{transform:translate(var(--px),var(--py)) scale(0);opacity:0;}}
+
+/* ── Scan ── */
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(200,0,10,.15),transparent);animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
 @keyframes sc{from{top:0}to{top:100vh}}
-.page{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;}
-.emblem{width:90px;height:90px;margin-bottom:18px;animation:emIn .9s cubic-bezier(.17,.67,.3,1.4) both;}
-@keyframes emIn{from{opacity:0;transform:scale(0) rotate(-180deg)}to{opacity:1;transform:scale(1) rotate(0deg)}}
-.em-outer{width:90px;height:90px;border-radius:50%;border:2px solid #b0001a;display:flex;align-items:center;justify-content:center;position:relative;animation:emG 2.5s 1s ease-in-out infinite;}
-@keyframes emG{0%,100%{box-shadow:0 0 12px rgba(180,0,26,.4)}50%{box-shadow:0 0 35px rgba(180,0,26,.9),0 0 70px rgba(180,0,26,.25)}}
-.em-ring1{position:absolute;inset:-8px;border-radius:50%;border:1px solid transparent;border-top-color:rgba(200,0,26,.8);border-right-color:rgba(200,0,26,.2);animation:ro1 3s linear infinite;}
-.em-ring2{position:absolute;inset:-16px;border-radius:50%;border:1px solid transparent;border-bottom-color:rgba(0,40,200,.35);animation:ro2 5s linear infinite;}
-@keyframes ro1{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-@keyframes ro2{from{transform:rotate(0deg)}to{transform:rotate(-360deg)}}
-.em-D{font-family:'Cinzel',serif;font-size:40px;font-weight:900;color:#b0001a;text-shadow:0 0 18px rgba(180,0,26,.8);line-height:1;}
-.dmc-rank{font-family:'Cinzel',serif;font-size:10px;letter-spacing:5px;color:#b0001a;text-transform:uppercase;margin-bottom:8px;animation:fu .4s .4s ease both;text-shadow:0 0 10px rgba(180,0,26,.6);}
-.pr-flag-wrap{position:relative;width:72px;height:44px;margin-bottom:14px;animation:flagIn .6s .5s ease both;border-radius:2px;overflow:hidden;box-shadow:0 0 16px rgba(200,0,40,.4),0 0 30px rgba(200,0,40,.15);border:1px solid rgba(200,0,40,.3);}
-@keyframes flagIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+
+/* ── HUD corners ── */
+.hc{position:fixed;width:52px;height:52px;pointer-events:none;z-index:3;}
+.hc.tl{top:16px;left:16px;border-top:2px solid rgba(200,0,10,.5);border-left:2px solid rgba(200,0,10,.5);}
+.hc.tr{top:16px;right:16px;border-top:2px solid rgba(200,120,0,.4);border-right:2px solid rgba(200,120,0,.4);}
+.hc.bl{bottom:16px;left:16px;border-bottom:2px solid rgba(0,200,80,.4);border-left:2px solid rgba(0,200,80,.4);}
+.hc.br{bottom:16px;right:16px;border-bottom:2px solid rgba(200,0,10,.5);border-right:2px solid rgba(200,0,10,.5);}
+
+/* ══ PAGE ══ */
+.page{position:fixed;inset:0;bottom:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;gap:5px;}
+
+/* ── DUAL CHAMPION BADGES ── */
+.champ-row{
+  display:flex;align-items:center;gap:16px;
+  margin-bottom:8px;
+  animation:champIn .9s .4s cubic-bezier(.17,.67,.3,1.3) both;
+}
+@keyframes champIn{from{opacity:0;transform:scale(.3) rotate(-5deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+
+/* Wukong badge */
+.wukong-badge{
+  width:88px;height:88px;
+  clip-path:polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%);
+  background:radial-gradient(circle at 38% 32%,rgba(0,140,50,.5),rgba(0,60,20,.4),rgba(0,0,0,.9));
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  animation:wuGlow 2.5s 1.2s ease-in-out infinite;
+}
+@keyframes wuGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(0,200,80,.4))}50%{filter:drop-shadow(0 0 28px rgba(0,240,100,.9)) drop-shadow(0 0 50px rgba(0,160,60,.3))}}
+
+/* Jax badge */
+.jax-badge{
+  width:88px;height:88px;
+  clip-path:polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%);
+  background:radial-gradient(circle at 38% 32%,rgba(180,100,0,.5),rgba(100,50,0,.4),rgba(0,0,0,.9));
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  animation:jaxGlow 2.5s 1.4s ease-in-out infinite;
+}
+@keyframes jaxGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(220,140,0,.4))}50%{filter:drop-shadow(0 0 28px rgba(255,160,0,.9)) drop-shadow(0 0 50px rgba(200,100,0,.3))}}
+
+/* VS divider */
+.vs-div{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.vs-txt{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;color:rgba(255,255,255,.2);}
+.vs-line{width:1px;height:20px;background:linear-gradient(180deg,transparent,rgba(255,255,255,.15),transparent);}
+
+/* Champion names under badges */
+.champ-names{
+  display:flex;align-items:center;gap:16px;
+  margin-bottom:6px;
+  animation:fu .4s .8s ease both;
+}
+.champ-name{
+  font-family:'Cinzel',serif;
+  font-size:11px;letter-spacing:3px;
+  text-transform:uppercase;font-weight:600;
+  width:88px;text-align:center;
+}
+.champ-name.wu{color:rgba(0,220,80,.7);text-shadow:0 0 8px rgba(0,200,60,.4);}
+.champ-name.jx{color:rgba(255,160,0,.7);text-shadow:0 0 8px rgba(200,120,0,.4);}
+.champ-name-sep{width:32px;text-align:center;color:rgba(255,255,255,.1);font-size:10px;}
+
+/* ── SUMMONER NAME ── */
+.sum-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:5px;color:rgba(255,100,80,.5);text-transform:uppercase;animation:fu .4s .9s ease both;}
+.sum-name{
+  font-family:'Bebas Neue',sans-serif;font-size:72px;letter-spacing:8px;line-height:1;
+  animation:sumIn .7s 1s ease both;
+  background:linear-gradient(180deg,#ffffff 0%,#ffb0b0 40%,#ff2020 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 24px rgba(200,0,10,.7)) drop-shadow(0 0 50px rgba(200,0,10,.3));
+}
+@keyframes sumIn{from{opacity:0;letter-spacing:20px}to{opacity:1;letter-spacing:8px}}
+
+/* ── RANK badge ── */
+.rank-badge{
+  display:inline-flex;align-items:center;gap:10px;
+  padding:5px 18px;
+  border:1px solid rgba(200,0,10,.4);
+  background:rgba(80,0,0,.2);
+  margin-top:3px;
+  animation:fu .5s 1.12s ease both;
+  position:relative;overflow:hidden;
+}
+.rank-badge::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,200,80,.05),transparent);animation:bs 3s ease-in-out infinite;}
+@keyframes bs{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+.rank-icon-wu{width:18px;height:18px;background:linear-gradient(135deg,#00c850,#008830);clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%);box-shadow:0 0 6px rgba(0,200,80,.5);}
+.rank-icon-jax{width:18px;height:18px;background:linear-gradient(135deg,#ff9000,#cc6000);clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%);box-shadow:0 0 6px rgba(220,140,0,.5);}
+.rank-txt{display:flex;flex-direction:column;gap:0;}
+.rank-main{font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:4px;color:#fff;text-transform:uppercase;font-weight:700;line-height:1;}
+.rank-sub{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:2px;color:rgba(255,100,80,.5);text-transform:uppercase;}
+
+/* ── Player name ── */
+.psep{display:flex;align-items:center;gap:8px;margin-top:5px;animation:fu .4s 1.22s ease both;}
+.pl{width:45px;height:1px;background:linear-gradient(90deg,transparent,rgba(0,180,80,.4));}
+.pl.r{background:linear-gradient(90deg,rgba(0,180,80,.4),transparent);}
+.pd{width:3px;height:3px;border-radius:50%;background:#00c850;box-shadow:0 0 5px rgba(0,200,80,.8);}
+.player-lbl{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:4px;color:rgba(255,255,255,.28);text-transform:uppercase;animation:fu .4s 1.3s ease both;}
+.player-name{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:600;color:rgba(255,255,255,.8);letter-spacing:3px;animation:fu .5s 1.38s ease both;}
+
+/* ── PR flag ── */
+.pr-row{display:flex;align-items:center;gap:7px;margin-top:5px;animation:fu .4s 1.46s ease both;}
+.pr-flag{width:30px;height:19px;border-radius:1px;overflow:hidden;border:1px solid rgba(200,0,40,.3);position:relative;}
 .pr-flag-inner{width:100%;height:100%;display:flex;flex-direction:column;position:relative;}
-.fst{flex:1;}
-.fst.r{background:#ce1126;}
-.fst.w{background:#f0f0f0;}
-.pr-flag-tri{position:absolute;top:0;bottom:0;left:0;width:0;border-top:22px solid transparent;border-bottom:22px solid transparent;border-left:38px solid #002868;}
-.pr-star{position:absolute;top:50%;left:10px;transform:translateY(-50%);color:#f0f0f0;font-size:12px;line-height:1;z-index:2;text-shadow:0 0 4px rgba(255,255,255,.8);animation:starPulse 1.5s ease-in-out infinite;}
-@keyframes starPulse{0%,100%{opacity:.9}50%{opacity:1;text-shadow:0 0 8px rgba(255,255,255,1);}}
-.pr-flag-wrap::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);animation:flagWave 2.5s ease-in-out infinite;border-radius:2px;}
-@keyframes flagWave{0%{transform:translateX(-150%)}100%{transform:translateX(250%)}}
-.welcome{font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:5px;color:#ffffff;text-transform:uppercase;margin-bottom:6px;animation:fu .4s .65s ease both;}
-.fullname{font-family:'Cinzel',serif;font-size:28px;font-weight:700;color:#ede0e0;letter-spacing:2px;margin-bottom:5px;animation:nameSlash .7s .78s ease both;text-shadow:0 0 16px rgba(180,0,26,.2);line-height:1.1;}
-@keyframes nameSlash{from{opacity:0;clip-path:polygon(0 0,0 0,0 100%,0 100%)}to{opacity:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%)}}
-.wise-man{font-family:'Cinzel',serif;font-size:11px;letter-spacing:4px;color:#ffffff;text-transform:uppercase;margin-bottom:4px;animation:fu .4s .9s ease both;}
-.tribal-note{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.7);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .98s ease both;}
-.boricua{font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:4px;color:rgba(255,255,255,.35);margin-bottom:14px;animation:fu .4s 1.05s ease both;}
-.role-tag{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);padding:5px 18px;margin-bottom:26px;animation:fu .4s 1.12s ease both;}
-.role-tag span{font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:3px;color:#ffffff;text-transform:uppercase;}
-.pbar-wrap{width:250px;margin-bottom:5px;animation:fu .4s 1.2s ease both;}
-.pbar-lbl{display:flex;justify-content:space-between;font-family:'Rajdhani',sans-serif;font-size:10px;color:#ffffff;letter-spacing:2px;margin-bottom:5px;}
-.pbar-track{width:100%;height:4px;background:rgba(180,0,26,.12);overflow:hidden;}
-.pbar-fill{height:100%;width:0%;background:linear-gradient(90deg,#00006a,#ce1126,#ffffff,#ce1126);background-size:300% 100%;animation:pf 5s 1.25s ease forwards,pshift 3s 1.25s linear infinite;position:relative;}
-.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:14px;height:100%;background:rgba(255,255,255,.4);filter:blur(3px);}
-@keyframes pf{0%{width:0%}40%{width:55%}70%{width:78%}90%{width:92%}100%{width:100%}}
-@keyframes pshift{0%{background-position:0% 0}100%{background-position:300% 0}}
-.sys{font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(255,255,255,.65);letter-spacing:2px;text-transform:uppercase;margin-top:8px;animation:fu .4s 2.9s ease both;}
-.sys-status{font-family:'Rajdhani',sans-serif;font-size:10px;color:rgba(200,150,150,.4);letter-spacing:1px;margin-top:4px;animation:fu .4s 3.2s ease both;min-height:14px;}
-@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.otc-badge{position:fixed;top:18px;right:22px;display:flex;align-items:center;gap:6px;z-index:20;animation:fu .5s .6s ease both;}
-.otc-finger{font-size:22px;animation:fingerUp 2s ease-in-out infinite;}
-@keyframes fingerUp{0%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
-.otc-txt{font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:rgba(255,180,180,.8);text-transform:uppercase;}
-.corner{position:fixed;font-family:'Rajdhani',sans-serif;font-size:9px;color:rgba(255,255,255,.22);letter-spacing:1px;z-index:1;}
-.ctop{top:18px;left:22px;} .cbot{bottom:18px;right:22px;}
+.pf-s{flex:1;}.pf-r{background:#ce1126;}.pf-w{background:#f0f0f0;}
+.pft{position:absolute;top:0;bottom:0;left:0;border-top:9.5px solid transparent;border-bottom:9.5px solid transparent;border-left:15px solid #002868;}
+.pfs{position:absolute;top:50%;left:4px;transform:translateY(-50%);color:#f0f0f0;font-size:5px;z-index:2;}
+.pr-flag::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);animation:fw 2.5s ease-in-out infinite;}
+@keyframes fw{0%{transform:translateX(-150%)}100%{transform:translateX(250%)}}
+.pr-lbl{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.28);}
+
+/* ── LOADING BAR ── */
+.load-wrap{
+  position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+  width:300px;z-index:11;
+  animation:fu .4s 1.6s ease both;
+}
+.lt{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-bottom:5px;}
+.lbar{width:100%;height:5px;background:rgba(100,0,0,.12);border:1px solid rgba(200,0,10,.3);position:relative;overflow:hidden;}
+.lfill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#3a0000,#cc0010,#ff2020,#00cc50,#ffa000);
+  background-size:400% 100%;
+  animation:lf 6s 1.7s ease forwards,ls 3s 1.7s linear infinite;position:relative;
+}
+.lfill::after{content:'';position:absolute;right:0;top:0;width:12px;height:100%;background:rgba(255,150,100,.6);filter:blur(3px);}
+@keyframes lf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+@keyframes ls{0%{background-position:0%}100%{background-position:400%}}
+.lticks{display:flex;justify-content:space-between;margin-top:3px;}
+.ltick{width:1px;height:4px;background:rgba(0,160,60,.25);}
+.lsys{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,100,80,.45);text-transform:uppercase;margin-top:5px;text-align:center;}
+
+@keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.corner{position:fixed;font-family:'DM Mono',monospace;font-size:8px;color:rgba(200,0,10,.28);letter-spacing:2px;z-index:1;}
+.ctop{top:20px;left:78px;}.cbot{bottom:20px;right:78px;}
 </style>
 </head>
 <body>
-<div class="bg-base"></div>
-<div class="pr-bg-stripes">
-  <div class="pr-stripe pr-s1"></div>
-  <div class="pr-stripe pr-s2"></div>
-  <div class="pr-stripe pr-s3"></div>
-  <div class="pr-stripe pr-s4"></div>
-  <div class="pr-stripe pr-s5"></div>
-</div>
-<div class="pr-triangle"></div>
-<div class="slashes">
-  <div class="sl"></div><div class="sl"></div><div class="sl"></div>
-  <div class="sl"></div><div class="sl"></div>
-</div>
-<svg class="penta" viewBox="0 0 200 200" fill="none">
-  <polygon points="100,10 40,180 190,70 10,70 160,180" fill="none" stroke="#b0001a" stroke-width="1"/>
-  <circle cx="100" cy="100" r="95" fill="none" stroke="#b0001a" stroke-width=".5"/>
-  <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(0,40,200,.3)" stroke-width=".5" stroke-dasharray="3 5"/>
+<div class="bg"></div>
+<div class="hex"></div>
+
+<!-- DMC pentagram bg -->
+<svg class="dmc-penta" viewBox="0 0 200 200" fill="none">
+  <polygon points="100,10 40,180 190,70 10,70 160,180" fill="none" stroke="#cc0010" stroke-width="1"/>
+  <circle cx="100" cy="100" r="95" fill="none" stroke="#cc0010" stroke-width=".6"/>
+  <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(200,0,10,.4)" stroke-width=".5" stroke-dasharray="3 5"/>
 </svg>
+
+<!-- DMC slash lines -->
+<div class="dmc-slashes">
+  <div class="dmcs" style="left:5%;transform:rotate(18deg);animation-delay:0s;"></div>
+  <div class="dmcs" style="left:18%;transform:rotate(18deg);animation-delay:.8s;"></div>
+  <div class="dmcs" style="left:82%;transform:rotate(-18deg);animation-delay:.4s;"></div>
+  <div class="dmcs" style="left:95%;transform:rotate(-18deg);animation-delay:1.2s;"></div>
+</div>
+
+<!-- Red DMC sparks -->
+<div class="rspark" style="width:3px;height:3px;left:42%;top:52%;--rx:-55px;--ry:-110px;--op:.8;animation-duration:2.8s;animation-delay:0s;"></div>
+<div class="rspark" style="width:2px;height:2px;left:50%;top:56%;--rx:45px;--ry:-120px;--op:.7;animation-duration:3.2s;animation-delay:.5s;"></div>
+<div class="rspark" style="width:3px;height:3px;left:58%;top:50%;--rx:60px;--ry:-100px;--op:.8;animation-duration:2.5s;animation-delay:1s;"></div>
+
+<div class="rift-floor"></div>
+<div class="rift-line"></div>
+<div class="split-l"></div>
+<div class="split-r"></div>
 <div class="scan"></div>
-<div class="sparks">
-  <div class="sp" style="left:49%;top:58%;--dx:42px;--dy:-88px;animation-delay:0s;"></div>
-  <div class="sp" style="left:51%;top:60%;--dx:-36px;--dy:-74px;animation-delay:.35s;background:#ff2030;"></div>
-  <div class="sp" style="left:50%;top:59%;--dx:20px;--dy:-98px;animation-delay:.7s;"></div>
-  <div class="sp" style="left:48%;top:61%;--dx:-52px;--dy:-62px;animation-delay:1.05s;"></div>
-  <div class="sp" style="left:52%;top:58%;--dx:58px;--dy:-78px;animation-delay:1.4s;background:#fff;width:1px;height:1px;"></div>
-</div>
-<div class="otc-badge">
-  <span class="otc-finger">☝️</span>
-  <span class="otc-txt">Wise Man</span>
-</div>
-<div class="corner ctop">THE BLOODLINE · WISE MAN</div>
-<div class="corner cbot">ZENNI LMS · SESSION ACTIVE</div>
+<div class="reveal"></div>
+<div class="locked">LOCKED IN</div>
+
+<div class="hc tl"></div><div class="hc tr"></div>
+<div class="hc bl"></div><div class="hc br"></div>
+
+<!-- Energy lines -->
+<div class="eline" style="top:20%;background:linear-gradient(90deg,transparent,rgba(0,200,80,.45),transparent);animation-duration:2.2s;animation-delay:0s;"></div>
+<div class="eline" style="top:40%;background:linear-gradient(90deg,transparent,rgba(220,140,0,.35),transparent);animation-duration:2.8s;animation-delay:.5s;height:1px;opacity:.6;"></div>
+<div class="eline" style="top:60%;background:linear-gradient(90deg,transparent,rgba(0,200,80,.3),transparent);animation-duration:2s;animation-delay:1s;"></div>
+<div class="eline" style="top:78%;background:linear-gradient(90deg,transparent,rgba(220,140,0,.3),transparent);animation-duration:2.5s;animation-delay:.8s;opacity:.5;"></div>
+
+<!-- Green Wukong particles left -->
+<div class="pt" style="width:3px;height:3px;left:22%;top:55%;background:#00cc60;--px:-50px;--py:-120px;--op:.8;animation-duration:3s;animation-delay:0s;"></div>
+<div class="pt" style="width:2px;height:2px;left:15%;top:62%;background:#00ff80;--px:-35px;--py:-100px;--op:.7;animation-duration:3.5s;animation-delay:.6s;"></div>
+<div class="pt" style="width:3px;height:3px;left:32%;top:50%;background:#40e880;--px:-60px;--py:-130px;--op:.8;animation-duration:2.8s;animation-delay:1.2s;"></div>
+<!-- Orange Jax particles right -->
+<div class="pt" style="width:3px;height:3px;left:72%;top:55%;background:#ff9000;--px:50px;--py:-120px;--op:.8;animation-duration:3.1s;animation-delay:.3s;"></div>
+<div class="pt" style="width:2px;height:2px;left:80%;top:60%;background:#ffaa20;--px:40px;--py:-100px;--op:.7;animation-duration:3.6s;animation-delay:.9s;"></div>
+<div class="pt" style="width:3px;height:3px;left:65%;top:52%;background:#ff7800;--px:55px;--py:-115px;--op:.8;animation-duration:2.6s;animation-delay:1.5s;"></div>
+<!-- Blue center -->
+<div class="pt" style="width:2px;height:2px;left:46%;top:58%;background:#0088ff;--px:-20px;--py:-140px;--op:.6;animation-duration:4s;animation-delay:1s;"></div>
+<div class="pt" style="width:2px;height:2px;left:54%;top:54%;background:#40a0ff;--px:20px;--py:-130px;--op:.6;animation-duration:3.8s;animation-delay:2s;"></div>
+
+<div class="corner ctop">ZENNI LMS · DEVIL MAY CRY</div>
+<div class="corner cbot">SESSION ACTIVE</div>
+
 <div class="page">
-  <div class="emblem">
-    <div class="em-outer">
-      <div class="em-ring1"></div>
-      <div class="em-ring2"></div>
-      <span class="em-D">D</span>
+
+  <!-- Dual champion hexagons -->
+  <div class="champ-row">
+
+    <!-- Wukong -->
+    <div class="wukong-badge">
+      <svg width="88" height="88" viewBox="0 0 88 88" fill="none">
+        <!-- Hex border -->
+        <polygon points="44,3 83,24 83,64 44,85 5,64 5,24" fill="none" stroke="rgba(0,220,80,.55)" stroke-width="1.5"/>
+        <polygon points="44,9 77,27 77,61 44,79 11,61 11,27" fill="none" stroke="rgba(0,180,60,.25)" stroke-width="1"/>
+        <!-- Wukong staff — his signature weapon -->
+        <line x1="44" y1="14" x2="44" y2="74" stroke="rgba(160,100,20,.7)" stroke-width="4" stroke-linecap="round"/>
+        <line x1="44" y1="14" x2="44" y2="74" stroke="rgba(200,140,40,.4)" stroke-width="2" stroke-linecap="round"/>
+        <!-- Staff gold tips -->
+        <rect x="40" y="12" width="8" height="6" rx="2" fill="#c8a000" stroke="#ffd040" stroke-width="1"/>
+        <rect x="40" y="70" width="8" height="6" rx="2" fill="#c8a000" stroke="#ffd040" stroke-width="1"/>
+        <!-- Staff orb middle -->
+        <circle cx="44" cy="44" r="7" fill="rgba(0,200,80,.2)" stroke="rgba(0,240,80,.7)" stroke-width="1.5"/>
+        <circle cx="44" cy="44" r="3" fill="rgba(0,255,80,.6)"/>
+        <!-- Clone smoke wisps -->
+        <ellipse cx="28" cy="56" rx="8" ry="5" fill="rgba(0,200,80,.12)" stroke="rgba(0,180,60,.25)" stroke-width="1"/>
+        <ellipse cx="60" cy="56" rx="8" ry="5" fill="rgba(0,200,80,.12)" stroke="rgba(0,180,60,.25)" stroke-width="1"/>
+        <!-- Tail curl -->
+        <path d="M52 36 Q62 28 60 20 Q56 16 52 20 Q50 26 54 30" stroke="rgba(200,140,40,.6)" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <!-- W text -->
+        <text x="44" y="78" text-anchor="middle" font-family="serif" font-size="8" font-weight="bold" fill="rgba(0,220,80,.7)" letter-spacing="1">WK</text>
+      </svg>
+    </div>
+
+    <div class="vs-div">
+      <div class="vs-line"></div>
+      <div class="vs-txt">VS</div>
+      <div class="vs-line"></div>
+    </div>
+
+    <!-- Jax -->
+    <div class="jax-badge">
+      <svg width="88" height="88" viewBox="0 0 88 88" fill="none">
+        <!-- Hex border -->
+        <polygon points="44,3 83,24 83,64 44,85 5,64 5,24" fill="none" stroke="rgba(220,140,0,.55)" stroke-width="1.5"/>
+        <polygon points="44,9 77,27 77,61 44,79 11,61 11,27" fill="none" stroke="rgba(180,100,0,.25)" stroke-width="1"/>
+        <!-- Jax lamppost weapon -->
+        <!-- Main pole -->
+        <line x1="44" y1="12" x2="44" y2="72" stroke="rgba(140,100,60,.7)" stroke-width="5" stroke-linecap="round"/>
+        <line x1="44" y1="12" x2="44" y2="72" stroke="rgba(200,160,80,.4)" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Lamp head top -->
+        <rect x="36" y="10" width="16" height="12" rx="4" fill="rgba(180,120,0,.5)" stroke="rgba(220,160,0,.7)" stroke-width="1.5"/>
+        <!-- Lamp glow -->
+        <rect x="38" y="12" width="12" height="8" rx="3" fill="rgba(255,200,80,.4)"/>
+        <circle cx="44" cy="16" r="4" fill="rgba(255,220,100,.6)"/>
+        <!-- Purple arcane energy on weapon -->
+        <path d="M44 30 Q50 38 44 46 Q38 54 44 62" stroke="rgba(140,0,200,.5)" stroke-width="2" stroke-linecap="round" fill="none"/>
+        <!-- Jax hood/mask hint -->
+        <circle cx="44" cy="42" r="11" fill="rgba(180,100,0,.15)" stroke="rgba(220,140,0,.4)" stroke-width="1"/>
+        <!-- Eyes glowing -->
+        <circle cx="40" cy="41" r="2.5" fill="rgba(255,180,0,.8)"/>
+        <circle cx="48" cy="41" r="2.5" fill="rgba(255,180,0,.8)"/>
+        <circle cx="40" cy="41" r="1.2" fill="#fff"/>
+        <circle cx="48" cy="41" r="1.2" fill="#fff"/>
+        <!-- Counter strike sparks -->
+        <line x1="20" y1="44" x2="28" y2="40" stroke="rgba(255,160,0,.6)" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="68" y1="44" x2="60" y2="40" stroke="rgba(255,160,0,.6)" stroke-width="1.5" stroke-linecap="round"/>
+        <text x="44" y="78" text-anchor="middle" font-family="serif" font-size="8" font-weight="bold" fill="rgba(255,160,0,.7)" letter-spacing="1">JAX</text>
+      </svg>
     </div>
   </div>
-  <div class="dmc-rank">✦ Executive Access ✦</div>
-  <div class="pr-flag-wrap">
-    <div class="pr-flag-inner">
-      <div class="fst r"></div>
-      <div class="fst w"></div>
-      <div class="fst r"></div>
-      <div class="fst w"></div>
-      <div class="fst r"></div>
+
+  <!-- Champion names -->
+  <div class="champ-names">
+    <div class="champ-name wu">Wukong</div>
+    <div class="champ-name-sep">·</div>
+    <div class="champ-name jx">Jax</div>
+  </div>
+
+  <div class="sum-label">Lab Management Administrator</div>
+  <div class="sum-name">DANTE</div>
+
+  <div class="rank-badge">
+    <div class="rank-icon-wu"></div>
+    <div class="rank-txt">
+      <div class="rank-main" id="displayRole">LMS · Admin</div>
+      <div class="rank-sub">Zenni USA Ohio</div>
     </div>
-    <div class="pr-flag-tri"></div>
-    <div class="pr-star">★</div>
+    <div class="rank-icon-jax"></div>
   </div>
-  <div class="welcome">Welcome back</div>
-  <div class="fullname" id="displayName">Brian Lopez Cabrera</div>
-  <div class="wise-man">Wise Man of the Tribal Chief</div>
-  <div class="tribal-note">The Bloodline · OTC ☝️</div>
-  <div class="boricua">🇵🇷 &nbsp; Boricua · Puerto Rico &nbsp; 🇵🇷</div>
-  <div class="role-tag">
-    <span id="displayRole">LMS · Admin</span>
+
+  <div class="psep">
+    <div class="pl"></div><div class="pd"></div><div class="pl r"></div>
   </div>
-  <div class="pbar-wrap">
-    <div class="pbar-lbl"><span>Loading Dashboard</span><span id="pct">0%</span></div>
-    <div class="pbar-track"><div class="pbar-fill" id="pbar"></div></div>
+  <div class="player-lbl">Player</div>
+  <div class="player-name" id="displayName">Brian Lopez Cabrera</div>
+
+  <div class="pr-row">
+    <div class="pr-flag">
+      <div class="pr-flag-inner">
+        <div class="pf-s pf-r"></div><div class="pf-s pf-w"></div>
+        <div class="pf-s pf-r"></div><div class="pf-s pf-w"></div>
+        <div class="pf-s pf-r"></div>
+      </div>
+      <div class="pft"></div>
+      <div class="pfs">★</div>
+    </div>
+    <div class="pr-lbl">Boricua</div>
   </div>
-  <div class="sys">Initializing systems...</div>
-  <div class="sys-status" id="sysStatus"></div>
+
+</div>
+
+<div class="load-wrap">
+  <div class="lt"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+  <div class="lbar"><div class="lfill"></div></div>
+  <div class="lticks">
+    <div class="ltick"></div><div class="ltick"></div><div class="ltick"></div>
+    <div class="ltick"></div><div class="ltick"></div><div class="ltick"></div>
+    <div class="ltick"></div><div class="ltick"></div><div class="ltick"></div><div class="ltick"></div>
+  </div>
+  <div class="lsys" id="sysTxt">Connecting to server...</div>
 </div>
 
 <script>
-  // Set name and role from session
-  const n = sessionStorage.getItem("lms_fullname") || "Brian Lopez Cabrera";
-  const r = sessionStorage.getItem("lms_role")     || "LMS";
-  const s = sessionStorage.getItem("lms_subrole")  || "Admin";
-  document.getElementById("displayName").textContent  = n;
-  document.getElementById("displayRole").textContent  = r + " · " + s;
-
-  // Percentage counter
-  let p = 0;
-  const pEl     = document.getElementById("pct");
-  const statusEl = document.getElementById("sysStatus");
-
-  const messages = [
-    "Authenticating credentials...",
-    "Loading visibility settings...",
-    "Syncing production data...",
-    "Preparing your workspace...",
-    "Almost ready..."
-  ];
-
-  const iv = setInterval(() => {
-    p = Math.min(99, p + Math.floor(Math.random() * 3) + 1);
-    pEl.textContent = p + "%";
-    // Cycle status messages based on progress
-    if      (p < 20)  statusEl.textContent = messages[0];
-    else if (p < 40)  statusEl.textContent = messages[1];
-    else if (p < 60)  statusEl.textContent = messages[2];
-    else if (p < 80)  statusEl.textContent = messages[3];
-    else              statusEl.textContent = messages[4];
-    if (p >= 99) clearInterval(iv);
-  }, 80);
-
-  // Minimum display time — 6 seconds
-  const MIN_TIME = 6000;
-  const startTime = Date.now();
-
-  // Preload dashboard in background
-  const preload = document.createElement("link");
-  preload.rel  = "prefetch";
-  preload.href = "index.html";
-  document.head.appendChild(preload);
-
-  function goToDashboard() {
-    const elapsed   = Date.now() - startTime;
-    const remaining = Math.max(0, MIN_TIME - elapsed);
-    setTimeout(() => {
-      p = 100;
-      pEl.textContent = "100%";
-      statusEl.textContent = "Welcome!";
-      clearInterval(iv);
-      setTimeout(() => {
-        window.location.replace("index.html");
-      }, 400);
-    }, remaining);
-  }
-
-  // Also fetch index.html in background to warm it up
-  fetch("index.html", { method: "GET", cache: "force-cache" })
-    .then(() => goToDashboard())
-    .catch(() => goToDashboard()); // fallback if fetch fails
-
-  // Hard fallback — never stay longer than 10 seconds
-  setTimeout(() => {
-    window.location.replace("index.html");
-  }, 10000);
+  const n=sessionStorage.getItem("lms_fullname")||"Brian Lopez Cabrera";
+  const r=sessionStorage.getItem("lms_role")||"LMS";
+  const s=sessionStorage.getItem("lms_subrole")||"Admin";
+  document.getElementById("displayName").textContent=n;
+  document.getElementById("displayRole").textContent=r+" · "+s;
+  const msgs=["Connecting to server...","Loading champion data...","Wukong & Jax ready...","Preparing the Rift...","Get ready, Summoner..."];
+  let p=0;const pEl=document.getElementById("pct");const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);pEl.textContent=p+"%";
+    if(p<20)sysEl.textContent=msgs[0];else if(p<40)sysEl.textContent=msgs[1];
+    else if(p<60)sysEl.textContent=msgs[2];else if(p<80)sysEl.textContent=msgs[3];
+    else sysEl.textContent=msgs[4];
+    if(p>=99)clearInterval(iv);
+  },100);
+  const MIN_TIME=6000;const startTime=Date.now();
+  const preload=document.createElement("link");preload.rel="prefetch";preload.href="index.html";document.head.appendChild(preload);
+  function go(){const e=Date.now()-startTime;const r=Math.max(0,MIN_TIME-e);setTimeout(()=>{p=100;pEl.textContent="100%";clearInterval(iv);setTimeout(()=>{window.location.replace("index.html");},400);},r);}
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>go()).catch(()=>go());
+  setTimeout(()=>{window.location.replace("index.html");},10000);
 </script>
 </body>
 </html>

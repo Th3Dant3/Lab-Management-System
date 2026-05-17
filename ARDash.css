@@ -2506,3 +2506,181 @@ button {
   border-color: rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.025);
 }
+.hud-back-btn {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  border-radius: 13px;
+  border: 1px solid rgba(0, 217, 255, 0.38);
+  background: linear-gradient(180deg, rgba(0, 217, 255, 0.13), rgba(2, 12, 24, 0.82));
+  color: #00d9ff;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: 0 0 18px rgba(0, 217, 255, 0.14);
+  transition: 0.25s ease;
+}
+
+.hud-back-btn:hover {
+  transform: translateY(-1px);
+  border-color: #00d9ff;
+  box-shadow: 0 0 22px rgba(0, 217, 255, 0.28);
+}
+
+.hud-back-btn span {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* ==============================
+   AR FLOW TEXT + ALIGNMENT FIX
+============================== */
+
+.station-head {
+  align-items: center;
+  text-align: center;
+}
+
+.station-head > div:nth-child(2) {
+  flex: 1;
+  text-align: center;
+}
+
+.station-name {
+  text-align: center;
+}
+
+.station-sub,
+.station-sub-white {
+  color: #ffffff !important;
+  font-weight: 800;
+  text-align: center;
+}
+
+.status-line,
+.status-line-white {
+  color: #ffffff !important;
+  font-weight: 800;
+  text-align: center;
+  justify-content: center;
+}
+
+.station[data-step="SurfaceInspectionInputWIP"] .station-foot,
+.station[data-step="ARInWIP"] .station-foot {
+  text-align: center;
+}
+
+.station[data-step="SurfaceInspectionInputWIP"] .station-visual,
+.station[data-step="ARInWIP"] .station-visual {
+  justify-content: center;
+  align-items: center;
+}
+
+.station[data-step="SurfaceInspectionInputWIP"] .station-head,
+.station[data-step="ARInWIP"] .station-head {
+  display: grid;
+  grid-template-columns: 28px 1fr 16px;
+  align-items: center;
+}
+
+.station[data-step="SurfaceInspectionInputWIP"] .status-dot,
+.station[data-step="ARInWIP"] .status-dot {
+  margin: 0;
+  justify-self: end;
+}
+
+.station-name {
+  color: #ffffff !important;
+}
+
+.station-sub {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.status-line {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.metric-label {
+  color: rgba(170, 175, 190, 0.9) !important;
+}
+
+.metric-value {
+  color: var(--orange-bright) !important;
+}
+
+.hud-back-btn {
+  border-color: rgba(0, 217, 255, 0.42) !important;
+  color: #00d9ff !important;
+  background: linear-gradient(180deg, rgba(0, 217, 255, 0.14), rgba(5, 16, 28, 0.9)) !important;
+}
+
+/* Remove station subtitles under titles */
+.station-sub {
+  display: none !important;
+}
+
+/* Better centered station headers */
+.station-head {
+  display: grid !important;
+  grid-template-columns: 28px 1fr 16px;
+  align-items: center !important;
+  gap: 8px;
+}
+
+.station-head > div:nth-child(2) {
+  text-align: center;
+}
+
+.station-name {
+  text-align: center;
+  color: #ffffff !important;
+  font-size: 13px;
+  line-height: 1.15;
+  font-weight: 950;
+}
+
+/* Keep the bottom process status clean */
+.status-line {
+  color: #ffffff !important;
+  font-weight: 800;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Make Dashboard button cleaner */
+.hud-back-btn {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  border-radius: 13px;
+  border: 1px solid rgba(0, 217, 255, 0.42) !important;
+  background: linear-gradient(180deg, rgba(0, 217, 255, 0.14), rgba(5, 16, 28, 0.9)) !important;
+  color: #00d9ff !important;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: 0 0 18px rgba(0, 217, 255, 0.14);
+  transition: 0.25s ease;
+}
+
+.hud-back-btn:hover {
+  transform: translateY(-1px);
+  border-color: #00d9ff !important;
+  box-shadow: 0 0 22px rgba(0, 217, 255, 0.28);
+}
+
+.hud-back-btn span {
+  font-size: 15px;
+  line-height: 1;
+}

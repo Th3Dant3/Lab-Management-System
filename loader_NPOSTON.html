@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cinzel+Decorative:wght@400;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#000;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── ELDEN RING dark sky ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 100% 60% at 50% 0%,    rgba(180,130,20,.18) 0%,transparent 55%),
+    radial-gradient(ellipse 80%  80% at 50% 30%,   rgba(100,70,10,.12) 0%,transparent 65%),
+    radial-gradient(ellipse 60%  40% at 50% 100%,  rgba(30,15,5,.8) 0%,transparent 70%),
+    linear-gradient(180deg,#05030a 0%,#0a0604 40%,#080502 100%);
+  animation:bgp 6s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.9}50%{opacity:1}}
+
+/* ── ERDTREE GOLDEN LIGHT ── */
+.erdtree{
+  position:fixed;
+  top:-20%;left:50%;
+  transform:translateX(-50%);
+  width:340px;height:90vh;
+  background:radial-gradient(ellipse 35% 100% at 50% 0%,
+    rgba(255,210,60,.28) 0%,
+    rgba(220,170,30,.14) 20%,
+    rgba(180,120,10,.07) 45%,
+    transparent 70%);
+  pointer-events:none;z-index:1;
+  animation:erdPulse 4s ease-in-out infinite;
+}
+@keyframes erdPulse{0%,100%{opacity:.7;transform:translateX(-50%) scaleX(1)}50%{opacity:1;transform:translateX(-50%) scaleX(1.05)}}
+
+/* ── Erdtree trunk glows ── */
+.erd-trunk{
+  position:fixed;
+  top:0;left:50%;
+  transform:translateX(-50%);
+  width:12px;height:45vh;
+  background:linear-gradient(180deg,rgba(255,210,60,.4),rgba(200,150,20,.15),transparent);
+  pointer-events:none;z-index:1;
+  filter:blur(3px);
+  animation:erdPulse 4s ease-in-out infinite;
+}
+
+/* ── Erdtree branches emanating ── */
+.erd-branch{
+  position:fixed;
+  top:0;left:50%;
+  transform-origin:bottom center;
+  width:3px;
+  background:linear-gradient(180deg,rgba(255,210,60,.3),transparent);
+  pointer-events:none;z-index:1;
+  filter:blur(2px);
+  animation:branchGlow 4s ease-in-out infinite;
+}
+@keyframes branchGlow{0%,100%{opacity:.5}50%{opacity:.9}}
+
+/* ── RUNE particles drifting up ── */
+.rune{
+  position:fixed;
+  font-family:'Cinzel',serif;
+  color:rgba(255,200,50,.0);
+  pointer-events:none;z-index:2;
+  animation:runeDrift linear infinite;
+}
+@keyframes runeDrift{
+  0%{transform:translateY(0) scale(1);opacity:0;color:rgba(255,200,50,.0);}
+  15%{opacity:1;color:rgba(255,200,50,.55);}
+  85%{opacity:.3;color:rgba(255,180,30,.3);}
+  100%{transform:translateY(-120px) scale(.6);opacity:0;}
+}
+
+/* ── Fog wisps ── */
+.fog{
+  position:fixed;
+  border-radius:50%;
+  background:rgba(120,80,20,.08);
+  filter:blur(30px);
+  pointer-events:none;z-index:1;
+  animation:fogDrift ease-in-out infinite;
+}
+@keyframes fogDrift{0%,100%{transform:translateX(0) scale(1);opacity:.4}50%{transform:translateX(var(--fd)) scale(1.1);opacity:.7}}
+
+/* ── Golden dust particles ── */
+.dust{
+  position:fixed;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,200,50,.8),rgba(200,140,0,.3));
+  pointer-events:none;z-index:2;
+  animation:dustFloat linear infinite;
+}
+@keyframes dustFloat{
+  0%{transform:translate(0,0) scale(1);opacity:var(--op);}
+  100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0;}
+}
+
+/* ── GRACE site glow ── */
+.grace-light{
+  position:fixed;
+  bottom:60px;left:50%;
+  transform:translateX(-50%);
+  width:200px;height:200px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(255,200,50,.15),rgba(200,140,0,.06),transparent 65%);
+  pointer-events:none;z-index:2;
+  animation:graceGlow 3s ease-in-out infinite;
+}
+@keyframes graceGlow{0%,100%{transform:translateX(-50%) scale(1);opacity:.6}50%{transform:translateX(-50%) scale(1.2);opacity:1}}
+
+/* ── Grace beam upward ── */
+.grace-beam{
+  position:fixed;
+  bottom:0;left:50%;
+  transform:translateX(-50%);
+  width:6px;height:60vh;
+  background:linear-gradient(180deg,transparent,rgba(255,200,50,.25),rgba(255,210,60,.5));
+  filter:blur(3px);
+  pointer-events:none;z-index:2;
+  animation:beamPulse 3s ease-in-out infinite;
+}
+@keyframes beamPulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* ── Scan ── */
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,200,50,.08),transparent);animation:sc 8s linear infinite;pointer-events:none;z-index:3;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+/* ══ PAGE ══ */
+.page{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:5px;
+}
+
+/* ── ELDEN RING emblem ── */
+.er-emblem{
+  width:110px;height:110px;
+  border-radius:50%;
+  border:2px solid rgba(255,200,50,.5);
+  background:radial-gradient(circle at 40% 35%,rgba(140,100,10,.3),rgba(0,0,0,.95));
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  margin-bottom:8px;
+  animation:embIn .9s cubic-bezier(.17,.67,.3,1.3) both,embGlow 3s 1s ease-in-out infinite;
+}
+@keyframes embIn{from{opacity:0;transform:scale(.3)}to{opacity:1;transform:scale(1)}}
+@keyframes embGlow{
+  0%,100%{box-shadow:0 0 20px rgba(200,150,20,.4),inset 0 0 20px rgba(150,100,10,.1)}
+  50%{box-shadow:0 0 50px rgba(255,200,50,.8),0 0 100px rgba(200,140,0,.3),inset 0 0 30px rgba(200,140,10,.15)}
+}
+.er-ring1{position:absolute;inset:-10px;border-radius:50%;border:1px solid transparent;border-top-color:rgba(255,200,50,.7);border-right-color:rgba(255,200,50,.2);animation:ro 4s linear infinite;}
+.er-ring2{position:absolute;inset:-18px;border-radius:50%;border:1px solid transparent;border-bottom-color:rgba(200,150,20,.4);animation:ro2 7s linear infinite;}
+@keyframes ro{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes ro2{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
+
+/* ── TARNISHED text header ── */
+.tarnished-tag{
+  font-family:'Cinzel',serif;
+  font-size:10px;letter-spacing:5px;
+  color:rgba(255,200,50,.45);
+  text-transform:uppercase;
+  animation:fu .5s .5s ease both;
+  margin-bottom:2px;
+}
+
+.welcome-txt{
+  font-family:'Cinzel',serif;
+  font-size:12px;letter-spacing:6px;
+  color:rgba(255,255,255,.4);
+  text-transform:uppercase;
+  animation:fu .4s .6s ease both;
+}
+.fullname{
+  font-family:'Cinzel Decorative',serif;
+  font-size:52px;font-weight:700;
+  color:#f0dfa0;
+  letter-spacing:3px;line-height:1.1;
+  animation:nameIn .7s .7s ease both;
+  text-shadow:0 0 30px rgba(255,200,50,.5),0 0 60px rgba(200,140,0,.2),0 2px 0 rgba(0,0,0,1);
+  text-align:center;
+}
+@keyframes nameIn{from{opacity:0;letter-spacing:12px}to{opacity:1;letter-spacing:3px}}
+
+/* ── Divider with rune ornament ── */
+.rune-divider{
+  display:flex;align-items:center;gap:10px;
+  margin:6px 0;
+  animation:fu .4s .85s ease both;
+}
+.rd-line{width:70px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,200,50,.45));}
+.rd-line.r{background:linear-gradient(90deg,rgba(255,200,50,.45),transparent);}
+.rd-rune{font-family:'Cinzel',serif;font-size:14px;color:rgba(255,200,50,.6);}
+
+/* ── Role block ── */
+.role-block{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  animation:fu .4s .95s ease both;
+}
+.role-main{
+  font-family:'Cinzel',serif;
+  font-size:14px;letter-spacing:5px;
+  color:#d4a830;
+  text-transform:uppercase;font-weight:600;
+  text-shadow:0 0 10px rgba(200,140,0,.5);
+}
+.role-sub{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:3px;color:rgba(255,255,255,.45);text-transform:uppercase;}
+.role-co{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:3px;color:rgba(200,150,20,.4);text-transform:uppercase;}
+
+/* ── ELDEN RING quote ── */
+.er-quote{
+  font-family:'Cinzel',serif;
+  font-size:10px;letter-spacing:2px;
+  color:rgba(200,150,20,.4);
+  font-style:italic;
+  text-align:center;
+  margin-top:4px;
+  animation:fu .5s 1.05s ease both;
+  padding:0 20px;
+}
+
+/* ── Progress ── */
+.pbar-wrap{width:280px;margin-top:14px;animation:fu .4s 1.12s ease both;}
+.pbar-top{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:5px;}
+.pbar-track{width:100%;height:3px;background:rgba(200,150,20,.1);border:1px solid rgba(200,150,20,.3);overflow:hidden;}
+.pbar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#2a1a00,#c89520,#f0d060,#c89520);
+  background-size:300% 100%;
+  animation:pf 6s 1.2s ease forwards,pshift 4s 1.2s linear infinite;
+  position:relative;
+}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:12px;height:100%;background:rgba(255,230,80,.7);filter:blur(2px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+@keyframes pshift{0%{background-position:0%}100%{background-position:300%}}
+.sys-txt{font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:rgba(200,150,20,.45);text-transform:uppercase;margin-top:6px;text-align:center;animation:fu .4s 2.8s ease both;}
+
+@keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Corner */
+.corner{position:fixed;font-family:'Cinzel',serif;font-size:8px;color:rgba(200,150,20,.2);letter-spacing:2px;z-index:1;}
+.ctop{top:18px;left:20px;}.cbot{bottom:18px;right:20px;}
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="erdtree"></div>
+<div class="erd-trunk"></div>
+
+<!-- Erdtree branches -->
+<div class="erd-branch" style="height:35vh;transform:translateX(-50%) rotate(-25deg);animation-delay:.5s;opacity:.6;"></div>
+<div class="erd-branch" style="height:28vh;transform:translateX(-50%) rotate(-45deg);animation-delay:1s;opacity:.5;"></div>
+<div class="erd-branch" style="height:22vh;transform:translateX(-50%) rotate(25deg);animation-delay:.8s;opacity:.6;"></div>
+<div class="erd-branch" style="height:18vh;transform:translateX(-50%) rotate(50deg);animation-delay:1.3s;opacity:.5;"></div>
+<div class="erd-branch" style="height:30vh;transform:translateX(-50%) rotate(-65deg);animation-delay:.3s;opacity:.35;"></div>
+<div class="erd-branch" style="height:26vh;transform:translateX(-50%) rotate(70deg);animation-delay:1.6s;opacity:.35;"></div>
+
+<!-- Fog wisps -->
+<div class="fog" style="width:300px;height:120px;left:-10%;top:35%;--fd:20px;animation-duration:8s;animation-delay:0s;"></div>
+<div class="fog" style="width:250px;height:100px;right:-8%;top:45%;--fd:-18px;animation-duration:9s;animation-delay:2s;"></div>
+<div class="fog" style="width:200px;height:80px;left:20%;bottom:15%;--fd:15px;animation-duration:7s;animation-delay:1s;"></div>
+<div class="fog" style="width:280px;height:110px;right:15%;bottom:20%;--fd:-22px;animation-duration:10s;animation-delay:3s;"></div>
+
+<!-- Grace beam and light -->
+<div class="grace-beam"></div>
+<div class="grace-light"></div>
+
+<!-- Rune symbols drifting -->
+<div class="rune" style="font-size:16px;left:12%;bottom:30%;animation-duration:6s;animation-delay:0s;">ᛟ</div>
+<div class="rune" style="font-size:12px;left:24%;bottom:40%;animation-duration:7s;animation-delay:1s;">ᚱ</div>
+<div class="rune" style="font-size:18px;left:75%;bottom:32%;animation-duration:5.5s;animation-delay:.5s;">ᛏ</div>
+<div class="rune" style="font-size:14px;left:82%;bottom:44%;animation-duration:6.5s;animation-delay:1.8s;">ᚷ</div>
+<div class="rune" style="font-size:10px;left:8%;bottom:50%;animation-duration:8s;animation-delay:2.5s;">ᛞ</div>
+<div class="rune" style="font-size:12px;left:88%;bottom:28%;animation-duration:7s;animation-delay:.8s;">ᚹ</div>
+<div class="rune" style="font-size:14px;left:40%;bottom:20%;animation-duration:6s;animation-delay:3s;">ᛉ</div>
+<div class="rune" style="font-size:10px;left:60%;bottom:24%;animation-duration:7.5s;animation-delay:1.5s;">ᛋ</div>
+
+<!-- Gold dust particles -->
+<div class="dust" style="width:3px;height:3px;left:35%;top:55%;--dx:-40px;--dy:-120px;--op:.8;animation-duration:4s;animation-delay:0s;"></div>
+<div class="dust" style="width:2px;height:2px;left:50%;top:60%;--dx:30px;--dy:-100px;--op:.7;animation-duration:4.5s;animation-delay:.6s;"></div>
+<div class="dust" style="width:3px;height:3px;left:62%;top:52%;--dx:50px;--dy:-130px;--op:.8;animation-duration:3.8s;animation-delay:1.2s;"></div>
+<div class="dust" style="width:2px;height:2px;left:28%;top:58%;--dx:-35px;--dy:-90px;--op:.6;animation-duration:4.2s;animation-delay:1.8s;"></div>
+<div class="dust" style="width:4px;height:4px;left:70%;top:56%;--dx:60px;--dy:-110px;--op:.9;animation-duration:3.5s;animation-delay:.4s;"></div>
+<div class="dust" style="width:2px;height:2px;left:44%;top:48%;--dx:-25px;--dy:-140px;--op:.7;animation-duration:5s;animation-delay:2.4s;"></div>
+<div class="dust" style="width:3px;height:3px;left:55%;top:62%;--dx:20px;--dy:-95px;--op:.8;animation-duration:4.8s;animation-delay:.9s;"></div>
+<div class="dust" style="width:2px;height:2px;left:20%;top:64%;--dx:-45px;--dy:-85px;--op:.6;animation-duration:5.2s;animation-delay:3s;"></div>
+
+<div class="scan"></div>
+
+<div class="corner ctop">ZENNI LMS · PRODUCTION</div>
+<div class="corner cbot">SESSION ACTIVE</div>
+
+<div class="page">
+
+  <!-- Erdtree emblem -->
+  <div class="er-emblem">
+    <div class="er-ring1"></div>
+    <div class="er-ring2"></div>
+    <svg width="74" height="74" viewBox="0 0 74 74" fill="none">
+      <!-- Elden Ring logo style — broken ring with rune -->
+      <!-- Outer circle broken at top -->
+      <path d="M37 8 Q60 8 66 30 Q72 52 55 63 Q46 69 37 69 Q28 69 19 63 Q2 52 8 30 Q14 8 37 8Z"
+            fill="none" stroke="rgba(255,200,50,.5)" stroke-width="1.5"/>
+      <!-- Inner ring -->
+      <circle cx="37" cy="38" r="18" fill="none" stroke="rgba(255,200,50,.3)" stroke-width="1" stroke-dasharray="3 4"/>
+      <!-- Erdtree trunk line -->
+      <line x1="37" y1="56" x2="37" y2="20" stroke="rgba(255,200,50,.6)" stroke-width="2"/>
+      <!-- Erdtree branches -->
+      <path d="M37 28 Q26 22 20 16" stroke="rgba(255,200,50,.55)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <path d="M37 28 Q48 22 54 16" stroke="rgba(255,200,50,.55)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <path d="M37 34 Q28 29 22 24" stroke="rgba(255,200,50,.4)" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+      <path d="M37 34 Q46 29 52 24" stroke="rgba(255,200,50,.4)" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+      <path d="M37 40 Q30 36 25 31" stroke="rgba(255,200,50,.3)" stroke-width="1" stroke-linecap="round" fill="none"/>
+      <path d="M37 40 Q44 36 49 31" stroke="rgba(255,200,50,.3)" stroke-width="1" stroke-linecap="round" fill="none"/>
+      <!-- Root lines bottom -->
+      <path d="M37 56 Q30 60 24 58" stroke="rgba(255,200,50,.3)" stroke-width="1" stroke-linecap="round" fill="none"/>
+      <path d="M37 56 Q44 60 50 58" stroke="rgba(255,200,50,.3)" stroke-width="1" stroke-linecap="round" fill="none"/>
+      <!-- Golden center glow -->
+      <circle cx="37" cy="37" r="5" fill="rgba(255,200,50,.3)" stroke="rgba(255,200,50,.7)" stroke-width="1"/>
+      <circle cx="37" cy="37" r="2" fill="rgba(255,210,60,.8)"/>
+    </svg>
+  </div>
+
+  <div class="tarnished-tag">✦ The Tarnished ✦</div>
+  <div class="welcome-txt">Welcome</div>
+  <div class="fullname" id="displayName">Nash Poston</div>
+
+  <div class="rune-divider">
+    <div class="rd-line"></div>
+    <div class="rd-rune">ᛟ</div>
+    <div class="rd-line r"></div>
+  </div>
+
+  <div class="role-block">
+    <div class="role-main" id="displayRole">Supervisor · Production</div>
+    <div class="role-sub">Zenni USA Ohio</div>
+    <div class="role-co">Surface & AR/div>
+  </div>
+
+  
+
+  <div class="pbar-wrap">
+    <div class="pbar-top"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+  </div>
+  <div class="sys-txt" id="sysTxt">Preparing the Lands Between...</div>
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Nash Poston";
+  const r=sessionStorage.getItem("lms_role")||"Supervisor";
+  const s=sessionStorage.getItem("lms_subrole")||"Production";
+  document.getElementById("displayName").textContent=n;
+  document.getElementById("displayRole").textContent=r+" · "+s;
+
+  const msgs=[
+    "Preparing the Lands Between...",
+    "Runes collecting...",
+    "Grace lighting the way...",
+    "Almost at the Erdtree...",
+    "You may proceed, Tarnished..."
+  ];
+  let p=0;const pEl=document.getElementById("pct");const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);pEl.textContent=p+"%";
+    if(p<20)sysEl.textContent=msgs[0];else if(p<40)sysEl.textContent=msgs[1];
+    else if(p<60)sysEl.textContent=msgs[2];else if(p<80)sysEl.textContent=msgs[3];
+    else sysEl.textContent=msgs[4];
+    if(p>=99)clearInterval(iv);
+  },100);
+  const MIN_TIME=6000;const startTime=Date.now();
+  const preload=document.createElement("link");preload.rel="prefetch";preload.href="index.html";document.head.appendChild(preload);
+  function go(){const e=Date.now()-startTime;const r=Math.max(0,MIN_TIME-e);setTimeout(()=>{p=100;pEl.textContent="100%";clearInterval(iv);setTimeout(()=>{window.location.replace("index.html");},400);},r);}
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>go()).catch(()=>go());
+  setTimeout(()=>{window.location.replace("index.html");},10000);
+</script>
+</body>
+</html>

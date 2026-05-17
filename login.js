@@ -2,8 +2,7 @@ const AUTH_API =
   "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
 
 /**************************************************
- * LOADER MAP — users with a personal loader go there first
- * Anyone not listed falls back to index.html
+ * LOADER MAP — routes each user to their screen
  **************************************************/
 const LOADER_MAP = {
   "BLOPEZ":        "loader_BLOPEZ.html",
@@ -13,9 +12,10 @@ const LOADER_MAP = {
   "RTATE":         "loader_RTATE.html",
   "AIVANOVSKI":    "loader_AIVANOVSKI.html",
   "SANDERSON":     "loader_SANDERSON.html",
-   "BDADE":         "loader_BDADE.html",
-   "BBLAKE":        "loader_BBLAKE.html",
-   "KMANACK": "loader_KMANACK.html"
+  "BHONICKER":     "loader_BHONICKER.html",
+  "BDADE":         "loader_BDADE.html",
+  "BBLAKE":        "loader_BBLAKE.html",
+  "NPOSTON":       "loader_NPOSTON.html"
 };
 document.addEventListener("DOMContentLoaded", () => {
   const userEl     = document.getElementById("username");
