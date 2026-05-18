@@ -3495,3 +3495,10 @@ body::before {
     display: none;
   }
 }
+
+#surfaceInspectionValue {
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  font-family: var(--font-display) !important;
+  line-height: 1 !important;
+}

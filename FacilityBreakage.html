@@ -230,44 +230,10 @@
         <div class="kpi-grid" id="labKpis"></div>
       </div>
 
-      <!-- ── PRODUCTION FLOW COMMAND CENTER ── -->
-      <div class="fcc-wrap">
-
-        <!-- LEFT: hero text + dept filter buttons -->
-        <div class="fcc-hero glass-panel">
-          <div class="fcc-hero-inner">
-            <div class="fcc-hero-eyebrow">PRODUCTION FLOW COMMAND CENTER</div>
-            <div class="fcc-hero-sub">Track how jobs move through Surface, AR, and Finish. Click a department card to drill in.</div>
-            <div class="fcc-hero-actions">
-              <div class="fcc-wip-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                UNDER CONSTRUCTION
-              </div>
-              <div class="fcc-wip-sub">Production Flow is being built — check back soon</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- RIGHT: breakage rate ring -->
-        <div class="fcc-ring-panel glass-panel">
-          <div class="fcc-ring-wrap">
-            <div class="fcc-ring" id="fccRing">
-              <div class="fcc-ring-center">
-                <span class="fcc-ring-val" id="fccRingVal">0.00%</span>
-                <span class="fcc-ring-label">Lab Breakage</span>
-              </div>
-            </div>
-          </div>
-          <div class="fcc-ring-stats" id="fccRingStats"></div>
-        </div>
-
-      </div>
-
       <!-- dept flow cards + connector lines -->
       <div class="fcc-flow-wrap glass-panel">
         <div class="fcc-flow-header">
-          <div class="fcc-flow-title">Animated Department Flow Map</div>
-          <div class="fcc-flow-route">Inventory → Surface → AR → Finish</div>
+          <div class="fcc-flow-title">Live Dashboard Map</div>          
         </div>
 
         <div class="fcc-flow-body">
@@ -279,17 +245,32 @@
           </div>
 
           <!-- card grid populated by JS -->
-          <div class="fcc-cards" id="fccCards"></div>
+          <div class="fcc-cards" id="fccDashboardCards"></div>
         </div>
-
       </div>
+
+      <div class="fcc-flow-wrap glass-panel">
+  <div class="fcc-flow-header">
+    <div class="fcc-flow-title">Breakage Department Map</div>    
+  </div>
+
+  <div class="fcc-flow-body">
+    <div class="fcc-connectors">
+      <div class="fcc-conn fcc-conn-1"></div>
+      <div class="fcc-conn fcc-conn-2"></div>
+      <div class="fcc-conn fcc-conn-3"></div>
+    </div>
+
+    <div class="fcc-cards" id="fccBreakageCards"></div>
+  </div>
+</div>
 
       <!-- Goal Bars -->
       <div class="section-block">
         <div class="goal-bar-wrap">
           <div class="goal-bar-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            GOAL TRACKING — WHITE MARKER = GOAL THRESHOLD
+            
           </div>
           <div id="goalBars"></div>
         </div>
@@ -362,10 +343,7 @@
         <div id="sumWeekDetail"></div>
       </div>
 
-    </section>
-
-
-    
+    </section>   
 
     
 

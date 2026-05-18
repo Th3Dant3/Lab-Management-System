@@ -65,15 +65,8 @@
     </div>
   </div>
 
-
-  <!-- =====================================================
-       APP LAYOUT
-  ====================================================== -->
   <div class="app">
 
-    <!-- =====================================================
-         SIDEBAR
-    ====================================================== -->
     <aside class="sidebar">
 
       <div class="brand">
@@ -186,22 +179,8 @@
 
     </aside>
 
-
-    <!-- =====================================================
-         MAIN CONTENT
-    ====================================================== -->
     <main class="main">
 
-      <!-- Back Button -->
-      <a class="surface-back-btn" href="index.html">
-        <span class="surface-back-icon">←</span>
-        <span>Back to Dashboard</span>
-      </a>
-
-
-      <!-- =====================================================
-           HEADER
-      ====================================================== -->
       <header class="page-header">
 
         <div>
@@ -226,17 +205,27 @@
           </div>
         </div>
 
-        <div class="clock-card">
-          <div id="clockTime">--:--:--</div>
-          <span id="clockDate">---</span>
+        <div class="surface-header-right">
+          <div class="surface-header-actions">
+            <a href="index.html" class="surface-action-btn dashboard-btn" aria-label="Back to dashboard">
+              <span>←</span>
+              <strong>Back to Dashboard</strong>
+            </a>
+
+            <a href="FacilityBreakage.html" class="surface-action-btn breakage-btn" aria-label="Open Facility Breakage">
+              <span>⚠</span>
+              <strong>Facility Breakage</strong>
+            </a>
+          </div>
+
+          <div class="clock-card">
+            <div id="clockTime">--:--:--</div>
+            <span id="clockDate">---</span>
+          </div>
         </div>
 
       </header>
 
-
-      <!-- =====================================================
-           KPI CARDS
-      ====================================================== -->
       <section class="kpi-grid">
 
         <article class="kpi-card">
@@ -265,16 +254,8 @@
 
       </section>
 
-
-      <!-- =====================================================
-           OVERVIEW TAB
-      ====================================================== -->
       <section id="tab-overview" class="tab-panel active">
 
-        <!-- =====================================================
-             SURFACE LIVE FLOW OPTION 3 — SINGLE VIEW
-             Old duplicate station-card wall removed.
-        ====================================================== -->
         <section class="transfer-shell surface-live-flow-v3-host">
           <div class="transfer-shell__header">
             <div>
@@ -299,10 +280,6 @@
 
       </section>
 
-
-      <!-- =====================================================
-           LIVE FLOW TAB
-      ====================================================== -->
       <section id="tab-transfer" class="tab-panel">
 
         <header class="page-header page-header--slim">
@@ -337,10 +314,6 @@
 
       </section>
 
-
-      <!-- =====================================================
-           FLOW DETAIL TAB
-      ====================================================== -->
       <section id="tab-detail" class="tab-panel">
 
         <header class="page-header page-header--slim">
@@ -356,10 +329,6 @@
 
       </section>
 
-
-      <!-- =====================================================
-           LINES TAB
-      ====================================================== -->
       <section id="tab-lines" class="tab-panel">
 
         <header class="page-header page-header--slim">
@@ -375,10 +344,6 @@
 
       </section>
 
-
-      <!-- =====================================================
-           ALERTS TAB
-      ====================================================== -->
       <section id="tab-alerts" class="tab-panel">
 
         <header class="page-header page-header--slim">
@@ -394,10 +359,6 @@
 
       </section>
 
-
-      <!-- =====================================================
-           ANALYTICS TAB
-      ====================================================== -->
       <section id="tab-analytics" class="tab-panel">
 
         <header class="page-header page-header--slim">
@@ -413,10 +374,6 @@
 
       </section>
 
-
-      <!-- =====================================================
-           SUMMARY TAB
-      ====================================================== -->
       <section id="tab-summary" class="tab-panel">
 
         <header class="page-header page-header--slim">
@@ -442,21 +399,10 @@
 
       </section>
 
-
-      <!-- Bottom Back Button -->
-      <a class="surface-back-btn surface-back-btn-bottom" href="index.html">
-        <span class="surface-back-icon">←</span>
-        <span>Back to Dashboard</span>
-      </a>
-
     </main>
 
   </div>
 
-
-  <!-- =====================================================
-       PAGE JS
-  ====================================================== -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="SurfaceWIP.js?v=20260506-v3-clean-blue"></script>
 

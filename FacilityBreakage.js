@@ -10,6 +10,8 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec';
 const INCOMING_API_URL = "https://script.google.com/macros/s/AKfycbyI2YqO9wXZ4-v34OXqqxD-yCYe3Dnly1-d_cf9mYtkcVkZoXeWhgQ8u6WbgY-lvIQQjg/exec";
 const FINISH_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Finish";
+const SURFACE_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Surface";
+const AR_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=productionFlow&area=AR&debug=true";
 
 
 const GOALS = {
@@ -334,7 +336,11 @@ function renderSummary(summary, meta, history) {
   }).join('');
 
   /* Animated flow map */
-  renderFlowMap(summary);
+  
+  renderDashboardMap(summary);
+    renderFlowMap(summary);
+
+  
 
   /* Top reasons panels */
   const deptKeys = ['AR', 'Finish', 'Surface', 'LMS', 'Inventory', 'Breakage'];
@@ -1272,162 +1278,313 @@ function toggleOperator(detailId, headerId) {
 
 // Filter state
 let _fccFilter = 'all';
+
 function fccFilter(type, btn) {
   _fccFilter = type;
-  document.querySelectorAll('.fcc-btn').forEach(b => b.classList.remove('active'));
+
+  document.querySelectorAll('.fcc-btn').forEach(b => {
+    b.classList.remove('active');
+  });
+
   if (btn) btn.classList.add('active');
+
   document.querySelectorAll('.fcc-dept-card').forEach(card => {
     const t = card.dataset.type || 'production';
-    card.style.display = (type === 'all' || t === type) ? '' : 'none';
+    card.style.display =
+      (type === 'all' || t === type) ? '' : 'none';
   });
 }
 
-function renderFlowMap(summary) {
-  if (!summary) return;
-
-  const deptMap = {};
-  (summary.departments || []).forEach(d => { deptMap[d.department] = d; });
-
-  const lt = summary.labTotal || {};
-  const orderCount = lt.orderCount || 0;
-  const labPct = (lt.labLensPct || 0) * 100;
-
-  const ringEl = document.getElementById('fccRing');
-  const ringVal = document.getElementById('fccRingVal');
-
-  if (ringEl && ringVal) {
-    const deg = Math.min((labPct / 10) * 360, 360);
-    const color = labPct <= 5 ? 'var(--green)' : labPct <= 7 ? 'var(--amber)' : 'var(--red)';
-    ringEl.style.background = `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
-    ringEl.style.boxShadow = `0 0 36px ${color}44`;
-    ringVal.textContent = labPct.toFixed(2) + '%';
-  }
-
-  const statsEl = document.getElementById('fccRingStats');
-  if (statsEl) {
-    statsEl.innerHTML = [
-      ['Lenses Broken', U.fmt(lt.labLensesBroken || 0)],
-      ['Frames Broken', U.fmt(lt.framesBroken || 0)],
-      ['Total Shipped', U.fmt(orderCount)],
-    ].map(([k, v]) => `
-      <div class="fcc-ring-stat"><span>${k}</span><strong>${v}</strong></div>
-    `).join('');
-  }
-
-  const depts = [
-    { key: 'Surface', label: 'Surface', color: '#fb923c', goal: 2.80, type: 'production' },
-    { key: 'AR', label: 'AR', color: '#a78bfa', goal: 0.50, type: 'production' },
-    { key: 'Finish', label: 'Finish', color: '#34d399', goal: null, type: 'production' },
-    { key: '_shipped', label: 'Mailroom', color: '#facc15', goal: null, type: 'production' },
-  ];
-
-  const cards = document.getElementById('fccCards');
+/* ── TOP MAP — DASHBOARD CARDS ──────────────────────────── */
+function renderDashboardMap(summary) {
+  const cards = document.getElementById('fccDashboardCards');
   if (!cards) return;
 
-  cards.innerHTML = depts.map(d => {
-    const isShipped = d.key === '_shipped';
-    const isFinish = d.key === 'Finish';
+  const finishWip = Number(window.FINISH_WIP_TOTAL || 0);
+  const shipped   = Number(summary?.labTotal?.orderCount || 0);
 
-    if (isFinish) {
-      const finishWip = Number(window.FINISH_WIP_TOTAL || 0);
+  cards.innerHTML = `
+  <div class="fcc-dept-card dashboard-card"
+     onclick="window.location.href='SurfaceWIP.html'"
+     data-type="dashboard"
+     data-key="Surface"
+     style="cursor:pointer">
 
-      return `
-        <div class="fcc-dept-card finish-live-card"
-             onclick="window.location.href='FinishDash.html'"
-             data-type="${d.type}" data-key="${d.key}"
-             style="cursor:pointer">
-          <div class="fcc-card-head">
-            <div class="fcc-card-name">Finish</div>
-            <div class="fcc-card-risk good">LIVE</div>
-          </div>
+  <div class="fcc-card-head">
+    <div class="fcc-card-name">Surface Dashboard</div>
+    <div class="fcc-card-risk good">LIVE</div>
+  </div>
 
-          <div class="fcc-metric-pct" id="finishFlowWipValue" style="color:${d.color}">
-            ${finishWip.toLocaleString()}
-          </div>
+  <div class="fcc-metric-pct" id="surfaceMainWipValue" style="color:#fb923c">
+    ${Number(window.SURFACE_MAIN_WIP || 0).toLocaleString()}
+  </div>
 
-          <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
-            Finish WIP
-          </div>
+  <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
+    Surface Main WIP
+  </div>
 
-          <div class="fcc-metric">
-            <span>Status</span>
-            <strong style="color:${d.color};font-size:9px">Live Dashboard</strong>
-          </div>
+  <div class="fcc-metric">
+    <span>Total SF Inspection OUT</span>
+    <strong id="surfaceInspectionValue" style="color:#fb923c;font-size:9px">
+      ${Number(window.SURFACE_INSPECTION_TOTAL || 0).toLocaleString()}
+    </strong>
+  </div>
 
-          <div class="fcc-metric">
-            <span>Open</span>
-            <strong style="color:${d.color};font-size:9px">Click Card →</strong>
-          </div>
+  <div class="fcc-mini-bar">
+    <div class="fcc-mini-fill"
+         style="background:#fb923c"
+         data-fill="80"></div>
+  </div>
+</div>
 
-          <div class="fcc-mini-bar">
-            <div class="fcc-mini-fill" style="background:${d.color}" data-fill="85"></div>
-          </div>
-        </div>`;
-    }
+   <div class="fcc-dept-card dashboard-card"
+     onclick="window.location.href='ARDash.html'"
+     data-type="dashboard"
+     data-key="AR"
+     style="cursor:pointer">
 
-    const dept = isShipped ? null : deptMap[d.key];
-    const broken = dept?.lensesBroken || 0;
-    const pct = dept ? (dept.lensBrkPct * 100) : 0;
-    const topR = dept?.topReason || '—';
+  <div class="fcc-card-head">
+    <div class="fcc-card-name">AR Dashboard</div>
+    <div class="fcc-card-risk good">LIVE</div>
+  </div>
 
-    const riskClass = isShipped ? 'shipped'
-      : !d.goal ? 'watch'
-      : pct <= d.goal ? 'good'
-      : pct <= d.goal * 1.8 ? 'watch'
-      : 'bad';
+  <div class="fcc-metric-pct" id="arTotalWipValue" style="color:#a78bfa">
+    ${Number(window.AR_TOTAL_WIP || 0).toLocaleString()}
+  </div>
 
-    const riskLabel = isShipped ? 'SHIPPED'
-      : riskClass === 'good' ? 'ON GOAL'
-      : riskClass === 'bad' ? 'CRITICAL'
-      : 'WATCH';
+  <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
+    Total AR WIP
+  </div>
 
-    const displayVal = isShipped ? orderCount.toLocaleString() : pct.toFixed(2) + '%';
-    const displaySub = isShipped ? 'orders shipped' : `${broken.toLocaleString()} broken`;
+  <div class="fcc-metric">
+    <span>AR-OUT Output</span>
+    <strong id="arOutOutputValue" style="color:#a78bfa;font-size:18px">
+      ${Number(window.AR_OUT_OUTPUT || 0).toLocaleString()}
+    </strong>
+  </div>
 
-    const fillW = isShipped ? 80
-      : d.goal ? Math.min((pct / (d.goal * 2.5)) * 100, 100)
-      : Math.min(pct * 5, 100);
+  <div class="fcc-mini-bar">
+    <div class="fcc-mini-fill"
+         style="background:#a78bfa"
+         data-fill="82"></div>
+  </div>
+</div>
 
-    const extraMetrics = isShipped ? '' : `
-      <div class="fcc-metric"><span>Breakage</span><strong>${broken.toLocaleString()}</strong></div>
-      <div class="fcc-metric"><span>Top Reason</span><strong style="color:${d.color};font-size:9px">${topR}</strong></div>`;
+    <div class="fcc-dept-card dashboard-card"
+         onclick="window.location.href='FinishDash.html'"
+         data-type="dashboard"
+         data-key="Finish"
+         style="cursor:pointer">
 
-    return `
-      <div class="fcc-dept-card fcc-dept-card--wip"
-           data-type="${d.type}" data-key="${d.key}">
-        <div class="fcc-wip-overlay">🚧</div>
-        <div class="fcc-card-head">
-          <div class="fcc-card-name">${d.label}</div>
-          <div class="fcc-card-risk ${riskClass}">${riskLabel}</div>
-        </div>
-        <div class="fcc-metric-pct" style="color:${d.color}">${displayVal}</div>
-        <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">${displaySub}</div>
-        ${extraMetrics}
-        <div class="fcc-mini-bar">
-          <div class="fcc-mini-fill" style="background:${d.color}" data-fill="${fillW}"></div>
-        </div>
-      </div>`;
-  }).join('');
+      <div class="fcc-card-head">
+        <div class="fcc-card-name">Finish Dashboard</div>
+        <div class="fcc-card-risk good">LIVE</div>
+      </div>
 
-  loadFinishWipForFlowMap();
+      <div class="fcc-metric-pct"
+           id="finishFlowWipValue"
+           style="color:#34d399">
+        ${finishWip.toLocaleString()}
+      </div>
+
+      <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
+        Finish WIP
+      </div>
+
+      <div class="fcc-mini-bar">
+        <div class="fcc-mini-fill"
+             style="background:#34d399"
+             data-fill="88"></div>
+      </div>
+    </div>
+
+    <div class="fcc-dept-card dashboard-card"
+         onclick="App.switchTab('mailroom')"
+         data-type="dashboard"
+         data-key="Mailroom"
+         style="cursor:pointer">
+
+      <div class="fcc-card-head">
+        <div class="fcc-card-name">Mailroom Dashboard</div>
+        <div class="fcc-card-risk shipped">SHIPPED</div>
+      </div>
+
+      <div class="fcc-metric-pct" style="color:#facc15">
+        ${shipped.toLocaleString()}
+      </div>
+
+      <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
+        Orders Shipped
+      </div>
+
+      <div class="fcc-mini-bar">
+        <div class="fcc-mini-fill"
+             style="background:#facc15"
+             data-fill="92"></div>
+      </div>
+    </div>
+  `;
 
   requestAnimationFrame(() => {
     cards.querySelectorAll('.fcc-mini-fill').forEach(el => {
       el.style.width = '0%';
-      setTimeout(() => { el.style.width = el.dataset.fill + '%'; }, 200);
+
+      setTimeout(() => {
+        el.style.width = el.dataset.fill + '%';
+      }, 200);
     });
   });
 
+  loadFinishWipForFlowMap();
+  loadSurfaceWipForFlowMap();
+  loadArWipForFlowMap();
+}
 
-  // Auto-select highest-risk production dept
+/* ── BOTTOM MAP — BREAKAGE CARDS ────────────────────────── */
+function renderFlowMap(summary) {
+  if (!summary) return;
+
+  const deptMap = {};
+  (summary.departments || []).forEach(d => {
+    deptMap[d.department] = d;
+  });
+
+  const lt = summary.labTotal || {};
+  const orderCount = lt.orderCount || 0;
+
+ const depts = [
+  {
+    key: 'Surface',
+    label: 'Surface',
+    color: '#fb923c',
+    goal: 2.80,
+    type: 'production'
+  },
+  {
+    key: 'AR',
+    label: 'AR',
+    color: '#a78bfa',
+    goal: 0.50,
+    type: 'production'
+  },
+  {
+    key: 'Finish',
+    label: 'Finish',
+    color: '#0feb9a',
+    goal: 1.70,
+    type: 'production'
+  }
+];
+
+  const cards = document.getElementById('fccBreakageCards');
+  if (!cards) return;
+
+  cards.innerHTML = depts.map(d => {
+
+    const isShipped = d.key === '_shipped';
+
+    const dept   = isShipped ? null : deptMap[d.key];
+    const broken = dept?.lensesBroken || 0;
+    const pct    = dept ? (dept.lensBrkPct * 100) : 0;
+    const topR   = dept?.topReason || '—';
+
+    const riskClass = isShipped
+      ? 'shipped'
+      : pct <= d.goal
+        ? 'good'
+        : pct <= d.goal * 1.8
+          ? 'watch'
+          : 'bad';
+
+    const riskLabel = isShipped
+      ? 'SHIPPED'
+      : riskClass === 'good'
+        ? 'ON GOAL'
+        : riskClass === 'bad'
+          ? 'CRITICAL'
+          : 'WATCH';
+
+    const displayVal = isShipped
+      ? orderCount.toLocaleString()
+      : pct.toFixed(2) + '%';
+
+    const displaySub = isShipped
+      ? 'orders shipped'
+      : `${broken.toLocaleString()} broken`;
+
+    const fillW = isShipped
+      ? 80
+      : Math.min((pct / (d.goal * 2.5)) * 100, 100);
+
+    const extraMetrics = isShipped ? '' : `
+      <div class="fcc-metric">
+        <span>Breakage</span>
+        <strong>${broken.toLocaleString()}</strong>
+      </div>
+
+      <div class="fcc-metric">
+        <span>Top Reason</span>
+        <strong style="color:${d.color};font-size:9px">
+          ${topR}
+        </strong>
+      </div>
+    `;
+
+    return `
+      <div class="fcc-dept-card"
+           data-type="${d.type}"
+           data-key="${d.key}">
+        
+
+        <div class="fcc-card-head">
+          <div class="fcc-card-name">${d.label}</div>
+          <div class="fcc-card-risk ${riskClass}">
+            ${riskLabel}
+          </div>
+        </div>
+
+        <div class="fcc-metric-pct"
+             style="color:${d.color}">
+          ${displayVal}
+        </div>
+
+        <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
+          ${displaySub}
+        </div>
+
+        ${extraMetrics}
+
+        <div class="fcc-mini-bar">
+          <div class="fcc-mini-fill"
+               style="background:${d.color}"
+               data-fill="${fillW}"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  requestAnimationFrame(() => {
+    cards.querySelectorAll('.fcc-mini-fill').forEach(el => {
+      el.style.width = '0%';
+
+      setTimeout(() => {
+        el.style.width = el.dataset.fill + '%';
+      }, 200);
+    });
+  });
+
   const topDept = ['AR','Finish','Surface'].reduce((top, k) => {
     const d = deptMap[k];
     if (!d) return top;
-    return (d.lensBrkPct || 0) > (deptMap[top]?.lensBrkPct || 0) ? k : top;
+
+    return (d.lensBrkPct || 0) >
+           (deptMap[top]?.lensBrkPct || 0)
+      ? k
+      : top;
   }, 'Surface');
+
   fccSelectDept(topDept, summary);
 
-  // Apply current filter
   fccFilter(_fccFilter, null);
 }
 
@@ -3512,5 +3669,138 @@ async function loadFinishWipForFlowMap() {
 
   } catch (err) {
     console.error("Finish WIP load failed:", err);
+  }
+}
+
+async function loadSurfaceWipForFlowMap() {
+  try {
+    const res = await fetch(SURFACE_DASH_API_URL, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const data = await res.json();
+
+    const summary = data.summary || {};
+
+    const rows =
+      data.productionFlow ||
+      data.surfaceFlow ||
+      data.surfaceCurrent ||
+      [];
+
+    const getRow = name =>
+      rows.find(r =>
+        String(r.FlowStep || r.flowStep || r.DisplayName || r.displayName || "")
+          .trim()
+          .toLowerCase() === name.toLowerCase()
+      ) || {};
+
+    const getWip = row =>
+      Number(
+        row.CurrentWIP ??
+        row.CurrentJobTotal ??
+        row.currentWip ??
+        row.wip ??
+        0
+      );
+
+    const totalWip =
+      Number(
+        summary.SurfaceTotalWIP ??
+        summary.TotalWIP ??
+        summary.totalWip ??
+        0
+      );
+
+    const sfScanWip = getWip(getRow("SF Scan & Verify"));
+
+    const surfaceMainWip =
+      Number(
+        summary.SurfaceMainWIP ??
+        summary.surfaceMainWip ??
+        Math.max(0, totalWip - sfScanWip)
+      );
+
+    const surfaceInspection =
+      Number(
+        summary.SurfaceOutputActivity ??
+        summary.OutputActivity ??
+        summary.outputActivity ??
+        getWip(getRow("Surface Inspection")) ??
+        0
+      );
+
+    window.SURFACE_MAIN_WIP = surfaceMainWip;
+    window.SURFACE_INSPECTION_TOTAL = surfaceInspection;
+
+    const mainEl = document.getElementById("surfaceMainWipValue");
+    if (mainEl) mainEl.textContent = surfaceMainWip.toLocaleString();
+
+    const inspEl = document.getElementById("surfaceInspectionValue");
+    if (inspEl) inspEl.textContent = surfaceInspection.toLocaleString();
+
+    console.log("Surface Map:", {
+      totalWip,
+      sfScanWip,
+      surfaceMainWip,
+      surfaceInspection,
+      rows
+    });
+
+  } catch (err) {
+    console.error("Surface WIP load failed:", err);
+  }
+}
+
+async function loadArWipForFlowMap() {
+  try {
+    const res = await fetch(AR_DASH_API_URL, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const data = await res.json();
+
+    const rows = Array.isArray(data.productionFlow)
+      ? data.productionFlow.filter(r => String(r.Area || "").trim().toUpperCase() === "AR")
+      : [];
+
+    const getRow = name =>
+      rows.find(r =>
+        String(r.FlowStep || r.DisplayName || "")
+          .trim()
+          .toUpperCase() === name.toUpperCase()
+      ) || {};
+
+    const getWip = row =>
+      Number(row.CurrentWIP ?? row.CurrentJobTotal ?? 0);
+
+    const getActivity = row =>
+      Number(row.ActivityToday ?? row.TotalScansToday ?? 0);
+
+    const arOutRow = rows.find(r =>
+      String(r.BridgeRole || "").trim().toUpperCase() === "AR_OUTPUT"
+    ) || getRow("AR-OUT");
+
+    const totalArWip =
+      Number(data.summary?.TotalWIP || 0) ||
+      rows
+        .filter(r => String(r.MetricMode || "").trim().toUpperCase() !== "OUTPUT_ONLY")
+        .reduce((sum, r) => sum + getWip(r), 0);
+
+    const arOutOutput = getActivity(arOutRow);
+
+    window.AR_TOTAL_WIP = totalArWip;
+    window.AR_OUT_OUTPUT = arOutOutput;
+
+    const arWipEl = document.getElementById("arTotalWipValue");
+    if (arWipEl) arWipEl.textContent = totalArWip.toLocaleString();
+
+    const arOutEl = document.getElementById("arOutOutputValue");
+    if (arOutEl) arOutEl.textContent = arOutOutput.toLocaleString();
+
+  } catch (err) {
+    console.error("AR WIP load failed:", err);
   }
 }

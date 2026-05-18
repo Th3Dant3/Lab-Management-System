@@ -3003,3 +3003,73 @@ body {
   font-size: 15px;
   line-height: 1;
 }
+
+.finish-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.finish-action-btn {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  border-radius: 14px;
+  text-decoration: none;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: 0.25s ease;
+}
+
+.finish-action-btn span {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.dashboard-btn {
+  color: var(--cyan);
+  border: 1px solid rgba(0, 217, 255, 0.48);
+  background:
+    linear-gradient(180deg, rgba(0, 217, 255, 0.14), rgba(2, 12, 24, 0.78));
+  box-shadow: 0 0 20px rgba(0, 217, 255, 0.16);
+}
+
+.breakage-btn {
+  color: var(--orange);
+  border: 1px solid rgba(255, 159, 26, 0.52);
+  background:
+    linear-gradient(180deg, rgba(255, 159, 26, 0.16), rgba(2, 12, 24, 0.78));
+  box-shadow: 0 0 20px rgba(255, 159, 26, 0.16);
+}
+
+.finish-action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.dashboard-btn:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 28px rgba(0, 217, 255, 0.32);
+}
+
+.breakage-btn:hover {
+  border-color: var(--orange);
+  box-shadow: 0 0 28px rgba(255, 159, 26, 0.32);
+}
+
+@media (max-width: 1300px) {
+  .finish-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .finish-action-btn {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 10px;
+  }
+}

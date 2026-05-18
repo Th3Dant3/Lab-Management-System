@@ -96,24 +96,33 @@
         <h1>AR Dashboard</h1>        
       </div>
 
-      <div class="header-right">
-        <div class="timestamp">
-          <span id="todayDate">--</span>
-          <span id="clockTime">--</span>
-          <span class="live" id="liveState">Live</span>
-        </div>
+     <div class="header-right">
+  <div class="timestamp">
+    <span id="todayDate">--</span>
+    <span id="clockTime">--</span>
+    <span class="live" id="liveState">Live</span>
+  </div>
 
-       <a href="index.html" class="hud-back-btn" aria-label="Back to dashboard">
-       <span>←</span>
-        Back to Dashboard
-       </a>
-        <button class="icon-btn" id="refreshBtn" title="Refresh data">⟳</button>
+  <div class="header-actions">
+    <a href="index.html" class="top-action-btn back-btn">
+      <span class="btn-icon">←</span>
+      <span>Back to Dashboard</span>
+    </a>
 
-        <div class="avatar">
-          <span>AR</span>
-          ▾
-        </div>
-      </div>
+    <a href="FacilityBreakage.html" class="top-action-btn facility-btn">
+      <span class="btn-icon">⚠</span>
+      <span>Facility Breakage</span>
+    </a>
+  </div>
+
+  <button class="icon-btn" id="refreshBtn" title="Refresh data">⟳</button>
+
+  <div class="avatar">
+    <span>AR</span>
+    ▾
+  </div>
+</div>
+
     </header>
 
     <section class="status-strip clean-status" id="statusStrip">
