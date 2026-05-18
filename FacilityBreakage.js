@@ -8,6 +8,9 @@
 
 /* ── CONFIG ─────────────────────────────────────────────── */
 const API_URL = 'https://script.google.com/macros/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec';
+const INCOMING_API_URL = "https://script.google.com/macros/s/AKfycbyI2YqO9wXZ4-v34OXqqxD-yCYe3Dnly1-d_cf9mYtkcVkZoXeWhgQ8u6WbgY-lvIQQjg/exec";
+const FINISH_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Finish";
+
 
 const GOALS = {
   'Lab Total':      5.00,
@@ -882,8 +885,10 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
       };
 
       // Toggle state per tab
-      if (!window._opFilter) window._opFilter = {};
-      if (!window._opFilter[tabId]) window._opFilter[tabId] = 'operator';
+    // Toggle state per tab
+// Default view should start by Reason first for every department tab.
+if (!window._opFilter) window._opFilter = {};
+if (!window._opFilter[tabId]) window._opFilter[tabId] = 'reason';
 
       const renderToggle = () => {
         const mode = window._opFilter[tabId];
@@ -912,12 +917,25 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
   }
 }
 
+
 /* ── MAILROOM ───────────────────────────────────────────── */
 function renderMailroom(meta) {
   const orders = meta.orderCount || 0;
 
-  document.getElementById('mailCount').textContent = U.fmt(orders);
-  document.getElementById('mailSub').textContent   = `Report Date: ${meta.reportDate || '—'}  ·  Last Refresh: ${meta.lastRefresh || '—'}`;
+  animateMailNumber("mailCount", orders);
+
+  const mailSub = document.getElementById("mailSub");
+  if (mailSub) {
+    mailSub.textContent =
+      `Report Date: ${meta.reportDate || "—"}  ·  Last Refresh: ${meta.lastRefresh || "—"}`;
+  }
+
+  const live = document.getElementById("mailLiveUpdated");
+  if (live) {
+    live.textContent = `Last Updated: ${meta.lastRefresh || "—"}`;
+  }
+
+  loadMailroomIncoming();
 }
 
 /* ── HISTORY ────────────────────────────────────────────── */
@@ -1269,42 +1287,38 @@ function renderFlowMap(summary) {
 
   const deptMap = {};
   (summary.departments || []).forEach(d => { deptMap[d.department] = d; });
-  const lt = summary.labTotal || {};
-  const lensCount  = lt.lensCount  || 1;
-  const orderCount = lt.orderCount || 0;
-  const labPct     = (lt.labLensPct || 0) * 100;
 
-  // ── Breakage ring ──
+  const lt = summary.labTotal || {};
+  const orderCount = lt.orderCount || 0;
+  const labPct = (lt.labLensPct || 0) * 100;
+
   const ringEl = document.getElementById('fccRing');
   const ringVal = document.getElementById('fccRingVal');
+
   if (ringEl && ringVal) {
-    const deg   = Math.min((labPct / 10) * 360, 360); // max at 10%
+    const deg = Math.min((labPct / 10) * 360, 360);
     const color = labPct <= 5 ? 'var(--green)' : labPct <= 7 ? 'var(--amber)' : 'var(--red)';
     ringEl.style.background = `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.07) ${deg}deg)`;
-    ringEl.style.boxShadow  = `0 0 36px ${color}44`;
+    ringEl.style.boxShadow = `0 0 36px ${color}44`;
     ringVal.textContent = labPct.toFixed(2) + '%';
   }
 
-  // Ring stats
   const statsEl = document.getElementById('fccRingStats');
   if (statsEl) {
-    const brk = lt.labLensesBroken || 0;
-    const frm = lt.framesBroken    || 0;
     statsEl.innerHTML = [
-      ['Lenses Broken', U.fmt(brk)],
-      ['Frames Broken', U.fmt(frm)],
+      ['Lenses Broken', U.fmt(lt.labLensesBroken || 0)],
+      ['Frames Broken', U.fmt(lt.framesBroken || 0)],
       ['Total Shipped', U.fmt(orderCount)],
-    ].map(([k,v]) => `
+    ].map(([k, v]) => `
       <div class="fcc-ring-stat"><span>${k}</span><strong>${v}</strong></div>
     `).join('');
   }
 
-  // ── Dept cards ──
   const depts = [
-    { key: 'Surface',   label: 'Surface',   color: '#fb923c', goal: 2.80,  type: 'production' },
-    { key: 'AR',        label: 'AR',        color: '#a78bfa', goal: 0.50,  type: 'production' },
-    { key: 'Finish',    label: 'Finish',    color: '#34d399', goal: 1.70,  type: 'production' },
-    { key: '_shipped',  label: 'Mailroom',  color: '#facc15', goal: null,  type: 'production' },
+    { key: 'Surface', label: 'Surface', color: '#fb923c', goal: 2.80, type: 'production' },
+    { key: 'AR', label: 'AR', color: '#a78bfa', goal: 0.50, type: 'production' },
+    { key: 'Finish', label: 'Finish', color: '#34d399', goal: null, type: 'production' },
+    { key: '_shipped', label: 'Mailroom', color: '#facc15', goal: null, type: 'production' },
   ];
 
   const cards = document.getElementById('fccCards');
@@ -1312,32 +1326,74 @@ function renderFlowMap(summary) {
 
   cards.innerHTML = depts.map(d => {
     const isShipped = d.key === '_shipped';
-    const dept   = isShipped ? null : deptMap[d.key];
+    const isFinish = d.key === 'Finish';
+
+    if (isFinish) {
+      const finishWip = Number(window.FINISH_WIP_TOTAL || 0);
+
+      return `
+        <div class="fcc-dept-card finish-live-card"
+             onclick="window.location.href='FinishDash.html'"
+             data-type="${d.type}" data-key="${d.key}"
+             style="cursor:pointer">
+          <div class="fcc-card-head">
+            <div class="fcc-card-name">Finish</div>
+            <div class="fcc-card-risk good">LIVE</div>
+          </div>
+
+          <div class="fcc-metric-pct" id="finishFlowWipValue" style="color:${d.color}">
+            ${finishWip.toLocaleString()}
+          </div>
+
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
+            Finish WIP
+          </div>
+
+          <div class="fcc-metric">
+            <span>Status</span>
+            <strong style="color:${d.color};font-size:9px">Live Dashboard</strong>
+          </div>
+
+          <div class="fcc-metric">
+            <span>Open</span>
+            <strong style="color:${d.color};font-size:9px">Click Card →</strong>
+          </div>
+
+          <div class="fcc-mini-bar">
+            <div class="fcc-mini-fill" style="background:${d.color}" data-fill="85"></div>
+          </div>
+        </div>`;
+    }
+
+    const dept = isShipped ? null : deptMap[d.key];
     const broken = dept?.lensesBroken || 0;
-    const pct    = dept ? (dept.lensBrkPct * 100) : 0;
-    const topR   = dept?.topReason || '—';
+    const pct = dept ? (dept.lensBrkPct * 100) : 0;
+    const topR = dept?.topReason || '—';
 
     const riskClass = isShipped ? 'shipped'
       : !d.goal ? 'watch'
       : pct <= d.goal ? 'good'
       : pct <= d.goal * 1.8 ? 'watch'
       : 'bad';
+
     const riskLabel = isShipped ? 'SHIPPED'
       : riskClass === 'good' ? 'ON GOAL'
-      : riskClass === 'bad'  ? 'CRITICAL'
+      : riskClass === 'bad' ? 'CRITICAL'
       : 'WATCH';
 
-    const displayVal   = isShipped ? orderCount.toLocaleString() : pct.toFixed(2) + '%';
-    const displaySub   = isShipped ? 'orders shipped' : `${broken.toLocaleString()} broken`;
-    const fillW        = isShipped ? 80
-      : d.goal ? Math.min((pct / (d.goal * 2.5)) * 100, 100) : Math.min(pct * 5, 100);
+    const displayVal = isShipped ? orderCount.toLocaleString() : pct.toFixed(2) + '%';
+    const displaySub = isShipped ? 'orders shipped' : `${broken.toLocaleString()} broken`;
+
+    const fillW = isShipped ? 80
+      : d.goal ? Math.min((pct / (d.goal * 2.5)) * 100, 100)
+      : Math.min(pct * 5, 100);
 
     const extraMetrics = isShipped ? '' : `
       <div class="fcc-metric"><span>Breakage</span><strong>${broken.toLocaleString()}</strong></div>
       <div class="fcc-metric"><span>Top Reason</span><strong style="color:${d.color};font-size:9px">${topR}</strong></div>`;
 
     return `
-      <div class="fcc-dept-card fcc-dept-card--wip ${d.type === 'support' ? 'support' : ''}"
+      <div class="fcc-dept-card fcc-dept-card--wip"
            data-type="${d.type}" data-key="${d.key}">
         <div class="fcc-wip-overlay">🚧</div>
         <div class="fcc-card-head">
@@ -1353,13 +1409,15 @@ function renderFlowMap(summary) {
       </div>`;
   }).join('');
 
-  // Animate fills
+  loadFinishWipForFlowMap();
+
   requestAnimationFrame(() => {
     cards.querySelectorAll('.fcc-mini-fill').forEach(el => {
       el.style.width = '0%';
       setTimeout(() => { el.style.width = el.dataset.fill + '%'; }, 200);
     });
   });
+
 
   // Auto-select highest-risk production dept
   const topDept = ['AR','Finish','Surface'].reduce((top, k) => {
@@ -3324,3 +3382,135 @@ document.addEventListener('click', (e) => {
     _closeSummarySubmenu();
   }
 });
+
+function getTodayIncomingDate_() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+async function loadMailroomIncoming() {
+  const countEl = document.getElementById("mailIncomingCount");
+  const subEl   = document.getElementById("mailIncomingSub");
+  if (!countEl) return;
+
+  try {
+    countEl.textContent = "…";
+    if (subEl) subEl.textContent = "Reading live incoming queue…";
+
+    const today = getTodayIncomingDate_();
+    const res = await fetch(`${INCOMING_API_URL}?date=${encodeURIComponent(today)}&t=${Date.now()}`);
+    const json = await res.json();
+
+    if (!json.success) throw new Error(json.error || "Incoming API failed");
+
+    const totalIncoming = Number(json.total || 0);
+
+    animateMailNumber("mailIncomingCount", totalIncoming);
+
+    if (subEl) {
+      subEl.textContent = "Live Total Jobs from Incoming Dashboard";
+    }
+
+  } catch (err) {
+    console.error("Mailroom incoming failed:", err);
+    countEl.textContent = "—";
+    if (subEl) subEl.textContent = "Incoming Total Jobs failed";
+  }
+}
+
+async function loadMailroomIncoming() {
+  const countEl = document.getElementById("mailIncomingCount");
+  const subEl   = document.getElementById("mailIncomingSub");
+  if (!countEl) return;
+
+  try {
+    countEl.textContent = "…";
+    if (subEl) subEl.textContent = "Reading Incoming Total Jobs…";
+
+    const today = getTodayIncomingDate_();
+    const res = await fetch(`${INCOMING_API_URL}?date=${encodeURIComponent(today)}&t=${Date.now()}`);
+    const json = await res.json();
+
+    if (!json.success) throw new Error(json.error || "Incoming API failed");
+
+    const totalIncoming = Number(json.total || 0);
+
+    countEl.textContent = totalIncoming ? U.fmt(totalIncoming) : "—";
+    if (subEl) subEl.textContent = "Live Total Jobs from Incoming Dashboard";
+
+  } catch (err) {
+    console.error("Mailroom incoming failed:", err);
+    countEl.textContent = "—";
+    if (subEl) subEl.textContent = "Incoming Total Jobs failed";
+  }
+}
+
+
+function animateMailNumber(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const finalValue = Number(value || 0);
+  const startValue = Number((el.textContent || "0").replace(/,/g, "")) || 0;
+  const duration = 700;
+  const startTime = performance.now();
+
+  function frame(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(startValue + (finalValue - startValue) * eased);
+
+    el.textContent = current.toLocaleString();
+
+    if (progress < 1) requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+}
+
+async function loadFinishWipForFlowMap() {
+  try {
+    const res = await fetch(FINISH_DASH_API_URL, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const data = await res.json();
+
+    const stations =
+      data.finishDashboard?.allStations ||
+      data.productionFlow ||
+      data.finishFlow ||
+      data.areaSummary ||
+      data.stations ||
+      [];
+
+    const get = name =>
+      stations.find(s =>
+        s.flowStep === name ||
+        s.displayName === name ||
+        s.station === name ||
+        s.Station === name
+      ) || {};
+
+    const finishWip =
+      Number(get("Finish Unbox").currentWip || get("Finish Unbox").wip || 0) +
+      Number(get("AR-OUT").currentWip || get("AR-OUT").wip || 0) +
+      Number(get("MEI Line B").currentWip || get("MEI Line B").wip || 0) +
+      Number(get("MEI Line C").currentWip || get("MEI Line C").wip || 0) +
+      Number(get("MEI Easy Fit").currentWip || get("MEI Easy Fit").wip || 0) +
+      Number(get("Mounting").currentWip || get("Mounting").wip || 0) +
+      Number(get("Drill").currentWip || get("Drill").wip || 0) +
+      Number(get("Bigs").currentWip || get("Bigs").wip || 0) +
+      Number(get("Sharps").currentWip || get("Sharps").wip || 0) +
+      Number(get("Final Inspection").currentWip || get("Final Inspection").wip || 0);
+
+    window.FINISH_WIP_TOTAL = finishWip;
+
+    const el = document.getElementById("finishFlowWipValue");
+    if (el) el.textContent = finishWip.toLocaleString();
+
+  } catch (err) {
+    console.error("Finish WIP load failed:", err);
+  }
+}

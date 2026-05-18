@@ -421,7 +421,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Reason / Operator</div></div>
         <div class="panel-body" id="arOperators"></div>
       </div>
     </section>
@@ -444,7 +444,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Reason / Operator</div></div>
         <div class="panel-body" id="finOperators"></div>
       </div>
     </section>
@@ -467,7 +467,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Reason / Operator</div></div>
         <div class="panel-body" id="srfOperators"></div>
       </div>
     </section>
@@ -490,7 +490,7 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Reason / Operator</div></div>
         <div class="panel-body" id="lmsOperators"></div>
       </div>
     </section>
@@ -507,7 +507,7 @@
         <div class="panel-body" id="invReasonsTable"></div>
       </div>
       <div class="panel" style="margin-top:18px">
-        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Reason / Operator</div></div>
         <div class="panel-body" id="invOperators"></div>
       </div>
     </section>
@@ -524,19 +524,102 @@
         <div class="panel-body" id="brkReasonsTable"></div>
       </div>
       <div class="panel" style="margin-top:18px">
-        <div class="panel-header"><div class="panel-title">Breakage by Operator</div></div>
+        <div class="panel-header"><div class="panel-title">Breakage by Reason / Operator</div></div>
         <div class="panel-body" id="brkOperators"></div>
       </div>
     </section>
 
     <!-- ══════════════ MAILROOM TAB ══════════════ -->
-    <section class="tab-panel" id="tab-mailroom">
-      <div class="mail-hero">
-        <div class="mail-label">Total Orders Shipped Today</div>
-        <div class="mail-count" id="mailCount">—</div>
-        <div class="mail-sub" id="mailSub">—</div>
+
+<section class="tab-panel" id="tab-mailroom">
+  <div class="mailroom-stage">
+
+    <div class="mailroom-top">
+      <div class="mailroom-title-wrap">
+        <div class="mailroom-icon">
+          <svg viewBox="0 0 64 64" fill="none">
+            <path d="M14 22h36v26H14z" stroke="currentColor" stroke-width="3" rx="4"/>
+            <path d="M14 24l18 13 18-13" stroke="currentColor" stroke-width="3"/>
+            <path d="M43 43l5 5 9-12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="mailroom-title">MAILROOM</div>
+          <div class="mailroom-subtitle">Shipping vs Incoming Overview</div>
+        </div>
       </div>
-    </section>
+
+      <div class="mailroom-live-card">
+        <div class="mailroom-live-main"><span></span> Live Feed</div>
+        <div class="mailroom-live-sub" id="mailLiveUpdated">Last Updated: —</div>
+      </div>
+    </div>
+
+    <div class="mail-big-card mail-big-card--shipped">
+      <div class="mail-card-motion"></div>
+      <div class="mail-card-grid"></div>
+
+      <div class="mail-visual">
+        <div class="mail-hex">
+          <svg viewBox="0 0 90 90" fill="none">
+            <path d="M45 5 80 25v40L45 85 10 65V25L45 5Z" stroke="currentColor" stroke-width="4"/>
+            <path d="M29 38h32v24H29z" stroke="currentColor" stroke-width="3"/>
+            <path d="M29 39l16 10 16-10" stroke="currentColor" stroke-width="3"/>
+            <path d="M57 62l5 5 10-14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="mail-label-block">
+        <div class="mail-small-label">TOTAL ORDERS</div>
+        <div class="mail-action-title">SHIPPED</div>
+        <div class="mail-badge">✓ COMPLETED</div>
+      </div>
+
+      <div class="mail-number-block">
+        <div class="mail-main-number" id="mailCount">—</div>
+        <div class="mail-meta-line" id="mailSub">Report Date: — · Last Refresh: —</div>
+      </div>
+
+      <div class="mail-map mail-map--gold"></div>
+    </div>
+
+    <div class="mail-big-card mail-big-card--incoming">
+      <div class="mail-card-motion"></div>
+      <div class="mail-card-grid"></div>
+
+      <div class="mail-visual">
+        <div class="mail-hex">
+          <svg viewBox="0 0 90 90" fill="none">
+            <path d="M45 5 80 25v40L45 85 10 65V25L45 5Z" stroke="currentColor" stroke-width="4"/>
+            <path d="M45 22v31" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            <path d="M31 40l14 14 14-14" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            <path d="M25 58v12h40V58" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="mail-label-block">
+        <div class="mail-small-label">TOTAL</div>
+        <div class="mail-action-title">INCOMING</div>
+        <div class="mail-badge">⌁ LIVE QUEUE</div>
+      </div>
+
+      <div class="mail-number-block">
+        <div class="mail-main-number" id="mailIncomingCount">—</div>
+        <div class="mail-meta-line" id="mailIncomingSub">Live Total Jobs from Incoming Dashboard</div>
+      </div>
+
+      <div class="mail-map mail-map--blue"></div>
+    </div>
+
+    <div class="mailroom-note">
+      <span>ⓘ</span>
+      Incoming total represents live queue volume from the Incoming Jobs Dashboard.
+    </div>
+
+  </div>
+</section>
 
   </main>
 
