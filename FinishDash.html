@@ -208,8 +208,7 @@
 
     <!-- TAB NAVIGATION -->
     <nav class="command-tabs">
-      <button class="tab-btn active" data-tab="floor">Floor Map</button>
-      <button class="tab-btn" data-tab="status">Station Health</button>
+      <button class="tab-btn active" data-tab="floor">Floor Map</button>      
       <button class="tab-btn" data-tab="hourly">Hourly Breakdown</button>
       <button class="tab-btn" data-tab="summary">Executive Summary</button>
       <button class="tab-btn" data-tab="config">Configuration</button>
@@ -529,17 +528,6 @@
       </section>
     </section>
 
-    <!-- STATUS TAB -->
-    <section class="tab-content" data-content="status">
-      <section class="panel-shell">
-        <div class="section-heading">
-          <h2>Station Health Intelligence</h2>
-          <p>Real-time status logic based on WIP, throughput, activity, and capacity thresholds.</p>
-        </div>
-
-        <div id="statusPanelContainer" class="status-panel-container"></div>
-      </section>
-    </section>
 
     <!-- HOURLY BREAKDOWN TAB -->
     <section class="tab-content" data-content="hourly">
@@ -561,74 +549,96 @@
     </section>
 
     <!-- SUMMARY TAB -->
-    <section class="tab-content" data-content="summary">
-      <section class="panel-shell">
-        <div class="section-heading">
-          <h2>Executive Summary</h2>
-          <p>High-level operational snapshot for leadership review.</p>
-        </div>
+<section class="tab-content" data-content="summary">
+  <section class="panel-shell executive-panel">
+    <div class="section-heading">
+      <h2>Management Summary</h2>
+      <p>Leadership view focused on WIP risk, bottlenecks, and operational action.</p>
+    </div>
 
-        <div class="summary-grid">
+    <div class="management-grid">
+      <article class="management-hero">
+        <span>Current Operational Position</span>
+        <strong id="mgmtSummaryTitle">Loading operation status...</strong>
+        <p id="mgmtSummaryText">Waiting for Finish dashboard data.</p>
+      </article>
 
-          <article class="summary-card">
-            <span>Total WIP</span>
-            <strong id="summaryTotalWip">0</strong>
-          </article>
+      <article class="summary-card">
+        <span>Total WIP</span>
+        <strong id="summaryTotalWip">0</strong>
+        <small>All active Finish workflow WIP</small>
+      </article>
 
-          <article class="summary-card">
-            <span>Total Activity Today</span>
-            <strong id="summaryActivity">0</strong>
-          </article>
+      <article class="summary-card">
+        <span>Primary Bottleneck</span>
+        <strong id="summaryLargestValue">0</strong>
+        <small id="summaryLargestName">--</small>
+      </article>
 
-          <article class="summary-card">
-            <span>Largest WIP</span>
-            <strong id="summaryLargestValue">0</strong>
-            <small id="summaryLargestName">--</small>
-          </article>
+      <article class="summary-card">
+        <span>Stations Needing Attention</span>
+        <strong id="summaryRiskCount">0</strong>
+        <small>Critical / Warning stations</small>
+      </article>
+    </div>
 
-          <article class="summary-card">
-            <span>Side Station WIP</span>
-            <strong id="summarySideWip">0</strong>
-          </article>
+    <div class="management-actions">
+      <article>
+        <span>Management Recommendation</span>
+        <p id="mgmtRecommendation">Waiting for data...</p>
+      </article>
+      <article>
+        <span>Next Action</span>
+        <p id="mgmtNextAction">Validate live production flow after the next refresh.</p>
+      </article>
+    </div>
 
-        </div>
+    <div class="summary-table-wrap">
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Station</th>
+            <th>Current WIP</th>
+            <th>Activity Today</th>
+            <th>Last Hour</th>
+            <th>Capacity / Hr</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="stationDetailBody">
+          <tr>
+            <td colspan="6">Waiting for data...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-        <div class="summary-table-wrap">
-          <table class="summary-table">
-            <thead>
-              <tr>
-                <th>Station</th>
-                <th>Current WIP</th>
-                <th>Activity Today</th>
-                <th>Last Hour</th>
-                <th>Capacity / Hr</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="stationDetailBody">
-              <tr>
-                <td colspan="6">Waiting for data...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+    <div class="updated-line">
+      Last Updated: <span id="summaryUpdated">--</span>
+    </div>
+  </section>
+</section>
 
-        <div class="updated-line">
-          Last Updated: <span id="summaryUpdated">--</span>
-        </div>
-      </section>
-    </section>
+ <!-- CONFIG TAB -->
+<section class="tab-content" data-content="config">
+  <section class="panel-shell">
+    <div class="section-heading">
+      <h2>Capacity Configuration</h2>
+      <p>Adjust station rate assumptions used for utilization and health logic.</p>
+    </div>
 
-    <!-- CONFIG TAB -->
-    <section class="tab-content" data-content="config">
-      <section class="panel-shell">
-        <div class="section-heading">
-          <h2>Capacity Configuration</h2>
-          <p>Adjust station rate assumptions used for utilization and health logic.</p>
-        </div>
+    <section class="config-accordion">
+
+      <details class="config-group" open>
+        <summary>
+          <div>
+            <h3>Core Capacity</h3>
+            <p>Finish Unbox, Mounting, Drill, and Final Inspection.</p>
+          </div>
+          <span>Open / Close</span>
+        </summary>
 
         <div class="config-grid">
-
           <article class="config-card">
             <h3>Finish Unbox</h3>
             <label>Rate Per Hour</label>
@@ -636,15 +646,6 @@
             <label>Station Count</label>
             <input id="cfgUnboxCount" type="number" min="0" />
             <div class="config-total">Total: <strong id="cfgUnboxTotal">0</strong> jobs/hr</div>
-          </article>
-
-          <article class="config-card">
-            <h3>MEI Bank</h3>
-            <label>Rate Per Machine</label>
-            <input id="cfgMeiRate" type="number" min="0" />
-            <label>Machine Count</label>
-            <input id="cfgMeiMachines" type="number" min="0" />
-            <div class="config-total">Total: <strong id="cfgMeiTotal">0</strong> jobs/hr</div>
           </article>
 
           <article class="config-card">
@@ -673,16 +674,100 @@
             <input id="cfgFinalCount" type="number" min="0" />
             <div class="config-total">Total: <strong id="cfgFinalTotal">0</strong> jobs/hr</div>
           </article>
-
         </div>
+      </details>
 
-        <div class="config-actions">
-          <button id="configSaveBtn" class="primary-action" type="button">Save Configuration</button>
-          <button id="configResetBtn" class="secondary-action" type="button">Reset Defaults</button>
+      <details class="config-group" open>
+        <summary>
+          <div>
+            <h3>MEI Capacity</h3>
+            <p>Separate machine targets for Line A, Line B, and Line C.</p>
+          </div>
+          <span>Open / Close</span>
+        </summary>
+
+        <div class="config-grid">
+          <article class="config-card">
+            <h3>MEI Line A</h3>
+            <label>Rate Per Machine</label>
+            <input id="cfgMeiARate" type="number" min="0" />
+            <label>Machine Count</label>
+            <input id="cfgMeiACount" type="number" min="0" />
+            <div class="config-total">Total: <strong id="cfgMeiATotal">0</strong> jobs/hr</div>
+          </article>
+
+          <article class="config-card">
+            <h3>MEI Line B</h3>
+            <label>Rate Per Machine</label>
+            <input id="cfgMeiBRate" type="number" min="0" />
+            <label>Machine Count</label>
+            <input id="cfgMeiBCount" type="number" min="0" />
+            <div class="config-total">Total: <strong id="cfgMeiBTotal">0</strong> jobs/hr</div>
+          </article>
+
+          <article class="config-card">
+            <h3>MEI Line C</h3>
+            <label>Rate Per Machine</label>
+            <input id="cfgMeiCRate" type="number" min="0" />
+            <label>Machine Count</label>
+            <input id="cfgMeiCCount" type="number" min="0" />
+            <div class="config-total">Total: <strong id="cfgMeiCTotal">0</strong> jobs/hr</div>
+          </article>
         </div>
+      </details>
 
-      </section>
+      <details class="config-group">
+        <summary>
+          <div>
+            <h3>Mounting Training Metric</h3>
+            <p>Weekly trainee ramp-up targets for adjusted Mounting JPH.</p>
+          </div>
+          <span>Open / Close</span>
+        </summary>
+
+        <div class="config-grid">
+          <article class="config-card training-card">
+            <h3>Mounting — Training Metric</h3>
+
+            <label>Week 1 Trainees — 3/hr</label>
+            <input id="cfgMountTraineeW1" type="number" min="0" value="0" />
+
+            <label>Week 2 Trainees — 6/hr</label>
+            <input id="cfgMountTraineeW2" type="number" min="0" value="0" />
+
+            <label>Week 3 Trainees — 9/hr</label>
+            <input id="cfgMountTraineeW3" type="number" min="0" value="0" />
+
+            <label>Week 4 Trainees — 12/hr</label>
+            <input id="cfgMountTraineeW4" type="number" min="0" value="0" />
+
+            <label>Week 5 Trainees — 15/hr</label>
+            <input id="cfgMountTraineeW5" type="number" min="0" value="0" />
+
+            <label>Week 6 Trainees — 18/hr</label>
+            <input id="cfgMountTraineeW6" type="number" min="0" value="0" />
+
+            <label>Week 7 Trainees — 21/hr</label>
+            <input id="cfgMountTraineeW7" type="number" min="0" value="0" />
+
+            <label>Week 8 Trainees — 25/hr</label>
+            <input id="cfgMountTraineeW8" type="number" min="0" value="0" />
+
+            <div class="config-total">Training Total: <strong id="cfgMountTrainingTotal">0</strong> jobs/hr</div>
+            <div class="config-total">Adjusted Mounting Target: <strong id="cfgMountAdjustedTotal">0</strong> jobs/hr</div>
+          </article>
+        </div>
+      </details>
+
     </section>
+
+    <div class="config-actions">
+      <button id="configSaveBtn" class="primary-action" type="button">Save Configuration</button>
+      <button id="configResetBtn" class="secondary-action" type="button">Reset Defaults</button>
+    </div>
+
+  </section>
+</section>
 
   </main>
 

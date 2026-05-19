@@ -5,15 +5,31 @@ let lastSyncTime = null;
 
 const DEFAULT_CONFIG = {
   unboxRate: 150,
-  unboxCount: 1,
-  meiRate: 50,
-  meiMachines: 5,
+  unboxCount: 1.5,
+
+  meiARate: 50,
+  meiACount: 0,
+  meiBRate: 50,
+  meiBCount: 5,
+  meiCRate: 50,
+  meiCCount: 5,
+
   mountRate: 25,
   mountCount: 10,
+
+ mountTraineeW1: 0,
+ mountTraineeW2: 0,
+ mountTraineeW3: 0,
+ mountTraineeW4: 0,
+ mountTraineeW5: 0,
+ mountTraineeW6: 0,
+ mountTraineeW7: 0,
+ mountTraineeW8: 0, 
+
   drillRate: 5,
-  drillCount: 13,
+  drillCount: 1,
   finalRate: 75,
-  finalCount: 1
+  finalCount: 3
 };
 
 const SHIFT_RULES = {
@@ -113,6 +129,7 @@ function renderEnrichedDashboard(finishDashboard) {
 
   renderStatusPanel(healthStations);
   renderStationDetail(healthStations);
+  renderManagementSummary(summary, healthStations);
   renderHourlyBreakdown(healthStations);
 
   applyStationStateClasses(floorStations);
@@ -128,11 +145,10 @@ function renderKpis(summary) {
   setText("kpiFinalWip", summary.finalInspectionWip || 0);
 
   setText("summaryTotalWip", summary.totalWip || 0);
-  setText("summaryActivity", summary.totalActivityToday || 0);
   setText("summaryLargestValue", summary.largestWipTotal || 0);
   setText("summaryLargestName", summary.largestWipStation || "--");
-  setText("summarySideWip", summary.sideStationWip || 0);
 }
+
 
 function renderStationNumbers(stations) {
   const get = name => stations.find(s => s.flowStep === name || s.displayName === name) || {};
@@ -355,6 +371,77 @@ function buildSummaryFromStations(stations) {
   };
 }
 
+
+function renderManagementSummary(summary, stations) {
+  const safeStations = Array.isArray(stations) ? stations : [];
+
+  const riskStations = safeStations.filter(s =>
+    ["CRITICAL", "WARNING", "STARVED", "OVERLOAD"].includes(String(s.status || "").toUpperCase())
+  );
+
+  const criticalStations = safeStations.filter(s =>
+    String(s.status || "").toUpperCase() === "CRITICAL"
+  );
+
+  const bottleneck = safeStations.reduce((best, station) => {
+    return Number(station.currentWip || 0) > Number(best.currentWip || 0) ? station : best;
+  }, { displayName: "--", currentWip: 0 });
+
+  const totalWip = Number(summary.totalWip || 0);
+  const bottleneckName = bottleneck.displayName || bottleneck.flowStep || summary.largestWipStation || "--";
+  const bottleneckWip = Number(bottleneck.currentWip || summary.largestWipTotal || 0);
+
+  setText("summaryRiskCount", riskStations.length);
+
+  if (criticalStations.length > 0) {
+    setText("mgmtSummaryTitle", "Immediate attention required");
+    setText(
+      "mgmtSummaryText",
+      `${criticalStations.length} station(s) are currently below expected performance. The largest WIP pressure is ${bottleneckName} with ${formatNumber(bottleneckWip)} jobs.`
+    );
+    setText(
+      "mgmtRecommendation",
+      `Prioritize support around ${bottleneckName}. Review staffing, machine availability, and upstream feed before WIP continues building.`
+    );
+    setText(
+      "mgmtNextAction",
+      `Check ${criticalStations.map(s => s.displayName || s.flowStep).join(", ")} and confirm whether the issue is labor, equipment, or scan timing.`
+    );
+    return;
+  }
+
+  if (riskStations.length > 0) {
+    setText("mgmtSummaryTitle", "Operation stable but needs monitoring");
+    setText(
+      "mgmtSummaryText",
+      `${riskStations.length} station(s) are trending below target. Total WIP is ${formatNumber(totalWip)}, with the highest load at ${bottleneckName}.`
+    );
+    setText(
+      "mgmtRecommendation",
+      `Monitor ${bottleneckName} and confirm the next hourly update improves before shifting more work downstream.`
+    );
+    setText(
+      "mgmtNextAction",
+      "Use the Hourly Breakdown tab to confirm whether the slowdown is isolated to one hour or becoming a trend."
+    );
+    return;
+  }
+
+  setText("mgmtSummaryTitle", "Operation running within control");
+  setText(
+    "mgmtSummaryText",
+    `Finish is currently operating within expected range. Total WIP is ${formatNumber(totalWip)}, and the largest active WIP point is ${bottleneckName}.`
+  );
+  setText(
+    "mgmtRecommendation",
+    "Maintain current staffing plan and continue watching the bottleneck station during the next refresh cycle."
+  );
+  setText(
+    "mgmtNextAction",
+    "No immediate escalation needed. Continue monitoring WIP movement and hourly pace."
+  );
+}
+
 /* ===============================
    STATUS SYSTEM
 ================================ */
@@ -365,31 +452,56 @@ function applyConfigToStation(station, config) {
       station.expectedNormalPerHour = config.unboxRate * config.unboxCount;
       break;
 
-    case "MEI Line B":
-    case "MEI Line C":
-    case "MEI Easy Fit":
-      station.expectedNormalPerHour = config.meiRate * config.meiMachines;
+    case "MEI Line A":
+      station.expectedNormalPerHour = config.meiARate * config.meiACount;
       break;
 
-    case "Mounting":
-      station.expectedNormalPerHour = config.mountRate * config.mountCount;
+    case "MEI Line B":
+      station.expectedNormalPerHour = config.meiBRate * config.meiBCount;
       break;
+
+    case "MEI Line C":
+      station.expectedNormalPerHour = config.meiCRate * config.meiCCount;
+      break;
+
+    case "MEI Easy Fit":
+      station.expectedNormalPerHour = config.meiBRate * config.meiBCount;
+      break;
+
+   case "Mounting": {
+  const mountTotal =
+    Number(config.mountRate || 0) *
+    Number(config.mountCount || 0);
+
+  const trainingMountTotal =
+    (Number(config.mountTraineeW1 || 0) * 3) +
+    (Number(config.mountTraineeW2 || 0) * 6) +
+    (Number(config.mountTraineeW3 || 0) * 9) +
+    (Number(config.mountTraineeW4 || 0) * 12) +
+    (Number(config.mountTraineeW5 || 0) * 15) +
+    (Number(config.mountTraineeW6 || 0) * 18) +
+    (Number(config.mountTraineeW7 || 0) * 21) +
+    (Number(config.mountTraineeW8 || 0) * 25);
+
+  station.expectedNormalPerHour = mountTotal + trainingMountTotal;
+  break;
+}
 
     case "Drill":
       station.expectedNormalPerHour = config.drillRate * config.drillCount;
       break;
 
-case "Final Inspection":
-  station.expectedNormalPerHour = config.finalRate * config.finalCount;
-  break;
+    case "Final Inspection":
+      station.expectedNormalPerHour = config.finalRate * config.finalCount;
+      break;
 
-case "Bigs":
-case "Sharps":
-  station.expectedNormalPerHour = 0;
-  break;
+    case "Bigs":
+    case "Sharps":
+      station.expectedNormalPerHour = 0;
+      break;
 
-default:
-  station.expectedNormalPerHour = station.expectedNormalPerHour || 0;
+    default:
+      station.expectedNormalPerHour = station.expectedNormalPerHour || 0;
   }
 
   station.currentWip = Number(station.currentWip || 0);
@@ -572,7 +684,19 @@ function renderHourlyBreakdown(stations) {
     "4:00 PM", "5:00 PM", "6:00 PM"
   ];
 
-  container.innerHTML = safeStations.map(station => {
+  if (!safeStations.length) {
+    container.innerHTML = `
+      <article class="hourly-station-card">
+        <div class="hourly-station-header">
+          <h3>No hourly data available</h3>
+          <span>--</span>
+        </div>
+      </article>
+    `;
+    return;
+  }
+
+  container.innerHTML = safeStations.map((station, index) => {
     const baseTarget = Number(station.expectedNormalPerHour || 0);
     const stationName = station.displayName || station.flowStep || "--";
     const isNoTarget = station.flowStep === "Bigs" || station.flowStep === "Sharps" || baseTarget <= 0;
@@ -584,20 +708,13 @@ function renderHourlyBreakdown(stations) {
       const pct = adjustedTarget > 0 ? Math.round((count / adjustedTarget) * 100) : 0;
 
       let statusClass = "hour-red";
-      let statusText = "Below Rate";
 
-      if (isNoTarget) {
+      if (isNoTarget || productiveMinutes <= 0) {
         statusClass = "hour-neutral";
-        statusText = "No Target";
-      } else if (productiveMinutes <= 0) {
-        statusClass = "hour-neutral";
-        statusText = "Off Shift";
       } else if (pct >= 100) {
         statusClass = "hour-green";
-        statusText = "Hit Rate";
       } else if (pct >= 90) {
         statusClass = "hour-amber";
-        statusText = "Near Rate";
       }
 
       return `
@@ -611,8 +728,8 @@ function renderHourlyBreakdown(stations) {
     }).join("");
 
     return `
-      <article class="hourly-station-card">
-        <div class="hourly-station-header">
+      <details class="hourly-accordion" ${index === 0 ? "open" : ""}>
+        <summary class="hourly-accordion-header">
           <div>
             <h3>${escapeHtml(stationName)}</h3>
             <small>
@@ -620,13 +737,17 @@ function renderHourlyBreakdown(stations) {
               · Last Hr: ${formatNumber(station.lastHourActivity || 0)}
             </small>
           </div>
-          <span>${isNoTarget ? "No hourly target" : `${formatNumber(baseTarget)} / hr target`}</span>
-        </div>
+
+          <div class="hourly-accordion-right">
+            <span>${isNoTarget ? "No hourly target" : `${formatNumber(baseTarget)} / hr target`}</span>
+            <b>Open / Close</b>
+          </div>
+        </summary>
 
         <div class="hourly-cells">
           ${cells}
         </div>
-      </article>
+      </details>
     `;
   }).join("");
 }
@@ -732,7 +853,7 @@ function applyStationStateClasses(stations) {
 function loadConfig() {
   try {
     const saved = localStorage.getItem("finishCapacityConfig");
-    return saved ? JSON.parse(saved) : { ...DEFAULT_CONFIG };
+    return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : { ...DEFAULT_CONFIG };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -747,10 +868,25 @@ function initConfigPanel() {
 
   setInputValue("cfgUnboxRate", config.unboxRate);
   setInputValue("cfgUnboxCount", config.unboxCount);
-  setInputValue("cfgMeiRate", config.meiRate);
-  setInputValue("cfgMeiMachines", config.meiMachines);
+
+  setInputValue("cfgMeiARate", config.meiARate);
+  setInputValue("cfgMeiACount", config.meiACount);
+  setInputValue("cfgMeiBRate", config.meiBRate);
+  setInputValue("cfgMeiBCount", config.meiBCount);
+  setInputValue("cfgMeiCRate", config.meiCRate);
+  setInputValue("cfgMeiCCount", config.meiCCount);
+
   setInputValue("cfgMountRate", config.mountRate);
   setInputValue("cfgMountCount", config.mountCount);
+  setInputValue("cfgMountTraineeW1", config.mountTraineeW1);
+ setInputValue("cfgMountTraineeW2", config.mountTraineeW2);
+ setInputValue("cfgMountTraineeW3", config.mountTraineeW3);
+ setInputValue("cfgMountTraineeW4", config.mountTraineeW4);
+ setInputValue("cfgMountTraineeW5", config.mountTraineeW5);
+ setInputValue("cfgMountTraineeW6", config.mountTraineeW6);
+ setInputValue("cfgMountTraineeW7", config.mountTraineeW7);
+ setInputValue("cfgMountTraineeW8", config.mountTraineeW8);
+
   setInputValue("cfgDrillRate", config.drillRate);
   setInputValue("cfgDrillCount", config.drillCount);
   setInputValue("cfgFinalRate", config.finalRate);
@@ -761,9 +897,21 @@ function initConfigPanel() {
   [
     "cfgUnboxRate",
     "cfgUnboxCount",
-    "cfgMeiRate",
-    "cfgMeiMachines",
+    "cfgMeiARate",
+    "cfgMeiACount",
+    "cfgMeiBRate",
+    "cfgMeiBCount",
+    "cfgMeiCRate",
+    "cfgMeiCCount",
     "cfgMountRate",
+    "cfgMountTraineeW1",
+    "cfgMountTraineeW2",
+    "cfgMountTraineeW3",
+    "cfgMountTraineeW4",
+    "cfgMountTraineeW5",
+    "cfgMountTraineeW6",
+    "cfgMountTraineeW7",
+    "cfgMountTraineeW8",
     "cfgMountCount",
     "cfgDrillRate",
     "cfgDrillCount",
@@ -777,10 +925,24 @@ function initConfigPanel() {
     const newConfig = {
       unboxRate: getInputValue("cfgUnboxRate"),
       unboxCount: getInputValue("cfgUnboxCount"),
-      meiRate: getInputValue("cfgMeiRate"),
-      meiMachines: getInputValue("cfgMeiMachines"),
+
+      meiARate: getInputValue("cfgMeiARate"),
+      meiACount: getInputValue("cfgMeiACount"),
+      meiBRate: getInputValue("cfgMeiBRate"),
+      meiBCount: getInputValue("cfgMeiBCount"),
+      meiCRate: getInputValue("cfgMeiCRate"),
+      meiCCount: getInputValue("cfgMeiCCount"),
+
       mountRate: getInputValue("cfgMountRate"),
       mountCount: getInputValue("cfgMountCount"),
+      mountTraineeW1: getInputValue("cfgMountTraineeW1"),
+mountTraineeW2: getInputValue("cfgMountTraineeW2"),
+mountTraineeW3: getInputValue("cfgMountTraineeW3"),
+mountTraineeW4: getInputValue("cfgMountTraineeW4"),
+mountTraineeW5: getInputValue("cfgMountTraineeW5"),
+mountTraineeW6: getInputValue("cfgMountTraineeW6"),
+mountTraineeW7: getInputValue("cfgMountTraineeW7"),
+mountTraineeW8: getInputValue("cfgMountTraineeW8"),
       drillRate: getInputValue("cfgDrillRate"),
       drillCount: getInputValue("cfgDrillCount"),
       finalRate: getInputValue("cfgFinalRate"),
@@ -793,7 +955,7 @@ function initConfigPanel() {
   });
 
   document.getElementById("configResetBtn")?.addEventListener("click", () => {
-    saveConfig(DEFAULT_CONFIG);
+    localStorage.removeItem("finishCapacityConfig");
     initConfigPanel();
     loadDashboard();
   });
@@ -801,17 +963,39 @@ function initConfigPanel() {
 
 function updateConfigTotals() {
   const unboxTotal = getInputValue("cfgUnboxRate") * getInputValue("cfgUnboxCount");
-  const meiTotal = getInputValue("cfgMeiRate") * getInputValue("cfgMeiMachines");
-  const mountTotal = getInputValue("cfgMountRate") * getInputValue("cfgMountCount");
+
+  const meiATotal = getInputValue("cfgMeiARate") * getInputValue("cfgMeiACount");
+  const meiBTotal = getInputValue("cfgMeiBRate") * getInputValue("cfgMeiBCount");
+  const meiCTotal = getInputValue("cfgMeiCRate") * getInputValue("cfgMeiCCount");
+
+  const mountTotal =
+  getInputValue("cfgMountRate") *
+  getInputValue("cfgMountCount");
+
+const trainingMountTotal =
+  (getInputValue("cfgMountTraineeW1") * 3) +
+  (getInputValue("cfgMountTraineeW2") * 6) +
+  (getInputValue("cfgMountTraineeW3") * 9) +
+  (getInputValue("cfgMountTraineeW4") * 12) +
+  (getInputValue("cfgMountTraineeW5") * 15) +
+  (getInputValue("cfgMountTraineeW6") * 18) +
+  (getInputValue("cfgMountTraineeW7") * 21) +
+  (getInputValue("cfgMountTraineeW8") * 25);
+
   const drillTotal = getInputValue("cfgDrillRate") * getInputValue("cfgDrillCount");
   const finalTotal = getInputValue("cfgFinalRate") * getInputValue("cfgFinalCount");
 
   setText("cfgUnboxTotal", unboxTotal);
-  setText("cfgMeiTotal", meiTotal);
+  setText("cfgMeiATotal", meiATotal);
+  setText("cfgMeiBTotal", meiBTotal);
+  setText("cfgMeiCTotal", meiCTotal);
   setText("cfgMountTotal", mountTotal);
+  setText("cfgMountTrainingTotal", trainingMountTotal);
+  setText("cfgMountAdjustedTotal", mountTotal + trainingMountTotal);
   setText("cfgDrillTotal", drillTotal);
   setText("cfgFinalTotal", finalTotal);
 }
+
 
 /* ===============================
    TABS
