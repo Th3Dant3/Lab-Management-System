@@ -5,8 +5,12 @@
 const API_URL =
   "https://script.google.com/a/macros/zennioptical.com/s/AKfycbzbQBjzoEEBpvukFkR-XMw8kG_gzCIuxZrTLodZZ_EnwqYAujOBqSzYslx-x9XTw7_UUA/exec";
 
+const PRODUCTION_FLOW_API =
+  "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec";
+
 const AUTH_API =
   "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
+  
 
 const SCANNER_STORAGE_KEY = "lms_scanner_attention";
 
@@ -978,18 +982,33 @@ function initTabs() {
 ===================================================== */
 async function fetchDashboard() {
   console.time("DASHBOARD_API");
+
   try {
-    const res  = await fetch(API_URL + "?t=" + Date.now());
+    const res = await fetch(API_URL + "?t=" + Date.now());
     const data = await res.json();
+
+    // Add Facility WIP from Production Flow API without replacing old dashboard data
+    try {
+      const prodRes = await fetch(
+        PRODUCTION_FLOW_API + "?action=productionFlow&area=All&debug=true&t=" + Date.now()
+      );
+
+      const prodData = await prodRes.json();
+
+      data.facilityWip = Number(prodData.facilityWip || 0);
+    } catch (prodErr) {
+      console.error("Production Flow API failed", prodErr);
+      data.facilityWip = 0;
+    }
+
     console.timeEnd("DASHBOARD_API");
     return data || {};
+
   } catch (err) {
     console.error("Dashboard API failed", err);
     return {};
   }
 }
-
-
 
 /* =====================================================
    THRESHOLD COLOR HELPERS
@@ -997,6 +1016,7 @@ async function fetchDashboard() {
 function setHoldsColor(active) {
   const el = document.getElementById("active");
   if (!el) return;
+
   if (active >= 15) {
     el.className = "cb-m-val cb-m-val--red";
   } else if (active >= 7) {
@@ -1004,41 +1024,49 @@ function setHoldsColor(active) {
   } else {
     el.className = "cb-m-val cb-m-val--steel";
   }
-  /* also recolor the sparkline */
+
   const color = active >= 15 ? "#e03e3e" : active >= 7 ? "#f07030" : "#64a0dc";
   updateSparklineColor("spark-holds", color);
 }
 
 function updateSparklineColor(id, color) {
-  /* store on canvas element so the live loop picks it up */
   const c = document.getElementById(id);
   if (c) c.dataset.color = color;
 }
+
 function renderDashboard(data) {
-  const active    = Number(data.active    ?? 0);
+  const active    = Number(data.active ?? 0);
   const completed = Number(data.completed ?? 0);
 
-  // Total Incoming — shown in command bar KPI
   const total = Number(data.totalIncoming ?? data.incoming ?? 0);
+  const facilityWip = Number(data.facilityWip || 0);
 
   let coverage = Number(data.coverage ?? 0);
+
   if (coverage <= 1) coverage *= 100;
+
   coverage = Math.max(0, Math.min(100, Math.round(coverage)));
+
   if (completed > 0 && coverage === 0) {
     coverage = Math.round((completed / (completed + active)) * 100);
   }
 
   // Command bar KPIs — animated count-up
-  if (total)  countUp("totalIncoming", total,  1800, "");
-  else        setText("totalIncoming", "—");
-  if (active) countUp("active",        active, 1400, "");
-  else        setText("active",        active);
+  if (total) {
+    countUp("totalIncoming", total, 1800, "");
+  } else {
+    setText("totalIncoming", "—");
+  }
 
-  setHoldsColor(active);
+  if (facilityWip) {
+    countUp("facilityWipTop", facilityWip, 1400, "");
+  } else {
+    setText("facilityWipTop", "—");
+  }
 
-  // Card metrics (investigation card)
-  setText("activeHolds",   active);
-  setText("completed",     completed);
+  // Investigation card metrics
+  setText("activeHolds", active);
+  setText("completed", completed);
   setText("coverageDetail", active === 0 ? "Complete" : coverage + "%");
 }
 

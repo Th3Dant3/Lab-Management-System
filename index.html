@@ -183,12 +183,15 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
       <canvas class="cb-sparkline" id="spark-incoming" height="28"></canvas>
     </div>
 
-    <div class="cb-metric">
-      <div class="cb-m-label">Active Holds</div>
-      <div class="cb-m-val cb-m-val--steel" id="active">—</div>
-      <div class="cb-m-sub">Open holds</div>
-      <canvas class="cb-sparkline" id="spark-holds" height="28"></canvas>
-    </div>
+  <div class="cb-metric cb-metric--facility">
+  <div class="cb-m-label">Facility WIP</div>
+
+  <div class="cb-m-val cb-m-val--orange" id="facilityWipTop">—</div>
+
+  <div class="cb-m-sub">Live facility jobs</div>
+
+  <canvas class="cb-sparkline" id="spark-facility" height="28"></canvas>
+</div>
 
     <div class="cb-metric">
       <div class="cb-m-label">Scanner Health</div>

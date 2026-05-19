@@ -138,13 +138,18 @@ body.lms-hidden { visibility: hidden; }
 .cb-metric:last-child { border-right: none; }
 .cb-metric:hover { background: rgba(100,160,220,0.04); }
 
-.cb-metric--hi { background: rgba(245,200,66,0.04); }
-.cb-metric--hi::after {
+.cb-metric--facility::after {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 2px;
-  background: var(--gold);
+  background: var(--orange);
+}
+
+.cb-metric--facility {
+  background: rgba(240,112,48,0.05);
 }
 
 .cb-m-label {

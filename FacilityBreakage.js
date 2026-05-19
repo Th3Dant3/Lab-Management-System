@@ -8,6 +8,7 @@
 
 /* ── CONFIG ─────────────────────────────────────────────── */
 const API_URL = 'https://script.google.com/macros/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec';
+const PRODUCTION_FLOW_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=productionFlow&area=All&debug=true";
 const INCOMING_API_URL = "https://script.google.com/macros/s/AKfycbyI2YqO9wXZ4-v34OXqqxD-yCYe3Dnly1-d_cf9mYtkcVkZoXeWhgQ8u6WbgY-lvIQQjg/exec";
 const FINISH_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Finish";
 const SURFACE_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Surface";
@@ -942,6 +943,7 @@ function renderMailroom(meta) {
   }
 
   loadMailroomIncoming();
+loadMailroomFacilityWip();
 }
 
 /* ── HISTORY ────────────────────────────────────────────── */
@@ -3602,6 +3604,40 @@ async function loadMailroomIncoming() {
   }
 }
 
+async function loadMailroomFacilityWip() {
+  const countEl = document.getElementById("mailFacilityWipCount");
+  const subEl = document.getElementById("mailFacilityWipSub");
+
+  try {
+    const res = await fetch(PRODUCTION_FLOW_API_URL, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const data = await res.json();
+
+    const facilityWip = Number(data.facilityWip || 0);
+
+    if (countEl) {
+      countEl.textContent = facilityWip.toLocaleString();
+    }
+
+    if (subEl) {
+      subEl.textContent = "Live Current Jobs from Production Flow";
+    }
+
+  } catch (error) {
+    console.error("Facility WIP load failed:", error);
+
+    if (countEl) {
+      countEl.textContent = "—";
+    }
+
+    if (subEl) {
+      subEl.textContent = "Facility WIP unavailable";
+    }
+  }
+}
 
 function animateMailNumber(id, value) {
   const el = document.getElementById(id);
