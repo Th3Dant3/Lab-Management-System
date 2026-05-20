@@ -2049,6 +2049,15 @@ async function runCompare() {
     const dataArr = await Promise.all(CMP.selected.map(fetchDate));
     hideTransition();
     renderCompareResults(CMP.selected, dataArr, resultsEl);
+// Enable compare export button
+const exportBtn = document.getElementById('cmpExportBtn');
+
+if (exportBtn) {
+  exportBtn.disabled = false;
+  exportBtn.style.opacity = '1';
+  exportBtn.style.pointerEvents = 'auto';
+}
+
   } catch(e) {
     hideTransition();
     resultsEl.innerHTML = `<div class="empty-state" style="padding:40px">Error: ${e.message}</div>`;
@@ -3915,6 +3924,10 @@ function downloadCSV(filename, rows) {
 }
 
 function exportSummaryCSV() {
+  if (SUM.mode === 'weekly') {
+    return exportWeeklySummaryCSV();
+  }
+
   const d = SUM.data;
   if (!d) {
     App.showToast('Load Summary data first', 'error');
@@ -3946,28 +3959,91 @@ function exportSummaryCSV() {
     ]);
   });
 
-  rows.push([]);
-  rows.push(['Department', 'Rank', 'Reason', 'Lenses Broken', 'Frames Broken']);
+  const date = (d.reportDate || SUM.selectedDate || 'summary').replaceAll('/', '-');
+  downloadCSV(`facility_summary_daily_${date}.csv`, rows);
+}
 
-  Object.entries(d.summary?.topReasons || {}).forEach(([dept, reasons]) => {
-    (reasons || []).forEach(r => {
-      rows.push([
-        dept,
-        r.rank || '',
-        r.reason || '',
-        r.lensesBroken || 0,
-        r.framesBroken || 0
-      ]);
+function exportWeeklySummaryCSV() {
+  const wd = SUM.weekData;
+
+  if (!wd || !wd.days) {
+    App.showToast('Select/load a weekly report first', 'error');
+    return;
+  }
+
+  const rows = [
+    ['Week Start', wd.weekStart || SUM.selectedWeek || ''],
+    ['Week End', wd.weekEnd || ''],
+    [],
+    ['Day', 'Date', 'Has Data', 'Lens Count', 'Order Count', 'Lab Lenses Broken', 'Lab Lens %', 'AR %', 'Finish %', 'Surface %', 'Frames Broken', 'Frame %']
+  ];
+
+  wd.days.forEach(day => {
+    rows.push([
+      day.day || '',
+      day.date || '',
+      day.hasData ? 'YES' : 'NO',
+      day.lensCount || 0,
+      day.orderCount || 0,
+      day.labLenses || 0,
+      Number(day.labLensPct || 0).toFixed(2) + '%',
+      Number(day.arPct || 0).toFixed(2) + '%',
+      Number(day.finPct || 0).toFixed(2) + '%',
+      Number(day.srfPct || 0).toFixed(2) + '%',
+      day.framesBroken || 0,
+      Number(day.framePct || 0).toFixed(2) + '%'
+    ]);
+  });
+
+  rows.push([]);
+  rows.push(['Date', 'Department', 'Rank', 'Reason', 'Lenses Broken']);
+
+  wd.days.forEach(day => {
+    if (!day.hasData || !day.topReasons) return;
+
+    Object.entries(day.topReasons).forEach(([dept, reasons]) => {
+      (reasons || []).forEach(r => {
+        rows.push([
+          day.date || '',
+          dept,
+          r.rank || '',
+          r.reason || '',
+          r.lensesBroken || r.count || 0
+        ]);
+      });
     });
   });
 
-  const date = (d.reportDate || SUM.selectedDate || 'summary').replaceAll('/', '-');
-  downloadCSV(`facility_summary_${date}.csv`, rows);
+  const week = (wd.weekStart || SUM.selectedWeek || 'weekly').replaceAll('/', '-');
+  downloadCSV(`facility_summary_weekly_${week}.csv`, rows);
 }
 
-function exportCompareCSV() {
-  if (!CMP.selected.length || !Object.keys(CMP.dataMap).length) {
-    App.showToast('Run Comparison first', 'error');
+
+async function exportCompareCSV() {
+  if (!CMP.selected || CMP.selected.length < 2) {
+    App.showToast('Select at least 2 compare dates first', 'error');
+    return;
+  }
+
+  const fetchDate = async (date) => {
+    if (CMP.dataMap[date]) return CMP.dataMap[date];
+
+    const isLive = date === State.meta?.reportDate && State.meta?.lensCount > 0;
+    const d = isLive ? State.depts : (await API.get('all', { date })).data;
+
+    CMP.dataMap[date] = d;
+    return d;
+  };
+
+  let dataArr = [];
+
+  try {
+    showTransition('history', 'Preparing compare CSV…');
+    dataArr = await Promise.all(CMP.selected.map(fetchDate));
+    hideTransition();
+  } catch (e) {
+    hideTransition();
+    App.showToast('Compare export failed: ' + e.message, 'error');
     return;
   }
 
@@ -3985,10 +4061,8 @@ function exportCompareCSV() {
     ['Date', 'Lens Count', 'Order Count', 'Lab Lenses Broken', 'Lab Lens %', 'Frames Broken', 'Frame Breakage %']
   ];
 
-  CMP.selected.forEach(date => {
-    const d = CMP.dataMap[date];
-    if (!d) return;
-
+  CMP.selected.forEach((date, i) => {
+    const d = dataArr[i];
     const lt = d.summary?.labTotal || {};
 
     rows.push([
@@ -4003,31 +4077,29 @@ function exportCompareCSV() {
   });
 
   rows.push([]);
-  rows.push(['Date', 'Department', 'Lenses Broken', 'Lens Breakage %']);
+  rows.push(['Date', 'Department', 'Lenses Broken', 'Lens Breakage %', 'Frames Broken', 'Top Reason']);
 
-  CMP.selected.forEach(date => {
-    const d = CMP.dataMap[date];
-    if (!d) return;
-
-    const lensCount = d.lensCount || 1;
+  CMP.selected.forEach((date, i) => {
+    const d = dataArr[i];
 
     DEPTS.forEach(dept => {
       const key = DEPT_KEYS[dept];
-      const total = d[key]?.totals || {};
-      const broken = total.lensesBroken || 0;
-      const pct = broken > 0 ? (broken / lensCount) * 100 : 0;
+      const depSummary = (d.summary?.departments || []).find(x => x.department === dept);
+      const totals = d[key]?.totals || {};
 
       rows.push([
         date,
         dept,
-        broken,
-        pct.toFixed(2) + '%'
+        depSummary?.lensesBroken || totals.lensesBroken || 0,
+        (((depSummary?.lensBrkPct || 0) * 100)).toFixed(2) + '%',
+        depSummary?.framesBroken || totals.framesBroken || 0,
+        depSummary?.topReason || ''
       ]);
     });
   });
 
-  const from = CMP.selected[0]?.replaceAll('/', '-') || 'from';
-  const to = CMP.selected[CMP.selected.length - 1]?.replaceAll('/', '-') || 'to';
+  const from = CMP.selected[CMP.selected.length - 1]?.replaceAll('/', '-') || 'from';
+  const to = CMP.selected[0]?.replaceAll('/', '-') || 'to';
 
   downloadCSV(`facility_compare_${from}_to_${to}.csv`, rows);
 }

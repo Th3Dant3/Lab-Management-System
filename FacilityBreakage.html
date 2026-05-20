@@ -91,15 +91,17 @@
         <div class="header-sub" id="headerSub">Loading…</div>
       </div>
     </div>
-    <div class="header-right">
-      <div class="header-right">
+
+  <div class="header-right">
+
   <a class="back-btn" href="index.html">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
     Dashboard
   </a>
 
-  <div class="mode-badge" id="modeBadge">
-      <!-- Mode indicator -->
+        <!-- Mode indicator -->
       <div class="mode-badge" id="modeBadge">
         <span class="mode-dot live-dot-anim"></span>
         <span id="modeLabel">LIVE</span>
@@ -384,9 +386,14 @@
           Run Comparison
         </button>
 
-        <button class="sum-report-btn csv-export-btn" id="cmpExportBtn" onclick="exportCompareCSV()" style="opacity:0.4;pointer-events:none;flex-shrink:0">
+    <button
+  class="sum-report-btn csv-export-btn"
+  id="cmpExportBtn"
+  onclick="exportCompareCSV()"
+  disabled
+  style="opacity:.45;pointer-events:none">
   ⬇ Export CSV
-       </button>
+</button>
 
       </div>
 
