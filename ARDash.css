@@ -2541,3 +2541,80 @@ button {
   justify-content: center !important;
   min-width: 0 !important;
 }
+
+/* =====================================================
+   FORCE LIVE SECTORING CHAMBERS GREEN / BLUE
+   Must stay at the very bottom of ARDash.css
+===================================================== */
+
+/* Remove old purple from all loaded/full chambers */
+.chamber.full,
+.chamber.active,
+.chamber.loaded,
+.chamber.complete {
+  border-color: rgba(86, 227, 109, 0.95) !important;
+  background: radial-gradient(
+    circle at 50% 60%,
+    rgba(86, 227, 109, 0.42),
+    rgba(20, 92, 48, 0.20) 70%
+  ) !important;
+  box-shadow:
+    0 0 14px rgba(86, 227, 109, 0.55),
+    inset 0 0 10px rgba(86, 227, 109, 0.24) !important;
+}
+
+/* Text inside green chambers */
+.chamber.full .chamber-count,
+.chamber.active .chamber-count,
+.chamber.loaded .chamber-count,
+.chamber.complete .chamber-count {
+  color: #b8ffc3 !important;
+}
+
+/* Alternate loaded/full chambers blue */
+.chamber.full:nth-child(even),
+.chamber.active:nth-child(even),
+.chamber.loaded:nth-child(even),
+.chamber.complete:nth-child(even) {
+  border-color: rgba(0, 217, 255, 0.95) !important;
+  background: radial-gradient(
+    circle at 50% 60%,
+    rgba(0, 217, 255, 0.40),
+    rgba(0, 75, 115, 0.20) 70%
+  ) !important;
+  box-shadow:
+    0 0 14px rgba(0, 217, 255, 0.55),
+    inset 0 0 10px rgba(0, 217, 255, 0.24) !important;
+}
+
+/* Text inside blue chambers */
+.chamber.full:nth-child(even) .chamber-count,
+.chamber.active:nth-child(even) .chamber-count,
+.chamber.loaded:nth-child(even) .chamber-count,
+.chamber.complete:nth-child(even) .chamber-count {
+  color: #9ff3ff !important;
+}
+
+/* Keep partial chamber orange */
+.chamber.partial {
+  border-color: rgba(255, 153, 0, 0.65) !important;
+  background: rgba(255, 153, 0, 0.10) !important;
+  box-shadow:
+    0 0 13px rgba(255, 153, 0, 0.24),
+    inset 0 0 8px rgba(255, 153, 0, 0.12) !important;
+}
+
+.chamber.partial .chamber-count {
+  color: var(--orange-bright) !important;
+}
+
+/* Empty chambers stay dark */
+.chamber.empty {
+  border-color: #2c2f3b !important;
+  background: rgba(50, 50, 60, 0.15) !important;
+  box-shadow: none !important;
+}
+
+.chamber.empty .chamber-count {
+  color: var(--text-mute) !important;
+}
