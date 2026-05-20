@@ -84,11 +84,7 @@
 
   <!-- ── HEADER ── -->
   <header class="header">
-    <div class="header-left">
-      <a class="back-btn" href="index.html">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-        Dashboard
-      </a>
+    <div class="header-left">   
       <div class="logo-mark">ZB</div>
       <div>
         <div class="header-title">Zenni Quality Dashboard</div>
@@ -96,6 +92,13 @@
       </div>
     </div>
     <div class="header-right">
+      <div class="header-right">
+  <a class="back-btn" href="index.html">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    Dashboard
+  </a>
+
+  <div class="mode-badge" id="modeBadge">
       <!-- Mode indicator -->
       <div class="mode-badge" id="modeBadge">
         <span class="mode-dot live-dot-anim"></span>
@@ -155,12 +158,12 @@
       <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="breakage">
-      <span class="dot" style="background:var(--brk)"></span>Breakage
+      <span class="dot" style="background:var(--brk)"></span>Breakage Dept
     
       <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
     <button class="nav-tab" data-tab="mailroom">
-      <span class="dot" style="background:var(--mail)"></span>Mailroom
+      <span class="dot" style="background:var(--mail)"></span>Mailroom/Incoming/Facility
     
       <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
@@ -310,6 +313,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           Generate Report
         </button>
+        <button class="sum-report-btn csv-export-btn" onclick="exportSummaryCSV()">
+  ⬇ Export CSV
+       </button>
+
       </div>
 
       <!-- Report output panel (slides in below header) -->
@@ -376,6 +383,11 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           Run Comparison
         </button>
+
+        <button class="sum-report-btn csv-export-btn" id="cmpExportBtn" onclick="exportCompareCSV()" style="opacity:0.4;pointer-events:none;flex-shrink:0">
+  ⬇ Export CSV
+       </button>
+
       </div>
 
       <div id="cmpResults"></div>

@@ -3502,3 +3502,14 @@ body::before {
   font-family: var(--font-display) !important;
   line-height: 1 !important;
 }
+
+.csv-export-btn {
+  border-color: rgba(56,189,248,0.35) !important;
+  color: var(--cyan) !important;
+  background: linear-gradient(135deg, rgba(56,189,248,0.10), rgba(34,212,126,0.08)) !important;
+}
+
+.csv-export-btn:hover {
+  background: linear-gradient(135deg, rgba(56,189,248,0.20), rgba(34,212,126,0.14)) !important;
+  box-shadow: 0 0 14px rgba(56,189,248,0.18);
+}

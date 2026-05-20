@@ -735,7 +735,7 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
       { label: 'Lenses Broken',  value: U.fmt(totals.lensesBroken), accent: color, sub: '' },
       { label: 'Lens Brk %',     value: lensPct.toFixed(2) + '%', accent: U.statusColor(lensPct, goal || 999), sub: goal ? `Goal ≤${goal}%` : '', badge: goal ? U.statusBadge(lensPct, goal) : '' },
       { label: 'Frames Broken',  value: U.fmt(totals.framesBroken), accent: 'var(--amber)', sub: totals.framesBroken > 0 ? framePctDisp.toFixed(2) + '%' : '—' },
-      { label: 'Unique Reasons', value: reasons.filter(r => r.lensesBroken > 0 || r.framesBroken > 0).length, accent: 'var(--muted)', sub: '' },
+      { label: 'Breakage Reasons', value: reasons.filter(r => r.lensesBroken > 0 || r.framesBroken > 0).length, accent: 'var(--muted)', sub: '' },
     ].map(k => `
       <div class="kpi-card" style="--accent:${k.accent}">
         <div class="kpi-label">${k.label}</div>
@@ -1790,6 +1790,39 @@ const SUM = {
   selectedDept: 'LAB',
 };
 
+function parseDashDate_(v) {
+  if (!v) return null;
+
+  const parts = String(v).split('/');
+  if (parts.length !== 3) return null;
+
+  return new Date(
+    Number(parts[2]),
+    Number(parts[0]) - 1,
+    Number(parts[1])
+  );
+}
+
+function fmtDashDate_(d) {
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+function getSundayWeekStart_(dateStr) {
+  const d = parseDashDate_(dateStr);
+  if (!d) return null;
+
+  d.setDate(d.getDate() - d.getDay());
+  return fmtDashDate_(d);
+}
+
+function buildWeeksFromHistoryDates_(dates) {
+  return [...new Set(
+    (dates || [])
+      .map(getSundayWeekStart_)
+      .filter(Boolean)
+  )].sort((a, b) => parseDashDate_(b) - parseDashDate_(a));
+}
+
 async function initSummaryTab() {
   try {
     // Load available dates
@@ -1803,11 +1836,8 @@ async function initSummaryTab() {
     }
 
     // Load available weeks
-    try {
-      const wRes = await fetch(`${API_URL}?action=weekly`);
-      const wJson = await wRes.json();
-      if (wJson.success) SUM.weeks = wJson.data?.availableWeeks || [];
-    } catch(e) {}
+   // Build available weeks from all saved history dates
+      SUM.weeks = buildWeeksFromHistoryDates_(SUM.dates);
 
     // Populate date selects
     const ds = document.getElementById('sumDateSelect');
@@ -2299,15 +2329,31 @@ async function loadSumDate(date) {
 }
 
 async function loadSumWeek(weekStart) {
+  if (!weekStart) return;
+
   SUM.selectedWeek = weekStart;
+
   try {
-    const res  = await fetch(`${API_URL}?action=weekly&weekStart=${encodeURIComponent(weekStart)}`);
+    const res = await fetch(
+      `${API_URL}?action=weekly&weekStart=${encodeURIComponent(weekStart)}`
+    );
+
     const json = await res.json();
-    if (!json.success) throw new Error(json.error);
+
+    if (!json.success) {
+      throw new Error(json.error || 'Weekly API failed');
+    }
+
     SUM.weekData = json.data;
+
     renderSumWeekly(json.data);
+
     hideTransition();
-  } catch(e) { App.showToast('Weekly error: ' + e.message, 'error'); hideTransition(); }
+
+  } catch (e) {
+    App.showToast('Weekly error: ' + e.message, 'error');
+    hideTransition();
+  }
 }
 
 function renderSumKpis(d) {
@@ -3839,4 +3885,149 @@ async function loadArWipForFlowMap() {
   } catch (err) {
     console.error("AR WIP load failed:", err);
   }
+}
+
+function csvSafe(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v).replace(/"/g, '""');
+  return `"${s}"`;
+}
+
+function downloadCSV(filename, rows) {
+  if (!rows || !rows.length) {
+    App.showToast('No CSV data available', 'error');
+    return;
+  }
+
+  const csv = rows.map(row => row.map(csvSafe).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+  App.showToast('CSV exported', 'success');
+}
+
+function exportSummaryCSV() {
+  const d = SUM.data;
+  if (!d) {
+    App.showToast('Load Summary data first', 'error');
+    return;
+  }
+
+  const lt = d.summary?.labTotal || {};
+  const rows = [
+    ['Report Date', d.reportDate || SUM.selectedDate || ''],
+    [],
+    ['Section', 'Metric', 'Value'],
+    ['Lab Total', 'Lens Count', d.lensCount || 0],
+    ['Lab Total', 'Order Count', d.orderCount || 0],
+    ['Lab Total', 'Lab Lenses Broken', lt.labLensesBroken || 0],
+    ['Lab Total', 'Lab Lens %', ((lt.labLensPct || 0) * 100).toFixed(2) + '%'],
+    ['Lab Total', 'Frames Broken', lt.framesBroken || 0],
+    ['Lab Total', 'Frame Breakage %', ((lt.labFramePct || 0) * 100).toFixed(2) + '%'],
+    [],
+    ['Department', 'Lenses Broken', 'Lens Breakage %', 'Frames Broken', 'Top Reason']
+  ];
+
+  (d.summary?.departments || []).forEach(dep => {
+    rows.push([
+      dep.department,
+      dep.lensesBroken || 0,
+      ((dep.lensBrkPct || 0) * 100).toFixed(2) + '%',
+      dep.framesBroken || 0,
+      dep.topReason || ''
+    ]);
+  });
+
+  rows.push([]);
+  rows.push(['Department', 'Rank', 'Reason', 'Lenses Broken', 'Frames Broken']);
+
+  Object.entries(d.summary?.topReasons || {}).forEach(([dept, reasons]) => {
+    (reasons || []).forEach(r => {
+      rows.push([
+        dept,
+        r.rank || '',
+        r.reason || '',
+        r.lensesBroken || 0,
+        r.framesBroken || 0
+      ]);
+    });
+  });
+
+  const date = (d.reportDate || SUM.selectedDate || 'summary').replaceAll('/', '-');
+  downloadCSV(`facility_summary_${date}.csv`, rows);
+}
+
+function exportCompareCSV() {
+  if (!CMP.selected.length || !Object.keys(CMP.dataMap).length) {
+    App.showToast('Run Comparison first', 'error');
+    return;
+  }
+
+  const DEPTS = ['AR', 'Finish', 'Surface', 'LMS', 'Inventory', 'Breakage'];
+  const DEPT_KEYS = {
+    AR: 'ar',
+    Finish: 'finish',
+    Surface: 'surface',
+    LMS: 'lms',
+    Inventory: 'inventory',
+    Breakage: 'breakage'
+  };
+
+  const rows = [
+    ['Date', 'Lens Count', 'Order Count', 'Lab Lenses Broken', 'Lab Lens %', 'Frames Broken', 'Frame Breakage %']
+  ];
+
+  CMP.selected.forEach(date => {
+    const d = CMP.dataMap[date];
+    if (!d) return;
+
+    const lt = d.summary?.labTotal || {};
+
+    rows.push([
+      date,
+      d.lensCount || 0,
+      d.orderCount || 0,
+      lt.labLensesBroken || 0,
+      ((lt.labLensPct || 0) * 100).toFixed(2) + '%',
+      lt.framesBroken || 0,
+      ((lt.labFramePct || 0) * 100).toFixed(2) + '%'
+    ]);
+  });
+
+  rows.push([]);
+  rows.push(['Date', 'Department', 'Lenses Broken', 'Lens Breakage %']);
+
+  CMP.selected.forEach(date => {
+    const d = CMP.dataMap[date];
+    if (!d) return;
+
+    const lensCount = d.lensCount || 1;
+
+    DEPTS.forEach(dept => {
+      const key = DEPT_KEYS[dept];
+      const total = d[key]?.totals || {};
+      const broken = total.lensesBroken || 0;
+      const pct = broken > 0 ? (broken / lensCount) * 100 : 0;
+
+      rows.push([
+        date,
+        dept,
+        broken,
+        pct.toFixed(2) + '%'
+      ]);
+    });
+  });
+
+  const from = CMP.selected[0]?.replaceAll('/', '-') || 'from';
+  const to = CMP.selected[CMP.selected.length - 1]?.replaceAll('/', '-') || 'to';
+
+  downloadCSV(`facility_compare_${from}_to_${to}.csv`, rows);
 }
