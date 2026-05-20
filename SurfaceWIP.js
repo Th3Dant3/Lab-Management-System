@@ -824,7 +824,7 @@ function renderFlowGrid() {
     return;
   }
 
-  const maxWip = Math.max(...rows.map(r => num(r.CurrentJobTotal)), 1);
+  const csv = [headers.join(","), ...csvRows].join("\n");
 
   grid.innerHTML = rows.map((row, index) => {
     const wip = num(row.CurrentJobTotal);
@@ -1020,8 +1020,8 @@ function renderContinuousSurfaceFlow(rows) {
 
       <div class="option3-clean-toolbar">
         <div>
-          <span class="option3-section-label">Snake Flow Map</span>
-          <strong>Station → WIP Moving → Next Station</strong>
+          <span class="option3-section-label">Process Flow</span>
+          
         </div>
 
         <div class="option3-clean-meta">
@@ -1695,17 +1695,40 @@ function renderLines() {
   const rows = state.surfaceFlow || [];
   const total = num((state.summary || {}).SurfaceTotalWIP) || 1;
 
-  const lineB = rows.filter(r => isLineB(r.FlowStep));
-  const shared = rows.filter(r => isShared(r.FlowStep));
+  function isIQStar(row) {
+    const step = String(row.FlowStep || "").trim();
+    const display = String(row.DisplayName || "").trim();
+    return step === "Cooling Storage" || step === "IQ Star" || display === "IQ Star";
+  }
+
+  function isSurfaceInspection(row) {
+    const step = String(row.FlowStep || "").trim();
+    const display = String(row.DisplayName || "").trim();
+    return step === "Surface Inspection" || display === "Surface Inspection";
+  }
+
+  const lineB = rows.filter(r => isLineB(r.FlowStep) || isIQStar(r));
+
+  const shared = rows.filter(r =>
+    isShared(r.FlowStep) &&
+    !isIQStar(r) &&
+    !isSurfaceInspection(r)
+  );
+
+  const inspectionRows = rows.filter(r => isSurfaceInspection(r));
 
   const lineBTotal = lineB.reduce((sum, r) => sum + num(r.CurrentJobTotal), 0);
   const sharedTotal = shared.reduce((sum, r) => sum + num(r.CurrentJobTotal), 0);
+  const inspectionWipTotal = inspectionRows.reduce((sum, r) => sum + num(r.CurrentJobTotal), 0);
+  const inspectionOutTotal = getStationScanTotal("Surface Inspection");
 
-  const maxWip = Math.max(lineBTotal, sharedTotal, 1);
+  const maxWip = Math.max(lineBTotal, sharedTotal, inspectionWipTotal, 1);
 
   function laneCard(title, subtitle, cardRows, cardTotal, accentColor) {
     const icon = title.includes("Line B")
       ? ICONS.gear
+      : title.includes("Inspection")
+      ? ICONS.shield
       : title.includes("Shared")
       ? ICONS.scan
       : ICONS.box;
@@ -1754,24 +1777,66 @@ function renderLines() {
       </article>`;
   }
 
+  function inspectionReportCard() {
+    const shareOfFacility = Math.round((inspectionWipTotal / total) * 100);
+
+    return `
+      <article class="ln-card ln-inspection-report" style="--ln-accent:var(--orange)">
+        <div class="ln-header">
+          <div class="ln-icon" style="color:var(--orange)">${ICONS.shield}</div>
+          <div class="ln-header-text">
+            <div class="ln-title">Surface Inspection Report</div>
+            <div class="ln-subtitle">Inspection output and remaining inspection WIP</div>
+          </div>
+          <div class="ln-total" style="color:var(--orange)">${inspectionOutTotal.toLocaleString()}</div>
+        </div>
+
+        <div class="ln-share-bar-track">
+          <div class="ln-share-bar-fill" style="width:${Math.min(100, Math.round((inspectionOutTotal / Math.max(total, 1)) * 100))}%;background:var(--orange);box-shadow:0 0 18px rgba(249,115,22,0.45)"></div>
+          <span class="ln-share-label">Inspection OUT today</span>
+        </div>
+
+        <div class="ln-rows">
+          <div class="ln-bar-row">
+            <div class="ln-dot" style="background:var(--orange);box-shadow:0 0 8px var(--orange)"></div>
+            <div class="ln-step-name">Surface Inspection OUT</div>
+            <div class="ln-bar-track">
+              <div class="ln-bar-fill" style="width:${Math.min(100, Math.round((inspectionOutTotal / Math.max(total, 1)) * 100))}%;background:var(--orange);box-shadow:0 0 12px rgba(249,115,22,0.44)"></div>
+            </div>
+            <div class="ln-val">${inspectionOutTotal.toLocaleString()}</div>
+          </div>
+
+          <div class="ln-bar-row">
+            <div class="ln-dot" style="background:var(--dim);box-shadow:0 0 8px var(--dim)"></div>
+            <div class="ln-step-name">Inspection WIP Remaining</div>
+            <div class="ln-bar-track">
+              <div class="ln-bar-fill" style="width:${shareOfFacility}%;background:var(--dim);box-shadow:0 0 12px rgba(148,163,184,0.3)"></div>
+            </div>
+            <div class="ln-val">${inspectionWipTotal.toLocaleString()}</div>
+          </div>
+        </div>
+      </article>`;
+  }
+
   grid.innerHTML = `
-    ${laneCard("Shared / Intake", "SF Scan · Unbox · Cooling · Inspection", shared, sharedTotal, "var(--cyan)")}
-    ${laneCard("Line B", "Active production line", lineB, lineBTotal, "var(--purple)")}
+    ${laneCard(
+      "Shared / Intake",
+      "SF Scan · Unbox",
+      shared,
+      sharedTotal,
+      "var(--cyan)"
+    )}
+
+    ${laneCard(
+      "Line B",
+      "IQ Star · Auto Blockers · Generating · Polishing · Engraving · Detaping · Coating",
+      lineB,
+      lineBTotal,
+      "var(--purple)"
+    )}
+
+    ${inspectionReportCard()}
   `;
-
-  requestAnimationFrame(() => {
-    grid.querySelectorAll(".ln-bar-fill").forEach(el => {
-      const target = el.style.width;
-      el.style.width = "0%";
-      requestAnimationFrame(() => { el.style.width = target; });
-    });
-
-    grid.querySelectorAll(".ln-share-bar-fill").forEach(el => {
-      const target = el.style.width;
-      el.style.width = "0%";
-      requestAnimationFrame(() => { el.style.width = target; });
-    });
-  });
 }
 
 
@@ -1872,9 +1937,7 @@ function generateAlerts(rows, summary) {
 }
 
 
-/* =========================================================
-   SECTION 18 — ANALYTICS TAB
-========================================================= */
+
 
 /* =========================================================
    SECTION 18 — ANALYTICS TAB
@@ -1887,139 +1950,156 @@ function renderAnalytics() {
 
   const rows = state.surfaceFlow || [];
   const s = state.summary || {};
-  const total = num(s.SurfaceTotalWIP) || 1;
 
-  const groups = {};
-
-  rows.forEach(row => {
-    const group = safeText(row.FlowGroup, "Other");
-    groups[group] = (groups[group] || 0) + num(row.CurrentJobTotal);
-  });
-
-  const entries = Object.entries(groups).sort((a, b) => b[1] - a[1]);
-  const max = Math.max(...entries.map(([, value]) => value), 1);
-
-  const largestStep = safeText(s.LargestStep);
-  const largestStepTotal = num(s.LargestStepTotal);
-  const largestPct = Math.round((largestStepTotal / total) * 100);
+  const total = num(s.SurfaceTotalWIP);
+  const totalSafe = total || 1;
 
   const mainWip = num(s.SurfaceMainWIP);
   const intakeWip = num(s.SurfaceIntakeWIP);
-  const inspectionTotal = getStationScanTotal("Surface Inspection");
+  const largestStep = safeText(s.LargestStep);
+  const largestStepTotal = num(s.LargestStepTotal);
+  const inspectionOut = getStationScanTotal("Surface Inspection");
 
-  const criticalRows = rows.filter(row => statusFromBackend(row) === "Critical");
-  const watchRows = rows.filter(row => statusFromBackend(row) === "Watch");
+  const bottleneckPct = Math.round((largestStepTotal / totalSafe) * 100);
+  const intakePct = Math.round((intakeWip / totalSafe) * 100);
+  const mainPct = Math.round((mainWip / totalSafe) * 100);
+  const inspectionPct = Math.round((inspectionOut / totalSafe) * 100);
 
-  const operationalRisk =
-    criticalRows.length > 0 ? "High" :
-    watchRows.length >= 3 ? "Moderate" :
-    "Controlled";
+  const criticalRows = rows.filter(row => {
+    const step = safeText(row.FlowStep, "");
+    return !isLineA(step) && statusFromBackend(row) === "Critical";
+  });
 
-  const recommendedAction =
-    criticalRows.length > 0
-      ? `Immediate support should be directed toward ${largestStep}. This area is carrying the highest load and may restrict downstream movement.`
-      : watchRows.length > 0
-      ? `Monitor the elevated stations and rebalance labor before the next report cycle.`
-      : `Surface flow is currently stable. Continue monitoring intake, inspection, and downstream movement.`;
+  const watchRows = rows.filter(row => {
+    const step = safeText(row.FlowStep, "");
+    return !isLineA(step) && statusFromBackend(row) === "Watch";
+  });
+
+  const topRows = rows
+    .filter(row => !isLineA(row.FlowStep))
+    .slice()
+    .sort((a, b) => num(b.CurrentJobTotal) - num(a.CurrentJobTotal))
+    .slice(0, 4);
+
+  const healthStatus =
+    bottleneckPct >= 40 || criticalRows.length >= 2 ? "At Risk" :
+    bottleneckPct >= 25 || watchRows.length >= 2 ? "Needs Monitoring" :
+    "Healthy";
+
+  const healthClass =
+    healthStatus === "At Risk" ? "high" :
+    healthStatus === "Needs Monitoring" ? "moderate" :
+    "controlled";
+
+  const healthScore =
+    healthStatus === "At Risk" ? 42 :
+    healthStatus === "Needs Monitoring" ? 68 :
+    88;
+
+  const healthNarrative =
+    healthStatus === "At Risk"
+      ? `Surface is currently under pressure. ${largestStep} is holding ${largestStepTotal.toLocaleString()} jobs, which is ${bottleneckPct}% of total Surface WIP. Intake and downstream movement should be watched closely before EOS.`
+      : healthStatus === "Needs Monitoring"
+      ? `Surface is moving, but ${largestStep} is becoming the main pressure point. Current WIP is still manageable if inspection output continues improving.`
+      : `Surface flow is in a healthy range. WIP is distributed well enough to continue normal monitoring.`;
+
+  const recommendation =
+    healthStatus === "At Risk"
+      ? `${largestStep} needs attention first. Additional support near intake and the next downstream step may help reduce carryover before EOS.`
+      : healthStatus === "Needs Monitoring"
+      ? `Keep an eye on ${largestStep}. If the next refresh shows growth, consider shifting support before the issue becomes a hard bottleneck.`
+      : `No major intervention is needed. Continue watching intake, inspection output, and station balance.`;
 
   grid.innerHTML = `
-    <section class="optical-analytics-report">
+    <section class="health-report-shell">
 
-      <article class="optical-report-hero">
+      <article class="health-report-hero ${healthClass}">
         <div>
-          <div class="report-eyebrow">Optical Operations Analytics</div>
-          <h2>Surface Production Health Report</h2>
-          <p>
-            This report evaluates the current Surface workflow using live WIP, scan activity,
-            bottleneck concentration, and station-level distribution. The goal is to identify
-            where jobs are accumulating and where operational support should be focused.
-          </p>
+          <div class="report-eyebrow">Production Health Report</div>
+          <h2>Surface Department Health</h2>
+          <p>${healthNarrative}</p>
         </div>
 
-        <div class="optical-risk-card">
-          <span>Operational Risk</span>
-          <strong class="${operationalRisk.toLowerCase()}">${operationalRisk}</strong>
+        <div class="health-score-card">
+          <span>Health Score</span>
+          <strong>${healthScore}</strong>
+          <small>${healthStatus}</small>
         </div>
       </article>
 
-      <div class="optical-insight-grid">
+      <div class="health-report-grid">
 
-        <article class="optical-insight-card">
-          <div class="insight-label">Total Surface WIP</div>
-          <div class="insight-value">${total.toLocaleString()}</div>
-          <p>
-            Current jobs staged within the Surface workflow. This includes intake,
-            active production areas, and downstream Surface stations.
-          </p>
+        <article class="health-report-card">
+          <span>Current WIP Load</span>
+          <strong>${total.toLocaleString()}</strong>
+          <p>${activeRowsText(rows)} active Surface areas are holding work right now.</p>
         </article>
 
-        <article class="optical-insight-card">
-          <div class="insight-label">Main Surface WIP</div>
-          <div class="insight-value">${mainWip.toLocaleString()}</div>
-          <p>
-            Jobs beyond initial intake. This is the strongest indicator of workload
-            already inside the Surface production path.
-          </p>
+        <article class="health-report-card">
+          <span>Intake Pressure</span>
+          <strong>${intakePct}%</strong>
+          <p>${intakeWip.toLocaleString()} jobs remain at SF Scan & Verify.</p>
         </article>
 
-        <article class="optical-insight-card warning">
-          <div class="insight-label">Primary Constraint</div>
-          <div class="insight-value">${largestStep}</div>
-          <p>
-            ${largestStepTotal.toLocaleString()} jobs are currently concentrated here,
-            representing ${largestPct}% of total Surface WIP.
-          </p>
+        <article class="health-report-card">
+          <span>Production Flow</span>
+          <strong>${mainPct}%</strong>
+          <p>${mainWip.toLocaleString()} jobs are already inside Surface production.</p>
         </article>
 
-        <article class="optical-insight-card">
-          <div class="insight-label">Inspection Scan Activity</div>
-          <div class="insight-value">${inspectionTotal.toLocaleString()}</div>
-          <p>
-            Total Surface Inspection scan activity. This helps indicate downstream
-            release movement after jobs complete the Surface path.
-          </p>
+        <article class="health-report-card">
+          <span>Surface Inspection OUT</span>
+          <strong>${inspectionOut.toLocaleString()}</strong>
+          <p>${inspectionPct}% output signal against current WIP volume.</p>
         </article>
 
       </div>
 
-      <article class="optical-narrative-card">
-        <div class="report-section-title">Operational Interpretation</div>
-        <p>
-          Surface is currently showing <strong>${total.toLocaleString()}</strong> jobs in WIP.
-          The largest workload concentration is <strong>${largestStep}</strong> with
-          <strong>${largestStepTotal.toLocaleString()}</strong> jobs. When one Surface station
-          carries a large share of total WIP, it can slow the flow into downstream steps such as
-          coating, inspection, and release.
-        </p>
+      <article class="health-diagnosis-card">
+        <div>
+          <div class="report-section-title">Health Diagnosis</div>
+          <p>
+            The primary constraint is <strong>${largestStep}</strong>, currently holding
+            <strong>${largestStepTotal.toLocaleString()}</strong> jobs. This station represents
+            <strong>${bottleneckPct}%</strong> of total Surface WIP.
+          </p>
+        </div>
 
-        <p>
-          Intake currently shows <strong>${intakeWip.toLocaleString()}</strong> jobs at SF Scan.
-          Comparing intake against main Surface WIP helps separate new arrivals from jobs already
-          moving through blocking, generating, polishing, coating, and inspection.
-        </p>
-
-        <div class="recommendation-box">
-          <span>Recommended Action</span>
-          <strong>${recommendedAction}</strong>
+        <div class="health-recommendation ${healthClass}">
+          <span>Recommended Focus</span>
+          <strong>${recommendation}</strong>
         </div>
       </article>
 
-      <article class="optical-distribution-card">
-        <div class="report-section-title">WIP Distribution by Flow Group</div>
-        <p class="report-section-sub">
-          This view ranks Surface workload by process group to show where jobs are accumulating.
-        </p>
+      <article class="health-table-card">
+        <div class="executive-panel-head">
+          <div>
+            <div class="report-section-title">Stations Impacting Health</div>
+            <p class="report-section-sub">Top areas affecting the current health status.</p>
+          </div>
+          <div class="report-chip">${topRows.length} stations</div>
+        </div>
 
-        <div class="group-bars optical-bars">
-          ${entries.map(([name, value]) => {
-            const percent = Math.round((value / total) * 100);
+        <div class="executive-top-list">
+          ${topRows.map((row, index) => {
+            const displayName = safeText(row.DisplayName || row.FlowStep);
+            const wip = num(row.CurrentJobTotal);
+            const status = statusFromBackend(row);
+            const pctOfTotal = total > 0 ? Math.round((wip / total) * 100) : 0;
+
+            const statusClass =
+              status === "Critical" ? "critical" :
+              status === "Watch" ? "watch" :
+              "";
+
             return `
-              <div class="group-bar-row">
-                <div class="gb-name">${name}</div>
-                <div class="gb-track">
-                  <div class="gb-fill" style="width:${Math.round((value / max) * 100)}%"></div>
+              <div class="executive-step-row ${statusClass}">
+                <div class="executive-rank">${index + 1}</div>
+                <div class="executive-step-body">
+                  <strong>${displayName}</strong>
+                  <span>${status} · ${pctOfTotal}% of Surface WIP</span>
                 </div>
-                <div class="gb-val">${value.toLocaleString()} <span>${percent}%</span></div>
+                <div class="executive-step-value">${wip.toLocaleString()}</div>
               </div>
             `;
           }).join("")}
@@ -2028,6 +2108,10 @@ function renderAnalytics() {
 
     </section>
   `;
+}
+
+function activeRowsText(rows) {
+  return rows.filter(row => !isLineA(row.FlowStep) && num(row.CurrentJobTotal) > 0).length;
 }
 
 
@@ -2044,217 +2128,201 @@ function renderReports() {
   const s = state.summary || {};
 
   if (!rows.length) {
-    wrap.innerHTML = `<div class="flow-loading">No summary data available.</div>`;
+    wrap.innerHTML = `<div class="flow-loading">No Surface summary data available.</div>`;
     return;
   }
 
   const total = num(s.SurfaceTotalWIP);
-  const main = num(s.SurfaceMainWIP);
-  const intake = num(s.SurfaceIntakeWIP);
+  const totalSafe = total || 1;
+
+  const mainWip = num(s.SurfaceMainWIP);
+  const intakeWip = num(s.SurfaceIntakeWIP);
   const largestStep = safeText(s.LargestStep);
   const largestStepTotal = num(s.LargestStepTotal);
-  const largestPct = total > 0 ? Math.round((largestStepTotal / total) * 100) : 0;
-
   const inspectionTotal = getStationScanTotal("Surface Inspection");
 
-  const visibleRows = rows.filter(row => {
-    const flowStep = safeText(row.FlowStep, "");
-    return !(CONFIG.LINE_A_OFFLINE && isLineA(flowStep));
+  const bottleneckPct = Math.round((largestStepTotal / totalSafe) * 100);
+  const mainPct = Math.round((mainWip / totalSafe) * 100);
+  const intakePct = Math.round((intakeWip / totalSafe) * 100);
+
+  const activeRows = rows.filter(row => !isLineA(row.FlowStep) && num(row.CurrentJobTotal) > 0);
+
+  const criticalRows = rows.filter(row => {
+    const step = safeText(row.FlowStep, "");
+    return !isLineA(step) && statusFromBackend(row) === "Critical";
   });
 
-  const criticalRows = visibleRows.filter(row => statusFromBackend(row) === "Critical");
-  const watchRows = visibleRows.filter(row => statusFromBackend(row) === "Watch");
-  const activeRows = visibleRows.filter(row => statusFromBackend(row) === "ACTIVE");
-  const lowRows = visibleRows.filter(row => statusFromBackend(row) === "LOW");
-  const emptyRows = visibleRows.filter(row => num(row.CurrentJobTotal) === 0);
+  const watchRows = rows.filter(row => {
+    const step = safeText(row.FlowStep, "");
+    return !isLineA(step) && statusFromBackend(row) === "Watch";
+  });
 
-  const topSteps = visibleRows
+  const topRows = rows
+    .filter(row => !isLineA(row.FlowStep))
     .slice()
     .sort((a, b) => num(b.CurrentJobTotal) - num(a.CurrentJobTotal))
     .slice(0, 5);
 
-  const groups = {};
+  const secondStep = topRows[1];
+  const secondStepName = secondStep ? safeText(secondStep.DisplayName || secondStep.FlowStep) : "—";
+  const secondStepTotal = secondStep ? num(secondStep.CurrentJobTotal) : 0;
 
-  visibleRows.forEach(row => {
-    const group = safeText(row.FlowGroup, "Other");
-    groups[group] = (groups[group] || 0) + num(row.CurrentJobTotal);
-  });
+  const hourlyRows = Array.isArray(state.surfaceHourlyInOut)
+    ? state.surfaceHourlyInOut
+    : [];
 
-  const groupEntries = Object.entries(groups).sort((a, b) => b[1] - a[1]);
-  const maxGroup = Math.max(...groupEntries.map(([, value]) => value), 1);
+  const hourlyOutputTotal = hourlyRows.reduce((sum, row) => {
+    return sum + num(row.Output || row.Out || row.TotalOut || row.TotalOutput || row.ScanOut || 0);
+  }, 0);
 
-  const liveRows = buildLiveTransferRowsFromSurfaceFlow_();
-  const totalCurrentUpNow = liveRows.reduce((sum, row) => sum + num(row.EstimatedInTransfer), 0);
+  const hourlyInputTotal = hourlyRows.reduce((sum, row) => {
+    return sum + num(row.Input || row.In || row.TotalIn || row.TotalInput || row.ScanIn || 0);
+  }, 0);
 
-  const riskLevel =
-    criticalRows.length > 0 ? "High" :
-    watchRows.length >= 2 ? "Moderate" :
+  const outputSignal = inspectionTotal || hourlyOutputTotal;
+  const netBuild = Math.max(0, total - outputSignal);
+
+  const releasePct = total > 0 ? Math.round((outputSignal / total) * 100) : 0;
+
+  const eosRisk =
+    bottleneckPct >= 40 || criticalRows.length >= 2 ? "High" :
+    bottleneckPct >= 25 || watchRows.length >= 2 ? "Moderate" :
     "Controlled";
 
-  const riskClass =
-    riskLevel === "High" ? "high" :
-    riskLevel === "Moderate" ? "moderate" :
+  const eosClass =
+    eosRisk === "High" ? "high" :
+    eosRisk === "Moderate" ? "moderate" :
     "controlled";
 
-  const productionRead =
-    criticalRows.length > 0
-      ? `${largestStep} is the primary constraint and should receive immediate attention.`
-      : watchRows.length > 0
-      ? `Surface is carrying elevated WIP in ${watchRows.length} watch area(s), but the flow is still manageable.`
-      : `Surface is currently balanced with no critical WIP concentration.`;
+  const readiness =
+    releasePct >= 45 ? "Strong" :
+    releasePct >= 25 ? "Developing" :
+    "Behind";
 
-  const actionRead =
-    criticalRows.length > 0
-      ? `Shift support toward ${largestStep}, verify staffing coverage, and monitor whether downstream stations begin to lose flow.`
-      : watchRows.length > 0
-      ? `Continue monitoring elevated stations and prepare to rebalance labor if WIP increases in the next refresh cycle.`
-      : `Maintain current staffing and continue normal monitoring.`;
+  const readinessClass =
+    readiness === "Strong" ? "controlled" :
+    readiness === "Developing" ? "moderate" :
+    "high";
+
+  const daySummary =
+    `Surface is carrying ${total.toLocaleString()} jobs across ${activeRows.length} active WIP areas. ` +
+    `${mainWip.toLocaleString()} jobs (${mainPct}%) are already inside production, while ` +
+    `${intakeWip.toLocaleString()} jobs (${intakePct}%) remain at intake. ` +
+    `The main constraint is ${largestStep} with ${largestStepTotal.toLocaleString()} jobs, representing ${bottleneckPct}% of total Surface WIP.`;
+
+  const outputSummary =
+    outputSignal > 0
+      ? `Surface Inspection shows ${outputSignal.toLocaleString()} completed scan activity today, equal to ${releasePct}% of current WIP volume.`
+      : `Hourly output data is not available yet, so EOS projection is based on current WIP and station concentration only.`;
+
+  const eosSummary =
+    eosRisk === "High"
+      ? `EOS carryover risk is high. If the current constraint is not reduced, Surface will likely carry a heavy intake and production backlog into the next shift.`
+      : eosRisk === "Moderate"
+      ? `EOS carryover risk is moderate. The shift can recover if support is moved to the constraint and downstream stations keep releasing work.`
+      : `EOS carryover risk is controlled. Current WIP distribution does not show a severe end-of-shift backlog pattern.`;
+
+  const leadershipAction =
+  eosRisk === "High"
+    ? `${largestStep} is currently carrying most of the Surface WIP. Additional support might requiered in ${secondStepName} to stabilize flow.`
+    : eosRisk === "Moderate"
+    ? `${largestStep} should continue to be monitored through the next refresh cycle. If WIP continues building, consider shifting additional support downstream.`
+    : `Surface flow is currently stable. Continue monitoring inspection output and intake movement through the remainder of the shift.`;
 
   wrap.innerHTML = `
-    <section class="executive-summary-shell">
+    <section class="daily-summary-shell">
 
-      <div class="executive-summary-hero">
-
-        <article class="executive-main-card">
-          <div class="report-eyebrow">Executive Surface Summary</div>
-
-          <div class="executive-main-row">
-            <div>
-              <div class="executive-total">${total.toLocaleString()}</div>
-              <div class="executive-total-label">Total Surface WIP</div>
-            </div>
-
-            <div class="executive-risk-badge ${riskClass}">
-              <span>Operational Risk</span>
-              <strong>${riskLevel}</strong>
-            </div>
+      <article class="daily-brief-card">
+        <div class="daily-brief-head">
+          <div>
+            <div class="report-eyebrow">Daily Executive Summary</div>
+            <h2>Surface Shift Performance Read</h2>
+            <p>${daySummary}</p>
           </div>
 
-          <p class="executive-read">
-            <strong>Production Read:</strong> Surface currently has
-            <strong>${total.toLocaleString()}</strong> jobs in WIP, with
-            <strong>${main.toLocaleString()}</strong> jobs already inside active Surface production
-            and <strong>${intake.toLocaleString()}</strong> jobs at intake.
-            ${productionRead}
-          </p>
-
-          <div class="executive-metric-grid">
-
-            <div class="executive-metric">
-              <span>Main Surface WIP</span>
-              <strong>${main.toLocaleString()}</strong>
-              <small>Jobs past intake and inside production flow</small>
-            </div>
-
-            <div class="executive-metric">
-              <span>Surface Intake</span>
-              <strong>${intake.toLocaleString()}</strong>
-              <small>Jobs entering through SF Scan & Verify</small>
-            </div>
-
-            <div class="executive-metric">
-              <span>Current WIP Moving</span>
-              <strong>${totalCurrentUpNow.toLocaleString()}</strong>
-              <small>Workload feeding downstream stations</small>
-            </div>
-
-            <div class="executive-metric orange">
-              <span>Inspection Activity</span>
-              <strong>${inspectionTotal.toLocaleString()}</strong>
-              <small>Total Surface Inspection scans today</small>
-            </div>
-
+          <div class="daily-risk-tile ${eosClass}">
+            <span>EOS Risk</span>
+            <strong>${eosRisk}</strong>
           </div>
-        </article>
-
-        <article class="executive-status-card">
-          <div class="report-section-title">Operational Status</div>
-
-          <div class="executive-status-list">
-
-            <div class="executive-status-row critical">
-              <div>
-                <strong>Critical Steps</strong>
-                <span>Stations above critical threshold</span>
-              </div>
-              <b>${criticalRows.length}</b>
-            </div>
-
-            <div class="executive-status-row watch">
-              <div>
-                <strong>Watch Steps</strong>
-                <span>Stations requiring monitoring</span>
-              </div>
-              <b>${watchRows.length}</b>
-            </div>
-
-            <div class="executive-status-row active">
-              <div>
-                <strong>Active Steps</strong>
-                <span>Stations currently holding work</span>
-              </div>
-              <b>${activeRows.length + lowRows.length}</b>
-            </div>
-
-            <div class="executive-status-row">
-              <div>
-                <strong>Empty Visible Steps</strong>
-                <span>Visible non-Line-A stations at zero</span>
-              </div>
-              <b>${emptyRows.length}</b>
-            </div>
-
-          </div>
-        </article>
-
-      </div>
-
-      <article class="executive-action-card">
-        <div>
-          <div class="report-section-title">Supervisor Action Read</div>
-          <p>
-            ${actionRead}
-            The largest WIP concentration is <strong>${largestStep}</strong> with
-            <strong>${largestStepTotal.toLocaleString()}</strong> jobs, representing
-            <strong>${largestPct}%</strong> of total Surface WIP.
-          </p>
         </div>
 
-        <div class="action-priority ${riskClass}">
-          <span>Priority</span>
-          <strong>${riskLevel}</strong>
+        <div class="daily-summary-grid">
+          <div class="daily-summary-metric">
+            <span>Current WIP Position</span>
+            <strong>${total.toLocaleString()}</strong>
+            <small>${activeRows.length} active areas · ${criticalRows.length} critical · ${watchRows.length} watch</small>
+          </div>
+
+          <div class="daily-summary-metric">
+            <span>Production WIP</span>
+            <strong>${mainWip.toLocaleString()}</strong>
+            <small>${mainPct}% already inside Surface flow</small>
+          </div>
+
+          <div class="daily-summary-metric">
+            <span>Intake Load</span>
+            <strong>${intakeWip.toLocaleString()}</strong>
+            <small>${intakePct}% still at SF Scan & Verify</small>
+          </div>
+
+          <div class="daily-summary-metric">
+            <span>Output / Release Signal</span>
+            <strong>${outputSignal.toLocaleString()}</strong>
+            <small>${releasePct}% release signal against current WIP</small>
+          </div>
+
+          <div class="daily-summary-metric">
+            <span>Constraint Impact</span>
+            <strong>${bottleneckPct}%</strong>
+            <small>${largestStep} · ${largestStepTotal.toLocaleString()} jobs</small>
+          </div>
+
+        <div class="daily-summary-metric">
+  <span>Surface Inspection OUT</span>
+  <strong>${outputSignal.toLocaleString()}</strong>
+  <small>
+    ${releasePct}% of current Surface WIP has reached inspection output today.
+  </small>
+</div>
         </div>
       </article>
 
-      <div class="executive-bottom-grid">
+      <article class="daily-narrative-card">
+        <div>
+          <div class="report-section-title">Professional Shift Readout</div>
+          <p>${outputSummary}</p>
+          <p>${eosSummary}</p>
+        </div>
 
-        <article class="executive-panel">
+        <div class="daily-action-box ${eosClass}">
+          <span>Leadership Action</span>
+          <strong>${leadershipAction}</strong>
+        </div>
+      </article>
+
+      <div class="daily-insight-grid">
+
+        <article class="daily-panel">
           <div class="executive-panel-head">
             <div>
-              <div class="report-section-title">Top WIP Stations</div>
-              <p class="report-section-sub">
-                Highest current WIP by visible station. These are the areas most likely to restrict Surface flow.
-              </p>
+              <div class="report-section-title">EOS Carryover Watch</div>
+              <p class="report-section-sub">Highest risk areas to reduce before end of shift.</p>
             </div>
-
-            <div class="report-chip">
-              ${largestStep}: ${largestStepTotal.toLocaleString()}
-            </div>
+            <div class="report-chip">${topRows.length} areas</div>
           </div>
 
           <div class="executive-top-list">
-            ${topSteps.map((row, index) => {
-              const wip = num(row.CurrentJobTotal);
+            ${topRows.map((row, index) => {
+              const flowStep = safeText(row.FlowStep, "");
               const displayName = safeText(row.DisplayName || row.FlowStep);
-              const flowStep = safeText(row.FlowStep);
-              const group = safeText(row.FlowGroup);
+              const wip = num(row.CurrentJobTotal);
               const status = statusFromBackend(row);
+              const percent = total > 0 ? Math.round((wip / total) * 100) : 0;
 
               const statusClass =
                 status === "Critical" ? "critical" :
                 status === "Watch" ? "watch" :
-                status === "ACTIVE" ? "active" :
-                "low";
+                "";
 
               return `
                 <div class="executive-step-row ${statusClass}">
@@ -2262,7 +2330,7 @@ function renderReports() {
 
                   <div class="executive-step-body">
                     <strong>${displayName}</strong>
-                    <span>${flowStep} · ${group} · ${status}</span>
+                    <span>${flowStep} · ${status} · ${percent}% of total WIP</span>
                   </div>
 
                   <div class="executive-step-value">${wip.toLocaleString()}</div>
@@ -2272,38 +2340,39 @@ function renderReports() {
           </div>
         </article>
 
-        <article class="executive-panel">
+        <article class="daily-panel">
           <div class="executive-panel-head">
             <div>
-              <div class="report-section-title">WIP by Flow Group</div>
-              <p class="report-section-sub">
-                Group-level distribution showing where Surface work is accumulating.
-              </p>
+              <div class="report-section-title">Across-the-Board Read</div>
+              <p class="report-section-sub">Simple leadership interpretation of the current shift.</p>
             </div>
-
-            <div class="report-chip">${groupEntries.length} groups</div>
+            <div class="report-chip">${readiness}</div>
           </div>
 
-          <div class="executive-group-bars">
-            ${groupEntries.map(([name, value]) => {
-              const width = Math.round((value / maxGroup) * 100);
-              const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+          <div class="daily-read-list">
+            <div>
+              <span>Primary Bottleneck</span>
+              <strong>${largestStep}</strong>
+              <small>${largestStepTotal.toLocaleString()} jobs are concentrated here.</small>
+            </div>
 
-              return `
-                <div class="executive-group-row">
-                  <div class="executive-group-name">${name}</div>
+            <div>
+              <span>Secondary Pressure</span>
+              <strong>${secondStepName}</strong>
+              <small>${secondStepTotal.toLocaleString()} jobs sitting behind the primary constraint.</small>
+            </div>
 
-                  <div class="executive-group-track">
-                    <div class="executive-group-fill" style="width:${width}%"></div>
-                  </div>
+            <div>
+              <span>Hourly Output Signal</span>
+              <strong>${outputSignal.toLocaleString()}</strong>
+              <small>Uses Surface Inspection scan activity when hourly output is not available.</small>
+            </div>
 
-                  <div class="executive-group-value">
-                    ${value.toLocaleString()}
-                    <span>${percent}%</span>
-                  </div>
-                </div>
-              `;
-            }).join("")}
+            <div>
+              <span>Estimated Remaining Pressure</span>
+              <strong>${netBuild.toLocaleString()}</strong>
+              <small>Current WIP minus release signal. Use as a rough EOS pressure indicator.</small>
+            </div>
           </div>
         </article>
 

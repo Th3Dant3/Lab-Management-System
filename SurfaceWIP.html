@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>Surface Live Flow Command Center</title>
+  <title>Surface Dashboard</title>
 
-  <link rel="stylesheet" href="SurfaceWIP.css?v=20260506-option3-command-center" />
+  <link rel="stylesheet" href="SurfaceWIP.css?v=20260520-production-intelligence" />
 </head>
 
 <body>
@@ -89,7 +89,7 @@
               <rect x="14" y="14" width="7" height="7" rx="1"></rect>
             </svg>
           </span>
-          Overview
+          Process Flow
         </button>
 
         <button class="nav-item" data-tab="transfer">
@@ -100,7 +100,7 @@
               <path d="M21 6l-6 6 6 6"></path>
             </svg>
           </span>
-          Live Flow
+          Line Constraints
         </button>
 
         <button class="nav-item" data-tab="detail">
@@ -125,7 +125,7 @@
               <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
             </svg>
           </span>
-          Lines
+          Production Lines
         </button>
 
         <button class="nav-item" data-tab="alerts">
@@ -148,7 +148,7 @@
               <line x1="2" y1="20" x2="22" y2="20"></line>
             </svg>
           </span>
-          Analytics
+          Production Health Report
         </button>
 
         <button class="nav-item" data-tab="summary">
@@ -184,9 +184,9 @@
       <header class="page-header">
 
         <div>
-          <div class="brand-kicker">Production Surface</div>
+          <div class="brand-kicker">Surface Dept</div>
 
-          <h1>Surface Live Flow Command Center</h1>
+          <h1>Surface Dashboard</h1>
 
           <div class="header-actions">
             <div class="live-pill">
@@ -255,7 +255,6 @@
       </section>
 
       <section id="tab-overview" class="tab-panel active">
-
         <section class="transfer-shell surface-live-flow-v3-host">
           <div class="transfer-shell__header">
             <div>
@@ -277,11 +276,9 @@
             </div>
           </div>
         </section>
-
       </section>
 
       <section id="tab-transfer" class="tab-panel">
-
         <header class="page-header page-header--slim">
           <div>
             <h1>Hourly In / Out</h1>
@@ -311,11 +308,9 @@
             </div>
           </div>
         </section>
-
       </section>
 
       <section id="tab-detail" class="tab-panel">
-
         <header class="page-header page-header--slim">
           <div>
             <h1>Flow Detail</h1>
@@ -326,29 +321,25 @@
         <div id="flowDetailGrid" class="flow-detail-grid">
           <div class="flow-loading">Loading detailed flow…</div>
         </div>
-
       </section>
 
       <section id="tab-lines" class="tab-panel">
-
         <header class="page-header page-header--slim">
           <div>
-            <h1>Lines</h1>
-            <p class="subtitle">Surface line distribution and active WIP split.</p>
+            <h1>Production Lines</h1>
+            
           </div>
         </header>
 
         <div id="linesGrid" class="lines-grid">
           <div class="flow-loading">Loading line data…</div>
         </div>
-
       </section>
 
       <section id="tab-alerts" class="tab-panel">
-
         <header class="page-header page-header--slim">
           <div>
-            <h1>Alerts</h1>
+            <h1>Operational Alerts</h1>
             <p class="subtitle">Critical and watch-level Surface WIP conditions.</p>
           </div>
         </header>
@@ -356,30 +347,25 @@
         <div id="alertsPanel" class="alerts-panel">
           <div class="flow-loading">Loading alerts…</div>
         </div>
-
       </section>
 
       <section id="tab-analytics" class="tab-panel">
-
         <header class="page-header page-header--slim">
           <div>
-            <h1>Analytics</h1>
-            <p class="subtitle">Surface WIP distribution by flow group.</p>
+            <h1>Production Health Report</h1>            
           </div>
         </header>
 
         <div id="analyticsGrid" class="analytics-grid">
-          <div class="flow-loading">Loading analytics…</div>
+          <div class="flow-loading">Loading production intelligence…</div>
         </div>
-
       </section>
 
       <section id="tab-summary" class="tab-panel">
-
         <header class="page-header page-header--slim">
           <div>
             <h1>Summary</h1>
-            <p class="subtitle">Executive Surface WIP summary and export.</p>
+            <p class="subtitle">Leadership-ready shift readout and export.</p>
           </div>
 
           <div class="header-actions">
@@ -394,9 +380,8 @@
         </header>
 
         <div id="reportTableWrap" class="report-table-wrap">
-          <div class="flow-loading">Loading summary…</div>
+          <div class="flow-loading">Loading executive snapshot…</div>
         </div>
-
       </section>
 
     </main>
@@ -404,7 +389,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="SurfaceWIP.js?v=20260506-v3-clean-blue"></script>
+  <script src="SurfaceWIP.js?v=20260520-production-intelligence"></script>
 
 </body>
 </html>
