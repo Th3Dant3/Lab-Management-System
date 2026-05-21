@@ -15,8 +15,16 @@ const LOADER_MAP = {
   "BHONICKER":     "loader_BHONICKER.html",
   "BDADE":         "loader_BDADE.html",
   "BBLAKE":        "loader_BBLAKE.html",
-  "NPOSTON":       "loader_NPOSTON.html"
-};
+  "BHONICKER": "loader_BHONICKER.html",
+  "NPOSTON":       "loader_NPOSTON.html",
+  "CDAY":          "loader_TEAMLEAD.html",
+  "JJOHNSON":      "loader_TEAMLEAD.html",
+  "CPATRICK":      "loader_TEAMLEAD.html",
+  "CWOOD":         "loader_TEAMLEAD.html",
+  "CFORBES":       "loader_TEAMLEAD.html",
+  "JADAIR":        "loader_TEAMLEAD.html"
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const userEl     = document.getElementById("username");
   const passwordEl = document.getElementById("password");
