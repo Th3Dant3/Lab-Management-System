@@ -17,25 +17,100 @@
 <body>
 
   <!-- LOADING SCREEN -->
-  <div id="loadingScreen" class="loading-screen">
-    <div class="loading-grid"></div>
+<div id="loadingScreen" class="loading-screen">
+  <div class="loading-bg-grid"></div>
+  <div class="loading-bg-glow loading-glow-a"></div>
+  <div class="loading-bg-glow loading-glow-b"></div>
+  <div class="loading-bg-glow loading-glow-c"></div>
 
-    <div class="loader-module">
-      <div class="loader-orbit orbit-one"></div>
-      <div class="loader-orbit orbit-two"></div>
-      <div class="loader-core">
-        <span>FIN</span>
+  <div class="loading-shell">
+    <div class="loading-topline"></div>
+
+    <div class="loading-header">
+      <div class="loading-brand">
+        <div class="loading-brand-mark">
+          <span></span>
+        </div>
+        <div class="loading-brand-copy">
+          <h2>FINISH OPS</h2>
+          <p>Digital Twin Command Center</p>
+        </div>
+      </div>
+
+      <div class="loading-live-pill">
+        <span class="loading-live-dot"></span>
+        Initializing Live System
       </div>
     </div>
 
-    <div class="loader-copy">
-      <h2>Initializing Finish Dashboard</h2>
-      <p>Syncing workflow nodes, WIP signals, and live station intelligence...</p>
-      <div class="loader-bar">
-        <span></span>
+    <div class="loading-core-wrap">
+      <div class="loading-radar-ring ring-1"></div>
+      <div class="loading-radar-ring ring-2"></div>
+      <div class="loading-radar-ring ring-3"></div>
+
+      <div class="loading-core-hex">
+        <div class="loading-core-inner">
+          <span>FIN</span>
+        </div>
+      </div>
+
+      <div class="loading-orbit loading-orbit-cyan"></div>
+      <div class="loading-orbit loading-orbit-purple"></div>
+      <div class="loading-orbit loading-orbit-orange"></div>
+    </div>
+
+    <div class="loading-copy">
+      <h1>Initializing Finish Dashboard</h1>
+      <p id="loadingStatusText">Syncing workflow nodes, WIP signals, and live station intelligence...</p>
+    </div>
+
+    <div class="loading-steps">
+      <div class="loading-step active" id="loadStep1">
+        <span class="step-dot"></span>
+        <span>Connecting API</span>
+      </div>
+      <div class="loading-step" id="loadStep2">
+        <span class="step-dot"></span>
+        <span>Reading station signals</span>
+      </div>
+      <div class="loading-step" id="loadStep3">
+        <span class="step-dot"></span>
+        <span>Calculating WIP + metrics</span>
+      </div>
+      <div class="loading-step" id="loadStep4">
+        <span class="step-dot"></span>
+        <span>Rendering command center</span>
+      </div>
+    </div>
+
+    <div class="loading-progress-wrap">
+      <div class="loading-progress-meta">
+        <span>SYSTEM BOOT PROGRESS</span>
+        <strong id="loadingPercent">0%</strong>
+      </div>
+
+      <div class="loading-progress-bar">
+        <div class="loading-progress-fill" id="loadingProgressFill"></div>
+        <div class="loading-progress-scan"></div>
+      </div>
+    </div>
+
+    <div class="loading-footer-cards">
+      <div class="loading-mini-card">
+        <span>Module</span>
+        <strong>Finish Flow</strong>
+      </div>
+      <div class="loading-mini-card">
+        <span>Theme</span>
+        <strong>Command Center</strong>
+      </div>
+      <div class="loading-mini-card">
+        <span>Status</span>
+        <strong id="loadingFooterStatus">Booting Systems</strong>
       </div>
     </div>
   </div>
+</div>
 
   <!-- BACKGROUND FX -->
   <div class="bg-grid"></div>
@@ -207,12 +282,12 @@
     </section>
 
     <!-- TAB NAVIGATION -->
-    <nav class="command-tabs">
-      <button class="tab-btn active" data-tab="floor">Floor Map</button>      
-      <button class="tab-btn" data-tab="hourly">Hourly Breakdown</button>
-      <button class="tab-btn" data-tab="summary">Executive Summary</button>
-      <button class="tab-btn" data-tab="config">Configuration</button>
-    </nav>
+  <nav class="command-tabs">
+  <button class="tab-btn active" data-tab="floor">Process Flow</button>
+  <button class="tab-btn" data-tab="config">Configuration</button>
+  <button class="tab-btn" data-tab="hourly">Hourly Production Performance</button>
+  <button class="tab-btn" data-tab="summary">Summary</button>
+</nav>
 
     <!-- FLOOR TAB -->
     <section class="tab-content active" data-content="floor">
@@ -533,8 +608,7 @@
     <section class="tab-content" data-content="hourly">
       <section class="hourly-panel">
         <div class="section-heading">
-          <h2>Hourly Performance Breakdown</h2>
-          <p>Each station is measured by hour against the configured rate target. Green means 100% or higher, amber means 90% to 99%, and red means below 90%.</p>
+          <h2>Hourly Production Performance</h2>          
         </div>
 
         <div id="hourlyBreakdownGrid" class="hourly-breakdown-grid">
@@ -755,6 +829,41 @@
 
             <div class="config-total">Training Total: <strong id="cfgMountTrainingTotal">0</strong> jobs/hr</div>
             <div class="config-total">Adjusted Mounting Target: <strong id="cfgMountAdjustedTotal">0</strong> jobs/hr</div>
+          </article>
+        </div>
+      </details>
+
+        <!-- ADD THIS NEW BLOCK HERE -->
+      <details class="config-group">
+        <summary>
+          <div>
+            <h3>Final Inspection Training Metric</h3>
+            <p>Five-week trainee ramp-up target for Final Inspection.</p>
+          </div>
+          <span>Open / Close</span>
+        </summary>
+
+        <div class="config-grid">
+          <article class="config-card training-card">
+            <h3>Final Inspection — Training Metric</h3>
+
+            <label>Week 1 Trainees — 15/hr</label>
+            <input id="cfgFinalTraineeW1" type="number" min="0" value="0" />
+
+            <label>Week 2 Trainees — 30/hr</label>
+            <input id="cfgFinalTraineeW2" type="number" min="0" value="0" />
+
+            <label>Week 3 Trainees — 45/hr</label>
+            <input id="cfgFinalTraineeW3" type="number" min="0" value="0" />
+
+            <label>Week 4 Trainees — 60/hr</label>
+            <input id="cfgFinalTraineeW4" type="number" min="0" value="0" />
+
+            <label>Week 5 Trainees — 75/hr</label>
+            <input id="cfgFinalTraineeW5" type="number" min="0" value="0" />
+
+            <div class="config-total">Training Total: <strong id="cfgFinalTrainingTotal">0</strong> jobs/hr</div>
+            <div class="config-total">Adjusted Final Inspection Target: <strong id="cfgFinalAdjustedTotal">0</strong> jobs/hr</div>
           </article>
         </div>
       </details>

@@ -28,8 +28,15 @@ const DEFAULT_CONFIG = {
 
   drillRate: 5,
   drillCount: 1,
-  finalRate: 75,
-  finalCount: 3
+ finalRate: 75,
+finalCount: 3,
+
+finalTraineeW1: 0,
+finalTraineeW2: 0,
+finalTraineeW3: 0,
+finalTraineeW4: 0,
+finalTraineeW5: 0
+
 };
 
 const SHIFT_RULES = {
@@ -491,9 +498,21 @@ function applyConfigToStation(station, config) {
       station.expectedNormalPerHour = config.drillRate * config.drillCount;
       break;
 
-    case "Final Inspection":
-      station.expectedNormalPerHour = config.finalRate * config.finalCount;
-      break;
+    case "Final Inspection": {
+  const finalCertifiedTotal =
+    Number(config.finalRate || 0) *
+    Number(config.finalCount || 0);
+
+  const finalTrainingTotal =
+    (Number(config.finalTraineeW1 || 0) * 15) +
+    (Number(config.finalTraineeW2 || 0) * 30) +
+    (Number(config.finalTraineeW3 || 0) * 45) +
+    (Number(config.finalTraineeW4 || 0) * 60) +
+    (Number(config.finalTraineeW5 || 0) * 75);
+
+  station.expectedNormalPerHour = finalCertifiedTotal + finalTrainingTotal;
+  break;
+}
 
     case "Bigs":
     case "Sharps":
@@ -891,6 +910,11 @@ function initConfigPanel() {
   setInputValue("cfgDrillCount", config.drillCount);
   setInputValue("cfgFinalRate", config.finalRate);
   setInputValue("cfgFinalCount", config.finalCount);
+  setInputValue("cfgFinalTraineeW1", config.finalTraineeW1);
+setInputValue("cfgFinalTraineeW2", config.finalTraineeW2);
+setInputValue("cfgFinalTraineeW3", config.finalTraineeW3);
+setInputValue("cfgFinalTraineeW4", config.finalTraineeW4);
+setInputValue("cfgFinalTraineeW5", config.finalTraineeW5);
 
   updateConfigTotals();
 
@@ -916,7 +940,13 @@ function initConfigPanel() {
     "cfgDrillRate",
     "cfgDrillCount",
     "cfgFinalRate",
-    "cfgFinalCount"
+"cfgFinalCount",
+"cfgFinalTraineeW1",
+"cfgFinalTraineeW2",
+"cfgFinalTraineeW3",
+"cfgFinalTraineeW4",
+"cfgFinalTraineeW5"
+
   ].forEach(id => {
     document.getElementById(id)?.addEventListener("input", updateConfigTotals);
   });
@@ -946,7 +976,14 @@ mountTraineeW8: getInputValue("cfgMountTraineeW8"),
       drillRate: getInputValue("cfgDrillRate"),
       drillCount: getInputValue("cfgDrillCount"),
       finalRate: getInputValue("cfgFinalRate"),
-      finalCount: getInputValue("cfgFinalCount")
+finalCount: getInputValue("cfgFinalCount"),
+
+finalTraineeW1: getInputValue("cfgFinalTraineeW1"),
+finalTraineeW2: getInputValue("cfgFinalTraineeW2"),
+finalTraineeW3: getInputValue("cfgFinalTraineeW3"),
+finalTraineeW4: getInputValue("cfgFinalTraineeW4"),
+finalTraineeW5: getInputValue("cfgFinalTraineeW5")
+
     };
 
     saveConfig(newConfig);
@@ -983,7 +1020,17 @@ const trainingMountTotal =
   (getInputValue("cfgMountTraineeW8") * 25);
 
   const drillTotal = getInputValue("cfgDrillRate") * getInputValue("cfgDrillCount");
-  const finalTotal = getInputValue("cfgFinalRate") * getInputValue("cfgFinalCount");
+
+  const finalTotal =
+  getInputValue("cfgFinalRate") *
+  getInputValue("cfgFinalCount");
+
+const finalTrainingTotal =
+  (getInputValue("cfgFinalTraineeW1") * 15) +
+  (getInputValue("cfgFinalTraineeW2") * 30) +
+  (getInputValue("cfgFinalTraineeW3") * 45) +
+  (getInputValue("cfgFinalTraineeW4") * 60) +
+  (getInputValue("cfgFinalTraineeW5") * 75);
 
   setText("cfgUnboxTotal", unboxTotal);
   setText("cfgMeiATotal", meiATotal);
@@ -994,6 +1041,8 @@ const trainingMountTotal =
   setText("cfgMountAdjustedTotal", mountTotal + trainingMountTotal);
   setText("cfgDrillTotal", drillTotal);
   setText("cfgFinalTotal", finalTotal);
+  setText("cfgFinalTrainingTotal", finalTrainingTotal);
+  setText("cfgFinalAdjustedTotal", finalTotal + finalTrainingTotal);
 }
 
 
@@ -1069,17 +1118,111 @@ function initHoverEffects() {
   });
 }
 
+let loadingInterval = null;
+let loadingProgress = 0;
+
+function startLoadingAnimation() {
+  stopLoadingAnimation();
+
+  const statuses = [
+    "Connecting to Finish dashboard API...",
+    "Reading live station signals...",
+    "Calculating WIP and throughput metrics...",
+    "Building hourly production performance...",
+    "Rendering command center interface..."
+  ];
+
+  const stepIds = ["loadStep1", "loadStep2", "loadStep3", "loadStep4"];
+  let statusIndex = 0;
+  loadingProgress = 0;
+
+  updateLoadingVisuals(loadingProgress, statuses[0], 0, stepIds);
+
+  loadingInterval = setInterval(() => {
+    if (loadingProgress < 92) {
+      loadingProgress += Math.floor(Math.random() * 8) + 4;
+      if (loadingProgress > 92) loadingProgress = 92;
+    }
+
+    const stepIndex =
+      loadingProgress < 25 ? 0 :
+      loadingProgress < 50 ? 1 :
+      loadingProgress < 75 ? 2 : 3;
+
+    statusIndex = stepIndex;
+
+    updateLoadingVisuals(
+      loadingProgress,
+      statuses[statusIndex] || statuses[statuses.length - 1],
+      stepIndex,
+      stepIds
+    );
+  }, 350);
+}
+
+function finishLoadingAnimation() {
+  updateLoadingVisuals(
+    100,
+    "Dashboard ready.",
+    3,
+    ["loadStep1", "loadStep2", "loadStep3", "loadStep4"]
+  );
+
+  stopLoadingAnimation();
+}
+
+function stopLoadingAnimation() {
+  if (loadingInterval) {
+    clearInterval(loadingInterval);
+    loadingInterval = null;
+  }
+}
+
+function updateLoadingVisuals(
+  percent,
+  text,
+  activeStep,
+  stepIds = ["loadStep1", "loadStep2", "loadStep3", "loadStep4"]
+) {
+  const fill = document.getElementById("loadingProgressFill");
+  const percentEl = document.getElementById("loadingPercent");
+  const statusText = document.getElementById("loadingStatusText");
+  const footerStatus = document.getElementById("loadingFooterStatus");
+
+  if (fill) fill.style.width = `${percent}%`;
+  if (percentEl) percentEl.textContent = `${percent}%`;
+  if (statusText) statusText.textContent = text;
+  if (footerStatus) footerStatus.textContent = text;
+
+  stepIds.forEach((id, index) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.classList.remove("active", "done");
+
+    if (index < activeStep) {
+      el.classList.add("done");
+    } else if (index === activeStep) {
+      el.classList.add("active");
+    }
+  });
+}
+
 function showLoading(show) {
   const loader = document.getElementById("loadingScreen");
   if (!loader) return;
 
   if (show) {
     loader.classList.remove("hidden");
-  } else {
-    setTimeout(() => {
-      loader.classList.add("hidden");
-    }, 350);
+    startLoadingAnimation();
+    return;
   }
+
+  finishLoadingAnimation();
+
+  setTimeout(() => {
+    loader.classList.add("hidden");
+  }, 350);
 }
 
 function renderError(error) {
