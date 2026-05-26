@@ -18,9 +18,68 @@ const FINISH_CAPACITY_CONFIG_KEY = "finishCapacityConfig";
    This is still local JS only. It does not save globally.
    Add more users here only if their login page is not saving Role/Username correctly. */
 const FINISH_LOGIN_PROFILE_OVERRIDES = {
+  /* LMS */
   "BLOPEZ": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" },
   "BRIAN LOPEZ CABRERA": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" },
-  "LOPEZ CABRERA": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" }
+  "LOPEZ CABRERA": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" },
+
+  /* DIRECTOR */
+  "RTATE": { username: "RTATE", role: "SR Director", subRole: "Zenni USA Ohio", firstName: "Rob", lastName: "Tate" },
+  "ROB TATE": { username: "RTATE", role: "SR Director", subRole: "Zenni USA Ohio", firstName: "Rob", lastName: "Tate" },
+  "TATE": { username: "RTATE", role: "SR Director", subRole: "Zenni USA Ohio", firstName: "Rob", lastName: "Tate" },
+
+  /* MANAGERS */
+  "MLITTLE": { username: "MLITTLE", role: "Manager", subRole: "Engineering", firstName: "Matt", lastName: "Little" },
+  "MATT LITTLE": { username: "MLITTLE", role: "Manager", subRole: "Engineering", firstName: "Matt", lastName: "Little" },
+  "LITTLE": { username: "MLITTLE", role: "Manager", subRole: "Engineering", firstName: "Matt", lastName: "Little" },
+
+  "BKARR": { username: "BKARR", role: "Manager", subRole: "Production", firstName: "Bobby", lastName: "Karr" },
+  "BOBBY KARR": { username: "BKARR", role: "Manager", subRole: "Production", firstName: "Bobby", lastName: "Karr" },
+  "KARR": { username: "BKARR", role: "Manager", subRole: "Production", firstName: "Bobby", lastName: "Karr" },
+
+  "BBLAKE": { username: "BBLAKE", role: "Manager", subRole: "Manufacturing Operation Program", firstName: "Beth", lastName: "Blake" },
+  "BETH BLAKE": { username: "BBLAKE", role: "Manager", subRole: "Manufacturing Operation Program", firstName: "Beth", lastName: "Blake" },
+  "BLAKE": { username: "BBLAKE", role: "Manager", subRole: "Manufacturing Operation Program", firstName: "Beth", lastName: "Blake" },
+
+  "SANDERSON": { username: "SANDERSON", role: "SR Manager", subRole: "DC & Inventory", firstName: "Scott", lastName: "Anderson" },
+  "SCOTT ANDERSON": { username: "SANDERSON", role: "SR Manager", subRole: "DC & Inventory", firstName: "Scott", lastName: "Anderson" },
+  "ANDERSON": { username: "SANDERSON", role: "SR Manager", subRole: "DC & Inventory", firstName: "Scott", lastName: "Anderson" },
+
+  /* SUPERVISORS */
+  "AIVANOVSKI": { username: "AIVANOVSKI", role: "Supervisor", subRole: "DC & Inventory", firstName: "Aleks", lastName: "Ivanovski" },
+  "ALEKS IVANOVSKI": { username: "AIVANOVSKI", role: "Supervisor", subRole: "DC & Inventory", firstName: "Aleks", lastName: "Ivanovski" },
+  "IVANOVSKI": { username: "AIVANOVSKI", role: "Supervisor", subRole: "DC & Inventory", firstName: "Aleks", lastName: "Ivanovski" },
+
+  "CBAYLIS": { username: "CBAYLIS", role: "Supervisor", subRole: "DC & Inventory", firstName: "Crystal", lastName: "Baylis" },
+  "CRYSTAL BAYLIS": { username: "CBAYLIS", role: "Supervisor", subRole: "DC & Inventory", firstName: "Crystal", lastName: "Baylis" },
+  "BAYLIS": { username: "CBAYLIS", role: "Supervisor", subRole: "DC & Inventory", firstName: "Crystal", lastName: "Baylis" },
+
+  "YKEEBEE": { username: "YKEEBEE", role: "Supervisor", subRole: "DC & Inventory", firstName: "", lastName: "" },
+
+  "KMANACK": { username: "KMANACK", role: "Supervisor", subRole: "Production", firstName: "Kim", lastName: "Manack" },
+  "KIM MANACK": { username: "KMANACK", role: "Supervisor", subRole: "Production", firstName: "Kim", lastName: "Manack" },
+  "MANACK": { username: "KMANACK", role: "Supervisor", subRole: "Production", firstName: "Kim", lastName: "Manack" },
+
+  "BHECK": { username: "BHECK", role: "Supervisor", subRole: "Production", firstName: "Brittany", lastName: "Heckman" },
+  "BRITTANY HECKMAN": { username: "BHECK", role: "Supervisor", subRole: "Production", firstName: "Brittany", lastName: "Heckman" },
+  "HECKMAN": { username: "BHECK", role: "Supervisor", subRole: "Production", firstName: "Brittany", lastName: "Heckman" },
+
+  "BHONICKER": { username: "BHONICKER", role: "Supervisor", subRole: "Production", firstName: "Brian", lastName: "Honicker" },
+  "BRIAN HONICKER": { username: "BHONICKER", role: "Supervisor", subRole: "Production", firstName: "Brian", lastName: "Honicker" },
+  "HONICKER": { username: "BHONICKER", role: "Supervisor", subRole: "Production", firstName: "Brian", lastName: "Honicker" },
+
+  "NPOSTON": { username: "NPOSTON", role: "Supervisor", subRole: "Production", firstName: "Nash", lastName: "Poston" },
+  "NASH POSTON": { username: "NPOSTON", role: "Supervisor", subRole: "Production", firstName: "Nash", lastName: "Poston" },
+  "POSTON": { username: "NPOSTON", role: "Supervisor", subRole: "Production", firstName: "Nash", lastName: "Poston" },
+
+  /* TRAINING */
+  "BDADE": { username: "BDADE", role: "Training", subRole: "Coordinator", firstName: "Brad", lastName: "Dade" },
+  "BRAD DADE": { username: "BDADE", role: "Training", subRole: "Coordinator", firstName: "Brad", lastName: "Dade" },
+  "DADE": { username: "BDADE", role: "Training", subRole: "Coordinator", firstName: "Brad", lastName: "Dade" },
+
+  "PTOWNSEND": { username: "PTOWNSEND", role: "Training", subRole: "Coordinator", firstName: "Patsy", lastName: "Townsend" },
+  "PATSY TOWNSEND": { username: "PTOWNSEND", role: "Training", subRole: "Coordinator", firstName: "Patsy", lastName: "Townsend" },
+  "TOWNSEND": { username: "PTOWNSEND", role: "Training", subRole: "Coordinator", firstName: "Patsy", lastName: "Townsend" }
 };
 
 function cleanLoginLookupKey(value) {
@@ -504,6 +563,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initRefreshButton();
   initHoverEffects();
   initOperatorCommandUI();
+  initFinishThreeLineCell();
 
   loadDashboard();
   loadFinishOperatorActivity();
@@ -1971,6 +2031,8 @@ function renderOperatorAssignmentConfigPanel() {
           </select>
         </label>
 
+        ${buildLineSlotAssignmentControls(item.station, item.operator, assignment)}
+
         <div class="assignment-target">
           <span>Target</span>
           <strong>${effective > 0 ? numberFmt(effective) + "/hr" : "—"}</strong>
@@ -1996,13 +2058,35 @@ function renderOperatorAssignmentConfigPanel() {
         event.target.dataset.station,
         event.target.dataset.operator,
         current.role || "training",
-        Number(event.target.value || 1)
+        Number(event.target.value || 1),
+        current.line || "",
+        current.slot || ""
+      );
+    });
+  });
+
+  rosterTarget.querySelectorAll("[data-assignment-line], [data-assignment-slot]").forEach(select => {
+    select.addEventListener("change", event => {
+      const station = event.target.dataset.station;
+      const operator = event.target.dataset.operator;
+      const row = event.target.closest(".assignment-row");
+      const current = getOperatorAssignment(operator, station) || { role: "ignore", trainingWeek: 1 };
+      const line = row?.querySelector("[data-assignment-line]")?.value || current.line || "";
+      const slot = row?.querySelector("[data-assignment-slot]")?.value || current.slot || "";
+      saveOperatorAssignment(
+        station,
+        operator,
+        current.role || "ignore",
+        Number(current.trainingWeek || 1),
+        line,
+        slot
       );
     });
   });
 
   updateConfigTotals();
   applyFinishAssignmentPermissionLock();
+  renderFinishThreeLineCell();
 }
 
 function applyFinishAssignmentPermissionLock() {
@@ -2046,7 +2130,7 @@ function buildTrainingWeekOptions(stationName, selectedWeek) {
   `).join("");
 }
 
-function saveOperatorAssignment(stationName, operatorName, role, trainingWeek = 1) {
+function saveOperatorAssignment(stationName, operatorName, role, trainingWeek = 1, line = "", slot = "") {
   if (!canEditFinishOperatorAssignments()) {
     showFinishAssignmentToast("View only. Your role can see operator setup but cannot edit it.");
     renderOperatorAssignmentConfigPanel();
@@ -2069,6 +2153,8 @@ function saveOperatorAssignment(stationName, operatorName, role, trainingWeek = 
       operator,
       role,
       trainingWeek: Number(trainingWeek || 1),
+      line: line || getOperatorAssignment(operator, station)?.line || "",
+      slot: slot || getOperatorAssignment(operator, station)?.slot || "",
       updatedAt: new Date().toISOString(),
       updatedBy: getCurrentUsername(),
       updatedByRole: getCurrentUserRole()
@@ -2081,6 +2167,7 @@ function saveOperatorAssignment(stationName, operatorName, role, trainingWeek = 
   renderOperatorAssignmentConfigPanel();
   updateConfigTotals();
   loadDashboard();
+  renderFinishThreeLineCell();
 
   if (finishOperatorState?.selectedStation) {
     const activeStation = finishOperatorState.stations?.[finishOperatorState.selectedStation];
@@ -2176,7 +2263,7 @@ function injectOperatorAssignmentStyles() {
     .assignment-toolbar select,
     .assignment-row select {
       height: 42px;
-      min-width: 230px;
+      min-width: 150px;
       border-radius: 12px;
       border: 1px solid rgba(0, 217, 255, .28);
       background: #061225;
@@ -2208,7 +2295,7 @@ function injectOperatorAssignmentStyles() {
 
     .assignment-row {
       display: grid;
-      grid-template-columns: minmax(220px, 1.2fr) minmax(220px, .8fr) minmax(190px, .7fr) 110px;
+      grid-template-columns: minmax(220px, 1.15fr) minmax(190px, .72fr) minmax(160px, .62fr) minmax(145px, .55fr) minmax(160px, .62fr) 96px;
       align-items: center;
       gap: 12px;
       padding: 14px;
@@ -2365,6 +2452,10 @@ function initTabs() {
 
       const target = document.querySelector(`[data-content="${tab}"]`);
       if (target) target.classList.add("active");
+
+      if (tab === "personal" && typeof renderFinishThreeLineCell === "function") {
+        renderFinishThreeLineCell();
+      }
     });
   });
 }
@@ -2867,6 +2958,7 @@ async function loadFinishOperatorActivity() {
     renderOperatorSummary(payload.summary || buildOperatorSummaryFromStations(finishOperatorState.stations));
     renderOperatorStationCards(finishOperatorState.stations);
     renderOperatorAssignmentConfigPanel();
+    renderFinishThreeLineCell();
 
     if (apiStatus) apiStatus.textContent = "Connected";
   } catch (error) {
@@ -3654,6 +3746,259 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+
+
+/* =========================================================
+   FINISH 3-LINE PHYSICAL CELL
+   Line A / B / C with odd side left and even side right.
+   Operator output still comes from the live operator API.
+   Line + slot placement comes from personal profile assignment.
+========================================================= */
+const FINISH_LINE_NAMES = ["Line A", "Line B", "Line C"];
+const FINISH_LINE_LAYOUT = {
+  mountingLeft: ["M09", "M07", "M05", "M03", "M01"],
+  mountingRight: ["M10", "M08", "M06", "M04", "M02"],
+  finalLeft: ["FI-03", "FI-01"],
+  finalRight: ["FI-04", "FI-02"]
+};
+
+function initFinishThreeLineCell() {
+  renderFinishThreeLineCell();
+}
+
+function isLineSlotStation(stationName) {
+  const station = normalizeFinishOperatorStation(stationName);
+  return station === "Mounting" || station === "Final Inspection";
+}
+
+function getFinishLineSlotStatusKey() {
+  return `finishLineSlotStatus_${getCurrentUsername()}`;
+}
+
+function loadFinishLineSlotStatus() {
+  try {
+    return JSON.parse(localStorage.getItem(getFinishLineSlotStatusKey()) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveFinishLineSlotStatus(statusMap) {
+  localStorage.setItem(getFinishLineSlotStatusKey(), JSON.stringify(statusMap || {}));
+}
+
+function makeLineSlotKey(line, station, slot) {
+  return `${line}||${normalizeFinishOperatorStation(station)}||${slot}`;
+}
+
+function buildLineOptions(selectedLine = "") {
+  return `<option value="">Select line</option>` + FINISH_LINE_NAMES.map(line =>
+    `<option value="${escapeHtml(line)}" ${line === selectedLine ? "selected" : ""}>${escapeHtml(line)}</option>`
+  ).join("");
+}
+
+function getSlotsForLineStation(stationName) {
+  const station = normalizeFinishOperatorStation(stationName);
+  if (station === "Mounting") {
+    return [
+      ...FINISH_LINE_LAYOUT.mountingLeft,
+      ...FINISH_LINE_LAYOUT.mountingRight
+    ].sort((a, b) => Number(a.replace(/\D/g, "")) - Number(b.replace(/\D/g, "")));
+  }
+  if (station === "Final Inspection") {
+    return ["FI-01", "FI-02", "FI-03", "FI-04"];
+  }
+  return [];
+}
+
+function buildSlotOptions(stationName, selectedSlot = "") {
+  const slots = getSlotsForLineStation(stationName);
+  return `<option value="">Select slot</option>` + slots.map(slot =>
+    `<option value="${escapeHtml(slot)}" ${slot === selectedSlot ? "selected" : ""}>${escapeHtml(slot)}</option>`
+  ).join("");
+}
+
+function buildLineSlotAssignmentControls(stationName, operatorName, assignment = {}) {
+  if (!isLineSlotStation(stationName)) {
+    return `
+      <label class="assignment-line disabled">
+        Line
+        <select disabled><option>Not used</option></select>
+      </label>
+      <label class="assignment-slot disabled">
+        Position
+        <select disabled><option>Not used</option></select>
+      </label>`;
+  }
+
+  return `
+    <label class="assignment-line">
+      Line
+      <select data-assignment-line data-station="${escapeHtml(stationName)}" data-operator="${escapeHtml(operatorName)}">
+        ${buildLineOptions(assignment.line || "")}
+      </select>
+    </label>
+    <label class="assignment-slot">
+      Position
+      <select data-assignment-slot data-station="${escapeHtml(stationName)}" data-operator="${escapeHtml(operatorName)}">
+        ${buildSlotOptions(stationName, assignment.slot || "")}
+      </select>
+    </label>`;
+}
+
+function getAssignedLineSlots(config = loadConfig()) {
+  const assignments = Object.values(config.operatorAssignments || {});
+  const map = {};
+
+  assignments.forEach(assignment => {
+    const line = assignment.line || "";
+    const station = normalizeFinishOperatorStation(assignment.station || "");
+    const slot = assignment.slot || "";
+    if (!line || !station || !slot) return;
+    if (!isLineSlotStation(station)) return;
+
+    const key = makeLineSlotKey(line, station, slot);
+    const live = getLiveOperatorForStation(assignment.operator, station);
+    map[key] = {
+      ...assignment,
+      station,
+      line,
+      slot,
+      total: live?.total ?? 0,
+      hourly: live?.hourly || {},
+      liveNow: !!live
+    };
+  });
+
+  return map;
+}
+
+function getLiveOperatorForStation(operatorName, stationName) {
+  const station = finishOperatorState?.stations?.[normalizeFinishOperatorStation(stationName)];
+  if (!station) return null;
+  const target = normalizeAssignmentOperatorName(operatorName);
+  return (station.operatorList || []).find(op => normalizeAssignmentOperatorName(op.name) === target) || null;
+}
+
+function renderFinishThreeLineCell() {
+  const grid = document.getElementById("finishThreeLineGrid");
+  if (!grid) return;
+
+  const config = loadConfig();
+  const assignmentMap = getAssignedLineSlots(config);
+  const statusMap = loadFinishLineSlotStatus();
+
+  grid.innerHTML = FINISH_LINE_NAMES.map(line => renderOneFinishLine(line, assignmentMap, statusMap)).join("");
+  bindFinishLineCellEvents();
+}
+
+function renderOneFinishLine(line, assignmentMap, statusMap) {
+  const lineAssignments = Object.values(assignmentMap).filter(a => a.line === line);
+  const mountingCount = lineAssignments.filter(a => a.station === "Mounting").length;
+  const finalCount = lineAssignments.filter(a => a.station === "Final Inspection").length;
+  const liveTotal = lineAssignments.reduce((sum, a) => sum + Number(a.total || 0), 0);
+
+  return `
+    <article class="finish-line-cell" data-finish-line="${escapeHtml(line)}">
+      <header class="finish-line-topbar">
+        <div class="finish-line-title">
+          <span>Finish Production Cell</span>
+          <h3>${escapeHtml(line)}</h3>
+        </div>
+        <div class="finish-line-metrics">
+          <div><span>Mounting</span><strong>${numberFmt(mountingCount)}/10</strong></div>
+          <div><span>Final</span><strong>${numberFmt(finalCount)}/4</strong></div>
+          <div><span>Live Output</span><strong>${numberFmt(liveTotal)}</strong></div>
+        </div>
+      </header>
+
+      <div class="line-side left">
+        <div class="line-side-label"><span>Odd Side</span><span>Left</span></div>
+        ${FINISH_LINE_LAYOUT.mountingLeft.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "left")).join("")}
+        <div class="line-final-divider"></div>
+        ${FINISH_LINE_LAYOUT.finalLeft.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "left")).join("")}
+      </div>
+
+      <div class="line-converter-core" aria-label="${escapeHtml(line)} converter">
+        <div class="line-converter-arrows">
+          <span>↓</span><span>↓</span><span>↓</span><span>↓</span><span>↓</span>
+        </div>
+      </div>
+
+      <div class="line-side right">
+        <div class="line-side-label"><span>Even Side</span><span>Right</span></div>
+        ${FINISH_LINE_LAYOUT.mountingRight.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "right")).join("")}
+        <div class="line-final-divider"></div>
+        ${FINISH_LINE_LAYOUT.finalRight.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "right")).join("")}
+      </div>
+
+      <div class="line-status-buttons">
+        <button type="button" data-line-status="online" data-line="${escapeHtml(line)}">Online</button>
+        <button type="button" data-line-status="issue" data-line="${escapeHtml(line)}">Issue</button>
+        <button type="button" data-line-status="down" data-line="${escapeHtml(line)}">Down</button>
+        <button type="button" data-line-status="clear" data-line="${escapeHtml(line)}">Clear</button>
+      </div>
+    </article>`;
+}
+
+function renderLineSlot(line, station, slot, assignmentMap, statusMap, side) {
+  const key = makeLineSlotKey(line, station, slot);
+  const assignment = assignmentMap[key];
+  const status = statusMap[key] || "online";
+  const isFinal = normalizeFinishOperatorStation(station) === "Final Inspection";
+  const operator = assignment?.operator || "Unassigned";
+  const role = assignment ? getAssignmentRoleLabel(assignment.operator, station, loadConfig()) : "Open Slot";
+  const total = Number(assignment?.total || 0);
+  const liveText = assignment?.liveNow ? "Live" : (assignment ? "Saved" : "Open");
+  const direction = side === "left" ? "→" : "←";
+
+  return `
+    <article class="finish-slot ${isFinal ? "final" : "mounting"} ${assignment ? "assigned" : "empty"} slot-status-${escapeHtml(status)}" data-line-slot="${escapeHtml(key)}" data-line="${escapeHtml(line)}" data-station="${escapeHtml(station)}" data-slot="${escapeHtml(slot)}" data-operator="${escapeHtml(assignment?.operator || "")}">
+      <span class="slot-status-dot"></span>
+      <div class="slot-code">${escapeHtml(slot)}</div>
+      <div class="slot-copy">
+        <strong>${escapeHtml(operator)}</strong>
+        <span>${escapeHtml(role)} · ${escapeHtml(liveText)}</span>
+      </div>
+      <div class="slot-output">
+        <strong>${numberFmt(total)}</strong>
+        <span>${escapeHtml(direction)}</span>
+      </div>
+    </article>`;
+}
+
+function bindFinishLineCellEvents() {
+  document.querySelectorAll("[data-line-slot]").forEach(slot => {
+    slot.addEventListener("click", () => {
+      const operator = slot.dataset.operator;
+      const station = slot.dataset.station;
+      if (operator && station && finishOperatorState?.stations?.[normalizeFinishOperatorStation(station)]) {
+        openExpandedOperatorViewer(normalizeFinishOperatorStation(station), operator);
+      } else {
+        showFinishAssignmentToast("Assign an operator in Configuration to activate this position.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-line-status]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      const line = button.dataset.line;
+      const mode = button.dataset.lineStatus;
+      const statusMap = loadFinishLineSlotStatus();
+      const slots = document.querySelectorAll(`[data-finish-line="${CSS.escape(line)}"] [data-line-slot]`);
+      slots.forEach(slot => {
+        const key = slot.dataset.lineSlot;
+        if (mode === "clear") delete statusMap[key];
+        else statusMap[key] = mode;
+      });
+      saveFinishLineSlotStatus(statusMap);
+      renderFinishThreeLineCell();
+    });
+  });
+}
+
 
 function renderOperatorError(error) {
   const grid = document.getElementById("operatorStationGrid");

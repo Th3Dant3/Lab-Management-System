@@ -284,7 +284,8 @@
     <!-- TAB NAVIGATION -->
   <nav class="command-tabs">
   <button class="tab-btn active" data-tab="floor">Process Flow</button>
-  <button class="tab-btn" data-tab="operators">Hourly Operator Performance</button>
+  <button class="tab-btn" data-tab="operators">Operator Command</button>
+  <button class="tab-btn" data-tab="personal">Personal</button>
   <button class="tab-btn" data-tab="config">Configuration</button>
   <button class="tab-btn" data-tab="hourly">Hourly Production Performance</button>
   <button class="tab-btn" data-tab="summary">Summary</button>
@@ -602,6 +603,34 @@
         </aside>
 
       </section>
+
+    </section>
+
+
+
+
+    <!-- PERSONAL FLOOR LAYOUT TAB -->
+    <section class="tab-content" data-content="personal">
+
+      <!-- FINISH THREE-LINE PRODUCTION CELL -->
+      <section id="finishThreeLineCell" class="finish-three-line-cell">
+        <header class="three-line-header">
+          <div>
+            <span class="three-line-eyebrow">PERSONAL FLOOR LAYOUT</span>
+            <h2>Personal Finish Line Assignment</h2>
+            <p>Your personal profile view for Line A, B, and C. Assign operators to Mounting or Final positions from Configuration, then review each line here.</p>
+          </div>
+          <div class="three-line-legend">
+            <span><i class="legend-chip orange"></i> Mounting</span>
+            <span><i class="legend-chip cyan"></i> Final Inspection</span>
+            <span><i class="legend-chip green"></i> Operator assigned</span>
+          </div>
+        </header>
+
+        <div id="finishThreeLineGrid" class="finish-three-line-grid">
+          <article class="three-line-empty">Waiting for Finish operator assignments...</article>
+        </div>
+      </section>
     </section>
 
 
@@ -613,7 +642,8 @@
         <div class="operator-command-hero">
           <div>
             <span class="operator-eyebrow">LIVE OPERATOR ACTIVITY</span>
-            <h2>Finish Operator Hourly Peformace</h2>            
+            <h2>Finish Operator Command</h2>
+            <p>Clickable station cards with hourly station output and individual operator hourly output. Status buttons are UI-only for now.</p>
           </div>
 
           <div class="operator-hero-actions">
