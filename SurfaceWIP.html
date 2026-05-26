@@ -6,7 +6,7 @@
 
   <title>Surface Dashboard</title>
 
-  <link rel="stylesheet" href="SurfaceWIP.css?v=20260520-production-intelligence" />
+  <link rel="stylesheet" href="SurfaceWIP.css?v=20260526-operator-command-no-line-constraints" />
 </head>
 
 <body>
@@ -92,15 +92,16 @@
           Process Flow
         </button>
 
-        <button class="nav-item" data-tab="transfer">
+        <button class="nav-item" data-tab="operators">
           <span class="nav-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12h18"></path>
-              <path d="M3 6l6 6-6 6"></path>
-              <path d="M21 6l-6 6 6 6"></path>
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
           </span>
-          Line Constraints
+          Machine Hourly Breakdown
         </button>
 
         <button class="nav-item" data-tab="detail">
@@ -150,6 +151,9 @@
           </span>
           Production Health Report
         </button>
+
+
+
 
         <button class="nav-item" data-tab="summary">
           <span class="nav-icon">
@@ -278,38 +282,6 @@
         </section>
       </section>
 
-      <section id="tab-transfer" class="tab-panel">
-        <header class="page-header page-header--slim">
-          <div>
-            <h1>Hourly In / Out</h1>
-            <p class="subtitle">
-              Compare received activity by hour between each Surface station.
-            </p>
-          </div>
-        </header>
-
-        <section class="transfer-shell">
-          <div class="transfer-shell__header">
-            <div>
-              <div class="transfer-title">Hourly In / Out Comparison</div>
-              <div class="transfer-subtitle">
-                Current hour received compared against the previous station.
-              </div>
-            </div>
-
-            <div id="transferMetaSecondary" class="transfer-meta">
-              Live flow
-            </div>
-          </div>
-
-          <div id="transferGridSecondary" class="transfer-grid">
-            <div class="transfer-loading">
-              Open Overview to view the live Surface flow.
-            </div>
-          </div>
-        </section>
-      </section>
-
       <section id="tab-detail" class="tab-panel">
         <header class="page-header page-header--slim">
           <div>
@@ -361,6 +333,54 @@
         </div>
       </section>
 
+
+      <section id="tab-operators" class="tab-panel">
+        <header class="page-header page-header--slim operator-command-header">
+          <div>
+            <div class="brand-kicker">Surface Machine Breakdown</div>
+            <h1>Hourly Breakdown</h1>
+            
+          </div>
+          <div class="header-actions">
+            <div id="operatorLatestUpdate" class="latest-update-pill">Latest Update: —</div>
+            <button id="btnExportOperatorsCsv" class="btn-export">Export Operators CSV</button>
+          </div>
+        </header>
+
+        <section class="operator-command-shell">
+          <div class="operator-command-hero">
+            <div class="operator-command-copy">              
+              <h2>Surface Dashboard</h2>              
+            </div>
+            <div class="operator-command-live"><span class="pulse-dot"></span>LIVE OPERATOR SIGNAL</div>
+          </div>
+
+          <div class="operator-command-kpis">
+            <article class="operator-command-kpi"><span>Total Jobs</span><strong id="operatorTotalJobs">—</strong><small>Visible station output</small></article>
+            <article class="operator-command-kpi"><span>Active Operators</span><strong id="operatorTotalOperators">—</strong><small>Operator rows captured</small></article>
+            <article class="operator-command-kpi highlight"><span>Peak Hour</span><strong id="operatorPeakHour">—</strong><small id="operatorPeakHourSub">—</small></article>
+            <article class="operator-command-kpi"><span>Top Station</span><strong id="operatorTopStation">—</strong><small id="operatorTopStationSub">—</small></article>
+          </div>
+
+          <div class="operator-command-toolbar">
+            <div class="operator-control"><label for="operatorStationFilter">Station Focus</label><select id="operatorStationFilter"><option value="all">All Surface Operator Stations</option></select></div>
+            <div class="operator-control operator-control--wide"><label for="operatorSearch">Search</label><input id="operatorSearch" type="search" placeholder="Search operator, station, or access point…" /></div>
+            <div class="operator-control"><label for="operatorSort">Station Sort</label><select id="operatorSort"><option value="stationAsc">Process Order</option><option value="totalDesc">Output High → Low</option><option value="operatorAsc">Top Operator A → Z</option><option value="lastActiveDesc">Last Active Hour</option></select></div>
+          </div>
+
+          <div id="operatorStationChips" class="operator-status-strip"><span class="flow-loading">Loading station status…</span></div>
+          <div id="operatorTableWrap" class="operator-command-grid"><div class="flow-loading">Loading Surface operator command cards…</div></div>
+        </section>
+
+        <aside id="operatorStationDrawer" class="operator-drawer" aria-hidden="true">
+          <div class="operator-drawer-backdrop" data-operator-close></div>
+          <div class="operator-drawer-panel">
+            <button class="operator-drawer-close" data-operator-close aria-label="Close station detail">×</button>
+            <div id="operatorDrawerContent" class="operator-drawer-content"><div class="flow-loading">Select a station to view details.</div></div>
+          </div>
+        </aside>
+      </section>
+
       <section id="tab-summary" class="tab-panel">
         <header class="page-header page-header--slim">
           <div>
@@ -389,7 +409,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="SurfaceWIP.js?v=20260520-production-intelligence"></script>
+  <script src="SurfaceWIP.js?v=20260526-operator-command-no-line-constraints"></script>
 
 </body>
 </html>

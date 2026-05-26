@@ -4,401 +4,804 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Welcome</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;600;700;900&family=Barlow+Condensed:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#000;overflow:hidden;height:100vh;width:100vw;}
+body{background:#03050a;overflow:hidden;height:100vh;width:100vw;}
 
-/* ── Deep LoL atmosphere ── */
+/* ── Zenni blue/teal base — DMC5 dark cinematic ── */
 .bg{
   position:fixed;inset:0;
   background:
-    radial-gradient(ellipse 80% 70% at 50% 50%,  rgba(120,0,0,.28) 0%,transparent 65%),
-    radial-gradient(ellipse 55% 60% at 15% 50%,  rgba(0,140,60,.1) 0%,transparent 55%),
-    radial-gradient(ellipse 55% 60% at 85% 50%,  rgba(140,60,0,.1) 0%,transparent 55%),
-    radial-gradient(ellipse 100% 35% at 50% 100%,rgba(200,0,10,.2) 0%,transparent 55%),
-    radial-gradient(ellipse 60%  25% at 50% 0%,  rgba(160,0,10,.12) 0%,transparent 50%),
-    linear-gradient(180deg,#08000a 0%,#060008 50%,#080202 100%);
-  animation:bgp 5s ease-in-out infinite;
+    radial-gradient(ellipse 80% 65% at 50% 30%,  rgba(0,100,200,.18) 0%,transparent 62%),
+    radial-gradient(ellipse 55% 55% at 10% 60%,  rgba(0,60,140,.12)  0%,transparent 55%),
+    radial-gradient(ellipse 55% 55% at 90% 60%,  rgba(0,60,140,.12)  0%,transparent 55%),
+    radial-gradient(ellipse 100% 30% at 50% 100%,rgba(0,80,180,.12)  0%,transparent 55%),
+    radial-gradient(ellipse 60%  20% at 50% 0%,  rgba(0,40,100,.1)   0%,transparent 50%),
+    linear-gradient(180deg,#020408 0%,#030610 55%,#020408 100%);
+  animation:bgp 6s ease-in-out infinite;
 }
-@keyframes bgp{0%,100%{opacity:.88}50%{opacity:1}}
+@keyframes bgp{0%,100%{opacity:.9}50%{opacity:1}}
 
+/* ── Fine Zenni blue grid ── */
+.grid{
+  position:fixed;inset:0;pointer-events:none;z-index:1;
+  background-image:
+    linear-gradient(rgba(0,120,220,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,120,220,.04) 1px,transparent 1px);
+  background-size:48px 48px;
+  animation:gridDrift 20s linear infinite;
+}
+@keyframes gridDrift{from{background-position:0 0}to{background-position:48px 48px}}
 
-/* ── DMC diagonal slashes ── */
-.dmc-slashes{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1;}
-.dmcs{position:absolute;width:1px;height:200%;background:linear-gradient(180deg,transparent,rgba(200,0,10,.12),transparent);animation:dmcsa 4s ease-in-out infinite;}
-@keyframes dmcsa{0%,100%{opacity:0}50%{opacity:1}}
+/* ── DMC5 style slash lines — Zenni blue tint ── */
+.slashes{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:1;}
+.sl{position:absolute;width:1px;height:200%;
+  background:linear-gradient(180deg,transparent,rgba(0,140,255,.12),transparent);
+  animation:sla 4s ease-in-out infinite;}
+@keyframes sla{0%,100%{opacity:0}50%{opacity:1}}
 
-/* ── DMC pentagram watermark ── */
-.dmc-penta{
+/* ── DMC5 Rebellion/Sparda sigil watermark ── */
+.sigil{
   position:fixed;top:50%;left:50%;
   transform:translate(-50%,-50%);
-  width:580px;height:580px;
-  opacity:.04;
-  animation:pentaRot 25s linear infinite;
   pointer-events:none;z-index:1;
+  opacity:.05;
+  animation:sigilRot 28s linear infinite;
 }
-@keyframes pentaRot{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes sigilRot{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
 
-/* ── Red sparks DMC ── */
-.rspark{position:fixed;border-radius:50%;background:#cc0010;animation:rsparkfly linear infinite;pointer-events:none;z-index:3;}
-@keyframes rsparkfly{0%{transform:translate(0,0) scale(1);opacity:var(--op);}100%{transform:translate(var(--rx),var(--ry)) scale(0);opacity:0;}}
-
-/* ── Rift floor glow ── */
-.rift-floor{
-  position:fixed;bottom:0;left:0;right:0;height:180px;
-  background:linear-gradient(180deg,transparent,rgba(0,180,80,.04),rgba(0,160,60,.08));
-  pointer-events:none;z-index:1;
-}
-.rift-line{
-  position:fixed;bottom:0;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,transparent,rgba(0,200,80,.3),rgba(0,255,100,.5),rgba(0,200,80,.3),transparent);
-  box-shadow:0 0 12px rgba(0,200,80,.3);
+/* ── DMC5 speed lines — horizontal energy ── */
+.speedline{
+  position:fixed;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,160,255,.45),rgba(0,200,255,.6),transparent);
+  animation:speedFly linear infinite;
   pointer-events:none;z-index:2;
 }
+@keyframes speedFly{from{left:-55%;width:40%}to{left:110%;width:40%}}
 
-/* ── Split background: Wukong green left / Jax orange right ── */
-.split-l{
-  position:fixed;top:0;left:0;bottom:0;right:50%;
-  background:radial-gradient(ellipse 120% 100% at 0% 50%,rgba(0,160,60,.12) 0%,transparent 65%);
+/* ── Blue energy particles ── */
+.ep{position:fixed;border-radius:50%;
+  background:rgba(0,160,255,.7);
+  animation:epFly linear infinite;pointer-events:none;z-index:2;}
+@keyframes epFly{0%{transform:translate(0,0) scale(1);opacity:var(--op);}100%{transform:translate(var(--ex),var(--ey)) scale(0);opacity:0;}}
+
+/* ── PR flag left edge ── */
+.pr-edge-l{position:fixed;top:0;left:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,#ce1126,#f0f0f0,#ce1126,#f0f0f0,#ce1126);
+  opacity:.3;pointer-events:none;z-index:3;animation:prEdge 4s ease-in-out infinite;}
+.pr-edge-r{position:fixed;top:0;right:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,#002868,#ce1126,#f0f0f0,#ce1126,#002868);
+  opacity:.25;pointer-events:none;z-index:3;animation:prEdge 4s ease-in-out infinite;}
+@keyframes prEdge{0%,100%{opacity:.2}50%{opacity:.38}}
+
+/* PR blue triangle glow */
+.pr-tri{
+  position:fixed;top:0;bottom:0;left:0;width:0;
+  border-top:50vh solid transparent;
+  border-bottom:50vh solid transparent;
+  border-left:26vw solid rgba(0,40,134,.06);
   pointer-events:none;z-index:1;
+  animation:triG 5s ease-in-out infinite;}
+@keyframes triG{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* PR flag watermark */
+.pr-wm{
+  position:fixed;right:-25px;top:50%;transform:translateY(-50%);
+  width:110px;height:68px;border-radius:2px;overflow:hidden;
+  opacity:.06;z-index:1;pointer-events:none;
+  animation:prWm 4s ease-in-out infinite;
 }
-.split-r{
-  position:fixed;top:0;left:50%;bottom:0;right:0;
-  background:radial-gradient(ellipse 120% 100% at 100% 50%,rgba(200,100,0,.12) 0%,transparent 65%);
-  pointer-events:none;z-index:1;
+@keyframes prWm{0%,100%{opacity:.05}50%{opacity:.1}}
+.prwm-i{width:100%;height:100%;display:flex;flex-direction:column;position:relative;}
+.prwm-s{flex:1;}.prwm-r{background:#ce1126;}.prwm-w{background:#f0f0f0;}
+.prwm-t{position:absolute;top:0;bottom:0;left:0;border-top:34px solid transparent;border-bottom:34px solid transparent;border-left:55px solid #002868;}
+.prwm-st{position:absolute;top:50%;left:16px;transform:translateY(-50%);color:#f0f0f0;font-size:16px;z-index:2;}
+.pr-wm::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);animation:fw 2.5s ease-in-out infinite;}
+@keyframes fw{0%{transform:translateX(-150%)}100%{transform:translateX(250%)}}
+
+/* Floating PR stars */
+.prstar{position:fixed;color:rgba(255,255,255,0);font-size:var(--sz);
+  animation:prStarF linear infinite;pointer-events:none;z-index:2;user-select:none;}
+@keyframes prStarF{
+  0%{opacity:0;transform:translateY(0) rotate(0deg);}
+  12%{opacity:1;color:rgba(255,255,255,var(--sop));}
+  88%{opacity:.5;}
+  100%{opacity:0;transform:translateY(-90px) rotate(180deg);}
 }
 
-/* ── Champion reveal flash ── */
-.reveal{
-  position:fixed;inset:0;pointer-events:none;z-index:8;
-  animation:revFlash 3s .4s ease forwards;opacity:0;
-}
-@keyframes revFlash{
-  0%{background:transparent;opacity:0;}
-  5%{background:rgba(200,0,10,.7);opacity:1;}
-  10%{background:transparent;opacity:0;}
-  14%{background:rgba(0,200,100,.35);opacity:.6;}
-  18%{background:transparent;opacity:0;}
-  22%{background:rgba(220,120,0,.3);opacity:.5;}
-  26%{opacity:0;}
-}
-
-/* LOCKED IN */
-.locked{
-  position:fixed;top:50%;left:50%;
-  transform:translate(-50%,-50%);
-  font-family:'Bebas Neue',sans-serif;
-  font-size:88px;letter-spacing:8px;
-  color:transparent;white-space:nowrap;
-  pointer-events:none;z-index:9;
-  animation:lockFlash 3s .4s ease forwards;
-}
-@keyframes lockFlash{
-  0%{color:transparent;text-shadow:none;}
-  7%{color:rgba(255,40,20,.95);text-shadow:0 0 40px rgba(220,0,10,1),0 0 80px rgba(200,0,10,.6);}
-  14%{color:transparent;text-shadow:none;}
-}
-
-/* ── Hex grid ── */
-.hex{position:fixed;inset:0;pointer-events:none;z-index:1;
-  background-image:linear-gradient(rgba(200,0,10,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(200,0,10,.04) 1px,transparent 1px);
-  background-size:44px 44px;}
-
-/* ── Energy lines ── */
-.eline{position:fixed;height:1px;pointer-events:none;z-index:2;animation:efly linear infinite;}
-@keyframes efly{from{left:-55%;width:40%}to{left:110%;width:40%}}
-
-/* ── Particles ── */
-.pt{position:fixed;border-radius:50%;animation:ptfly linear infinite;pointer-events:none;z-index:3;}
-@keyframes ptfly{0%{transform:translate(0,0) scale(1);opacity:var(--op);}100%{transform:translate(var(--px),var(--py)) scale(0);opacity:0;}}
+/* ── HUD corners — Zenni blue ── */
+.hc{position:fixed;width:58px;height:58px;pointer-events:none;z-index:3;}
+.hc.tl{top:18px;left:18px;border-top:1.5px solid rgba(0,140,255,.45);border-left:1.5px solid rgba(0,140,255,.45);}
+.hc.tr{top:18px;right:18px;border-top:1.5px solid rgba(0,140,255,.45);border-right:1.5px solid rgba(0,140,255,.45);}
+.hc.bl{bottom:18px;left:18px;border-bottom:1.5px solid rgba(0,140,255,.45);border-left:1.5px solid rgba(0,140,255,.45);}
+.hc.br{bottom:18px;right:18px;border-bottom:1.5px solid rgba(0,140,255,.45);border-right:1.5px solid rgba(0,140,255,.45);}
+.hc.tl::after,.hc.tl::before{content:'';position:absolute;background:rgba(0,140,255,.38);}
+.hc.tl::after{top:-1.5px;left:62px;width:12px;height:1.5px;}
+.hc.tl::before{left:-1.5px;top:62px;width:1.5px;height:12px;}
+.hc.tr::after,.hc.tr::before{content:'';position:absolute;background:rgba(0,140,255,.38);}
+.hc.tr::after{top:-1.5px;right:62px;width:12px;height:1.5px;}
+.hc.tr::before{right:-1.5px;top:62px;width:1.5px;height:12px;}
 
 /* ── Scan ── */
-.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(200,0,10,.15),transparent);animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,160,255,.12),transparent);animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
 @keyframes sc{from{top:0}to{top:100vh}}
 
-/* ── HUD corners ── */
-.hc{position:fixed;width:52px;height:52px;pointer-events:none;z-index:3;}
-.hc.tl{top:16px;left:16px;border-top:2px solid rgba(200,0,10,.5);border-left:2px solid rgba(200,0,10,.5);}
-.hc.tr{top:16px;right:16px;border-top:2px solid rgba(200,120,0,.4);border-right:2px solid rgba(200,120,0,.4);}
-.hc.bl{bottom:16px;left:16px;border-bottom:2px solid rgba(0,200,80,.4);border-left:2px solid rgba(0,200,80,.4);}
-.hc.br{bottom:16px;right:16px;border-bottom:2px solid rgba(200,0,10,.5);border-right:2px solid rgba(200,0,10,.5);}
+/* ── Horizontal accent lines ── */
+.hline{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,120,220,.07),transparent);pointer-events:none;z-index:1;}
 
 /* ══ PAGE ══ */
-.page{position:fixed;inset:0;bottom:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;gap:5px;}
-
-/* ── DUAL CHAMPION BADGES ── */
-.champ-row{
-  display:flex;align-items:center;gap:16px;
-  margin-bottom:8px;
-  animation:champIn .9s .4s cubic-bezier(.17,.67,.3,1.3) both;
+.page{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:0;
 }
-@keyframes champIn{from{opacity:0;transform:scale(.3) rotate(-5deg)}to{opacity:1;transform:scale(1) rotate(0)}}
 
-/* Wukong badge */
-.wukong-badge{
-  width:88px;height:88px;
-  clip-path:polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%);
-  background:radial-gradient(circle at 38% 32%,rgba(0,140,50,.5),rgba(0,60,20,.4),rgba(0,0,0,.9));
+/* ── LMS emblem — DMC5 cinematic ring style ── */
+.emblem{
+  width:100px;height:100px;border-radius:50%;
+  border:2px solid rgba(0,140,255,.55);
+  background:radial-gradient(circle at 38% 32%,rgba(0,80,200,.3),rgba(0,0,0,.96));
   display:flex;align-items:center;justify-content:center;
-  position:relative;
-  animation:wuGlow 2.5s 1.2s ease-in-out infinite;
+  position:relative;margin-bottom:16px;
+  animation:embIn .8s cubic-bezier(.17,.67,.3,1.3) both,embGlow 3s 1s ease-in-out infinite;
 }
-@keyframes wuGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(0,200,80,.4))}50%{filter:drop-shadow(0 0 28px rgba(0,240,100,.9)) drop-shadow(0 0 50px rgba(0,160,60,.3))}}
-
-/* Jax badge */
-.jax-badge{
-  width:88px;height:88px;
-  clip-path:polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%);
-  background:radial-gradient(circle at 38% 32%,rgba(180,100,0,.5),rgba(100,50,0,.4),rgba(0,0,0,.9));
-  display:flex;align-items:center;justify-content:center;
-  position:relative;
-  animation:jaxGlow 2.5s 1.4s ease-in-out infinite;
+@keyframes embIn{from{opacity:0;transform:scale(.3) rotate(-180deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes embGlow{
+  0%,100%{box-shadow:0 0 16px rgba(0,140,255,.35)}
+  50%{box-shadow:0 0 40px rgba(0,180,255,.85),0 0 80px rgba(0,120,220,.25)}
 }
-@keyframes jaxGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(220,140,0,.4))}50%{filter:drop-shadow(0 0 28px rgba(255,160,0,.9)) drop-shadow(0 0 50px rgba(200,100,0,.3))}}
+/* DMC5 style — 3 orbit rings at different speeds */
+.er1{position:absolute;inset:-9px;border-radius:50%;border:1.5px solid transparent;border-top-color:rgba(0,180,255,.8);border-right-color:rgba(0,180,255,.2);animation:ro 2.8s linear infinite;}
+.er2{position:absolute;inset:-17px;border-radius:50%;border:1px solid transparent;border-bottom-color:rgba(0,140,220,.45);animation:ro2 5s linear infinite;}
+.er3{position:absolute;inset:-25px;border-radius:50%;border:1px solid rgba(0,100,200,.1);border-left-color:rgba(0,160,255,.2);animation:ro 10s linear infinite reverse;}
+@keyframes ro{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes ro2{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
+.emb-inner{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.emb-lms{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px;color:#fff;
+  text-shadow:0 0 16px rgba(0,180,255,.9),0 0 30px rgba(0,140,220,.4);line-height:1;}
+.emb-sub{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:2px;color:rgba(0,200,255,.65);text-transform:uppercase;}
 
-/* VS divider */
-.vs-div{display:flex;flex-direction:column;align-items:center;gap:4px;}
-.vs-txt{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;color:rgba(255,255,255,.2);}
-.vs-line{width:1px;height:20px;background:linear-gradient(180deg,transparent,rgba(255,255,255,.15),transparent);}
-
-/* Champion names under badges */
-.champ-names{
-  display:flex;align-items:center;gap:16px;
-  margin-bottom:6px;
-  animation:fu .4s .8s ease both;
+/* ── Welcome / Name ── */
+.welcome-txt{font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:8px;color:rgba(255,255,255,.38);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .45s ease both;}
+.fullname{
+  font-family:'Bebas Neue',sans-serif;font-size:66px;
+  color:#ffffff;letter-spacing:4px;line-height:1;
+  text-align:center;margin-bottom:6px;
+  animation:nameIn .7s .55s ease both;
+  /* DMC5 — name slashes in from the side */
+  text-shadow:0 0 24px rgba(0,160,255,.35),0 0 50px rgba(0,100,200,.15),0 2px 0 rgba(0,0,0,.95);
 }
-.champ-name{
-  font-family:'Cinzel',serif;
-  font-size:11px;letter-spacing:3px;
-  text-transform:uppercase;font-weight:600;
-  width:88px;text-align:center;
+@keyframes nameIn{
+  from{opacity:0;letter-spacing:16px;clip-path:polygon(0 0,0 0,0 100%,0 100%);}
+  to{opacity:1;letter-spacing:4px;clip-path:polygon(0 0,100% 0,100% 100%,0 100%);}
 }
-.champ-name.wu{color:rgba(0,220,80,.7);text-shadow:0 0 8px rgba(0,200,60,.4);}
-.champ-name.jx{color:rgba(255,160,0,.7);text-shadow:0 0 8px rgba(200,120,0,.4);}
-.champ-name-sep{width:32px;text-align:center;color:rgba(255,255,255,.1);font-size:10px;}
 
-/* ── SUMMONER NAME ── */
-.sum-label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:5px;color:rgba(255,100,80,.5);text-transform:uppercase;animation:fu .4s .9s ease both;}
-.sum-name{
-  font-family:'Bebas Neue',sans-serif;font-size:72px;letter-spacing:8px;line-height:1;
-  animation:sumIn .7s 1s ease both;
-  background:linear-gradient(180deg,#ffffff 0%,#ffb0b0 40%,#ff2020 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  filter:drop-shadow(0 0 24px rgba(200,0,10,.7)) drop-shadow(0 0 50px rgba(200,0,10,.3));
-}
-@keyframes sumIn{from{opacity:0;letter-spacing:20px}to{opacity:1;letter-spacing:8px}}
-
-/* ── RANK badge ── */
-.rank-badge{
-  display:inline-flex;align-items:center;gap:10px;
-  padding:5px 18px;
-  border:1px solid rgba(200,0,10,.4);
-  background:rgba(80,0,0,.2);
-  margin-top:3px;
-  animation:fu .5s 1.12s ease both;
+/* ── Title banner — DMC5 clean reveal ── */
+.title-banner{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  border:1px solid rgba(0,140,255,.28);
+  background:rgba(0,20,60,.2);
+  padding:10px 36px;margin-bottom:10px;
   position:relative;overflow:hidden;
+  animation:fu .5s .7s ease both;
+  min-width:300px;
 }
-.rank-badge::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,200,80,.05),transparent);animation:bs 3s ease-in-out infinite;}
-@keyframes bs{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
-.rank-icon-wu{width:18px;height:18px;background:linear-gradient(135deg,#00c850,#008830);clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%);box-shadow:0 0 6px rgba(0,200,80,.5);}
-.rank-icon-jax{width:18px;height:18px;background:linear-gradient(135deg,#ff9000,#cc6000);clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%);box-shadow:0 0 6px rgba(220,140,0,.5);}
-.rank-txt{display:flex;flex-direction:column;gap:0;}
-.rank-main{font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:4px;color:#fff;text-transform:uppercase;font-weight:700;line-height:1;}
-.rank-sub{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:2px;color:rgba(255,100,80,.5);text-transform:uppercase;}
+/* DMC5 red accent stripe on left, blue on right */
+.title-banner::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,rgba(200,0,20,.8),rgba(200,0,20,.2));}
+.title-banner::after{content:'';position:absolute;top:0;right:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,rgba(0,160,255,.8),rgba(0,140,220,.2));}
+.tb-topline{position:absolute;top:0;left:3px;right:3px;height:1px;
+  background:linear-gradient(90deg,rgba(200,0,20,.5),rgba(0,140,255,.5));}
+.tb-botline{position:absolute;bottom:0;left:3px;right:3px;height:1px;
+  background:linear-gradient(90deg,rgba(0,140,255,.3),rgba(200,0,20,.3));}
+.tb-shine{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,160,255,.04),transparent);animation:tbShine 4s ease-in-out infinite;}
+@keyframes tbShine{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+.pr-wash{position:absolute;inset:0;background:linear-gradient(90deg,rgba(200,0,40,.03) 0%,transparent 30%,transparent 70%,rgba(0,40,134,.03) 100%);}
+.tb-main{font-family:'Barlow Condensed',sans-serif;font-size:20px;letter-spacing:5px;color:#ffffff;text-transform:uppercase;font-weight:700;line-height:1;}
+.tb-role{font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:4px;color:#00aadd;text-transform:uppercase;font-weight:600;}
+.tb-dept{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:3px;color:rgba(255,255,255,.42);text-transform:uppercase;}
+.tb-co{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:3px;color:rgba(0,160,255,.45);text-transform:uppercase;}
 
-/* ── Player name ── */
-.psep{display:flex;align-items:center;gap:8px;margin-top:5px;animation:fu .4s 1.22s ease both;}
-.pl{width:45px;height:1px;background:linear-gradient(90deg,transparent,rgba(0,180,80,.4));}
-.pl.r{background:linear-gradient(90deg,rgba(0,180,80,.4),transparent);}
-.pd{width:3px;height:3px;border-radius:50%;background:#00c850;box-shadow:0 0 5px rgba(0,200,80,.8);}
-.player-lbl{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:4px;color:rgba(255,255,255,.28);text-transform:uppercase;animation:fu .4s 1.3s ease both;}
-.player-name{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:600;color:rgba(255,255,255,.8);letter-spacing:3px;animation:fu .5s 1.38s ease both;}
+/* ── Metrics ── */
+.metrics{
+  display:flex;align-items:stretch;gap:0;
+  border:1px solid rgba(0,120,220,.2);
+  background:rgba(0,0,0,.45);
+  margin-bottom:10px;
+  animation:fu .5s .86s ease both;
+}
+.metric{padding:8px 18px;display:flex;flex-direction:column;align-items:center;gap:2px;border-right:1px solid rgba(0,120,220,.15);}
+.metric:last-child{border-right:none;}
+.metric-val{font-family:'Bebas Neue',sans-serif;font-size:22px;color:#00aadd;letter-spacing:1px;line-height:1;text-shadow:0 0 8px rgba(0,160,255,.5);}
+.metric-lbl{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.38);text-transform:uppercase;}
+
+/* ── Status ── */
+.status-row{display:flex;align-items:center;gap:16px;margin-bottom:10px;animation:fu .4s .96s ease both;}
+.st-item{display:flex;align-items:center;gap:5px;}
+.st-dot{width:6px;height:6px;border-radius:50%;animation:stP 2s ease-in-out infinite;}
+@keyframes stP{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
+.st-dot.on{background:#00d890;box-shadow:0 0 6px rgba(0,200,140,.7);}
+.st-dot.act{background:#0099dd;box-shadow:0 0 6px rgba(0,160,220,.7);animation-delay:.5s;}
+.st-dot.rdy{background:#ffc800;box-shadow:0 0 6px rgba(200,160,0,.7);animation-delay:1s;}
+.st-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.35);text-transform:uppercase;}
 
 /* ── PR flag ── */
-.pr-row{display:flex;align-items:center;gap:7px;margin-top:5px;animation:fu .4s 1.46s ease both;}
-.pr-flag{width:30px;height:19px;border-radius:1px;overflow:hidden;border:1px solid rgba(200,0,40,.3);position:relative;}
+.pr-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;animation:fu .4s 1.02s ease both;}
+.pr-flag{width:32px;height:20px;border-radius:1px;overflow:hidden;border:1px solid rgba(200,0,40,.3);position:relative;}
 .pr-flag-inner{width:100%;height:100%;display:flex;flex-direction:column;position:relative;}
 .pf-s{flex:1;}.pf-r{background:#ce1126;}.pf-w{background:#f0f0f0;}
-.pft{position:absolute;top:0;bottom:0;left:0;border-top:9.5px solid transparent;border-bottom:9.5px solid transparent;border-left:15px solid #002868;}
-.pfs{position:absolute;top:50%;left:4px;transform:translateY(-50%);color:#f0f0f0;font-size:5px;z-index:2;}
-.pr-flag::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);animation:fw 2.5s ease-in-out infinite;}
-@keyframes fw{0%{transform:translateX(-150%)}100%{transform:translateX(250%)}}
-.pr-lbl{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.28);}
+.pft{position:absolute;top:0;bottom:0;left:0;border-top:10px solid transparent;border-bottom:10px solid transparent;border-left:16px solid #002868;}
+.pfs{position:absolute;top:50%;left:4px;transform:translateY(-50%);color:#f0f0f0;font-size:6px;z-index:2;}
+.pr-flag::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);animation:fw2 2.5s ease-in-out infinite;}
+@keyframes fw2{0%{transform:translateX(-150%)}100%{transform:translateX(250%)}}
+.pr-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:3px;color:rgba(255,255,255,.28);}
 
-/* ── LOADING BAR ── */
-.load-wrap{
-  position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
-  width:300px;z-index:11;
-  animation:fu .4s 1.6s ease both;
-}
-.lt{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-bottom:5px;}
-.lbar{width:100%;height:5px;background:rgba(100,0,0,.12);border:1px solid rgba(200,0,10,.3);position:relative;overflow:hidden;}
-.lfill{
+/* ── Boricua tag ── */
+.boricua-tag{display:flex;align-items:center;gap:8px;margin-bottom:12px;animation:fu .5s 1.1s ease both;}
+.bt-l{width:20px;height:1px;background:linear-gradient(90deg,transparent,rgba(200,0,40,.5));}
+.bt-r{width:20px;height:1px;background:linear-gradient(90deg,rgba(0,40,134,.5),transparent);}
+.bt-txt{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:4px;color:rgba(255,255,255,.3);text-transform:uppercase;white-space:nowrap;}
+
+/* ── Progress ── */
+.pbar-wrap{width:300px;animation:fu .4s 1.18s ease both;}
+.pbar-top{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-bottom:5px;}
+.pbar-track{width:100%;height:4px;background:rgba(0,120,220,.1);border:1px solid rgba(0,140,255,.25);overflow:hidden;}
+.pbar-fill{
   height:100%;width:0%;
-  background:linear-gradient(90deg,#3a0000,#cc0010,#ff2020,#00cc50,#ffa000);
-  background-size:400% 100%;
-  animation:lf 6s 1.7s ease forwards,ls 3s 1.7s linear infinite;position:relative;
+  /* DMC5 style — Zenni blue with a red flash edge */
+  background:linear-gradient(90deg,#001640,#0055cc,#0099dd,#40ccff);
+  background-size:300% 100%;
+  animation:pf 6s 1.2s ease forwards,ps 4s 1.2s linear infinite;
+  position:relative;
 }
-.lfill::after{content:'';position:absolute;right:0;top:0;width:12px;height:100%;background:rgba(255,150,100,.6);filter:blur(3px);}
-@keyframes lf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
-@keyframes ls{0%{background-position:0%}100%{background-position:400%}}
-.lticks{display:flex;justify-content:space-between;margin-top:3px;}
-.ltick{width:1px;height:4px;background:rgba(0,160,60,.25);}
-.lsys{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,100,80,.45);text-transform:uppercase;margin-top:5px;text-align:center;}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:14px;height:100%;background:rgba(80,200,255,.65);filter:blur(3px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+@keyframes ps{0%{background-position:0%}100%{background-position:300%}}
+.pbar-ticks{display:flex;justify-content:space-between;margin-top:3px;}
+.ptick{width:1px;height:4px;background:rgba(0,140,255,.2);}
+.sys-txt{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(0,180,255,.45);text-transform:uppercase;margin-top:6px;text-align:center;animation:fu .4s 2.5s ease both;}
 
 @keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.corner{position:fixed;font-family:'DM Mono',monospace;font-size:8px;color:rgba(200,0,10,.28);letter-spacing:2px;z-index:1;}
-.ctop{top:20px;left:78px;}.cbot{bottom:20px;right:78px;}
+
+.ctxt{position:fixed;font-family:'DM Mono',monospace;font-size:8px;color:rgba(0,140,255,.22);letter-spacing:2px;z-index:1;}
+.ctxt.tl{top:20px;left:86px;}
+.ctxt.br{bottom:20px;right:86px;}
+
+/* ══ INTERIOR EFFECTS ══ */
+
+/* DMC5 — lightning bolt flash across screen */
+.lightning{
+  position:fixed;inset:0;pointer-events:none;z-index:7;
+  animation:lightningStrike 6s ease-in-out infinite;
+  opacity:0;
+}
+@keyframes lightningStrike{
+  0%,100%{opacity:0;}
+  15%{opacity:0;}15.3%{opacity:.7;background:rgba(0,180,255,.18);}
+  15.6%{opacity:0;}15.9%{opacity:.5;background:rgba(0,160,255,.12);}
+  16.2%{opacity:0;}
+  50%{opacity:0;}50.2%{opacity:.4;background:rgba(0,200,255,.1);}
+  50.4%{opacity:0;}
+}
+
+/* DMC5 — Dante's signature red + blue energy clash ring */
+.clash-ring{
+  position:fixed;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  border:2px solid rgba(0,160,255,.0);
+  pointer-events:none;z-index:6;
+  animation:clashExpand 4s ease-out infinite;
+}
+.clash-ring2{
+  position:fixed;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  border:1px solid rgba(200,0,20,.0);
+  pointer-events:none;z-index:6;
+  animation:clashExpand2 4s ease-out infinite;
+  animation-delay:2s;
+}
+@keyframes clashExpand{
+  0%{width:60px;height:60px;border-color:rgba(0,180,255,.7);opacity:.8;}
+  100%{width:700px;height:700px;border-color:rgba(0,140,255,.0);opacity:0;}
+}
+@keyframes clashExpand2{
+  0%{width:60px;height:60px;border-color:rgba(200,0,20,.5);opacity:.6;}
+  100%{width:600px;height:600px;border-color:rgba(200,0,20,.0);opacity:0;}
+}
+
+/* DMC5 — Royal Guard blue shockwave */
+.shockwave{
+  position:fixed;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:10px;height:10px;
+  border-radius:50%;
+  background:transparent;
+  border:3px solid rgba(0,200,255,.8);
+  pointer-events:none;z-index:6;
+  animation:shockwaveExp 5s ease-out infinite;
+  animation-delay:1.5s;
+}
+@keyframes shockwaveExp{
+  0%{width:10px;height:10px;opacity:.9;border-color:rgba(0,220,255,.8);}
+  30%{border-color:rgba(0,180,255,.4);}
+  100%{width:900px;height:900px;opacity:0;border-color:rgba(0,140,255,.0);}
+}
+
+/* Dante's white hair light flicker behind emblem */
+.emb-flare{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:130px;height:130px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(0,200,255,.0),transparent 60%);
+  pointer-events:none;z-index:1;
+  animation:emFlare 3s ease-in-out infinite;
+}
+@keyframes emFlare{
+  0%,100%{background:radial-gradient(circle,rgba(0,200,255,.0),transparent 60%);}
+  40%{background:radial-gradient(circle,rgba(0,220,255,.18),rgba(0,160,255,.06) 40%,transparent 65%);}
+  42%{background:radial-gradient(circle,rgba(255,255,255,.25),rgba(0,200,255,.1) 35%,transparent 60%);}
+  44%{background:radial-gradient(circle,rgba(0,200,255,.05),transparent 50%);}
+}
+
+/* Stylish V — DMC5 character runic lines on emblem */
+.emb-rune-l{
+  position:absolute;
+  top:50%;left:50%;
+  width:70px;height:1px;
+  background:linear-gradient(90deg,rgba(0,180,255,.6),transparent);
+  transform-origin:left center;
+  animation:runeLineL 3s ease-in-out infinite;
+}
+.emb-rune-r{
+  position:absolute;
+  top:50%;left:50%;
+  width:70px;height:1px;
+  background:linear-gradient(90deg,rgba(0,180,255,.6),transparent);
+  transform-origin:left center;
+  animation:runeLineR 3s ease-in-out infinite;
+}
+@keyframes runeLineL{
+  0%,100%{transform:rotate(-30deg) scaleX(0);opacity:0;}
+  35%{transform:rotate(-30deg) scaleX(0);opacity:0;}
+  50%{transform:rotate(-30deg) scaleX(1);opacity:.8;}
+  65%{transform:rotate(-30deg) scaleX(0);opacity:0;}
+}
+@keyframes runeLineR{
+  0%,100%{transform:rotate(150deg) scaleX(0);opacity:0;}
+  35%{transform:rotate(150deg) scaleX(0);opacity:0;}
+  50%{transform:rotate(150deg) scaleX(1);opacity:.8;}
+  65%{transform:rotate(150deg) scaleX(0);opacity:0;}
+}
+
+/* Title banner energy pulse */
+.banner-pulse{
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,
+    rgba(200,0,20,.0) 0%,
+    rgba(0,140,255,.08) 40%,
+    rgba(0,180,255,.12) 50%,
+    rgba(0,140,255,.08) 60%,
+    rgba(200,0,20,.0) 100%);
+  animation:bannerPulse 3s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes bannerPulse{
+  0%,100%{opacity:0;transform:scaleX(.8);}
+  50%{opacity:1;transform:scaleX(1);}
+}
+
+/* Progress bar electricity sparks */
+.pbar-spark{
+  position:absolute;
+  top:-3px;
+  width:2px;height:10px;
+  background:rgba(0,220,255,.9);
+  border-radius:1px;
+  animation:sparkJump 1.5s linear infinite;
+  box-shadow:0 0 4px rgba(0,200,255,.8);
+}
+@keyframes sparkJump{
+  0%{left:0%;opacity:0;}
+  5%{opacity:1;}
+  95%{opacity:1;}
+  100%{left:100%;opacity:0;}
+}
+
+/* Name letter glow on load */
+.fullname{
+  animation:nameIn .7s .55s ease both, nameGlow 4s 1.5s ease-in-out infinite !important;
+}
+@keyframes nameGlow{
+  0%,100%{text-shadow:0 0 24px rgba(0,160,255,.35),0 0 50px rgba(0,100,200,.15),0 2px 0 rgba(0,0,0,.95);}
+  40%{text-shadow:0 0 30px rgba(0,200,255,.5),0 0 60px rgba(0,160,255,.25),0 0 90px rgba(0,120,200,.1),0 2px 0 rgba(0,0,0,.95);}
+  42%{text-shadow:0 0 40px rgba(255,255,255,.3),0 0 70px rgba(0,200,255,.4),0 2px 0 rgba(0,0,0,.95);}
+  44%{text-shadow:0 0 24px rgba(0,160,255,.35),0 0 50px rgba(0,100,200,.15),0 2px 0 rgba(0,0,0,.95);}
+}
+
+/* DMC5 Trigger style top flash */
+.dt-flash{
+  position:fixed;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,transparent,rgba(200,0,20,.6),rgba(0,180,255,.6),transparent);
+  pointer-events:none;z-index:7;
+  animation:dtFlash 4s ease-in-out infinite;
+  opacity:0;
+}
+@keyframes dtFlash{
+  0%,100%{opacity:0;}
+  15%{opacity:0;}15.5%{opacity:1;}16%{opacity:0;}
+  50%{opacity:0;}50.3%{opacity:.6;}50.6%{opacity:0;}
+}
+
+/* Metric value flash on count */
+.metric-val{
+  animation:metricFlash 2s ease-in-out infinite !important;
+}
+@keyframes metricFlash{
+  0%,100%{text-shadow:0 0 8px rgba(0,160,255,.5);}
+  50%{text-shadow:0 0 16px rgba(0,220,255,.9),0 0 30px rgba(0,160,255,.4);}
+}
+
+
+/* ══ DANTE DMC EFFECTS ══ */
+
+/* ── Rebellion sword slash — diagonal white streak ── */
+.sword-slash{
+  position:fixed;
+  pointer-events:none;z-index:7;
+  width:3px;
+  background:linear-gradient(180deg,transparent,rgba(255,255,255,.9),rgba(0,200,255,.6),transparent);
+  border-radius:2px;
+  filter:blur(.5px);
+  box-shadow:0 0 8px rgba(0,200,255,.8),0 0 20px rgba(0,160,255,.4);
+  animation:slashStrike 5s ease-in-out infinite;
+  opacity:0;
+  transform-origin:top center;
+}
+@keyframes slashStrike{
+  0%,100%{opacity:0;}
+  12%{opacity:0;height:0;top:0%;left:35%;transform:rotate(25deg);}
+  12.3%{opacity:1;height:60vh;top:5%;left:35%;transform:rotate(25deg);}
+  12.8%{opacity:.6;height:80vh;top:0%;left:38%;transform:rotate(25deg);}
+  13.4%{opacity:0;height:100vh;}
+}
+.sword-slash2{
+  position:fixed;
+  pointer-events:none;z-index:7;
+  width:2px;
+  background:linear-gradient(180deg,transparent,rgba(255,255,255,.7),rgba(0,180,255,.5),transparent);
+  border-radius:2px;
+  filter:blur(.5px);
+  box-shadow:0 0 6px rgba(0,180,255,.6);
+  animation:slashStrike2 5s ease-in-out infinite;
+  opacity:0;
+  transform-origin:top center;
+  animation-delay:.08s;
+}
+@keyframes slashStrike2{
+  0%,100%{opacity:0;}
+  12%{opacity:0;height:0;top:0%;left:58%;transform:rotate(-22deg);}
+  12.3%{opacity:.8;height:55vh;top:5%;left:58%;transform:rotate(-22deg);}
+  12.8%{opacity:.4;height:75vh;top:0%;left:55%;transform:rotate(-22deg);}
+  13.4%{opacity:0;height:95vh;}
+}
+
+/* ── After-slash impact flash ── */
+.slash-impact{
+  position:fixed;inset:0;
+  pointer-events:none;z-index:6;
+  animation:impactFlash 5s ease-in-out infinite;
+  opacity:0;
+}
+@keyframes impactFlash{
+  0%,100%{opacity:0;background:transparent;}
+  13%{opacity:0;}
+  13.2%{opacity:1;background:rgba(255,255,255,.12);}
+  13.5%{opacity:1;background:rgba(0,180,255,.08);}
+  14%{opacity:0;}
+}
+
+/* ── Stinger — single fast horizontal thrust line ── */
+.stinger{
+  position:fixed;
+  top:50%;
+  height:3px;
+  background:linear-gradient(90deg,transparent,rgba(0,200,255,.3),rgba(255,255,255,.9),rgba(0,180,255,.4),transparent);
+  border-radius:2px;
+  filter:blur(.5px);
+  box-shadow:0 0 10px rgba(0,200,255,.7);
+  pointer-events:none;z-index:7;
+  animation:stingerThrust 7s ease-in-out infinite;
+  opacity:0;
+  animation-delay:2.5s;
+}
+@keyframes stingerThrust{
+  0%,100%{opacity:0;width:0;left:50%;}
+  10%{opacity:0;width:0;left:10%;}
+  10.2%{opacity:1;width:80%;left:10%;}
+  10.6%{opacity:.5;width:85%;left:10%;}
+  11%{opacity:0;width:90%;left:10%;}
+}
+
+/* ── Devil Trigger burst — full screen blue/white explosion ── */
+.dt-burst{
+  position:fixed;inset:0;
+  pointer-events:none;z-index:6;
+  animation:dtBurst 8s ease-in-out infinite;
+  opacity:0;
+  animation-delay:4s;
+}
+@keyframes dtBurst{
+  0%,100%{opacity:0;background:transparent;}
+  6.2%{opacity:0;}
+  6.5%{opacity:1;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(0,180,255,.25),rgba(255,255,255,.1),transparent 65%);}
+  7%{opacity:.8;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(0,220,255,.15),transparent 60%);}
+  8%{opacity:0;}
+}
+
+/* ── Dante's red coat trail — DMC5 style motion trail ── */
+.coat-trail{
+  position:fixed;
+  pointer-events:none;z-index:2;
+  animation:coatSweep 5s ease-in-out infinite;
+  opacity:0;
+}
+@keyframes coatSweep{
+  0%,100%{opacity:0;}
+  12%{opacity:0;}
+  12.5%{opacity:.6;}
+  14%{opacity:0;}
+}
+
+/* ── Trickster dodge — blue afterimage streaks ── */
+.trick-img{
+  position:fixed;
+  height:100vh;
+  pointer-events:none;z-index:3;
+  background:linear-gradient(90deg,transparent,rgba(0,160,255,.06),transparent);
+  animation:trickDodge 6s ease-in-out infinite;
+  opacity:0;
+  animation-delay:1.2s;
+}
+@keyframes trickDodge{
+  0%,100%{opacity:0;left:-30%;width:20%;}
+  8%{opacity:0;left:-20%;width:20%;}
+  8.3%{opacity:1;left:5%;width:22%;}
+  8.6%{opacity:.5;left:25%;width:20%;}
+  9%{opacity:0;left:110%;}
+}
+.trick-img2{
+  position:fixed;
+  height:100vh;
+  pointer-events:none;z-index:3;
+  background:linear-gradient(90deg,transparent,rgba(0,140,255,.04),transparent);
+  animation:trickDodge2 6s ease-in-out infinite;
+  opacity:0;
+  animation-delay:1.35s;
+}
+@keyframes trickDodge2{
+  0%,100%{opacity:0;left:-30%;width:16%;}
+  8%{opacity:0;left:-15%;width:16%;}
+  8.5%{opacity:.7;left:12%;width:18%;}
+  8.8%{opacity:.3;left:32%;width:16%;}
+  9.2%{opacity:0;left:110%;}
+}
+
+/* ── Royal Guard stance — blue shield pulse from center ── */
+.rg-shield{
+  position:fixed;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  border:2px solid rgba(0,180,255,.0);
+  pointer-events:none;z-index:5;
+  animation:rgShield 8s ease-in-out infinite;
+  animation-delay:6s;
+}
+@keyframes rgShield{
+  0%,100%{width:0;height:0;border-color:rgba(0,180,255,.0);opacity:0;}
+  3%{width:80px;height:80px;border-color:rgba(0,220,255,.9);opacity:1;}
+  5%{width:300px;height:300px;border-color:rgba(0,180,255,.5);opacity:.7;}
+  7%{width:600px;height:600px;border-color:rgba(0,140,255,.0);opacity:0;}
+}
+
+/* ── Concentration rune — appears briefly like V's summon ── */
+.v-rune{
+  position:fixed;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  font-family:'serif';font-size:80px;
+  color:rgba(0,180,255,.0);
+  pointer-events:none;z-index:7;
+  text-shadow:0 0 20px rgba(0,180,255,.0);
+  animation:vRune 8s ease-in-out infinite;
+  animation-delay:4s;
+  white-space:nowrap;
+}
+@keyframes vRune{
+  0%,100%{color:rgba(0,180,255,.0);text-shadow:none;}
+  6%{color:rgba(0,180,255,.0);}
+  6.5%{color:rgba(0,220,255,.4);text-shadow:0 0 30px rgba(0,200,255,.8);}
+  7.5%{color:rgba(0,200,255,.2);text-shadow:0 0 20px rgba(0,180,255,.5);}
+  8.5%{color:rgba(0,180,255,.0);text-shadow:none;}
+}
+
+/* ── Emblem Devil Trigger glow ── */
+.emb-dt{
+  position:absolute;inset:-6px;
+  border-radius:50%;
+  background:transparent;
+  animation:embDT 5s ease-in-out infinite;
+  pointer-events:none;
+  animation-delay:2s;
+}
+@keyframes embDT{
+  0%,100%{box-shadow:none;}
+  12%{box-shadow:0 0 0 0 rgba(0,220,255,.0);}
+  12.4%{box-shadow:0 0 40px 20px rgba(0,220,255,.5),0 0 80px 40px rgba(0,180,255,.2),0 0 120px 60px rgba(255,255,255,.08);}
+  13.2%{box-shadow:0 0 20px 8px rgba(0,200,255,.2);}
+  14%{box-shadow:none;}
+}
+
 </style>
 </head>
 <body>
+
 <div class="bg"></div>
-<div class="hex"></div>
+<div class="grid"></div>
+<div class="scan"></div>
 
-<!-- DMC pentagram bg -->
-<svg class="dmc-penta" viewBox="0 0 200 200" fill="none">
-  <polygon points="100,10 40,180 190,70 10,70 160,180" fill="none" stroke="#cc0010" stroke-width="1"/>
-  <circle cx="100" cy="100" r="95" fill="none" stroke="#cc0010" stroke-width=".6"/>
-  <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(200,0,10,.4)" stroke-width=".5" stroke-dasharray="3 5"/>
-</svg>
-
-<!-- DMC slash lines -->
-<div class="dmc-slashes">
-  <div class="dmcs" style="left:5%;transform:rotate(18deg);animation-delay:0s;"></div>
-  <div class="dmcs" style="left:18%;transform:rotate(18deg);animation-delay:.8s;"></div>
-  <div class="dmcs" style="left:82%;transform:rotate(-18deg);animation-delay:.4s;"></div>
-  <div class="dmcs" style="left:95%;transform:rotate(-18deg);animation-delay:1.2s;"></div>
+<!-- PR Boricua elements -->
+<div class="pr-edge-l"></div>
+<div class="pr-edge-r"></div>
+<div class="pr-tri"></div>
+<div class="pr-wm">
+  <div class="prwm-i">
+    <div class="prwm-s prwm-r"></div><div class="prwm-s prwm-w"></div>
+    <div class="prwm-s prwm-r"></div><div class="prwm-s prwm-w"></div>
+    <div class="prwm-s prwm-r"></div>
+  </div>
+  <div class="prwm-t"></div><div class="prwm-st">★</div>
 </div>
 
-<!-- Red DMC sparks -->
-<div class="rspark" style="width:3px;height:3px;left:42%;top:52%;--rx:-55px;--ry:-110px;--op:.8;animation-duration:2.8s;animation-delay:0s;"></div>
-<div class="rspark" style="width:2px;height:2px;left:50%;top:56%;--rx:45px;--ry:-120px;--op:.7;animation-duration:3.2s;animation-delay:.5s;"></div>
-<div class="rspark" style="width:3px;height:3px;left:58%;top:50%;--rx:60px;--ry:-100px;--op:.8;animation-duration:2.5s;animation-delay:1s;"></div>
+<!-- Floating PR stars -->
+<div class="prstar" style="left:6%;top:74%;--sz:9px;--sop:.45;animation-duration:5.5s;animation-delay:0s;">★</div>
+<div class="prstar" style="left:16%;top:68%;--sz:7px;--sop:.38;animation-duration:6.2s;animation-delay:.9s;">★</div>
+<div class="prstar" style="left:84%;top:72%;--sz:8px;--sop:.42;animation-duration:5.8s;animation-delay:1.7s;">★</div>
+<div class="prstar" style="left:92%;top:65%;--sz:7px;--sop:.35;animation-duration:6.6s;animation-delay:.4s;">★</div>
+<div class="prstar" style="left:4%;top:42%;--sz:7px;--sop:.38;animation-duration:7s;animation-delay:2.2s;">★</div>
+<div class="prstar" style="left:95%;top:40%;--sz:6px;--sop:.32;animation-duration:5.9s;animation-delay:3s;">★</div>
 
-<div class="rift-floor"></div>
-<div class="rift-line"></div>
-<div class="split-l"></div>
-<div class="split-r"></div>
-<div class="scan"></div>
-<div class="reveal"></div>
-<div class="locked">LOCKED IN</div>
+<!-- DMC5 sigil watermark -->
+<svg class="sigil" width="540" height="540" viewBox="0 0 200 200" fill="none">
+  <circle cx="100" cy="100" r="96" stroke="rgba(0,140,255,.8)" stroke-width="1"/>
+  <polygon points="100,8 123,76 194,76 138,118 160,186 100,144 40,186 62,118 6,76 77,76"
+    fill="none" stroke="rgba(0,120,220,.7)" stroke-width="1"/>
+  <circle cx="100" cy="100" r="50" stroke="rgba(0,100,200,.5)" stroke-width=".8" stroke-dasharray="4 5"/>
+  <line x1="100" y1="4"   x2="100" y2="196" stroke="rgba(0,100,200,.25)" stroke-width=".6"/>
+  <line x1="4"   y1="100" x2="196" y2="100" stroke="rgba(0,100,200,.25)" stroke-width=".6"/>
+  <text x="100" y="108" text-anchor="middle" font-family="serif" font-size="22" font-weight="bold" fill="rgba(0,160,255,.4)">D</text>
+</svg>
 
+<!-- DMC5 slash lines -->
+<div class="slashes">
+  <div class="sl" style="left:6%;transform:rotate(18deg);animation-delay:0s;"></div>
+  <div class="sl" style="left:20%;transform:rotate(18deg);animation-delay:1s;"></div>
+  <div class="sl" style="left:80%;transform:rotate(-18deg);animation-delay:.5s;"></div>
+  <div class="sl" style="left:94%;transform:rotate(-18deg);animation-delay:1.5s;"></div>
+</div>
+
+<!-- DMC5 speed lines -->
+<div class="speedline" style="top:22%;animation-duration:2s;animation-delay:0s;"></div>
+<div class="speedline" style="top:38%;animation-duration:2.6s;animation-delay:.3s;opacity:.6;"></div>
+<div class="speedline" style="top:58%;animation-duration:1.9s;animation-delay:.7s;"></div>
+<div class="speedline" style="top:74%;animation-duration:2.3s;animation-delay:1.1s;opacity:.5;"></div>
+<div class="speedline" style="top:86%;animation-duration:2.8s;animation-delay:.2s;opacity:.4;"></div>
+
+<!-- Blue energy particles -->
+<div class="ep" style="width:3px;height:3px;left:22%;top:52%;--ex:-50px;--ey:-120px;--op:.8;animation-duration:3s;animation-delay:0s;"></div>
+<div class="ep" style="width:2px;height:2px;left:35%;top:58%;--ex:-35px;--ey:-100px;--op:.7;animation-duration:3.5s;animation-delay:.6s;"></div>
+<div class="ep" style="width:3px;height:3px;left:65%;top:54%;--ex:50px;--ey:-115px;--op:.8;animation-duration:2.8s;animation-delay:1.1s;"></div>
+<div class="ep" style="width:4px;height:4px;left:78%;top:60%;--ex:60px;--ey:-105px;--op:.9;animation-duration:3.2s;animation-delay:.4s;"></div>
+<div class="ep" style="width:2px;height:2px;left:14%;top:62%;--ex:-30px;--ey:-90px;--op:.6;animation-duration:4s;animation-delay:1.8s;"></div>
+
+<!-- HUD corners -->
 <div class="hc tl"></div><div class="hc tr"></div>
 <div class="hc bl"></div><div class="hc br"></div>
+<div class="ctxt tl">ZENNI LMS · LAB MANAGEMENT</div>
+<div class="ctxt br">SESSION ACTIVE</div>
 
-<!-- Energy lines -->
-<div class="eline" style="top:20%;background:linear-gradient(90deg,transparent,rgba(0,200,80,.45),transparent);animation-duration:2.2s;animation-delay:0s;"></div>
-<div class="eline" style="top:40%;background:linear-gradient(90deg,transparent,rgba(220,140,0,.35),transparent);animation-duration:2.8s;animation-delay:.5s;height:1px;opacity:.6;"></div>
-<div class="eline" style="top:60%;background:linear-gradient(90deg,transparent,rgba(0,200,80,.3),transparent);animation-duration:2s;animation-delay:1s;"></div>
-<div class="eline" style="top:78%;background:linear-gradient(90deg,transparent,rgba(220,140,0,.3),transparent);animation-duration:2.5s;animation-delay:.8s;opacity:.5;"></div>
+<div class="hline" style="top:20%;"></div>
+<div class="hline" style="top:80%;"></div>
 
-<!-- Green Wukong particles left -->
-<div class="pt" style="width:3px;height:3px;left:22%;top:55%;background:#00cc60;--px:-50px;--py:-120px;--op:.8;animation-duration:3s;animation-delay:0s;"></div>
-<div class="pt" style="width:2px;height:2px;left:15%;top:62%;background:#00ff80;--px:-35px;--py:-100px;--op:.7;animation-duration:3.5s;animation-delay:.6s;"></div>
-<div class="pt" style="width:3px;height:3px;left:32%;top:50%;background:#40e880;--px:-60px;--py:-130px;--op:.8;animation-duration:2.8s;animation-delay:1.2s;"></div>
-<!-- Orange Jax particles right -->
-<div class="pt" style="width:3px;height:3px;left:72%;top:55%;background:#ff9000;--px:50px;--py:-120px;--op:.8;animation-duration:3.1s;animation-delay:.3s;"></div>
-<div class="pt" style="width:2px;height:2px;left:80%;top:60%;background:#ffaa20;--px:40px;--py:-100px;--op:.7;animation-duration:3.6s;animation-delay:.9s;"></div>
-<div class="pt" style="width:3px;height:3px;left:65%;top:52%;background:#ff7800;--px:55px;--py:-115px;--op:.8;animation-duration:2.6s;animation-delay:1.5s;"></div>
-<!-- Blue center -->
-<div class="pt" style="width:2px;height:2px;left:46%;top:58%;background:#0088ff;--px:-20px;--py:-140px;--op:.6;animation-duration:4s;animation-delay:1s;"></div>
-<div class="pt" style="width:2px;height:2px;left:54%;top:54%;background:#40a0ff;--px:20px;--py:-130px;--op:.6;animation-duration:3.8s;animation-delay:2s;"></div>
 
-<div class="corner ctop">ZENNI LMS · DEVIL MAY CRY</div>
-<div class="corner cbot">SESSION ACTIVE</div>
+
+<!-- ══ DANTE DMC EFFECTS ══ -->
+<!-- Rebellion sword slashes -->
+<div class="sword-slash"></div>
+<div class="sword-slash2"></div>
+<!-- Impact flash -->
+<div class="slash-impact"></div>
+<!-- Stinger thrust -->
+<div class="stinger"></div>
+<!-- Devil Trigger burst -->
+<div class="dt-burst"></div>
+<!-- Trickster dodge afterimages -->
+<div class="trick-img"></div>
+<div class="trick-img2"></div>
+<!-- Royal Guard shield -->
+<div class="rg-shield"></div>
+<!-- V's summon rune -->
+<div class="v-rune">✦</div>
+
+<!-- Red coat trails during slash -->
+<svg class="coat-trail" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+  <path d="M30 20 Q45 50 35 90 Q42 70 55 85 Q48 55 60 15" fill="rgba(200,0,10,.12)" stroke="rgba(200,0,10,.2)" stroke-width=".3"/>
+</svg>
+
+<!-- ══ INTERIOR EFFECTS ══ -->
+
+<!-- DMC5 lightning flash -->
+<div class="lightning"></div>
+
+<!-- Devil Trigger top flash -->
+<div class="dt-flash"></div>
+
+<!-- Clash rings from center -->
+<div class="clash-ring"></div>
+<div class="clash-ring2"></div>
+
+<!-- Shockwave -->
+<div class="shockwave"></div>
 
 <div class="page">
 
-  <!-- Dual champion hexagons -->
-  <div class="champ-row">
-
-    <!-- Wukong -->
-    <div class="wukong-badge">
-      <svg width="88" height="88" viewBox="0 0 88 88" fill="none">
-        <!-- Hex border -->
-        <polygon points="44,3 83,24 83,64 44,85 5,64 5,24" fill="none" stroke="rgba(0,220,80,.55)" stroke-width="1.5"/>
-        <polygon points="44,9 77,27 77,61 44,79 11,61 11,27" fill="none" stroke="rgba(0,180,60,.25)" stroke-width="1"/>
-        <!-- Wukong staff — his signature weapon -->
-        <line x1="44" y1="14" x2="44" y2="74" stroke="rgba(160,100,20,.7)" stroke-width="4" stroke-linecap="round"/>
-        <line x1="44" y1="14" x2="44" y2="74" stroke="rgba(200,140,40,.4)" stroke-width="2" stroke-linecap="round"/>
-        <!-- Staff gold tips -->
-        <rect x="40" y="12" width="8" height="6" rx="2" fill="#c8a000" stroke="#ffd040" stroke-width="1"/>
-        <rect x="40" y="70" width="8" height="6" rx="2" fill="#c8a000" stroke="#ffd040" stroke-width="1"/>
-        <!-- Staff orb middle -->
-        <circle cx="44" cy="44" r="7" fill="rgba(0,200,80,.2)" stroke="rgba(0,240,80,.7)" stroke-width="1.5"/>
-        <circle cx="44" cy="44" r="3" fill="rgba(0,255,80,.6)"/>
-        <!-- Clone smoke wisps -->
-        <ellipse cx="28" cy="56" rx="8" ry="5" fill="rgba(0,200,80,.12)" stroke="rgba(0,180,60,.25)" stroke-width="1"/>
-        <ellipse cx="60" cy="56" rx="8" ry="5" fill="rgba(0,200,80,.12)" stroke="rgba(0,180,60,.25)" stroke-width="1"/>
-        <!-- Tail curl -->
-        <path d="M52 36 Q62 28 60 20 Q56 16 52 20 Q50 26 54 30" stroke="rgba(200,140,40,.6)" stroke-width="2" stroke-linecap="round" fill="none"/>
-        <!-- W text -->
-        <text x="44" y="78" text-anchor="middle" font-family="serif" font-size="8" font-weight="bold" fill="rgba(0,220,80,.7)" letter-spacing="1">WK</text>
-      </svg>
-    </div>
-
-    <div class="vs-div">
-      <div class="vs-line"></div>
-      <div class="vs-txt">VS</div>
-      <div class="vs-line"></div>
-    </div>
-
-    <!-- Jax -->
-    <div class="jax-badge">
-      <svg width="88" height="88" viewBox="0 0 88 88" fill="none">
-        <!-- Hex border -->
-        <polygon points="44,3 83,24 83,64 44,85 5,64 5,24" fill="none" stroke="rgba(220,140,0,.55)" stroke-width="1.5"/>
-        <polygon points="44,9 77,27 77,61 44,79 11,61 11,27" fill="none" stroke="rgba(180,100,0,.25)" stroke-width="1"/>
-        <!-- Jax lamppost weapon -->
-        <!-- Main pole -->
-        <line x1="44" y1="12" x2="44" y2="72" stroke="rgba(140,100,60,.7)" stroke-width="5" stroke-linecap="round"/>
-        <line x1="44" y1="12" x2="44" y2="72" stroke="rgba(200,160,80,.4)" stroke-width="2.5" stroke-linecap="round"/>
-        <!-- Lamp head top -->
-        <rect x="36" y="10" width="16" height="12" rx="4" fill="rgba(180,120,0,.5)" stroke="rgba(220,160,0,.7)" stroke-width="1.5"/>
-        <!-- Lamp glow -->
-        <rect x="38" y="12" width="12" height="8" rx="3" fill="rgba(255,200,80,.4)"/>
-        <circle cx="44" cy="16" r="4" fill="rgba(255,220,100,.6)"/>
-        <!-- Purple arcane energy on weapon -->
-        <path d="M44 30 Q50 38 44 46 Q38 54 44 62" stroke="rgba(140,0,200,.5)" stroke-width="2" stroke-linecap="round" fill="none"/>
-        <!-- Jax hood/mask hint -->
-        <circle cx="44" cy="42" r="11" fill="rgba(180,100,0,.15)" stroke="rgba(220,140,0,.4)" stroke-width="1"/>
-        <!-- Eyes glowing -->
-        <circle cx="40" cy="41" r="2.5" fill="rgba(255,180,0,.8)"/>
-        <circle cx="48" cy="41" r="2.5" fill="rgba(255,180,0,.8)"/>
-        <circle cx="40" cy="41" r="1.2" fill="#fff"/>
-        <circle cx="48" cy="41" r="1.2" fill="#fff"/>
-        <!-- Counter strike sparks -->
-        <line x1="20" y1="44" x2="28" y2="40" stroke="rgba(255,160,0,.6)" stroke-width="1.5" stroke-linecap="round"/>
-        <line x1="68" y1="44" x2="60" y2="40" stroke="rgba(255,160,0,.6)" stroke-width="1.5" stroke-linecap="round"/>
-        <text x="44" y="78" text-anchor="middle" font-family="serif" font-size="8" font-weight="bold" fill="rgba(255,160,0,.7)" letter-spacing="1">JAX</text>
-      </svg>
+  <div class="emblem">
+    <div class="er1"></div><div class="er2"></div><div class="er3"></div>
+    <div class="emb-flare"></div>
+    <div class="emb-dt"></div>
+    <div class="emb-rune-l"></div>
+    <div class="emb-rune-r"></div>
+    <div class="emb-inner">
+      <div class="emb-lms">LMS</div>
+      <div class="emb-sub">Admin</div>
     </div>
   </div>
 
-  <!-- Champion names -->
-  <div class="champ-names">
-    <div class="champ-name wu">Wukong</div>
-    <div class="champ-name-sep">·</div>
-    <div class="champ-name jx">Jax</div>
+  <div class="welcome-txt">Welcome back</div>
+  <div class="fullname" id="displayName">Brian Lopez Cabrera</div>
+
+  <div class="title-banner">
+    <div class="tb-shine"></div>
+    <div class="banner-pulse"></div>
+    <div class="tb-topline"></div>
+    <div class="tb-botline"></div>
+    <div class="pr-wash"></div>
+    <div class="tb-main">Lab Management</div>
+    <div class="tb-role">System Administrator</div>
+    <div class="tb-dept">LMS · Zenni Optical</div>
+    <div class="tb-co">Zenni USA · Ohio</div>
   </div>
 
-  <div class="sum-label">Lab Management Administrator</div>
-  <div class="sum-name">DANTE</div>
-
-  <div class="rank-badge">
-    <div class="rank-icon-wu"></div>
-    <div class="rank-txt">
-      <div class="rank-main" id="displayRole">LMS · Admin</div>
-      <div class="rank-sub">Zenni USA Ohio</div>
-    </div>
-    <div class="rank-icon-jax"></div>
+  <div class="metrics">
+    <div class="metric"><div class="metric-val" id="m1">--</div><div class="metric-lbl">Modules</div></div>
+    <div class="metric"><div class="metric-val" id="m2">--</div><div class="metric-lbl">Depts</div></div>
+    <div class="metric"><div class="metric-val" id="m3">--</div><div class="metric-lbl">Users</div></div>
   </div>
 
-  <div class="psep">
-    <div class="pl"></div><div class="pd"></div><div class="pl r"></div>
+  <div class="status-row">
+    <div class="st-item"><div class="st-dot on"></div><div class="st-lbl">Online</div></div>
+    <div class="st-item"><div class="st-dot act"></div><div class="st-lbl">Systems Active</div></div>
+    <div class="st-item"><div class="st-dot rdy"></div><div class="st-lbl">Admin Ready</div></div>
   </div>
-  <div class="player-lbl">Player</div>
-  <div class="player-name" id="displayName">Brian Lopez Cabrera</div>
 
   <div class="pr-row">
     <div class="pr-flag">
@@ -407,32 +810,42 @@ body{background:#000;overflow:hidden;height:100vh;width:100vw;}
         <div class="pf-s pf-r"></div><div class="pf-s pf-w"></div>
         <div class="pf-s pf-r"></div>
       </div>
-      <div class="pft"></div>
-      <div class="pfs">★</div>
+      <div class="pft"></div><div class="pfs">★</div>
     </div>
-    <div class="pr-lbl">Boricua</div>
+    <div class="pr-lbl">🇵🇷 Boricua · Puerto Rico</div>
   </div>
 
-</div>
-
-<div class="load-wrap">
-  <div class="lt"><span>Loading Dashboard</span><span id="pct">0%</span></div>
-  <div class="lbar"><div class="lfill"></div></div>
-  <div class="lticks">
-    <div class="ltick"></div><div class="ltick"></div><div class="ltick"></div>
-    <div class="ltick"></div><div class="ltick"></div><div class="ltick"></div>
-    <div class="ltick"></div><div class="ltick"></div><div class="ltick"></div><div class="ltick"></div>
+  <div class="boricua-tag">
+    <div class="bt-l"></div>
+    <span class="bt-txt">La Isla del Encanto</span>
+    <div class="bt-r"></div>
   </div>
-  <div class="lsys" id="sysTxt">Connecting to server...</div>
+
+  <div class="pbar-wrap">
+    <div class="pbar-top"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track" style="position:relative;"><div class="pbar-fill"></div><div class="pbar-spark"></div></div>
+    <div class="pbar-ticks">
+      <div class="ptick"></div><div class="ptick"></div><div class="ptick"></div>
+      <div class="ptick"></div><div class="ptick"></div><div class="ptick"></div>
+      <div class="ptick"></div><div class="ptick"></div><div class="ptick"></div><div class="ptick"></div>
+    </div>
+    <div class="sys-txt" id="sysTxt">Initializing LMS modules...</div>
+  </div>
+
 </div>
 
 <script>
   const n=sessionStorage.getItem("lms_fullname")||"Brian Lopez Cabrera";
-  const r=sessionStorage.getItem("lms_role")||"LMS";
-  const s=sessionStorage.getItem("lms_subrole")||"Admin";
   document.getElementById("displayName").textContent=n;
-  document.getElementById("displayRole").textContent=r+" · "+s;
-  const msgs=["Connecting to server...","Loading champion data...","Wukong & Jax ready...","Preparing the Rift...","Get ready, Summoner..."];
+  setTimeout(()=>{ countUp("m1",0,8,1000); },600);
+  setTimeout(()=>{ countUp("m2",0,6,900); },800);
+  setTimeout(()=>{ countUp("m3",0,14,1100); },1000);
+  function countUp(id,from,to,dur){
+    const el=document.getElementById(id);if(!el)return;
+    const steps=20;const inc=(to-from)/steps;let cur=from;let i=0;
+    const iv=setInterval(()=>{cur+=inc;i++;el.textContent=Math.round(cur);if(i>=steps){el.textContent=to;clearInterval(iv);}},dur/steps);
+  }
+  const msgs=["Initializing LMS modules...","Loading visibility settings...","Syncing department data...","Preparing admin console...","Access granted..."];
   let p=0;const pEl=document.getElementById("pct");const sysEl=document.getElementById("sysTxt");
   const iv=setInterval(()=>{
     p=Math.min(99,p+Math.floor(Math.random()*2)+1);pEl.textContent=p+"%";

@@ -67,6 +67,15 @@ let state = {
 
   filter: "all",
   activeTab: "overview",
+
+  operatorActivity: [],
+  operatorSummary: {},
+  operatorStationOptions: [],
+  operatorFilter: "all",
+  operatorSearch: "",
+  operatorSort: "stationAsc",
+  operatorError: "",
+
   hasRenderedOnce: false
 };
 
@@ -134,6 +143,16 @@ function pct(value) {
 function safeText(value, fallback = "—") {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function setText(id, value) {
@@ -536,6 +555,8 @@ async function fetchData(forceRender = false) {
       throw new Error(json?.message || "API returned error");
     }
 
+    await fetchOperatorActivity(true);
+
     const incomingFlow = Array.isArray(json.surfaceFlow) ? json.surfaceFlow : [];
     const incomingTransfers = Array.isArray(json.surfaceTransfers) ? json.surfaceTransfers : [];
     const incomingScanSummary = Array.isArray(json.surfaceScanSummary)
@@ -620,6 +641,238 @@ async function fetchData(forceRender = false) {
     setSurfaceLoaderProgress(100, "Unable to load Surface dashboard");
     setTimeout(hideSurfaceLoader, 700);
   }
+}
+
+
+/* =========================================================
+   SECTION 06B — OPERATOR COMMAND CENTER API/UI
+   Source: RAW_ACTIVITY_CURRENT via ?action=operatorActivity
+========================================================= */
+
+function getOperatorField(row, upperName, lowerName, fallback = "") {
+  if (!row) return fallback;
+  const value = row[upperName] ?? row[lowerName];
+  return value === undefined || value === null || String(value).trim() === "" ? fallback : value;
+}
+function normalizeOperatorDisplayName(value) {
+  const text = safeText(value, "System / No Operator Captured");
+  const lower = text.toLowerCase();
+  return lower.includes("unassigned") || lower.includes("no operator") ? "System / No Operator Captured" : text;
+}
+const OPERATOR_SURFACE_STATION_ORDER = ["Blocking Line B","Cooling Storage","Generating Line B","Polishing Line B","Engraving Line B","Detaping Line B","Coating Line B","Surface Inspection OUT"];
+const OPERATOR_SURFACE_STATION_SET = new Set(OPERATOR_SURFACE_STATION_ORDER);
+const OPERATOR_HOUR_LABELS = ["6:00 AM","7:00 AM","8:00 AM","9:00 AM","10:00 AM","11:00 AM","12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM","6:00 PM","7:00 PM","8:00 PM"];
+const OPERATOR_STATION_ICONS = {"Blocking Line B":"blocking","Cooling Storage":"snow","Generating Line B":"gear","Polishing Line B":"sparkle","Engraving Line B":"engrave","Detaping Line B":"tape","Coating Line B":"droplet","Surface Inspection OUT":"shield"};
+function operatorStationRank(station){ const i = OPERATOR_SURFACE_STATION_ORDER.indexOf(String(station||"").trim()); return i === -1 ? 999 : i; }
+function isVisibleSurfaceOperatorStation(station){ return OPERATOR_SURFACE_STATION_SET.has(String(station||"").trim()); }
+function sortOperatorRowsByStationOrder(a,b){ const s=operatorStationRank(a.flowStation)-operatorStationRank(b.flowStation); if(s) return s; const t=num(b.total)-num(a.total); if(t) return t; return String(a.operator||"").localeCompare(String(b.operator||"")); }
+function ensureOperatorUiState(){ if(!state.operatorMachineStatus) state.operatorMachineStatus={}; if(!state.activeOperatorStation) state.activeOperatorStation=""; }
+function getOperatorStationIcon(station){ const key=OPERATOR_STATION_ICONS[station] || "gearDefault"; return ICONS[key] || ICONS.gearDefault; }
+function buildOperatorSummaryFromRows(rows){
+  const sourceRows=Array.isArray(rows)?rows:[], operatorTotals={}, stationTotals={}, hourTotals={};
+  let totalJobs=0, topOperator="—", topOperatorTotal=0, topStation="—", topStationTotal=0, peakHour="—", peakHourTotal=0;
+  sourceRows.forEach(row=>{ const op=row.operator||"System / No Operator Captured", st=row.flowStation||"Other", total=num(row.total); totalJobs+=total; operatorTotals[op]=(operatorTotals[op]||0)+total; stationTotals[st]=(stationTotals[st]||0)+total; OPERATOR_HOUR_LABELS.forEach(h=>hourTotals[h]=(hourTotals[h]||0)+num(row.hours?.[h])); });
+  Object.keys(operatorTotals).forEach(op=>{ if(operatorTotals[op]>topOperatorTotal){ topOperator=op; topOperatorTotal=operatorTotals[op]; }});
+  Object.keys(stationTotals).forEach(st=>{ if(stationTotals[st]>topStationTotal){ topStation=st; topStationTotal=stationTotals[st]; }});
+  Object.keys(hourTotals).forEach(h=>{ if(hourTotals[h]>peakHourTotal){ peakHour=h; peakHourTotal=hourTotals[h]; }});
+  return {totalJobs,totalOperators:Object.keys(operatorTotals).length,totalStations:Object.keys(stationTotals).length,topOperator,topOperatorTotal,topStation,topStationTotal,peakHour,peakHourTotal,hourTotals,stationTotals};
+}
+function normalizeOperatorActivityPayload(payload){
+  const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
+  return rows.map(row=>{ const hours=row.Hours||row.hours||{}; return {reportDate:getOperatorField(row,"ReportDate","reportDate",""),area:getOperatorField(row,"Area","area",CONFIG.AREA),flowStation:getOperatorField(row,"FlowStation","flowStation",""),accessPoint:getOperatorField(row,"AccessPoint","accessPoint",""),operator:normalizeOperatorDisplayName(getOperatorField(row,"Operator","operator","System / No Operator Captured")),total:num(getOperatorField(row,"Total","total",0)),hourlyTotal:num(getOperatorField(row,"HourlyTotal","hourlyTotal",0)),bestHour:getOperatorField(row,"BestHour","bestHour","—"),bestHourValue:num(getOperatorField(row,"BestHourValue","bestHourValue",0)),lastActiveHour:getOperatorField(row,"LastActiveHour","lastActiveHour","—"),hours}; }).filter(row=>isVisibleSurfaceOperatorStation(row.flowStation)).sort(sortOperatorRowsByStationOrder);
+}
+async function fetchOperatorActivity(quiet=true){
+  const url=`${CONFIG.API_URL}?action=operatorActivity&area=${encodeURIComponent(CONFIG.AREA||"Surface")}&t=${Date.now()}`;
+  try { const res=await fetch(url,{cache:"no-store"}); if(!res.ok) throw new Error("Operator API HTTP "+res.status); const json=await res.json(); if(!json||json.status!=="success") throw new Error(json?.message||"Operator API returned error"); state.operatorActivity=normalizeOperatorActivityPayload(json); state.operatorSummary=json.summary||{}; state.operatorStationOptions=OPERATOR_SURFACE_STATION_ORDER.filter(st=>state.operatorActivity.some(row=>row.flowStation===st)); state.operatorError=""; renderOperatorStationOptions(); renderOperatorActivity(); return json; }
+  catch(err){ console.error("[SurfaceWIP] Operator activity error:",err); state.operatorError=err.message||"Unable to load operator activity."; if(!quiet) renderOperatorActivity(); return null; }
+}
+function renderOperatorStationOptions(){ const select=document.getElementById("operatorStationFilter"); if(!select) return; const current=select.value||state.operatorFilter||"all", stations=state.operatorStationOptions||[]; select.innerHTML=`<option value="all">All Surface Operator Stations</option>${stations.map(st=>`<option value="${escapeHTML(st)}">${escapeHTML(st)}</option>`).join("")}`; select.value=stations.includes(current)?current:"all"; state.operatorFilter=select.value; }
+function getFilteredOperatorRows(){
+  const rows=Array.isArray(state.operatorActivity)?state.operatorActivity.slice():[]; const stationFilter=state.operatorFilter||"all", search=String(state.operatorSearch||"").trim().toLowerCase(); let filtered=rows;
+  if(stationFilter!=="all") filtered=filtered.filter(row=>row.flowStation===stationFilter);
+  if(search) filtered=filtered.filter(row=>[row.operator,row.flowStation,row.accessPoint,row.bestHour,row.lastActiveHour].join(" ").toLowerCase().includes(search));
+  switch(state.operatorSort){ case "operatorAsc": filtered.sort((a,b)=>String(a.operator).localeCompare(String(b.operator))); break; case "lastActiveDesc": filtered.sort((a,b)=>hourSortValue(b.lastActiveHour)-hourSortValue(a.lastActiveHour)); break; case "totalDesc": filtered.sort((a,b)=>num(b.total)-num(a.total)); break; default: filtered.sort(sortOperatorRowsByStationOrder); }
+  return filtered;
+}
+function hourSortValue(label){ const m=String(label||"").trim().toUpperCase().match(/^(\d{1,2})(?::00)?\s*(AM|PM)$/); if(!m) return -1; let h=Number(m[1]); if(m[2]==="PM"&&h!==12) h+=12; if(m[2]==="AM"&&h===12) h=0; return h; }
+function getOperatorStationSummaries(rows){
+  const sourceRows=Array.isArray(rows)?rows:[];
+  return OPERATOR_SURFACE_STATION_ORDER.map(station=>{ const stationRows=sourceRows.filter(row=>row.flowStation===station), operatorSet=new Set(), accessSet=new Set(), hourTotals={}, operatorTotals={}; let total=0, topOperator="—", topOperatorTotal=0, peakHour="—", peakHourTotal=0, lastActiveHour="—"; OPERATOR_HOUR_LABELS.forEach(h=>hourTotals[h]=0);
+    stationRows.forEach(row=>{ const rowTotal=num(row.total), op=row.operator||"System / No Operator Captured"; total+=rowTotal; operatorSet.add(op); if(row.accessPoint) accessSet.add(row.accessPoint); operatorTotals[op]=(operatorTotals[op]||0)+rowTotal; OPERATOR_HOUR_LABELS.forEach(h=>{ const v=num(row.hours?.[h]); hourTotals[h]+=v; if(v>0) lastActiveHour=h; }); });
+    Object.keys(operatorTotals).forEach(op=>{ if(operatorTotals[op]>topOperatorTotal){ topOperator=op; topOperatorTotal=operatorTotals[op]; }}); Object.keys(hourTotals).forEach(h=>{ if(hourTotals[h]>peakHourTotal){ peakHour=h; peakHourTotal=hourTotals[h]; }});
+    return {station, rows:stationRows.sort((a,b)=>num(b.total)-num(a.total)), total, operatorCount:operatorSet.size, accessPoints:Array.from(accessSet), topOperator, topOperatorTotal, peakHour, peakHourTotal, lastActiveHour, hourTotals};
+  }).filter(item=>item.rows.length);
+}
+function getStationLiveStatus(summary){ ensureOperatorUiState(); const manual=state.operatorMachineStatus?.[summary.station]; if(manual?.status) return manual; if(num(summary.total)<=0) return {status:"NO OUTPUT",className:"no-output",label:"No Output",note:"No production captured today"}; return {status:"ONLINE",className:"online",label:"Running",note:"Live output captured"}; }
+function setOperatorStationStatus(station,status){ ensureOperatorUiState(); const map={ONLINE:{status:"ONLINE",className:"online",label:"Running",note:"Manually marked online"},WATCH:{status:"WATCH",className:"watch",label:"Watch",note:"Marked for supervisor attention"},DOWN:{status:"DOWN",className:"down",label:"Machine Down",note:"Temporary UI status only"}}; state.operatorMachineStatus[station]={...(map[String(status||"ONLINE").toUpperCase()]||map.ONLINE),updatedAt:new Date()}; renderOperatorActivity(); openOperatorStationDrawer(station); }
+function renderOperatorActivity(){
+  ensureOperatorUiState(); const wrap=document.getElementById("operatorTableWrap"); if(!wrap) return; if(state.operatorError&&!state.operatorActivity.length){ wrap.innerHTML=`<div class="flow-loading">Operator activity could not load: ${escapeHTML(state.operatorError)}</div>`; return; }
+  const rows=getFilteredOperatorRows(), baseRows=Array.isArray(state.operatorActivity)?state.operatorActivity:[], summary=buildOperatorSummaryFromRows(baseRows), stationSummaries=getOperatorStationSummaries(rows);
+  setText("operatorTotalJobs",num(summary.totalJobs).toLocaleString()); setText("operatorTotalOperators",num(summary.totalOperators).toLocaleString()); setText("operatorPeakHour",safeText(summary.peakHour,"—")); setText("operatorPeakHourSub",`${num(summary.peakHourTotal).toLocaleString()} jobs`); setText("operatorTopStation",safeText(summary.topStation,"—")); setText("operatorTopStationSub",`${num(summary.topStationTotal).toLocaleString()} jobs`);
+  const update=document.getElementById("operatorLatestUpdate"); if(update) update.textContent=`Latest Update: ${formatDisplayDateTime(state.lastUpdateTime||state.lastFetch||new Date())}`;
+  renderOperatorStationChips(baseRows); if(!stationSummaries.length){ wrap.innerHTML=`<div class="flow-loading">No operator station cards match the selected filters.</div>`; return; }
+  wrap.innerHTML=stationSummaries.map(renderOperatorStationCard).join(""); wrap.querySelectorAll("[data-operator-card]").forEach(card=>card.addEventListener("click",()=>openOperatorStationDrawer(card.dataset.operatorCard||"")));
+}
+function renderOperatorStationCard(summary){
+  const status=getStationLiveStatus(summary), maxHour=Math.max(...Object.values(summary.hourTotals||{}).map(v=>num(v)),1), systemTotal=summary.rows.filter(row=>row.operator==="System / No Operator Captured").reduce((sum,row)=>sum+num(row.total),0);
+  return `<article class="operator-command-card ${escapeHTML(status.className)}" data-operator-card="${escapeHTML(summary.station)}"><div class="operator-card-glow"></div><div class="operator-card-top"><div class="operator-card-icon">${getOperatorStationIcon(summary.station)}</div><div><div class="operator-card-step">${String(operatorStationRank(summary.station)+1).padStart(2,"0")}</div><h3>${escapeHTML(summary.station)}</h3><p>${escapeHTML(summary.accessPoints.join(" + ")||"Access point not captured")}</p></div><span class="operator-status-badge ${escapeHTML(status.className)}">${escapeHTML(status.label)}</span></div><div class="operator-card-output"><span>Output Today</span><strong>${num(summary.total).toLocaleString()}</strong></div><div class="operator-card-metrics"><div><span>Operators</span><strong>${summary.operatorCount}</strong></div><div><span>Peak</span><strong>${escapeHTML(summary.peakHour)}</strong><small>${num(summary.peakHourTotal).toLocaleString()}</small></div><div><span>Top</span><strong>${escapeHTML(summary.topOperator)}</strong><small>${num(summary.topOperatorTotal).toLocaleString()}</small></div></div><div class="operator-card-bars">${OPERATOR_HOUR_LABELS.map(hour=>{const v=num(summary.hourTotals?.[hour]), h=Math.max(8,Math.round((v/maxHour)*46)); return `<span class="operator-hour-bar ${v>0?"active":""}" style="height:${h}px" title="${escapeHTML(hour)}: ${v.toLocaleString()}"></span>`;}).join("")}</div><div class="operator-card-footer"><span>${escapeHTML(status.note||"")}</span>${systemTotal>0?`<strong>${systemTotal.toLocaleString()} system/no operator</strong>`:`<strong>Click for details</strong>`}</div></article>`;
+}
+function renderOperatorStationChips(rows){
+  const chips=document.getElementById("operatorStationChips"); if(!chips) return; const summaries=getOperatorStationSummaries(Array.isArray(rows)?rows:[]); if(!summaries.length){ chips.innerHTML=`<span class="operator-status-pill">No station rows</span>`; return; }
+  chips.innerHTML=`<button class="operator-status-pill ${state.operatorFilter==="all"?"active":""}" data-operator-station="all">All Stations</button>${summaries.map(s=>{const status=getStationLiveStatus(s); return `<button class="operator-status-pill ${escapeHTML(status.className)} ${state.operatorFilter===s.station?"active":""}" data-operator-station="${escapeHTML(s.station)}"><span>${escapeHTML(s.station)}</span><strong>${num(s.total).toLocaleString()}</strong></button>`;}).join("")}`;
+  chips.querySelectorAll("[data-operator-station]").forEach(btn=>btn.addEventListener("click",()=>{ state.operatorFilter=btn.dataset.operatorStation||"all"; const select=document.getElementById("operatorStationFilter"); if(select) select.value=state.operatorFilter; renderOperatorActivity(); }));
+}
+function renderOperatorPersonHourly(row){
+  const maxHour = Math.max(...OPERATOR_HOUR_LABELS.map(hour => num(row.hours?.[hour])), 1);
+
+  return `<div class="operator-person-hour-grid">
+    ${OPERATOR_HOUR_LABELS.map(hour => {
+      const v = num(row.hours?.[hour]);
+      const h = Math.max(7, Math.round((v / maxHour) * 54));
+
+      return `<div class="operator-person-hour">
+        <span class="operator-person-hour-bar ${v > 0 ? "active" : ""}" style="height:${h}px"></span>
+        <strong>${v ? v.toLocaleString() : "—"}</strong>
+        <small>${escapeHTML(hour.replace(":00", ""))}</small>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function renderOperatorPersonCard(row, index){
+  const isSystem = row.operator === "System / No Operator Captured";
+  const cardId = `operatorPerson_${index}`;
+
+  return `<article class="operator-person-card operator-person-card--expandable ${isSystem ? "system" : ""}" data-person-card="${escapeHTML(cardId)}">
+    <button class="operator-person-main" type="button" data-person-toggle="${escapeHTML(cardId)}">
+      <div>
+        <strong>${escapeHTML(row.operator)}</strong>
+        <span>${escapeHTML(row.accessPoint)} • ${escapeHTML(row.bestHour || "—")} peak</span>
+      </div>
+
+      <div class="operator-person-score">
+        <strong>${num(row.total).toLocaleString()}</strong>
+        <span>${escapeHTML(row.lastActiveHour || "—")} last active</span>
+      </div>
+
+      <div class="operator-person-chevron">⌄</div>
+    </button>
+
+    <div class="operator-person-hour-panel" data-person-panel="${escapeHTML(cardId)}">
+      <div class="operator-person-hour-title">
+        <span>Individual Hourly Output</span>
+        <strong>${escapeHTML(row.operator)}</strong>
+      </div>
+      ${renderOperatorPersonHourly(row)}
+    </div>
+  </article>`;
+}
+
+function openOperatorStationDrawer(station){
+  ensureOperatorUiState();
+
+  const drawer = document.getElementById("operatorStationDrawer");
+  const content = document.getElementById("operatorDrawerContent");
+
+  if (!drawer || !content || !station) return;
+
+  const rows = Array.isArray(state.operatorActivity)
+    ? state.operatorActivity.filter(row => row.flowStation === station)
+    : [];
+
+  const summary = getOperatorStationSummaries(rows)[0];
+  if (!summary) return;
+
+  const status = getStationLiveStatus(summary);
+  const maxHour = Math.max(...Object.values(summary.hourTotals || {}).map(v => num(v)), 1);
+
+  state.activeOperatorStation = station;
+
+  content.innerHTML = `<div class="operator-drawer-head ${escapeHTML(status.className)}">
+    <div class="operator-drawer-icon">${getOperatorStationIcon(station)}</div>
+    <div>
+      <div class="report-eyebrow">Station Detail</div>
+      <h2>${escapeHTML(station)}</h2>
+      <p>${escapeHTML(summary.accessPoints.join(" + ") || "Access point not captured")}</p>
+    </div>
+    <span class="operator-status-badge ${escapeHTML(status.className)}">${escapeHTML(status.label)}</span>
+  </div>
+
+  <div class="operator-drawer-actions">
+    <button class="operator-action-btn online" data-operator-status="ONLINE">Back Online</button>
+    <button class="operator-action-btn watch" data-operator-status="WATCH">Watch</button>
+    <button class="operator-action-btn down" data-operator-status="DOWN">Mark Down</button>
+  </div>
+
+  <div class="operator-drawer-stat-grid">
+    <div><span>Total Output</span><strong>${num(summary.total).toLocaleString()}</strong></div>
+    <div><span>Operators</span><strong>${summary.operatorCount}</strong></div>
+    <div><span>Peak Hour</span><strong>${escapeHTML(summary.peakHour)}</strong><small>${num(summary.peakHourTotal).toLocaleString()} jobs</small></div>
+    <div><span>Top Operator</span><strong>${escapeHTML(summary.topOperator)}</strong><small>${num(summary.topOperatorTotal).toLocaleString()} jobs</small></div>
+  </div>
+
+  <div class="operator-drawer-section">
+    <h3>Station Hourly Output</h3>
+    <div class="operator-drawer-hour-grid">
+      ${OPERATOR_HOUR_LABELS.map(hour => {
+        const v = num(summary.hourTotals?.[hour]);
+        const h = Math.max(8, Math.round((v / maxHour) * 76));
+
+        return `<div class="operator-drawer-hour">
+          <span class="operator-drawer-hour-bar ${v > 0 ? "active" : ""}" style="height:${h}px"></span>
+          <strong>${v ? v.toLocaleString() : "—"}</strong>
+          <small>${escapeHTML(hour.replace(":00", ""))}</small>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>
+
+  <div class="operator-drawer-section">
+    <div class="operator-section-title-row">
+      <h3>Operators Captured</h3>
+      <span>Click an operator to see individual hourly output</span>
+    </div>
+
+    <div class="operator-person-list">
+      ${summary.rows.map(renderOperatorPersonCard).join("")}
+    </div>
+  </div>
+
+  <div class="operator-drawer-note">
+    <strong>UI preview only:</strong> Down / Watch / Online status resets when the page reloads until the machine-status backend is added.
+  </div>`;
+
+  content.querySelectorAll("[data-operator-status]").forEach(btn => {
+    btn.addEventListener("click", () => setOperatorStationStatus(station, btn.dataset.operatorStatus || "ONLINE"));
+  });
+
+  content.querySelectorAll("[data-person-toggle]").forEach(btn => {
+    btn.addEventListener("click", event => {
+      event.stopPropagation();
+
+      const id = btn.dataset.personToggle || "";
+      const card = content.querySelector(`[data-person-card="${CSS.escape(id)}"]`);
+      const panel = content.querySelector(`[data-person-panel="${CSS.escape(id)}"]`);
+
+      if (!card || !panel) return;
+
+      const isOpen = card.classList.toggle("open");
+      panel.style.maxHeight = isOpen ? panel.scrollHeight + "px" : "0px";
+    });
+  });
+
+  drawer.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+}
+function closeOperatorStationDrawer(){ const drawer=document.getElementById("operatorStationDrawer"); if(!drawer) return; drawer.classList.remove("open"); drawer.setAttribute("aria-hidden","true"); }
+function exportOperatorCSV(){ const rows=getFilteredOperatorRows(); if(!rows.length) return; const csvRows=[["Report Date","Area","Operator","Flow Station","Access Point","Total",...OPERATOR_HOUR_LABELS,"Best Hour","Best Hour Value","Last Active Hour"]]; rows.forEach(row=>csvRows.push([row.reportDate,row.area,row.operator,row.flowStation,row.accessPoint,row.total,...OPERATOR_HOUR_LABELS.map(hour=>num(row.hours?.[hour])),row.bestHour,row.bestHourValue,row.lastActiveHour])); const csv=csvRows.map(row=>row.map(value=>`"${String(value??"").replace(/"/g,'""')}"`).join(",")).join("\n"); const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const link=document.createElement("a"), date=new Date().toISOString().slice(0,10); link.href=URL.createObjectURL(blob); link.download=`Surface_Operator_Command_Output_${date}.csv`; link.click(); URL.revokeObjectURL(link.href); }
+function initOperatorControls(){
+  const station=document.getElementById("operatorStationFilter"), search=document.getElementById("operatorSearch"), sort=document.getElementById("operatorSort"), exportButton=document.getElementById("btnExportOperatorsCsv");
+  if(station) station.addEventListener("change",()=>{ state.operatorFilter=station.value||"all"; renderOperatorActivity(); });
+  if(search) search.addEventListener("input",()=>{ state.operatorSearch=search.value||""; renderOperatorActivity(); });
+  if(sort){ sort.value=state.operatorSort||"stationAsc"; sort.addEventListener("change",()=>{ state.operatorSort=sort.value||"stationAsc"; renderOperatorActivity(); }); }
+  if(exportButton) exportButton.addEventListener("click",exportOperatorCSV);
+  document.querySelectorAll("[data-operator-close]").forEach(button=>button.addEventListener("click",closeOperatorStationDrawer));
 }
 
 /* =========================================================
@@ -771,6 +1024,7 @@ function renderAll() {
   renderLines();
   renderAlerts();
   renderAnalytics();
+  renderOperatorActivity();
   renderReports();
 }
 
@@ -2529,6 +2783,7 @@ function boot() {
   initTabs();
   initFilters();
   initExport();
+  initOperatorControls();
 
   updateClock();
   setInterval(updateClock, 1000);
