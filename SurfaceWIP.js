@@ -824,7 +824,7 @@ function renderFlowGrid() {
     return;
   }
 
-  const csv = [headers.join(","), ...csvRows].join("\n");
+  const maxWip = Math.max(...rows.map(r => num(r.CurrentJobTotal)), 1);
 
   grid.innerHTML = rows.map((row, index) => {
     const wip = num(row.CurrentJobTotal);
@@ -862,6 +862,7 @@ function renderFlowGrid() {
 
   updateBottleneckLabel(rows);
 }
+
 
 function updateBottleneckLabel(rows) {
   const label = document.getElementById("bottleneckLabel");
@@ -1530,8 +1531,9 @@ const SCAN_STEP_ALIASES = {
   "Surface Unbox": ["Surface Unbox", "SF Unbox"],
   "SF Unbox": ["Surface Unbox", "SF Unbox"],
 
-  "Blocking Line B": ["Blocking Line B", "Auto Blockers", "Blocking Line"],
-  "Auto Blockers": ["Blocking Line B", "Auto Blockers", "Blocking Line"],
+ "Blocking Line B": ["Blocking Line B", "Auto Blockers", "Manual Blocker", "Blocking Line"],
+"Auto Blockers": ["Blocking Line B", "Auto Blockers", "Manual Blocker", "Blocking Line"],
+"Manual Blocker": ["Blocking Line B", "Auto Blockers", "Manual Blocker", "Blocking Line"],
 
   "Cooling Storage": ["Cooling Storage", "IQ Star"],
   "IQ Star": ["Cooling Storage", "IQ Star"],
