@@ -13,26 +13,279 @@ const FINISH_PERSONAL_OPERATOR_ASSIGNMENTS_BASE_KEY = "finishPersonalOperatorAss
 const FINISH_PERSONAL_PROFILE_META_BASE_KEY = "finishPersonalOperatorProfileMeta_v1";
 const FINISH_CAPACITY_CONFIG_KEY = "finishCapacityConfig";
 
+
+/* Login-sheet fallback overrides for testing/personal profile resolution.
+   This is still local JS only. It does not save globally.
+   Add more users here only if their login page is not saving Role/Username correctly. */
+const FINISH_LOGIN_PROFILE_OVERRIDES = {
+  "BLOPEZ": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" },
+  "BRIAN LOPEZ CABRERA": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" },
+  "LOPEZ CABRERA": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" }
+};
+
+function cleanLoginLookupKey(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+function applyFinishLoginOverride(profile) {
+  if (!profile || typeof profile !== "object") return profile || {};
+
+  const possibleKeys = [
+    profile.username,
+    profile.Username,
+    profile.userName,
+    profile.UserName,
+    profile.email,
+    profile.Email,
+    `${profile.firstName || profile.FirstName || profile["First Name"] || ""} ${profile.lastName || profile.LastName || profile["Last Name"] || ""}`,
+    profile.lastName,
+    profile.LastName,
+    profile["Last Name"]
+  ];
+
+  for (const value of possibleKeys) {
+    const key = cleanLoginLookupKey(value);
+    if (key && FINISH_LOGIN_PROFILE_OVERRIDES[key]) {
+      return {
+        ...profile,
+        ...FINISH_LOGIN_PROFILE_OVERRIDES[key]
+      };
+    }
+  }
+
+  return profile;
+}
+
 const FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK = role => {
   const value = String(role || "").trim().toLowerCase();
   return (
     value === "lms" ||
     value.includes("director") ||
     value.includes("manager") ||
-    value.includes("supervisor")
+    value.includes("supervisor") ||
+    value.includes("training")
   );
 };
 
-function readJsonStorageValue(key) {
+function safeParseLoginValue(raw, key = "") {
+  if (raw == null || raw === "") return null;
+
+  if (typeof raw === "object") return raw;
+
+  const text = String(raw).trim();
+  if (!text) return null;
+
   try {
-    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
+    const parsed = JSON.parse(text);
+    return parsed;
   } catch {
+    // Some login scripts save only the username or role as plain text.
+    const cleanKey = String(key || "").toLowerCase();
+    if (cleanKey.includes("role")) return { role: text };
+    if (cleanKey.includes("user") || cleanKey.includes("login") || cleanKey.includes("name")) {
+      return { username: text };
+    }
     return null;
   }
 }
 
+function readJsonStorageValue(key) {
+  const rawSession = sessionStorage.getItem(key);
+  const rawLocal = localStorage.getItem(key);
+
+  return safeParseLoginValue(rawSession, key) || safeParseLoginValue(rawLocal, key);
+}
+
+function pickLoginField(user, keys) {
+  if (!user || typeof user !== "object") return "";
+
+  for (const key of keys) {
+    if (user[key] != null && String(user[key]).trim() !== "") {
+      return String(user[key]).trim();
+    }
+  }
+
+  // Support nested objects like { user: { username, role } } or { profile: {...} }.
+  const nestedObjects = [user.user, user.profile, user.account, user.auth, user.data, user.currentUser];
+  for (const nested of nestedObjects) {
+    if (!nested || typeof nested !== "object") continue;
+    for (const key of keys) {
+      if (nested[key] != null && String(nested[key]).trim() !== "") {
+        return String(nested[key]).trim();
+      }
+    }
+  }
+
+  return "";
+}
+
+function normalizeLoginUser(candidate) {
+  if (!candidate || typeof candidate !== "object") return null;
+
+  const username = pickLoginField(candidate, [
+    "username",
+    "Username",
+    "userName",
+    "UserName",
+    "login",
+    "Login",
+    "email",
+    "Email",
+    "user",
+    "User"
+  ]);
+
+  const role = pickLoginField(candidate, [
+    "role",
+    "Role",
+    "userRole",
+    "UserRole",
+    "accessRole",
+    "AccessRole"
+  ]);
+
+  const subRole = pickLoginField(candidate, [
+    "subRole",
+    "SubRole",
+    "Sub-Role",
+    "sub-role",
+    "departmentRole",
+    "DepartmentRole"
+  ]);
+
+  const firstName = pickLoginField(candidate, [
+    "firstName",
+    "FirstName",
+    "First Name",
+    "firstname"
+  ]);
+
+  const lastName = pickLoginField(candidate, [
+    "lastName",
+    "LastName",
+    "Last Name",
+    "lastname"
+  ]);
+
+  if (!username && !role && !firstName && !lastName) return null;
+
+  return applyFinishLoginOverride({
+    ...candidate,
+    username,
+    role,
+    subRole,
+    firstName,
+    lastName
+  });
+}
+
+function readSeparateLoginFields() {
+  const getAny = keys => {
+    for (const key of keys) {
+      const value = sessionStorage.getItem(key) || localStorage.getItem(key);
+      if (value != null && String(value).trim() !== "") return String(value).trim();
+    }
+    return "";
+  };
+
+  const username = getAny([
+    "lmsUsername",
+    "LMS_USERNAME",
+    "currentUsername",
+    "CurrentUsername",
+    "username",
+    "Username",
+    "userName",
+    "UserName",
+    "loggedInUsername",
+    "loggedInUserName"
+  ]);
+
+  const role = getAny([
+    "lmsRole",
+    "LMS_ROLE",
+    "currentUserRole",
+    "CurrentUserRole",
+    "role",
+    "Role",
+    "userRole",
+    "UserRole",
+    "loggedInRole"
+  ]);
+
+  const subRole = getAny([
+    "lmsSubRole",
+    "LMS_SUB_ROLE",
+    "currentUserSubRole",
+    "subRole",
+    "SubRole",
+    "Sub-Role"
+  ]);
+
+  const firstName = getAny([
+    "firstName",
+    "FirstName",
+    "First Name",
+    "lmsFirstName"
+  ]);
+
+  const lastName = getAny([
+    "lastName",
+    "LastName",
+    "Last Name",
+    "lmsLastName"
+  ]);
+
+  if (!username && !role) return null;
+
+  return applyFinishLoginOverride({ username, role, subRole, firstName, lastName });
+}
+
+function readLoginUserFromDom() {
+  const body = document.body || {};
+  const dataset = body.dataset || {};
+
+  const username =
+    dataset.username ||
+    dataset.userName ||
+    dataset.lmsUsername ||
+    document.querySelector("[data-current-username]")?.getAttribute("data-current-username") ||
+    document.querySelector("#currentUsername")?.textContent ||
+    "";
+
+  const role =
+    dataset.role ||
+    dataset.userRole ||
+    dataset.lmsRole ||
+    document.querySelector("[data-current-role]")?.getAttribute("data-current-role") ||
+    document.querySelector("#currentUserRole")?.textContent ||
+    "";
+
+  if (!username && !role) return null;
+  return applyFinishLoginOverride({ username: String(username).trim(), role: String(role).trim() });
+}
+
 function findStoredLoginUser() {
+  // 1) If your login page exposes a global user object, use it first.
+  const globals = [
+    window.lmsCurrentUser,
+    window.currentUser,
+    window.loggedInUser,
+    window.dashboardUser,
+    window.LMS_USER,
+    window.lmsUser,
+    window.userProfile
+  ];
+
+  for (const item of globals) {
+    const normalized = normalizeLoginUser(item);
+    if (normalized) return normalized;
+  }
+
+  // 2) Common local/session storage object keys.
   const likelyKeys = [
     "lmsCurrentUser",
     "currentUser",
@@ -41,26 +294,37 @@ function findStoredLoginUser() {
     "LMS_USER",
     "lmsUser",
     "authUser",
-    "userProfile"
+    "userProfile",
+    "loginUser",
+    "loginProfile",
+    "sessionUser",
+    "activeUser",
+    "LMS_CURRENT_USER",
+    "LMSCurrentUser"
   ];
 
   for (const key of likelyKeys) {
-    const user = readJsonStorageValue(key);
-    if (user && typeof user === "object" && (user.username || user.Username || user.role || user.Role)) {
-      return user;
-    }
+    const normalized = normalizeLoginUser(readJsonStorageValue(key));
+    if (normalized) return normalized;
   }
 
-  // Last-resort scan: useful if your login script used a custom key name.
+  // 3) Separate saved fields like localStorage.Username and localStorage.Role.
+  const separate = normalizeLoginUser(readSeparateLoginFields());
+  if (separate) return separate;
+
+  // 4) DOM fallback if the login page stamped the page/body with user info.
+  const domUser = normalizeLoginUser(readLoginUserFromDom());
+  if (domUser) return domUser;
+
+  // 5) Last-resort scan: useful if your login script used a custom key name.
   const stores = [sessionStorage, localStorage];
   for (const store of stores) {
     for (let i = 0; i < store.length; i++) {
       const key = store.key(i);
       if (!key) continue;
-      const user = readJsonStorageValue(key);
-      if (user && typeof user === "object" && (user.username || user.Username) && (user.role || user.Role)) {
-        return user;
-      }
+
+      const normalized = normalizeLoginUser(readJsonStorageValue(key));
+      if (normalized) return normalized;
     }
   }
 
@@ -68,7 +332,39 @@ function findStoredLoginUser() {
 }
 
 function getCurrentLoggedInUser() {
-  return findStoredLoginUser();
+  const user = findStoredLoginUser();
+
+  // Browser-console test helper. This does not save globally; it only helps you test this browser.
+  // Example:
+  // window.setFinishLoginProfileForTesting("BLOPEZ", "LMS", "Brian", "Lopez Cabrera");
+  window.setFinishLoginProfileForTesting = function(username, role, firstName = "", lastName = "", subRole = "") {
+    const profile = { username, role, firstName, lastName, subRole };
+    localStorage.setItem("lmsCurrentUser", JSON.stringify(profile));
+    console.log("Finish login profile saved for testing:", profile);
+    return profile;
+  };
+
+  window.debugFinishLoginProfile = function() {
+    const profile = findStoredLoginUser();
+    console.log("Finish detected login profile:", profile);
+    console.log("Can edit Finish operator assignments:", FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(profile.role || profile.Role));
+    return profile;
+  };
+
+  window.debugFinishLoginStorage = function() {
+    const rows = [];
+    [sessionStorage, localStorage].forEach((store, storeIndex) => {
+      const storeName = storeIndex === 0 ? "sessionStorage" : "localStorage";
+      for (let i = 0; i < store.length; i++) {
+        const key = store.key(i);
+        rows.push({ store: storeName, key, value: store.getItem(key) });
+      }
+    });
+    console.table(rows);
+    return rows;
+  };
+
+  return user;
 }
 
 function getCurrentUsername() {
@@ -77,6 +373,7 @@ function getCurrentUsername() {
     user.username ||
     user.Username ||
     user.userName ||
+    user.UserName ||
     user.email ||
     user.Email ||
     "default"
@@ -89,7 +386,7 @@ function getCurrentUsername() {
 
 function getCurrentUserRole() {
   const user = getCurrentLoggedInUser();
-  return String(user.role || user.Role || "").trim();
+  return String(user.role || user.Role || user.userRole || user.UserRole || "").trim();
 }
 
 function getCurrentUserDisplayName() {
