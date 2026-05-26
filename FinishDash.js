@@ -4,6 +4,135 @@ const FINISH_API_URL =
 const FINISH_OPERATOR_API_URL =
   "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=operatorActivity&area=Finish";
 
+/* Personal-profile storage.
+   This is NOT global. It saves operator roster and Certified/TQ/Training assignments
+   under the logged-in dashboard username in localStorage.
+   Director / Manager / Supervisor / LMS can edit. Team Lead and others are view-only. */
+const FINISH_PERSONAL_OPERATOR_ROSTER_BASE_KEY = "finishPersonalOperatorRoster_v1";
+const FINISH_PERSONAL_OPERATOR_ASSIGNMENTS_BASE_KEY = "finishPersonalOperatorAssignments_v1";
+const FINISH_PERSONAL_PROFILE_META_BASE_KEY = "finishPersonalOperatorProfileMeta_v1";
+const FINISH_CAPACITY_CONFIG_KEY = "finishCapacityConfig";
+
+const FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK = role => {
+  const value = String(role || "").trim().toLowerCase();
+  return (
+    value === "lms" ||
+    value.includes("director") ||
+    value.includes("manager") ||
+    value.includes("supervisor")
+  );
+};
+
+function readJsonStorageValue(key) {
+  try {
+    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function findStoredLoginUser() {
+  const likelyKeys = [
+    "lmsCurrentUser",
+    "currentUser",
+    "loggedInUser",
+    "dashboardUser",
+    "LMS_USER",
+    "lmsUser",
+    "authUser",
+    "userProfile"
+  ];
+
+  for (const key of likelyKeys) {
+    const user = readJsonStorageValue(key);
+    if (user && typeof user === "object" && (user.username || user.Username || user.role || user.Role)) {
+      return user;
+    }
+  }
+
+  // Last-resort scan: useful if your login script used a custom key name.
+  const stores = [sessionStorage, localStorage];
+  for (const store of stores) {
+    for (let i = 0; i < store.length; i++) {
+      const key = store.key(i);
+      if (!key) continue;
+      const user = readJsonStorageValue(key);
+      if (user && typeof user === "object" && (user.username || user.Username) && (user.role || user.Role)) {
+        return user;
+      }
+    }
+  }
+
+  return {};
+}
+
+function getCurrentLoggedInUser() {
+  return findStoredLoginUser();
+}
+
+function getCurrentUsername() {
+  const user = getCurrentLoggedInUser();
+  const username = String(
+    user.username ||
+    user.Username ||
+    user.userName ||
+    user.email ||
+    user.Email ||
+    "default"
+  ).trim();
+
+  return (username || "default")
+    .toUpperCase()
+    .replace(/[^A-Z0-9._@-]/g, "_");
+}
+
+function getCurrentUserRole() {
+  const user = getCurrentLoggedInUser();
+  return String(user.role || user.Role || "").trim();
+}
+
+function getCurrentUserDisplayName() {
+  const user = getCurrentLoggedInUser();
+  const first = user.firstName || user.FirstName || user["First Name"] || "";
+  const last = user.lastName || user.LastName || user["Last Name"] || "";
+  const full = `${first} ${last}`.trim();
+  return full || getCurrentUsername();
+}
+
+function canEditFinishOperatorAssignments() {
+  return FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(getCurrentUserRole());
+}
+
+function getFinishPersonalOperatorRosterKey() {
+  return `${FINISH_PERSONAL_OPERATOR_ROSTER_BASE_KEY}_${getCurrentUsername()}`;
+}
+
+function getFinishPersonalOperatorAssignmentsKey() {
+  return `${FINISH_PERSONAL_OPERATOR_ASSIGNMENTS_BASE_KEY}_${getCurrentUsername()}`;
+}
+
+function getFinishPersonalProfileMetaKey() {
+  return `${FINISH_PERSONAL_PROFILE_META_BASE_KEY}_${getCurrentUsername()}`;
+}
+
+function showFinishAssignmentToast(message) {
+  let toast = document.getElementById("finishAssignmentToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "finishAssignmentToast";
+    toast.className = "finish-assignment-toast";
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = message;
+  toast.classList.add("show");
+  window.clearTimeout(showFinishAssignmentToast._timer);
+  showFinishAssignmentToast._timer = window.setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2800);
+}
+
 let lastSyncTime = null;
 
 const DEFAULT_CONFIG = {
@@ -887,17 +1016,57 @@ function applyStationStateClasses(stations) {
    CONFIG
 ================================ */
 
+function loadFinishPersonalOperatorAssignments() {
+  try {
+    return JSON.parse(localStorage.getItem(getFinishPersonalOperatorAssignmentsKey()) || "{}");
+  } catch (error) {
+    console.warn("Could not read personal Finish operator assignments:", error);
+    return {};
+  }
+}
+
+function saveFinishPersonalOperatorAssignments(assignments) {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role can see operator setup but cannot edit it.");
+    return false;
+  }
+
+  try {
+    localStorage.setItem(getFinishPersonalOperatorAssignmentsKey(), JSON.stringify(assignments || {}));
+    localStorage.setItem(getFinishPersonalProfileMetaKey(), JSON.stringify({
+      savedAt: new Date().toISOString(),
+      storage: "localStorage",
+      scope: "personal-login-profile",
+      username: getCurrentUsername(),
+      role: getCurrentUserRole()
+    }));
+    return true;
+  } catch (error) {
+    console.warn("Could not save personal Finish operator assignments:", error);
+    return false;
+  }
+}
+
 function loadConfig() {
   try {
-    const saved = localStorage.getItem("finishCapacityConfig");
-    return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : { ...DEFAULT_CONFIG };
+    const saved = localStorage.getItem(FINISH_CAPACITY_CONFIG_KEY);
+    const baseConfig = saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : { ...DEFAULT_CONFIG };
+    return {
+      ...baseConfig,
+      operatorAssignments: loadFinishPersonalOperatorAssignments()
+    };
   } catch {
-    return { ...DEFAULT_CONFIG };
+    return {
+      ...DEFAULT_CONFIG,
+      operatorAssignments: loadFinishPersonalOperatorAssignments()
+    };
   }
 }
 
 function saveConfig(config) {
-  localStorage.setItem("finishCapacityConfig", JSON.stringify(config));
+  const safeConfig = { ...(config || {}) };
+  delete safeConfig.operatorAssignments;
+  localStorage.setItem(FINISH_CAPACITY_CONFIG_KEY, JSON.stringify(safeConfig));
 }
 
 function initConfigPanel() {
@@ -1013,7 +1182,7 @@ finalTraineeW5: getInputValue("cfgFinalTraineeW5"),
   });
 
   document.getElementById("configResetBtn")?.addEventListener("click", () => {
-    localStorage.removeItem("finishCapacityConfig");
+    localStorage.removeItem(FINISH_CAPACITY_CONFIG_KEY);
     initConfigPanel();
     loadDashboard();
   });
@@ -1234,29 +1403,129 @@ function getAssignmentTargetLabel(operatorName, stationName, config = loadConfig
   return `${role} · ${numberFmt(base)}/hr`;
 }
 
+function loadFinishPersonalOperatorRoster() {
+  try {
+    return JSON.parse(localStorage.getItem(getFinishPersonalOperatorRosterKey()) || "{}");
+  } catch (error) {
+    console.warn("Could not read personal Finish operator roster:", error);
+    return {};
+  }
+}
+
+function saveFinishPersonalOperatorRoster(roster) {
+  try {
+    localStorage.setItem(getFinishPersonalOperatorRosterKey(), JSON.stringify(roster || {}));
+    localStorage.setItem(getFinishPersonalProfileMetaKey(), JSON.stringify({
+      savedAt: new Date().toISOString(),
+      storage: "localStorage",
+      scope: "personal-browser-profile"
+    }));
+  } catch (error) {
+    console.warn("Could not save personal Finish operator roster:", error);
+  }
+}
+
+function upsertFinishPersonalRosterOperator(stationName, operatorName, total = 0, accessPoints = []) {
+  const station = normalizeFinishOperatorStation(stationName);
+  const operator = normalizeAssignmentOperatorName(operatorName);
+
+  if (!operator || operator === "Unassigned / No Operator") return;
+  if (!isFinishOperatorStationAllowed(station)) return;
+
+  const roster = loadFinishPersonalOperatorRoster();
+  const key = makeAssignmentKey(station, operator);
+  const now = new Date().toISOString();
+  const existing = roster[key] || {};
+
+  const nextAccessPoints = Array.from(new Set([
+    ...((existing.accessPoints || []).filter(Boolean)),
+    ...((Array.isArray(accessPoints) ? accessPoints : [accessPoints]).filter(Boolean))
+  ]));
+
+  roster[key] = {
+    station,
+    operator,
+    total: Number(total || 0),
+    accessPoints: nextAccessPoints,
+    firstSeen: existing.firstSeen || now,
+    lastSeen: now
+  };
+
+  saveFinishPersonalOperatorRoster(roster);
+}
+
+function syncFinishPersonalRosterFromStations(stations) {
+  Object.values(stations || {}).forEach(station => {
+    (station.operatorList || []).forEach(operator => {
+      upsertFinishPersonalRosterOperator(
+        station.name,
+        operator.name,
+        operator.total,
+        operator.accessPoints || []
+      );
+    });
+  });
+}
+
 function getFinishOperatorRoster() {
   const stations = finishOperatorState?.stations || {};
+  const savedRoster = loadFinishPersonalOperatorRoster();
   const roster = [];
   const seen = new Set();
 
+  // 1) Start with saved personal-profile roster so previously seen operators stay available.
+  Object.values(savedRoster || {}).forEach(item => {
+    const stationName = normalizeFinishOperatorStation(item.station);
+    const operatorName = normalizeAssignmentOperatorName(item.operator);
+    if (!stationName || !operatorName || !isFinishOperatorStationAllowed(stationName)) return;
+    if (!FINISH_ASSIGNMENT_STATIONS.includes(stationName)) return;
+
+    const key = makeAssignmentKey(stationName, operatorName);
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    roster.push({
+      station: stationName,
+      operator: operatorName,
+      total: Number(item.total || 0),
+      accessPoints: item.accessPoints || [],
+      firstSeen: item.firstSeen || "",
+      lastSeen: item.lastSeen || "",
+      savedProfile: true
+    });
+  });
+
+  // 2) Overlay current live roster totals, so active operators show today's live count.
   FINISH_ASSIGNMENT_STATIONS.forEach(stationName => {
     const station = stations[stationName];
     (station?.operatorList || []).forEach(operator => {
       const key = makeAssignmentKey(stationName, operator.name);
-      if (seen.has(key)) return;
-      seen.add(key);
-      roster.push({
+      const liveItem = {
         station: stationName,
         operator: operator.name,
         total: Number(operator.total || 0),
-        accessPoints: operator.accessPoints || []
-      });
+        accessPoints: operator.accessPoints || [],
+        firstSeen: "",
+        lastSeen: new Date().toISOString(),
+        savedProfile: true,
+        liveNow: true
+      };
+
+      if (seen.has(key)) {
+        const idx = roster.findIndex(item => makeAssignmentKey(item.station, item.operator) === key);
+        if (idx >= 0) roster[idx] = { ...roster[idx], ...liveItem, firstSeen: roster[idx].firstSeen || liveItem.firstSeen };
+        return;
+      }
+
+      seen.add(key);
+      roster.push(liveItem);
     });
   });
 
   return roster.sort((a, b) => {
     const s = FINISH_ASSIGNMENT_STATIONS.indexOf(a.station) - FINISH_ASSIGNMENT_STATIONS.indexOf(b.station);
     if (s !== 0) return s;
+    if (Boolean(b.liveNow) !== Boolean(a.liveNow)) return Number(Boolean(b.liveNow)) - Number(Boolean(a.liveNow));
     return Number(b.total || 0) - Number(a.total || 0);
   });
 }
@@ -1279,16 +1548,18 @@ function ensureOperatorAssignmentConfigPanel() {
     <summary>
       <div>
         <h3>Operator Capacity Assignment</h3>
-        <p>Select who counts as Certified/TQ core capacity and who is on Training Metric.</p>
+        <p>Select who counts as Certified/TQ core capacity and who is on Training Metric. Saved to this browser profile only.</p>
       </div>
       <span>Open / Close</span>
     </summary>
 
     <div class="operator-assignment-shell">
       <div class="assignment-warning-card">
-        <strong>Important</strong>
-        <span>When operators are assigned here, their station capacity and individual JPH target use the selected role. Trainees are graded against their ramp week, not the certified rate.</span>
+        <strong>Personal Login Profile</strong>
+        <span>Names are learned automatically from the Finish operator API. Certified/TQ/Training changes save under your logged-in username only, not globally.</span>
       </div>
+
+      <div id="finishAssignmentPermissionNotice" class="assignment-permission-notice"></div>
 
       <div class="assignment-summary-grid">
         <article><span>Mount Core/TQ</span><strong id="cfgAssignedMountCore">0</strong></article>
@@ -1306,6 +1577,7 @@ function ensureOperatorAssignmentConfigPanel() {
           </select>
         </label>
         <button id="assignmentClearBtn" type="button">Clear Assignments</button>
+        <button id="assignmentClearRosterBtn" type="button">Clear Saved Roster</button>
       </div>
 
       <div id="operatorAssignmentRoster" class="assignment-roster"></div>
@@ -1320,9 +1592,11 @@ function ensureOperatorAssignmentConfigPanel() {
 
   document.getElementById("assignmentStationFilter")?.addEventListener("change", renderOperatorAssignmentConfigPanel);
   document.getElementById("assignmentClearBtn")?.addEventListener("click", () => {
-    const config = loadConfig();
-    config.operatorAssignments = {};
-    saveConfig(config);
+    if (!canEditFinishOperatorAssignments()) {
+      showFinishAssignmentToast("View only. Your role can see operator setup but cannot edit it.");
+      return;
+    }
+    saveFinishPersonalOperatorAssignments({});
     renderOperatorAssignmentConfigPanel();
     updateConfigTotals();
     loadDashboard();
@@ -1330,6 +1604,17 @@ function ensureOperatorAssignmentConfigPanel() {
       const station = finishOperatorState.stations?.[finishOperatorState.selectedStation];
       if (station) renderDrawerOperators(station);
     }
+  });
+
+  document.getElementById("assignmentClearRosterBtn")?.addEventListener("click", () => {
+    if (!canEditFinishOperatorAssignments()) {
+      showFinishAssignmentToast("View only. Your role can see operator setup but cannot edit it.");
+      return;
+    }
+    localStorage.removeItem(getFinishPersonalOperatorRosterKey());
+    localStorage.removeItem(getFinishPersonalProfileMetaKey());
+    syncFinishPersonalRosterFromStations(finishOperatorState.stations || {});
+    renderOperatorAssignmentConfigPanel();
   });
 }
 
@@ -1350,6 +1635,7 @@ function renderOperatorAssignmentConfigPanel() {
         No live Finish operator roster loaded yet. Click Refresh Operators on the Operator tab or wait for the API refresh.
       </article>`;
     updateConfigTotals();
+    applyFinishAssignmentPermissionLock();
     return;
   }
 
@@ -1368,7 +1654,7 @@ function renderOperatorAssignmentConfigPanel() {
       <article class="assignment-row" data-assignment-row="${escapeHtml(makeAssignmentKey(item.station, item.operator))}">
         <div class="assignment-operator">
           <strong>${escapeHtml(item.operator)}</strong>
-          <span>${escapeHtml(item.station)} · Today ${numberFmt(item.total)}</span>
+          <span>${escapeHtml(item.station)} · Today ${numberFmt(item.total)}${item.liveNow ? " · Live" : " · Saved"}</span>
         </div>
 
         <label>
@@ -1419,6 +1705,36 @@ function renderOperatorAssignmentConfigPanel() {
   });
 
   updateConfigTotals();
+  applyFinishAssignmentPermissionLock();
+}
+
+function applyFinishAssignmentPermissionLock() {
+  const canEdit = canEditFinishOperatorAssignments();
+  const role = getCurrentUserRole() || "Unknown role";
+  const user = getCurrentUserDisplayName();
+
+  document
+    .querySelectorAll("#operatorAssignmentConfigPanel select, #operatorAssignmentConfigPanel input, #operatorAssignmentConfigPanel button")
+    .forEach(el => {
+      // Station filter should stay enabled so Team Leads can still view/filter.
+      if (el.id === "assignmentStationFilter") {
+        el.disabled = false;
+        return;
+      }
+
+      el.disabled = !canEdit;
+      el.classList.toggle("locked", !canEdit);
+      el.title = canEdit ? "" : "View only for your role";
+    });
+
+  const notice = document.getElementById("finishAssignmentPermissionNotice");
+  if (notice) {
+    notice.classList.toggle("can-edit", canEdit);
+    notice.classList.toggle("view-only", !canEdit);
+    notice.innerHTML = canEdit
+      ? `<strong>Edit access active</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · personal setup saves under ${escapeHtml(getCurrentUsername())}</span>`
+      : `<strong>View only</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · Director, Manager, Supervisor, and LMS can edit. Team Lead and other roles can only view.</span>`;
+  }
 }
 
 function buildTrainingWeekOptions(stationName, selectedWeek) {
@@ -1434,6 +1750,12 @@ function buildTrainingWeekOptions(stationName, selectedWeek) {
 }
 
 function saveOperatorAssignment(stationName, operatorName, role, trainingWeek = 1) {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role can see operator setup but cannot edit it.");
+    renderOperatorAssignmentConfigPanel();
+    return;
+  }
+
   const config = loadConfig();
   const station = normalizeFinishOperatorStation(stationName);
   const operator = normalizeAssignmentOperatorName(operatorName);
@@ -1450,12 +1772,15 @@ function saveOperatorAssignment(stationName, operatorName, role, trainingWeek = 
       operator,
       role,
       trainingWeek: Number(trainingWeek || 1),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      updatedBy: getCurrentUsername(),
+      updatedByRole: getCurrentUserRole()
     };
   }
 
-  config.operatorAssignments = assignments;
-  saveConfig(config);
+  const saved = saveFinishPersonalOperatorAssignments(assignments);
+  if (!saved) return;
+
   renderOperatorAssignmentConfigPanel();
   updateConfigTotals();
   loadDashboard();
@@ -1630,6 +1955,82 @@ function injectOperatorAssignmentStyles() {
       border-radius: 16px;
       color: #8fa6c3;
       background: rgba(2, 12, 24, .52);
+    }
+
+    .assignment-permission-notice {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(100, 221, 255, .16);
+      background: rgba(2, 12, 24, .62);
+    }
+
+    .assignment-permission-notice strong {
+      color: #eef8ff;
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .assignment-permission-notice span {
+      color: #8fa6c3;
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .assignment-permission-notice.can-edit {
+      border-color: rgba(0, 245, 160, .28);
+      background: rgba(0, 245, 160, .07);
+    }
+
+    .assignment-permission-notice.can-edit strong {
+      color: #00f5a0;
+    }
+
+    .assignment-permission-notice.view-only {
+      border-color: rgba(251, 191, 36, .28);
+      background: rgba(251, 191, 36, .07);
+    }
+
+    .assignment-permission-notice.view-only strong {
+      color: #fbbf24;
+    }
+
+    #operatorAssignmentConfigPanel select.locked,
+    #operatorAssignmentConfigPanel input.locked,
+    #operatorAssignmentConfigPanel button.locked {
+      opacity: .48;
+      cursor: not-allowed;
+      filter: grayscale(.35);
+    }
+
+    .finish-assignment-toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 10050;
+      max-width: 360px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(251, 191, 36, .35);
+      background: rgba(3, 12, 24, .96);
+      color: #eef8ff;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, .42);
+      transform: translateY(14px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .24s ease;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .finish-assignment-toast.show {
+      transform: translateY(0);
+      opacity: 1;
     }
 
     @media (max-width: 1100px) {
@@ -2164,6 +2565,7 @@ async function loadFinishOperatorActivity() {
 
     finishOperatorState.rows = rows;
     finishOperatorState.stations = buildFinishOperatorStations(rows);
+    syncFinishPersonalRosterFromStations(finishOperatorState.stations);
 
     renderOperatorSummary(payload.summary || buildOperatorSummaryFromStations(finishOperatorState.stations));
     renderOperatorStationCards(finishOperatorState.stations);
