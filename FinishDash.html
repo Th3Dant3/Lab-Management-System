@@ -284,6 +284,7 @@
     <!-- TAB NAVIGATION -->
   <nav class="command-tabs">
   <button class="tab-btn active" data-tab="floor">Process Flow</button>
+  <button class="tab-btn" data-tab="operators">Operator Command</button>
   <button class="tab-btn" data-tab="config">Configuration</button>
   <button class="tab-btn" data-tab="hourly">Hourly Production Performance</button>
   <button class="tab-btn" data-tab="summary">Summary</button>
@@ -603,6 +604,111 @@
       </section>
     </section>
 
+
+
+
+    <!-- OPERATOR COMMAND TAB -->
+    <section class="tab-content" data-content="operators">
+      <section class="operator-command-panel">
+        <div class="operator-command-hero">
+          <div>
+            <span class="operator-eyebrow">LIVE OPERATOR ACTIVITY</span>
+            <h2>Finish Operator Command</h2>
+            <p>Clickable station cards with hourly station output and individual operator hourly output. Status buttons are UI-only for now.</p>
+          </div>
+
+          <div class="operator-hero-actions">
+            <button id="operatorRefreshBtn" class="operator-refresh-btn" type="button">Refresh Operators</button>
+            <div class="operator-sync-card">
+              <span>API</span>
+              <strong id="operatorApiStatus">Checking...</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="operator-kpi-grid">
+          <article class="operator-kpi-card">
+            <span>Total Output</span>
+            <strong id="operatorTotalJobs">0</strong>
+            <small>Finish operator activity today</small>
+          </article>
+          <article class="operator-kpi-card">
+            <span>Active Operators</span>
+            <strong id="operatorTotalOperators">0</strong>
+            <small>Operators with Finish activity</small>
+          </article>
+          <article class="operator-kpi-card">
+            <span>Top Station</span>
+            <strong id="operatorTopStationTotal">0</strong>
+            <small id="operatorTopStation">--</small>
+          </article>
+          <article class="operator-kpi-card">
+            <span>Peak Hour</span>
+            <strong id="operatorPeakHourTotal">0</strong>
+            <small id="operatorPeakHour">--</small>
+          </article>
+        </div>
+
+        <div id="operatorStationGrid" class="operator-station-grid">
+          <article class="operator-empty-card">Waiting for Finish operator activity...</article>
+        </div>
+      </section>
+    </section>
+
+    <!-- OPERATOR STATION DRAWER -->
+    <aside id="operatorDrawer" class="operator-drawer" aria-hidden="true">
+      <div class="operator-drawer-backdrop" data-close-operator-drawer></div>
+
+      <section class="operator-drawer-shell">
+        <div class="operator-drawer-head">
+          <div>
+            <span class="operator-eyebrow">STATION DETAIL</span>
+            <h2 id="operatorDrawerTitle">Station</h2>
+            <p id="operatorDrawerSub">Hourly output and individual operator activity.</p>
+          </div>
+
+          <button class="operator-drawer-close" type="button" data-close-operator-drawer>×</button>
+        </div>
+
+        <div class="operator-drawer-status-row">
+          <button class="status-action is-online" type="button" data-status-action="online">Online</button>
+          <button class="status-action is-issue" type="button" data-status-action="issue">Issue</button>
+          <button class="status-action is-down" type="button" data-status-action="down">Down</button>
+          <button class="status-action is-clear" type="button" data-status-action="clear">Clear</button>
+        </div>
+
+        <div class="operator-drawer-kpis">
+          <article>
+            <span>Total Output</span>
+            <strong id="drawerStationTotal">0</strong>
+          </article>
+          <article>
+            <span>Operators</span>
+            <strong id="drawerOperatorCount">0</strong>
+          </article>
+          <article>
+            <span>Peak Hour</span>
+            <strong id="drawerPeakHour">--</strong>
+          </article>
+        </div>
+
+        <div class="operator-drawer-block">
+          <div class="drawer-block-title">
+            <h3>Station Hourly Output</h3>
+            <span>Station total by hour</span>
+          </div>
+          <div id="drawerStationHourly" class="operator-hour-grid"></div>
+        </div>
+
+        <div class="operator-drawer-block">
+          <div class="drawer-block-title">
+            <h3>Individual Operator Output</h3>
+            <span>Operator rows are expanded by hour</span>
+          </div>
+          <div id="drawerOperatorList" class="operator-list"></div>
+        </div>
+      </section>
+    </aside>
 
     <!-- HOURLY BREAKDOWN TAB -->
     <section class="tab-content" data-content="hourly">
