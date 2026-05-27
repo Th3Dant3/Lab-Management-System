@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Picking Floor WIP — Zenni Lab</title>
+  <title>Inventory- Picking Dashboard</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="Pickwip.css" />
@@ -43,9 +43,9 @@
           <div class="ld-log-line" style="animation-delay:.1s"><span class="ld-tag ok">[  OK  ]</span> Initializing picking floor monitor...</div>
           <div class="ld-log-line" style="animation-delay:.4s"><span class="ld-tag ok">[  OK  ]</span> Loading UI components</div>
           <div class="ld-log-line" style="animation-delay:.7s"><span class="ld-tag ok">[  OK  ]</span> Establishing API connection</div>
-          <div class="ld-log-line" style="animation-delay:1.0s"><span class="ld-tag wait">[ WAIT ]</span> Fetching live WIP data...</div>
+          <div class="ld-log-line" style="animation-delay:1.0s"><span class="ld-tag wait">[ WAIT ]</span> Syncing WIP, activity, and operator intelligence...</div>
           <div class="ld-log-line ld-log-cursor" style="animation-delay:1.3s" id="ldCursorLine">
-            <span class="ld-tag pend">[ PEND ]</span> <span id="ldCursorText">Connecting to data source</span><span class="ld-blink">_</span>
+            <span class="ld-tag pend">[ PEND ]</span> <span id="ldCursorText">Preparing Picking dashboard</span><span class="ld-blink">_</span>
           </div>
         </div>
       </div>
@@ -137,7 +137,7 @@
       <nav class="side-nav">
         <button class="side-link active" type="button" data-tab="command-center">
           <span>⌘</span>
-          <b>WIP Monitor</b>
+          <b>Process Flow</b>
         </button>
 
         <button class="side-link" type="button" data-tab="queues">
@@ -148,6 +148,17 @@
         <button class="side-link" type="button" data-tab="activity">
           <span>◌</span>
           <b>Activity Log</b>
+        </button>
+
+
+        <button class="side-link" type="button" data-tab="operators">
+          <span>👤</span>
+          <b>Operator Hourly Peformance</b>
+        </button>
+
+        <button class="side-link" type="button" data-tab="personal">
+          <span>⚙</span>
+          <b>JPH Setup</b>
         </button>
 
         <button class="side-link" type="button" data-tab="reports">
@@ -174,7 +185,7 @@
               Dashboard
             </button>
 
-            <h1>Picking Floor — WIP Monitor</h1>
+            <h1>Picking Dashboard</h1>
 
             <button class="live-pill" id="livePill" onclick="fetchAll(true)" type="button">
               <span id="liveDot"></span>
@@ -252,10 +263,30 @@
           </article>
         </section>
 
+        <section class="wip-split-strip">
+          <article class="wip-split-card clean">
+            <div class="split-icon">PK</div>
+            <div>
+              <span>Picking WIP</span>
+              <strong id="kpiPickingWipSplit">0</strong>
+              <small>Pickroom WIP</small>
+            </div>
+          </article>
+
+          <article class="wip-split-card inventory">
+            <div class="split-icon">INV</div>
+            <div>
+              <span>Inventory Department WIP</span>
+              <strong id="kpiInventoryWip">0</strong>
+              <small>Inventory/Picking WIP</small>
+            </div>
+          </article>
+      
+        </section>
+
         <!-- MOVEMENT CHECK PANEL -->
         <section class="panel movement-panel">
-          <div class="panel-head">
-            <h2><span>↔</span> Movement Check <em>(Latest File vs Previous File)</em></h2>
+          <div class="panel-head">            
             <small id="movementStatus">LOADING</small>
           </div>
 
@@ -321,7 +352,7 @@
                   <div>
                     <span>Total</span>
                     <strong id="donutTotal">0</strong>
-                    <small>Items</small>
+                    <small>WIP</small>
                   </div>
                 </div>
                 <div class="legend" id="wipLegend"></div>
@@ -483,6 +514,317 @@
         </section>
       </div>
 
+
+      <!-- TAB: Operator Activity -->
+      <div class="tab-content tab-hidden" id="tab-operators">
+        <section class="op-hero-panel">
+          <div class="op-hero-copy">
+            <span class="op-eyebrow">Live Operator Intelligence</span>
+            <h2>Picking Operator Activity</h2>
+            <p>Operator output by station, peak hour, and hourly production rhythm. FSV activity is displayed as <strong>FSV Scan & Verify</strong>.</p>
+          </div>
+
+          <div class="op-hero-status">
+            <div class="op-live-orb"><span></span></div>
+            <div>
+              <strong id="operatorHeroStatus">ONLINE</strong>
+              <small id="operatorDataNote">Waiting for operator data...</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="op-command-strip">
+          <article class="op-command-card cyan">
+            <span>Active Operators</span>
+            <strong id="opTotalOperators">0</strong>
+            <small>Operators with activity today</small>
+          </article>
+
+          <article class="op-command-card green">
+            <span>Total Operator Jobs</span>
+            <strong id="opTotalJobs">0</strong>
+            <small>SF + FSV Scan & Verify</small>
+          </article>
+
+          <article class="op-command-card orange">
+            <span>Top Operator</span>
+            <strong id="opTopOperatorTotal">0</strong>
+            <small id="opTopOperatorName">--</small>
+          </article>
+
+          <article class="op-command-card purple">
+            <span>Peak Hour</span>
+            <strong id="opPeakHourTotal">0</strong>
+            <small id="opPeakHourName">--</small>
+          </article>
+
+          <article class="op-command-card steel">
+            <span>Average / Operator</span>
+            <strong id="opAvgPerOperator">0</strong>
+            <small>Jobs per active operator</small>
+          </article>
+        </section>
+
+        <section class="panel op-station-scoreboard-panel">
+          <div class="panel-head op-panel-head">
+            <h2><span>▣</span> Scan & Verify Scorecards</h2>
+            <div class="op-score-actions">
+              <small id="operatorScorecardMeta">Click a station to focus operator activity</small>
+              <button class="view-btn" type="button" onclick="setOperatorStationView('all')">View All</button>
+            </div>
+          </div>
+
+          <div class="op-station-scorecards" id="operatorStationScorecards">
+            <article class="op-station-scorecard loading">
+              <span>Loading station activity...</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="op-layout-grid">
+          <div class="op-main-stack">
+            <section class="panel op-leaderboard-panel">
+              <div class="panel-head op-panel-head">
+                <h2><span>★</span> Operator Leaderboard</h2>
+                <small id="operatorLeaderboardMeta">Top performers</small>
+              </div>
+              <div id="operatorLeaderboardCards" class="op-leaderboard-cards"></div>
+            </section>
+
+            <section class="panel op-control-panel pro">
+              <div class="panel-head op-panel-head">
+                <h2><span>⌁</span> Operator Controls</h2>
+                <button class="view-btn" type="button" onclick="fetchAll(true)">Refresh ›</button>
+              </div>
+
+              <div class="op-controls pro">
+                <label>
+                  Search Operator
+                  <input id="operatorSearch" type="search" placeholder="Type operator name..." oninput="renderOperatorActivityTab()" />
+                </label>
+
+                <label>
+                  Station
+                  <select id="operatorStationFilter" onchange="renderOperatorActivityTab()">
+                    <option value="all">All Stations</option>
+                  </select>
+                </label>
+
+                <label>
+                  Sort View
+                  <select id="operatorSortMode" onchange="renderOperatorActivityTab()">
+                    <option value="total">Highest Output</option>
+                    <option value="operator">Operator Name</option>
+                    <option value="station">Station</option>
+                    <option value="bestHour">Best Hour</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section class="panel op-table-panel pro">
+              <div class="panel-head op-panel-head">
+                <h2><span>▤</span> Operator Production Detail</h2>
+                <small id="operatorTableMeta">-- rows</small>
+              </div>
+
+              <div class="operator-table pro">
+                <div class="operator-head pro">
+                  <span>Operator</span>
+                  <span>Station</span>
+                  <span>Total Output</span>
+                  <span>Best Hour</span>
+                  <span>Last Active</span>
+                  <span>Hourly Trend</span>
+                  <span>Status</span>
+                </div>
+                <div id="operatorActivityRows"></div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="op-side-stack">
+            <section class="panel op-selected-panel">
+              <div class="panel-head op-panel-head">
+                <h2><span>◉</span> Selected Operator Hourly Output</h2>
+                <small>Click an operator row</small>
+              </div>
+              <div id="operatorSelectedPanel" class="operator-selected-panel">
+                <div class="op-selected-empty">
+                  <span>👤</span>
+                  <strong>Select an operator</strong>
+                  <small>Click any operator name/row to view their hourly output by hour.</small>
+                </div>
+              </div>
+            </section>
+            <section class="panel op-station-panel">
+              <div class="panel-head op-panel-head">
+                <h2><span>◎</span> Station Mix</h2>
+                <small id="operatorStationMeta">Live split</small>
+              </div>
+              <div id="operatorStationMix" class="op-station-mix"></div>
+            </section>
+          </aside>
+        </section>
+      </div>
+
+
+      <!-- TAB: Personal / Hourly Performance -->
+      <div class="tab-content tab-hidden" id="tab-personal">
+        <section class="op-hero-panel personal-hero-panel">
+          <div class="op-hero-copy">
+            <span class="op-eyebrow">Target Setup · Hourly Performance</span>
+            <h2>Picking Personal Setup</h2>
+            <p>Manage SF and FSV operator JPH targets, then review hourly performance with separate station colors.</p>
+          </div>
+
+          <div class="op-hero-status personal-hero-status">
+            <div class="op-live-orb"><span></span></div>
+            <div>
+              <strong>CONFIG READY</strong>
+              <small>Local target rules are applied to operator hourly output.</small>
+            </div>
+          </div>
+        </section>
+
+
+
+        <section class="panel op-jph-config-panel">
+          <div class="panel-head op-panel-head">
+            <h2><span>⚙</span> Operator JPH Configuration</h2>
+            <small id="cfgPickingSummary">Green: 100%+ · Amber: 90%–99% · Red: below 90%</small>
+          </div>
+
+          <div class="op-jph-config-grid">
+            <article class="op-jph-config-card sf">
+              <div class="op-jph-title">
+                <span>SF</span>
+                <div>
+                  <strong>SF Scan & Verify</strong>
+                  <small>Operator hourly target</small>
+                </div>
+              </div>
+              <label>100% JPH Target
+                <input id="cfgPickingSfTarget" type="number" min="0" step="1" value="98" onchange="renderPickingJphConfigPanel()" />
+              </label>
+              <div class="op-threshold-grid">
+                <div><span>Green</span><b>≥ 100%</b></div>
+                <div><span>Amber</span><b id="cfgPickingSfAmberLabel">89–97 / hr</b></div>
+                <div><span>Red</span><b id="cfgPickingSfRedLabel">< 89 / hr</b></div>
+              </div>
+            </article>
+
+            <article class="op-jph-config-card fsv">
+              <div class="op-jph-title">
+                <span>FSV</span>
+                <div>
+                  <strong>FSV Scan & Verify</strong>
+                  <small>Operator hourly target</small>
+                </div>
+              </div>
+              <label>100% JPH Target
+                <input id="cfgPickingFsvTarget" type="number" min="0" step="1" value="72" onchange="renderPickingJphConfigPanel()" />
+              </label>
+              <div class="op-threshold-grid">
+                <div><span>Green</span><b>≥ 100%</b></div>
+                <div><span>Amber</span><b id="cfgPickingFsvAmberLabel">65–71 / hr</b></div>
+                <div><span>Red</span><b id="cfgPickingFsvRedLabel">< 65 / hr</b></div>
+              </div>
+            </article>
+
+            <article class="op-jph-config-card rules">
+              <div class="op-jph-title">
+                <span>%</span>
+                <div>
+                  <strong>Threshold Rules</strong>
+                  <small>Applied to each operator hour</small>
+                </div>
+              </div>
+              <label>Amber Starts At
+                <input id="cfgPickingAmberPct" type="number" min="1" max="100" step="1" value="90" onchange="renderPickingJphConfigPanel()" />
+              </label>
+              <div class="op-config-actions">
+                <button type="button" onclick="savePickingJphConfigFromUi()">Save Configuration</button>
+                <button type="button" class="ghost" onclick="resetPickingJphConfig()">Reset</button>
+              </div>
+              <small id="cfgPickingSaveState">Local config active</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel personal-hourly-performance-panel">
+          <div class="panel-head op-panel-head">
+            <h2><span>◷</span> Hourly Performance</h2>
+            <div class="personal-hourly-actions">
+              <small id="personalHourlyMeta">SF cyan / FSV orange · clearer hourly readout</small>
+              <button class="personal-filter-btn active" type="button" data-personal-hourly-filter="all" onclick="setPersonalHourlyStation('all')">All</button>
+              <button class="personal-filter-btn sf" type="button" data-personal-hourly-filter="SF Scan & Verify" onclick="setPersonalHourlyStation('SF Scan & Verify')">SF</button>
+              <button class="personal-filter-btn fsv" type="button" data-personal-hourly-filter="FSV Scan & Verify" onclick="setPersonalHourlyStation('FSV Scan & Verify')">FSV</button>
+            </div>
+          </div>
+
+          <div class="personal-hourly-legend">
+            <span><i class="sf"></i> SF Scan & Verify</span>
+            <span><i class="fsv"></i> FSV Scan & Verify</span>
+            <em>Green/amber/red status still follows the target configuration above.</em>
+          </div>
+
+          <div id="personalHourlySummary" class="op-hourly-summary personal-summary"></div>
+          <div id="personalHourlyRows" class="operator-hourly-rows pro personal-hourly-rows"></div>
+        </section>
+      </div>
+
+
+      <!-- Operator Station Detail Overlay -->
+      <div class="op-detail-overlay" id="operatorStationDetailOverlay" aria-hidden="true">
+        <section class="op-detail-modal" role="dialog" aria-modal="true" aria-labelledby="opStationDetailTitle">
+          <button class="op-detail-close" type="button" onclick="closeOperatorStationDetail()" title="Close">×</button>
+
+          <header class="op-detail-header">
+            <div>
+              <div class="op-detail-eyebrow"><span></span> Station Detail</div>
+              <h2 id="opStationDetailTitle">Scan & Verify</h2>
+              <p id="opStationDetailSub">Picking operator activity by hour</p>
+            </div>
+            <div class="op-detail-status">
+              <span class="online">ONLINE</span>
+              <span id="opStationDetailScope">LIVE</span>
+            </div>
+          </header>
+
+          <div class="op-detail-actions">
+            <button type="button" class="active">Online</button>
+            <button type="button">Issue</button>
+            <button type="button">Down</button>
+            <button type="button">Clear</button>
+          </div>
+
+          <section class="op-detail-kpis">
+            <article><span>Total Output</span><strong id="opDetailTotalOutput">0</strong><small>Jobs scanned today</small></article>
+            <article><span>Operators</span><strong id="opDetailOperators">0</strong><small>Active operator rows</small></article>
+            <article><span>Peak Hour</span><strong id="opDetailPeakHour">--</strong><small id="opDetailPeakCount">0 jobs</small></article>
+            <article><span>Top Operator</span><strong id="opDetailTopOperator">--</strong><small id="opDetailTopOperatorCount">0 jobs</small></article>
+          </section>
+
+          <section class="op-detail-operator-section">
+            <div class="op-detail-section-head">
+              <div>
+                <h3>Individual Operator Output</h3>
+                <p>Operator rows are expanded by hour. JPH targets can be connected later.</p>
+              </div>
+              <label>
+                Operator Filter
+                <select id="opDetailOperatorFilter" onchange="renderOperatorStationDetailModal()">
+                  <option value="all">All operators</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="opDetailOperatorRows" class="op-detail-operator-rows"></div>
+          </section>
+        </section>
+      </div>
+
       <!-- TAB: Reports -->
       <div class="tab-content tab-hidden" id="tab-reports">
         <div class="rpt-header">
@@ -534,6 +876,29 @@
             <h2><span>◷</span> Movement Summary</h2>
           </div>
           <div id="rptActivitySummary"></div>
+        </section>
+
+
+        <section class="panel rpt-section rpt-operator-hourly-section">
+          <div class="panel-head">
+            <h2><span>👤</span> Operator Hourly Performance</h2>
+            <small id="rptOperatorHourlyMeta">--</small>
+          </div>
+
+          <div id="rptOperatorHourlySummary" class="rpt-op-summary"></div>
+
+          <div class="rpt-op-table">
+            <div class="rpt-op-head">
+              <span>Operator</span>
+              <span>Station</span>
+              <span>Total</span>
+              <span>Best Hour</span>
+              <span>Last Active</span>
+              <span>Hourly Pattern</span>
+              <span>Status</span>
+            </div>
+            <div id="rptOperatorHourlyRows"></div>
+          </div>
         </section>
 
         <section class="panel rpt-section">
