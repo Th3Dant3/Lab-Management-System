@@ -460,6 +460,47 @@ function canEditFinishOperatorAssignments() {
   return FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(getCurrentUserRole());
 }
 
+function isCurrentUserLmsOnly() {
+  const role = String(getCurrentUserRole() || "").trim().toLowerCase();
+  return role === "lms";
+}
+
+function applyLmsControlTabVisibility() {
+  const isLms = isCurrentUserLmsOnly();
+
+  const lmsTabBtn = document.querySelector('.tab-btn[data-tab="lms-control"]');
+  const lmsTabContent = document.querySelector('.tab-content[data-content="lms-control"]');
+
+  if (!isLms) {
+    if (lmsTabBtn) lmsTabBtn.style.display = "none";
+    if (lmsTabContent) lmsTabContent.style.display = "none";
+
+    const activeTab = document.querySelector(".tab-btn.active");
+    const activeContent = document.querySelector(".tab-content.active");
+
+    if (activeTab?.dataset.tab === "lms-control") {
+      activeTab.classList.remove("active");
+      activeContent?.classList.remove("active");
+
+      const morningBtn = document.querySelector('.tab-btn[data-tab="personal"]');
+      const morningContent = document.querySelector('.tab-content[data-content="personal"]');
+      const floorBtn = document.querySelector('.tab-btn[data-tab="floor"]');
+      const floorContent = document.querySelector('.tab-content[data-content="floor"]');
+
+      if (morningBtn && morningContent) {
+        morningBtn.classList.add("active");
+        morningContent.classList.add("active");
+      } else {
+        floorBtn?.classList.add("active");
+        floorContent?.classList.add("active");
+      }
+    }
+  } else {
+    if (lmsTabBtn) lmsTabBtn.style.display = "";
+    if (lmsTabContent) lmsTabContent.style.display = "";
+  }
+}
+
 function getFinishPersonalOperatorRosterKey() {
   return `${FINISH_PERSONAL_OPERATOR_ROSTER_BASE_KEY}_${getCurrentUsername()}`;
 }
@@ -490,6 +531,7 @@ function showFinishAssignmentToast(message) {
 }
 
 let lastSyncTime = null;
+let finishDashboardInitialLoadComplete = false;
 
 const DEFAULT_CONFIG = {
   unboxRate: 150,
@@ -558,6 +600,7 @@ const SHIFT_RULES = {
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
+  applyLmsControlTabVisibility();
   initClock();
   initConfigPanel();
   initRefreshButton();
@@ -565,10 +608,10 @@ document.addEventListener("DOMContentLoaded", () => {
   initOperatorCommandUI();
   initFinishThreeLineCell();
 
-  loadDashboard();
+  loadDashboard({ showLoader: true });
   loadFinishOperatorActivity();
 
-  setInterval(loadDashboard, 5 * 60 * 1000);
+  setInterval(() => loadDashboard({ showLoader: false }), 5 * 60 * 1000);
   setInterval(loadFinishOperatorActivity, 5 * 60 * 1000);
   setInterval(updateSyncAge, 1000);
 });
@@ -577,8 +620,12 @@ document.addEventListener("DOMContentLoaded", () => {
    MAIN LOAD
 ================================ */
 
-async function loadDashboard() {
-  showLoading(true);
+async function loadDashboard(options = {}) {
+  const shouldShowLoader = options.showLoader !== false && !finishDashboardInitialLoadComplete;
+
+  if (shouldShowLoader) {
+    showLoading(true);
+  }
 
   try {
     const response = await fetch(FINISH_API_URL, {
@@ -604,7 +651,11 @@ async function loadDashboard() {
     console.error("Finish Dashboard Error:", error);
     renderError(error);
   } finally {
-    showLoading(false);
+    finishDashboardInitialLoadComplete = true;
+
+    if (shouldShowLoader) {
+      showLoading(false);
+    }
   }
 }
 
@@ -1535,13 +1586,13 @@ finalTraineeW5: getInputValue("cfgFinalTraineeW5"),
 
     saveConfig(newConfig);
     flashButton("configSaveBtn", "Saved");
-    loadDashboard();
+    loadDashboard({ showLoader: false });
   });
 
   document.getElementById("configResetBtn")?.addEventListener("click", () => {
     localStorage.removeItem(FINISH_CAPACITY_CONFIG_KEY);
     initConfigPanel();
-    loadDashboard();
+    loadDashboard({ showLoader: false });
   });
 }
 
@@ -2493,7 +2544,9 @@ function updateSyncAge() {
 }
 
 function initRefreshButton() {
-  document.getElementById("refreshBtn")?.addEventListener("click", loadDashboard);
+  document.getElementById("refreshBtn")?.addEventListener("click", () => {
+    loadDashboard({ showLoader: false });
+  });
 }
 
 function initHoverEffects() {
@@ -3893,14 +3946,112 @@ function renderFinishThreeLineCell() {
   bindFinishLineCellEvents();
 }
 
+
+function getLineStationJphStats(lineAssignments, stationName) {
+  const station = normalizeFinishOperatorStation(stationName);
+  const assigned = (lineAssignments || []).filter(a => normalizeFinishOperatorStation(a.station) === station);
+  const assignedCount = assigned.length;
+
+  if (!assignedCount) {
+    return {
+      assignedCount: 0,
+      hour: "",
+      value: 0,
+      target: 0,
+      avgValue: 0,
+      avgTarget: 0,
+      pct: 0,
+      className: "neutral",
+      color: "#38bdf8",
+      label: "No Target"
+    };
+  }
+
+  const hourSet = {};
+  assigned.forEach(item => {
+    const live = getLiveOperatorForStation(item.operator, station) || item;
+    Object.keys(live?.hourly || {}).forEach(hour => hourSet[hour] = true);
+  });
+
+  const hourOrder = getOperatorHourOrder(hourSet);
+  let selectedHour = "";
+
+  hourOrder.forEach(hour => {
+    let hourValue = 0;
+    let hourTarget = 0;
+
+    assigned.forEach(item => {
+      const live = getLiveOperatorForStation(item.operator, station) || item;
+      hourValue += Number((live?.hourly || {})[hour] || 0);
+      hourTarget += Number(getOperatorHourTarget(station, hour, "operator", item.operator) || 0);
+    });
+
+    if (hourTarget > 0 && hourValue > 0) {
+      selectedHour = hour;
+    }
+  });
+
+  if (!selectedHour) {
+    const now = new Date();
+    const currentHour = now
+      .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      .replace(/:\d{2}/, ":00");
+
+    selectedHour = hourOrder.includes(currentHour)
+      ? currentHour
+      : (hourOrder[hourOrder.length - 1] || "");
+  }
+
+  let value = 0;
+  let target = 0;
+
+  assigned.forEach(item => {
+    const live = getLiveOperatorForStation(item.operator, station) || item;
+    value += Number((live?.hourly || {})[selectedHour] || 0);
+    target += Number(getOperatorHourTarget(station, selectedHour, "operator", item.operator) || 0);
+  });
+
+  const avgValue = assignedCount > 0 ? Math.round(value / assignedCount) : 0;
+  const avgTarget = assignedCount > 0 ? Math.round(target / assignedCount) : 0;
+  const status = getOperatorPerformanceStatus(avgValue, avgTarget);
+
+  return {
+    assignedCount,
+    hour: selectedHour,
+    value,
+    target,
+    avgValue,
+    avgTarget,
+    ...status
+  };
+}
+
+function renderLineAverageMetric(label, stats) {
+  const targetText = stats.avgTarget > 0
+    ? `${numberFmt(stats.avgValue)} / ${numberFmt(stats.avgTarget)}`
+    : "No Target";
+
+  const hourText = stats.hour ? shortHour(stats.hour) : "--";
+
+  return `
+    <div class="line-jph-metric perf-${escapeHtml(stats.className)}" style="--metric-color:${escapeHtml(stats.color)};">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(targetText)}</strong>
+      <small>${escapeHtml(stats.label)} · ${escapeHtml(hourText)} · ${numberFmt(stats.assignedCount)} op</small>
+    </div>`;
+}
+
 function renderOneFinishLine(line, assignmentMap, statusMap) {
   const lineAssignments = Object.values(assignmentMap).filter(a => a.line === line);
   const mountingCount = lineAssignments.filter(a => a.station === "Mounting").length;
   const finalCount = lineAssignments.filter(a => a.station === "Final Inspection").length;
   const liveTotal = lineAssignments.reduce((sum, a) => sum + Number(a.total || 0), 0);
+  const mountingStats = getLineStationJphStats(lineAssignments, "Mounting");
+  const finalStats = getLineStationJphStats(lineAssignments, "Final Inspection");
+  const isCollapsed = finishRosterUiState.collapsedLines.has(line);
 
   return `
-    <article class="finish-line-cell" data-finish-line="${escapeHtml(line)}">
+    <article class="finish-line-cell ${isCollapsed ? "is-collapsed" : "is-expanded"}" data-finish-line="${escapeHtml(line)}">
       <header class="finish-line-topbar">
         <div class="finish-line-title">
           <span>Finish Production Cell</span>
@@ -3909,35 +4060,42 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
         <div class="finish-line-metrics">
           <div><span>Mounting</span><strong>${numberFmt(mountingCount)}/10</strong></div>
           <div><span>Final</span><strong>${numberFmt(finalCount)}/4</strong></div>
+          ${renderLineAverageMetric("Mount Avg", mountingStats)}
+          ${renderLineAverageMetric("Final Avg", finalStats)}
           <div><span>Live Output</span><strong>${numberFmt(liveTotal)}</strong></div>
+          <button class="finish-line-collapse-btn" type="button" data-line-toggle="${escapeHtml(line)}">
+            ${isCollapsed ? "Open" : "Close"}
+          </button>
         </div>
       </header>
 
-      <div class="line-side left">
-        <div class="line-side-label"><span>Odd Side</span><span>Left</span></div>
-        ${FINISH_LINE_LAYOUT.mountingLeft.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "left")).join("")}
-        <div class="line-final-divider"></div>
-        ${FINISH_LINE_LAYOUT.finalLeft.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "left")).join("")}
-      </div>
-
-      <div class="line-converter-core" aria-label="${escapeHtml(line)} converter">
-        <div class="line-converter-arrows">
-          <span>↓</span><span>↓</span><span>↓</span><span>↓</span><span>↓</span>
+      <div class="finish-line-body">
+        <div class="line-side left">
+          <div class="line-side-label"><span>Odd Side</span><span>Left</span></div>
+          ${FINISH_LINE_LAYOUT.mountingLeft.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "left")).join("")}
+          <div class="line-final-divider"></div>
+          ${FINISH_LINE_LAYOUT.finalLeft.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "left")).join("")}
         </div>
-      </div>
 
-      <div class="line-side right">
-        <div class="line-side-label"><span>Even Side</span><span>Right</span></div>
-        ${FINISH_LINE_LAYOUT.mountingRight.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "right")).join("")}
-        <div class="line-final-divider"></div>
-        ${FINISH_LINE_LAYOUT.finalRight.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "right")).join("")}
-      </div>
+        <div class="line-converter-core" aria-label="${escapeHtml(line)} converter">
+          <div class="line-converter-arrows">
+            <span>↓</span><span>↓</span><span>↓</span><span>↓</span><span>↓</span>
+          </div>
+        </div>
 
-      <div class="line-status-buttons">
-        <button type="button" data-line-status="online" data-line="${escapeHtml(line)}">Online</button>
-        <button type="button" data-line-status="issue" data-line="${escapeHtml(line)}">Issue</button>
-        <button type="button" data-line-status="down" data-line="${escapeHtml(line)}">Down</button>
-        <button type="button" data-line-status="clear" data-line="${escapeHtml(line)}">Clear</button>
+        <div class="line-side right">
+          <div class="line-side-label"><span>Even Side</span><span>Right</span></div>
+          ${FINISH_LINE_LAYOUT.mountingRight.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "right")).join("")}
+          <div class="line-final-divider"></div>
+          ${FINISH_LINE_LAYOUT.finalRight.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "right")).join("")}
+        </div>
+
+        <div class="line-status-buttons">
+          <button type="button" data-line-status="online" data-line="${escapeHtml(line)}">Online</button>
+          <button type="button" data-line-status="issue" data-line="${escapeHtml(line)}">Issue</button>
+          <button type="button" data-line-status="down" data-line="${escapeHtml(line)}">Down</button>
+          <button type="button" data-line-status="clear" data-line="${escapeHtml(line)}">Clear</button>
+        </div>
       </div>
     </article>`;
 }
@@ -3969,6 +4127,20 @@ function renderLineSlot(line, station, slot, assignmentMap, statusMap, side) {
 }
 
 function bindFinishLineCellEvents() {
+  document.querySelectorAll("[data-line-toggle]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      const line = button.dataset.lineToggle;
+      if (!line) return;
+      if (finishRosterUiState.collapsedLines.has(line)) {
+        finishRosterUiState.collapsedLines.delete(line);
+      } else {
+        finishRosterUiState.collapsedLines.add(line);
+      }
+      renderFinishThreeLineCell();
+    });
+  });
+
   document.querySelectorAll("[data-line-slot]").forEach(slot => {
     slot.addEventListener("click", () => {
       const operator = slot.dataset.operator;
@@ -4010,3 +4182,783 @@ function renderOperatorError(error) {
       <small>${escapeHtml(error.message || error)}</small>
     </article>`;
 }
+
+
+/* =========================================================
+   FINISH ROSTER API FRONTEND OVERRIDE
+   Source of truth: FINISH_USER_PROFILES, FINISH_OPERATOR_MASTER,
+   FINISH_OPERATOR_ROSTER_CONTROL, FINISH_ROSTER_AUDIT_LOG.
+   localStorage remains only for dashboard capacity config and UI-only line status.
+========================================================= */
+const FINISH_ROSTER_API_BASE_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec";
+
+const finishRosterApiState = {
+  profiles: [],
+  operators: [],
+  roster: [],
+  audit: [],
+  ownerUsername: "",
+  shiftType: "Weekday",
+  loading: false,
+  ready: false,
+  lastError: ""
+};
+
+const finishRosterUiState = {
+  expandedRosterRows: new Set(),
+  collapsedLines: new Set()
+};
+
+function buildFinishRosterApiUrl(action, params = {}) {
+  const url = new URL(FINISH_ROSTER_API_BASE_URL);
+  url.searchParams.set("action", action);
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value) !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+  return url.toString();
+}
+
+async function fetchFinishRosterApi(action, params = {}) {
+  const response = await fetch(buildFinishRosterApiUrl(action, params), {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Finish roster API failed: ${response.status}`);
+  }
+
+  const payload = await response.json();
+
+  if (payload.status === "error" || payload.success === false) {
+    throw new Error(payload.message || payload.error || `Finish roster API action failed: ${action}`);
+  }
+
+  return payload;
+}
+
+function getFinishRosterCurrentProfile() {
+  const current = getCurrentUsername();
+  return (finishRosterApiState.profiles || []).find(profile =>
+    String(profile.username || "").toUpperCase() === current
+  ) || null;
+}
+
+function canEditFinishOperatorAssignments() {
+  const profile = getFinishRosterCurrentProfile();
+
+  if (profile) {
+    return !!profile.canEdit && !!profile.isActive && FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(profile.role);
+  }
+
+  return FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(getCurrentUserRole());
+}
+
+function getRosterOwnerUsername() {
+  return finishRosterApiState.ownerUsername || getCurrentUsername();
+}
+
+function getRosterShiftType() {
+  return finishRosterApiState.shiftType || "Weekday";
+}
+
+function convertApiRoleToLocal(roleType) {
+  const role = String(roleType || "").toLowerCase();
+  if (role === "certified") return "core";
+  if (role === "tq") return "tq";
+  if (role === "training") return "training";
+  return "ignore";
+}
+
+function convertLocalRoleToApi(role) {
+  const value = String(role || "").toLowerCase();
+  if (value === "core" || value === "certified") return "Certified";
+  if (value === "tq") return "TQ";
+  if (value === "training") return "Training";
+  return "Unassigned";
+}
+
+function convertApiWeekToNumber(week) {
+  const match = String(week || "").match(/(\d+)/);
+  return match ? Number(match[1]) : 1;
+}
+
+function convertNumberToApiWeek(week) {
+  const n = Number(week || 0);
+  return n > 0 ? `W${n}` : "";
+}
+
+function loadFinishPersonalOperatorAssignments() {
+  const assignments = {};
+
+  (finishRosterApiState.roster || [])
+    .filter(row => String(row.activeStatus || "").toLowerCase() !== "removed")
+    .forEach(row => {
+      const station = normalizeFinishOperatorStation(row.defaultArea || row.station || "");
+      const operator = normalizeAssignmentOperatorName(row.operatorName || row.operator || "");
+      if (!operator || !station) return;
+
+      const role = convertApiRoleToLocal(row.roleType);
+      if (role === "ignore" && !row.defaultLine && !row.defaultPosition) return;
+
+      assignments[makeAssignmentKey(station, operator)] = {
+        station,
+        operator,
+        role,
+        trainingWeek: convertApiWeekToNumber(row.trainingWeek),
+        line: row.defaultLine || "",
+        slot: row.defaultPosition || "",
+        activeStatus: row.activeStatus || "Active",
+        updatedAt: row.updatedAt || "",
+        updatedBy: row.updatedBy || ""
+      };
+    });
+
+  return assignments;
+}
+
+function saveFinishPersonalOperatorAssignments() {
+  // Backend save is handled per-row by saveOperatorAssignment().
+  return true;
+}
+
+function getFinishOperatorRoster() {
+  const rosterByKey = {};
+
+  (finishRosterApiState.operators || []).forEach(op => {
+    const operatorName = normalizeAssignmentOperatorName(op.operatorName || op.OperatorName || "");
+    if (!operatorName) return;
+
+    const stationName = normalizeFinishOperatorStation(op.lastFlowStation || op.LastFlowStation || op.lastAccessPoint || op.LastAccessPoint || "");
+    if (!stationName || stationName === "FSV Scan & Verify") return;
+
+    const key = makeAssignmentKey(stationName, operatorName);
+    rosterByKey[key] = {
+      station: stationName,
+      operator: operatorName,
+      total: Number(op.lastTotal || op.LastTotal || 0) || 0,
+      liveNow: true,
+      accessPoints: [op.lastAccessPoint || op.LastAccessPoint || ""].filter(Boolean)
+    };
+  });
+
+  // Include saved roster rows even if that operator has no live activity today.
+  (finishRosterApiState.roster || []).forEach(row => {
+    if (String(row.activeStatus || "").toLowerCase() === "removed") return;
+
+    const stationName = normalizeFinishOperatorStation(row.defaultArea || "");
+    const operatorName = normalizeAssignmentOperatorName(row.operatorName || "");
+    if (!stationName || !operatorName) return;
+
+    const key = makeAssignmentKey(stationName, operatorName);
+    if (!rosterByKey[key]) {
+      rosterByKey[key] = {
+        station: stationName,
+        operator: operatorName,
+        total: 0,
+        liveNow: false,
+        accessPoints: []
+      };
+    }
+  });
+
+  return Object.values(rosterByKey).sort((a, b) => {
+    const stationCompare = a.station.localeCompare(b.station);
+    if (stationCompare !== 0) return stationCompare;
+    return a.operator.localeCompare(b.operator);
+  });
+}
+
+async function loadFinishRosterBackend(options = {}) {
+  const silent = !!options.silent;
+  finishRosterApiState.loading = true;
+  finishRosterApiState.lastError = "";
+  setText("finishRosterApiStatus", "Loading...");
+
+  try {
+    if (!finishRosterApiState.ownerUsername) {
+      finishRosterApiState.ownerUsername = getCurrentUsername();
+    }
+
+    const [profilesPayload, operatorsPayload] = await Promise.all([
+      fetchFinishRosterApi("getFinishUserProfiles"),
+      fetchFinishRosterApi("getFinishOperatorMaster")
+    ]);
+
+    finishRosterApiState.profiles = profilesPayload.data || [];
+    finishRosterApiState.operators = operatorsPayload.data || [];
+
+    const currentProfile = getFinishRosterCurrentProfile();
+    if (!currentProfile && finishRosterApiState.ownerUsername === "DEFAULT") {
+      finishRosterApiState.ownerUsername = (finishRosterApiState.profiles[0]?.username || getCurrentUsername()).toUpperCase();
+    }
+
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    finishRosterApiState.ready = true;
+    setText("finishRosterApiStatus", "Connected");
+    renderFinishRosterApiPanel();
+    renderOperatorAssignmentConfigPanel();
+    updateConfigTotals();
+    renderFinishThreeLineCell();
+  } catch (error) {
+    finishRosterApiState.lastError = error.message || String(error);
+    console.error("Finish roster backend error:", error);
+    setText("finishRosterApiStatus", "Error");
+    renderFinishRosterApiPanel();
+    if (!silent) showFinishAssignmentToast(finishRosterApiState.lastError);
+  } finally {
+    finishRosterApiState.loading = false;
+  }
+}
+
+async function loadFinishRosterForSelectedProfile(options = {}) {
+  const ownerUsername = getRosterOwnerUsername();
+  const shiftType = getRosterShiftType();
+
+  const [rosterPayload, auditPayload] = await Promise.all([
+    fetchFinishRosterApi("getFinishRosterControl", { ownerUsername, shiftType }),
+    fetchFinishRosterApi("getFinishRosterAuditLog", { targetUsername: ownerUsername, limit: 75 })
+  ]);
+
+  finishRosterApiState.roster = rosterPayload.data || [];
+  finishRosterApiState.audit = auditPayload.data || [];
+
+  if (!options.silent) {
+    renderFinishRosterApiPanel();
+    renderOperatorAssignmentConfigPanel();
+    updateConfigTotals();
+    renderFinishThreeLineCell();
+  }
+}
+
+function initFinishRosterApiPanel() {
+  const ownerSelect = document.getElementById("finishRosterOwnerSelect");
+  const shiftSelect = document.getElementById("finishRosterShiftSelect");
+  const areaFilter = document.getElementById("finishRosterAreaFilter");
+  const refreshBtn = document.getElementById("finishRosterRefreshBtn");
+
+  ownerSelect?.addEventListener("change", async event => {
+    finishRosterApiState.ownerUsername = String(event.target.value || getCurrentUsername()).toUpperCase();
+    await loadFinishRosterForSelectedProfile();
+  });
+
+  shiftSelect?.addEventListener("change", async event => {
+    finishRosterApiState.shiftType = String(event.target.value || "Weekday");
+    await loadFinishRosterForSelectedProfile();
+  });
+
+  areaFilter?.addEventListener("change", renderFinishRosterApiPanel);
+  refreshBtn?.addEventListener("click", () => loadFinishRosterBackend());
+}
+
+function renderFinishRosterApiPanel() {
+  const panel = document.getElementById("finishRosterApiPanel");
+  if (!panel) return;
+
+  const ownerSelect = document.getElementById("finishRosterOwnerSelect");
+  const shiftSelect = document.getElementById("finishRosterShiftSelect");
+  const areaFilter = document.getElementById("finishRosterAreaFilter");
+  const list = document.getElementById("finishRosterEditorList");
+  const banner = document.getElementById("finishRosterPermissionBanner");
+
+  const currentUsername = getCurrentUsername();
+  const canEdit = canEditFinishOperatorAssignments();
+  const currentProfile = getFinishRosterCurrentProfile();
+  const selectedOwner = getRosterOwnerUsername();
+  const selectedShift = getRosterShiftType();
+
+  if (ownerSelect) {
+    const profiles = finishRosterApiState.profiles.length
+      ? finishRosterApiState.profiles
+      : [{ username: currentUsername, fullName: getCurrentUserDisplayName(), role: getCurrentUserRole(), shiftGroup: "Weekday" }];
+
+    ownerSelect.innerHTML = profiles.map(profile => {
+      const username = String(profile.username || "").toUpperCase();
+      const label = `${profile.fullName || username} · ${profile.role || "Role"} · ${profile.shiftGroup || "Shift"}`;
+      return `<option value="${escapeHtml(username)}" ${username === selectedOwner ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    }).join("");
+    ownerSelect.disabled = !canEdit;
+  }
+
+  if (shiftSelect) shiftSelect.value = selectedShift;
+
+  if (banner) {
+    banner.classList.toggle("can-edit", canEdit);
+    banner.innerHTML = canEdit
+      ? `<strong>Edit access active</strong><span>${escapeHtml(getCurrentUserDisplayName())} · ${escapeHtml(currentProfile?.role || getCurrentUserRole())} can save/edit/delete roster rows.</span>`
+      : `<strong>View only</strong><span>${escapeHtml(getCurrentUserDisplayName())} · your role can view this roster, but the API blocks edit/delete.</span>`;
+  }
+
+  const filter = areaFilter?.value || "all";
+  const rows = buildFinishRosterEditorRows(filter);
+
+  setText("finishRosterOperatorCount", finishRosterApiState.operators.length || 0);
+  setText("finishRosterActiveCount", (finishRosterApiState.roster || []).filter(r => String(r.activeStatus).toLowerCase() === "active").length);
+  setText("finishRosterMountingCount", (finishRosterApiState.roster || []).filter(r => String(r.activeStatus).toLowerCase() === "active" && r.defaultArea === "Mounting").length);
+  setText("finishRosterFinalCount", (finishRosterApiState.roster || []).filter(r => String(r.activeStatus).toLowerCase() === "active" && r.defaultArea === "Final Inspection").length);
+
+  if (list) {
+    if (finishRosterApiState.lastError) {
+      list.innerHTML = `<article class="roster-api-empty">${escapeHtml(finishRosterApiState.lastError)}</article>`;
+    } else if (!rows.length) {
+      list.innerHTML = `<article class="roster-api-empty">No floor operators available yet. Run syncFinishOperatorMasterFromRawActivity() or wait for RAW_ACTIVITY_CURRENT to populate.</article>`;
+    } else {
+      list.innerHTML = rows.map(row => renderFinishRosterEditorRow(row, canEdit)).join("");
+      bindFinishRosterEditorEvents();
+    }
+  }
+
+  renderFinishRosterAuditLog();
+}
+
+function buildFinishRosterEditorRows(filter = "all") {
+  const savedByOperator = {};
+  (finishRosterApiState.roster || []).forEach(row => {
+    savedByOperator[normalizeAssignmentOperatorName(row.operatorName)] = row;
+  });
+
+  return (finishRosterApiState.operators || [])
+    .map(op => {
+      const operatorName = normalizeAssignmentOperatorName(op.operatorName || "");
+      const liveStation = normalizeFinishOperatorStation(op.lastFlowStation || op.lastAccessPoint || "");
+      const saved = savedByOperator[operatorName] || {};
+      const area = saved.defaultArea || (isLineSlotStation(liveStation) ? liveStation : "Mounting");
+
+      return {
+        operatorName,
+        liveStation,
+        lastTotal: Number(op.lastTotal || 0) || 0,
+        activeStatus: saved.activeStatus || "Active",
+        defaultLine: saved.defaultLine || "",
+        defaultArea: area,
+        defaultPosition: saved.defaultPosition || "",
+        roleType: saved.roleType || "Unassigned",
+        trainingWeek: saved.trainingWeek || "",
+        isSaved: !!saved.operatorName
+      };
+    })
+    .filter(row => row.operatorName && !row.operatorName.toLowerCase().includes("unassigned"))
+    .filter(row => row.liveStation !== "FSV Scan & Verify")
+    .filter(row => filter === "all" || row.defaultArea === filter || row.liveStation === filter)
+    .sort((a, b) => {
+      const activeA = a.activeStatus === "Active" ? 0 : 1;
+      const activeB = b.activeStatus === "Active" ? 0 : 1;
+      if (activeA !== activeB) return activeA - activeB;
+      return a.operatorName.localeCompare(b.operatorName);
+    });
+}
+
+function renderFinishRosterEditorRow(row, canEdit) {
+  const disabled = canEdit ? "" : "disabled";
+  const statusClass = row.activeStatus === "Archived" ? "is-archived" : "is-active";
+  const target = row.roleType === "Training"
+    ? `${row.trainingWeek || "W?"}`
+    : row.roleType && row.roleType !== "Unassigned"
+      ? row.roleType
+      : "—";
+  const rowKey = normalizeAssignmentOperatorName(row.operatorName);
+  const expanded = finishRosterUiState.expandedRosterRows.has(rowKey);
+
+  return `
+    <article class="finish-roster-row ${statusClass} ${expanded ? "is-expanded" : "is-collapsed"}" data-roster-operator="${escapeHtml(row.operatorName)}">
+      <div class="finish-roster-row-head">
+        <div class="finish-roster-operator">
+          <strong>${escapeHtml(row.operatorName)}</strong>
+          <span>Live: ${escapeHtml(row.liveStation || "—")} · Today ${numberFmt(row.lastTotal)} · ${row.isSaved ? "Saved" : "New"}</span>
+        </div>
+
+        <div class="finish-roster-head-meta">
+          <span>${escapeHtml(row.activeStatus || "Active")}</span>
+          <span>${escapeHtml(row.defaultArea || "No area")}</span>
+          <span>${escapeHtml(row.defaultLine || "No line")}</span>
+          <span>${escapeHtml(row.defaultPosition || "No position")}</span>
+          <strong>${escapeHtml(target)}</strong>
+        </div>
+
+        <button class="finish-roster-toggle" type="button" data-roster-toggle>
+          ${expanded ? "Close" : "Open"}
+        </button>
+      </div>
+
+      <div class="finish-roster-controls">
+        <label><span>Status</span>
+          <select data-roster-field="activeStatus" ${disabled}>
+            ${["Active", "Archived"].map(v => `<option value="${v}" ${row.activeStatus === v ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </label>
+
+        <label><span>Area</span>
+          <select data-roster-field="defaultArea" ${disabled}>
+            ${["Mounting", "Final Inspection"].map(v => `<option value="${v}" ${row.defaultArea === v ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </label>
+
+        <label><span>Line</span>
+          <select data-roster-field="defaultLine" ${disabled}>
+            ${["", "Line A", "Line B", "Line C"].map(v => `<option value="${v}" ${row.defaultLine === v ? "selected" : ""}>${v || "Select"}</option>`).join("")}
+          </select>
+        </label>
+
+        <label><span>Position</span>
+          <select data-roster-field="defaultPosition" ${disabled}>
+            ${buildRosterPositionOptions(row.defaultArea, row.defaultPosition)}
+          </select>
+        </label>
+
+        <label><span>Role</span>
+          <select data-roster-field="roleType" ${disabled}>
+            ${["Unassigned", "Certified", "TQ", "Training"].map(v => `<option value="${v}" ${row.roleType === v ? "selected" : ""}>${v}</option>`).join("")}
+          </select>
+        </label>
+
+        <label><span>Week</span>
+          <select data-roster-field="trainingWeek" ${disabled || row.roleType !== "Training" ? "disabled" : ""}>
+            ${["", "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"].map(v => `<option value="${v}" ${row.trainingWeek === v ? "selected" : ""}>${v || "—"}</option>`).join("")}
+          </select>
+        </label>
+
+        <button class="finish-roster-action-btn archive" type="button" data-roster-archive ${disabled}>Archive</button>
+        <button class="finish-roster-action-btn delete" type="button" data-roster-delete ${disabled}>Delete</button>
+      </div>
+    </article>`;
+}
+
+function buildRosterPositionOptions(area, selected) {
+  const slots = normalizeFinishOperatorStation(area) === "Final Inspection"
+    ? ["", "FI-01", "FI-02", "FI-03", "FI-04"]
+    : ["", "M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10"];
+
+  return slots.map(slot => `<option value="${escapeHtml(slot)}" ${slot === selected ? "selected" : ""}>${escapeHtml(slot || "Select")}</option>`).join("");
+}
+
+function bindFinishRosterEditorEvents() {
+  document.querySelectorAll("[data-roster-toggle]").forEach(button => {
+    button.addEventListener("click", event => {
+      const row = event.target.closest(".finish-roster-row");
+      const operator = normalizeAssignmentOperatorName(row?.dataset.rosterOperator || "");
+      if (!operator) return;
+      if (finishRosterUiState.expandedRosterRows.has(operator)) {
+        finishRosterUiState.expandedRosterRows.delete(operator);
+        row.classList.remove("is-expanded");
+        row.classList.add("is-collapsed");
+        button.textContent = "Open";
+      } else {
+        finishRosterUiState.expandedRosterRows.add(operator);
+        row.classList.remove("is-collapsed");
+        row.classList.add("is-expanded");
+        button.textContent = "Close";
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-roster-field]").forEach(select => {
+    select.addEventListener("change", event => {
+      const row = event.target.closest(".finish-roster-row");
+      if (event.target.dataset.rosterField === "defaultArea") {
+        const positionSelect = row?.querySelector('[data-roster-field="defaultPosition"]');
+        if (positionSelect) {
+          positionSelect.innerHTML = buildRosterPositionOptions(event.target.value, "");
+        }
+      }
+      saveFinishRosterRowFromDom(row);
+    });
+  });
+
+  document.querySelectorAll("[data-roster-archive]").forEach(button => {
+    button.addEventListener("click", event => updateFinishRosterRowStatus(event.target.closest(".finish-roster-row"), "archiveFinishRosterOperator"));
+  });
+
+  document.querySelectorAll("[data-roster-delete]").forEach(button => {
+    button.addEventListener("click", event => {
+      const row = event.target.closest(".finish-roster-row");
+      const operator = row?.dataset.rosterOperator || "";
+      if (!operator) return;
+      if (confirm(`Remove ${operator} from this ${getRosterShiftType()} roster? This marks the row as Removed and keeps audit history.`)) {
+        updateFinishRosterRowStatus(row, "deleteFinishRosterOperator");
+      }
+    });
+  });
+}
+
+async function saveFinishRosterRowFromDom(rowEl) {
+  if (!rowEl) return;
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role cannot edit Finish roster rows.");
+    renderFinishRosterApiPanel();
+    return;
+  }
+
+  const operatorName = rowEl.dataset.rosterOperator;
+  const getField = field => rowEl.querySelector(`[data-roster-field="${field}"]`)?.value || "";
+  const defaultArea = getField("defaultArea");
+
+  try {
+    await fetchFinishRosterApi("saveFinishRosterControl", {
+      updatedBy: getCurrentUsername(),
+      ownerUsername: getRosterOwnerUsername(),
+      shiftType: getRosterShiftType(),
+      operatorName,
+      activeStatus: getField("activeStatus") || "Active",
+      defaultLine: getField("defaultLine"),
+      defaultArea,
+      defaultPosition: getField("defaultPosition"),
+      roleType: getField("roleType"),
+      trainingWeek: getField("roleType") === "Training" ? getField("trainingWeek") : ""
+    });
+
+    showFinishAssignmentToast(`Saved ${operatorName}`);
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    renderFinishRosterApiPanel();
+    renderOperatorAssignmentConfigPanel();
+    updateConfigTotals();
+    renderFinishThreeLineCell();
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+    await loadFinishRosterForSelectedProfile({ silent: true }).catch(() => {});
+    renderFinishRosterApiPanel();
+  }
+}
+
+async function updateFinishRosterRowStatus(rowEl, action) {
+  if (!rowEl) return;
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role cannot delete/archive Finish roster rows.");
+    return;
+  }
+
+  const operatorName = rowEl.dataset.rosterOperator;
+
+  try {
+    await fetchFinishRosterApi(action, {
+      updatedBy: getCurrentUsername(),
+      ownerUsername: getRosterOwnerUsername(),
+      shiftType: getRosterShiftType(),
+      operatorName
+    });
+    showFinishAssignmentToast(`${action.includes("delete") ? "Deleted" : "Archived"} ${operatorName}`);
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    renderFinishRosterApiPanel();
+    renderOperatorAssignmentConfigPanel();
+    updateConfigTotals();
+    renderFinishThreeLineCell();
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+  }
+}
+
+function renderFinishRosterAuditLog() {
+  const target = document.getElementById("finishRosterAuditLog");
+  if (!target) return;
+
+  const logs = finishRosterApiState.audit || [];
+  if (!logs.length) {
+    target.innerHTML = `<article class="roster-api-empty">No audit changes for this profile yet.</article>`;
+    return;
+  }
+
+  target.innerHTML = logs.map(row => `
+    <article class="roster-audit-row">
+      <span>${escapeHtml(row.timestamp || "")}</span>
+      <strong>${escapeHtml(row.action || "")}</strong>
+      <span>${escapeHtml(row.operatorName || "")}</span>
+      <span>${escapeHtml(row.fieldChanged || "")} · ${escapeHtml(row.oldValue || "—")} → ${escapeHtml(row.newValue || "—")}</span>
+      <em>${escapeHtml(row.updatedBy || "")}</em>
+    </article>
+  `).join("");
+}
+
+function renderOperatorAssignmentConfigPanel() {
+  ensureOperatorAssignmentConfigPanel();
+  renderFinishRosterApiPanel();
+
+  const rosterTarget = document.getElementById("operatorAssignmentRoster");
+  if (!rosterTarget) return;
+
+  const config = loadConfig();
+  const filter = document.getElementById("assignmentStationFilter")?.value || "all";
+  const roster = getFinishOperatorRoster()
+    .filter(item => filter === "all" || item.station === filter);
+
+  if (!roster.length) {
+    rosterTarget.innerHTML = `
+      <article class="assignment-empty">
+        No Finish operator master loaded yet. Use the Personal tab roster control or run syncFinishOperatorMasterFromRawActivity().
+      </article>`;
+    updateConfigTotals();
+    applyFinishAssignmentPermissionLock();
+    return;
+  }
+
+  rosterTarget.innerHTML = roster.map(item => {
+    const assignment = getOperatorAssignment(item.operator, item.station, config) || {
+      role: "ignore",
+      trainingWeek: 1
+    };
+    const canTrain = item.station === "Mounting" || item.station === "Final Inspection";
+    const role = String(assignment.role || "ignore");
+    const trainingRate = getTrainingRateForStationWeek(item.station, assignment.trainingWeek || 1);
+    const baseRate = getFinishOperatorBaseRate(item.station, item.operator);
+    const effective = role === "training" ? trainingRate : (["core", "tq", "certified"].includes(role) ? baseRate : 0);
+
+    return `
+      <article class="assignment-row" data-assignment-row="${escapeHtml(makeAssignmentKey(item.station, item.operator))}">
+        <div class="assignment-operator">
+          <strong>${escapeHtml(item.operator)}</strong>
+          <span>${escapeHtml(item.station)} · Today ${numberFmt(item.total)}${item.liveNow ? " · Live" : " · Saved API"}</span>
+        </div>
+
+        <label>
+          Role
+          <select data-assignment-role data-station="${escapeHtml(item.station)}" data-operator="${escapeHtml(item.operator)}">
+            <option value="ignore" ${role === "ignore" ? "selected" : ""}>Do not count</option>
+            <option value="core" ${role === "core" || role === "certified" ? "selected" : ""}>Certified / Core Capacity</option>
+            <option value="tq" ${role === "tq" ? "selected" : ""}>TQ / Core Capacity</option>
+            ${canTrain ? `<option value="training" ${role === "training" ? "selected" : ""}>Training Metric</option>` : ""}
+          </select>
+        </label>
+
+        <label class="assignment-week ${role === "training" && canTrain ? "active" : "disabled"}">
+          Week
+          <select data-assignment-week data-station="${escapeHtml(item.station)}" data-operator="${escapeHtml(item.operator)}" ${role === "training" && canTrain ? "" : "disabled"}>
+            ${buildTrainingWeekOptions(item.station, assignment.trainingWeek || 1)}
+          </select>
+        </label>
+
+        ${buildLineSlotAssignmentControls(item.station, item.operator, assignment)}
+
+        <div class="assignment-target">
+          <span>Target</span>
+          <strong>${effective > 0 ? numberFmt(effective) + "/hr" : "—"}</strong>
+        </div>
+      </article>`;
+  }).join("");
+
+  rosterTarget.querySelectorAll("[data-assignment-role]").forEach(select => {
+    select.addEventListener("change", event => {
+      saveOperatorAssignment(
+        event.target.dataset.station,
+        event.target.dataset.operator,
+        event.target.value,
+        Number(getOperatorAssignment(event.target.dataset.operator, event.target.dataset.station)?.trainingWeek || 1)
+      );
+    });
+  });
+
+  rosterTarget.querySelectorAll("[data-assignment-week]").forEach(select => {
+    select.addEventListener("change", event => {
+      const current = getOperatorAssignment(event.target.dataset.operator, event.target.dataset.station) || { role: "training" };
+      saveOperatorAssignment(
+        event.target.dataset.station,
+        event.target.dataset.operator,
+        current.role || "training",
+        Number(event.target.value || 1),
+        current.line || "",
+        current.slot || ""
+      );
+    });
+  });
+
+  rosterTarget.querySelectorAll("[data-assignment-line], [data-assignment-slot]").forEach(select => {
+    select.addEventListener("change", event => {
+      const station = event.target.dataset.station;
+      const operator = event.target.dataset.operator;
+      const row = event.target.closest(".assignment-row");
+      const current = getOperatorAssignment(operator, station) || { role: "ignore", trainingWeek: 1 };
+      const line = row?.querySelector("[data-assignment-line]")?.value || current.line || "";
+      const slot = row?.querySelector("[data-assignment-slot]")?.value || current.slot || "";
+      saveOperatorAssignment(
+        station,
+        operator,
+        current.role || "ignore",
+        Number(current.trainingWeek || 1),
+        line,
+        slot
+      );
+    });
+  });
+
+  updateConfigTotals();
+  applyFinishAssignmentPermissionLock();
+  renderFinishThreeLineCell();
+}
+
+async function saveOperatorAssignment(stationName, operatorName, role, trainingWeek = 1, line = "", slot = "") {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role can see operator setup but cannot edit it.");
+    renderOperatorAssignmentConfigPanel();
+    return;
+  }
+
+  const station = normalizeFinishOperatorStation(stationName);
+  const operator = normalizeAssignmentOperatorName(operatorName);
+  if (!operator) return;
+
+  try {
+    await fetchFinishRosterApi("saveFinishRosterControl", {
+      updatedBy: getCurrentUsername(),
+      ownerUsername: getRosterOwnerUsername(),
+      shiftType: getRosterShiftType(),
+      operatorName: operator,
+      activeStatus: role && role !== "ignore" ? "Active" : "Archived",
+      defaultLine: line || getOperatorAssignment(operator, station)?.line || "",
+      defaultArea: station,
+      defaultPosition: slot || getOperatorAssignment(operator, station)?.slot || "",
+      roleType: convertLocalRoleToApi(role),
+      trainingWeek: role === "training" ? convertNumberToApiWeek(trainingWeek) : ""
+    });
+
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    renderFinishRosterApiPanel();
+    renderOperatorAssignmentConfigPanel();
+    updateConfigTotals();
+    loadDashboard();
+    renderFinishThreeLineCell();
+
+    if (finishOperatorState?.selectedStation) {
+      const activeStation = finishOperatorState.stations?.[finishOperatorState.selectedStation];
+      if (activeStation) renderDrawerOperators(activeStation);
+    }
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+    await loadFinishRosterForSelectedProfile({ silent: true }).catch(() => {});
+    renderFinishRosterApiPanel();
+    renderOperatorAssignmentConfigPanel();
+  }
+}
+
+function applyFinishAssignmentPermissionLock() {
+  const canEdit = canEditFinishOperatorAssignments();
+  const role = getFinishRosterCurrentProfile()?.role || getCurrentUserRole() || "Unknown role";
+  const user = getCurrentUserDisplayName();
+
+  document
+    .querySelectorAll("#operatorAssignmentConfigPanel select, #operatorAssignmentConfigPanel input, #operatorAssignmentConfigPanel button")
+    .forEach(el => {
+      if (el.id === "assignmentStationFilter") {
+        el.disabled = false;
+        return;
+      }
+      el.disabled = !canEdit;
+      el.classList.toggle("locked", !canEdit);
+      el.title = canEdit ? "" : "View only for your role";
+    });
+
+  const notice = document.getElementById("finishAssignmentPermissionNotice");
+  if (notice) {
+    notice.classList.toggle("can-edit", canEdit);
+    notice.classList.toggle("view-only", !canEdit);
+    notice.innerHTML = canEdit
+      ? `<strong>Edit access active</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · saving to Finish roster API for ${escapeHtml(getRosterOwnerUsername())} / ${escapeHtml(getRosterShiftType())}</span>`
+      : `<strong>View only</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · edit/delete is blocked by the API.</span>`;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initFinishRosterApiPanel();
+  loadFinishRosterBackend({ silent: true });
+});

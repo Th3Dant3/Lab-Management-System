@@ -283,12 +283,13 @@
 
     <!-- TAB NAVIGATION -->
   <nav class="command-tabs">
-  <button class="tab-btn active" data-tab="floor">Process Flow</button>
-  <button class="tab-btn" data-tab="operators">Operator Command</button>
-  <button class="tab-btn" data-tab="personal">Personal</button>
+  <button class="tab-btn active" data-tab="floor">Process Flow</button>  
+  <button class="tab-btn" data-tab="personal">Morning Set Up</button>  
   <button class="tab-btn" data-tab="config">Configuration</button>
+  <button class="tab-btn" data-tab="operators">Hourly Operator Performance</button>
   <button class="tab-btn" data-tab="hourly">Hourly Production Performance</button>
   <button class="tab-btn" data-tab="summary">Summary</button>
+  <button class="tab-btn lms-control-tab" data-tab="lms-control">LMS Control Center</button>
 </nav>
 
     <!-- FLOOR TAB -->
@@ -612,13 +613,19 @@
     <!-- PERSONAL FLOOR LAYOUT TAB -->
     <section class="tab-content" data-content="personal">
 
+
+      <!-- Morning Set Up view is visible to all Finish dashboard users.
+           LMS-only roster editing has been moved to the LMS Control Center tab. -->
+
+
+
       <!-- FINISH THREE-LINE PRODUCTION CELL -->
       <section id="finishThreeLineCell" class="finish-three-line-cell">
         <header class="three-line-header">
           <div>
-            <span class="three-line-eyebrow">PERSONAL FLOOR LAYOUT</span>
-            <h2>Personal Finish Line Assignment</h2>
-            <p>Your personal profile view for Line A, B, and C. Assign operators to Mounting or Final positions from Configuration, then review each line here.</p>
+            <span class="three-line-eyebrow">MORNING SET UP</span>
+            <h2>Morning Finish Line Assignment</h2>
+            <p>Line A, B, and C morning floor view. LMS controls roster assignments from the LMS Control Center; this tab stays visible for the floor team to review the active setup.</p>
           </div>
           <div class="three-line-legend">
             <span><i class="legend-chip orange"></i> Mounting</span>
@@ -630,6 +637,75 @@
         <div id="finishThreeLineGrid" class="finish-three-line-grid">
           <article class="three-line-empty">Waiting for Finish operator assignments...</article>
         </div>
+      </section>
+    </section>
+
+
+    <!-- LMS CONTROL CENTER TAB - LMS ONLY -->
+    <section class="tab-content lms-control-content" data-content="lms-control">
+      <!-- LMS ROSTER CONTROL TAB -->
+      <section id="finishRosterApiPanel" class="finish-roster-api-panel">
+        <header class="roster-api-header">
+          <div>
+            <span class="roster-api-eyebrow">LMS CONTROL CENTER</span>
+            <h2>Finish Roster Control</h2>
+            <p>LMS-only roster editor. Select the login profile, shift roster, and floor operators. Saved changes write to the Finish roster control sheet and update the Morning Set Up layout.</p>
+          </div>
+          <div class="roster-api-status-card">
+            <span>Roster API</span>
+            <strong id="finishRosterApiStatus">Checking...</strong>
+          </div>
+        </header>
+
+        <div class="roster-api-toolbar">
+          <label>
+            Editing Profile
+            <select id="finishRosterOwnerSelect">
+              <option value="">Loading users...</option>
+            </select>
+          </label>
+
+          <label>
+            Shift Roster
+            <select id="finishRosterShiftSelect">
+              <option value="Weekday">Weekday</option>
+              <option value="Weekend">Weekend</option>
+            </select>
+          </label>
+
+          <label>
+            Area Filter
+            <select id="finishRosterAreaFilter">
+              <option value="all">All Floor Operators</option>
+              <option value="Mounting">Mounting</option>
+              <option value="Final Inspection">Final Inspection</option>
+            </select>
+          </label>
+
+          <button id="finishRosterRefreshBtn" class="roster-api-btn" type="button">Refresh Roster</button>
+        </div>
+
+        <div id="finishRosterPermissionBanner" class="roster-permission-banner">
+          Loading permission profile...
+        </div>
+
+        <div class="roster-api-summary-grid">
+          <article><span>Floor Operators</span><strong id="finishRosterOperatorCount">0</strong></article>
+          <article><span>Saved Active</span><strong id="finishRosterActiveCount">0</strong></article>
+          <article><span>Mounting Filled</span><strong id="finishRosterMountingCount">0</strong></article>
+          <article><span>Final Filled</span><strong id="finishRosterFinalCount">0</strong></article>
+        </div>
+
+        <div id="finishRosterEditorList" class="finish-roster-editor-list">
+          <article class="roster-api-empty">Waiting for roster API...</article>
+        </div>
+
+        <details class="roster-audit-details">
+          <summary>Personal Roster Audit Log</summary>
+          <div id="finishRosterAuditLog" class="finish-roster-audit-log">
+            <article class="roster-api-empty">No audit rows loaded yet.</article>
+          </div>
+        </details>
       </section>
     </section>
 
