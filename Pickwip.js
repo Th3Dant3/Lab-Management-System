@@ -54,6 +54,9 @@ let STATE = {
   activityByOperator: [],
   hourlyActivity: [],
   manualCounts: {},
+  dailyActivityCounts: {},
+  snapshotRecordCounts: {},
+  recordCounts: {},
   totalWip: 0,
   totalPickingWip: 0,
   totalInventoryWip: 0,
@@ -641,9 +644,13 @@ async function fetchAll(showToast = false) {
      * Do not replace STATE until payload is confirmed good.
      */
     const nextWip = normalizeWip(payload.wip || payload.data || []);
-    const nextDailyStats = normalizeDailyStats(payload.dailyStats || {}, payload.manualCounts || {});
+    const nextDailyStats = normalizeDailyStats(
+      payload.dailyStats || {},
+      payload.dailyActivityCounts || payload.snapshotRecordCounts || payload.recordCounts || {},
+      payload.manualCounts || {}
+    );
 
-    console.log('Picking daily stats loaded:', nextDailyStats, 'manualCounts:', payload.manualCounts || {});
+    console.log('Picking daily stats loaded:', nextDailyStats, 'dailyActivityCounts:', payload.dailyActivityCounts || {}, 'manualCounts:', payload.manualCounts || {});
 
     // Loader: step 3 — WIP normalized
     loaderSetBar(72, 'Checking queue movement and snapshots...');
@@ -668,6 +675,9 @@ async function fetchAll(showToast = false) {
       activityByOperator: normalizeOperatorActivity(payload.activityByOperator || []),
       hourlyActivity: normalizeHourlyActivity(payload.hourlyActivity || []),
       manualCounts: payload.manualCounts || {},
+      dailyActivityCounts: payload.dailyActivityCounts || payload.snapshotRecordCounts || payload.recordCounts || {},
+      snapshotRecordCounts: payload.snapshotRecordCounts || payload.dailyActivityCounts || payload.recordCounts || {},
+      recordCounts: payload.dailyActivityCounts || payload.snapshotRecordCounts || payload.recordCounts || {},
       totalWip: getSafePickingWipTotal_(payload, nextWip),
       totalPickingWip: getSafePickingWipTotal_(payload, nextWip),
       totalInventoryWip: getSafeInventoryWipTotal_(payload, nextWip),
@@ -840,24 +850,41 @@ function normalizeMovement(rows) {
   }).filter(r => r.subDepartment !== 'Unknown');
 }
 
-function normalizeDailyStats(stats, manualCounts = {}) {
+function normalizeDailyStats(stats, dailyActivityCounts = {}, manualCounts = {}) {
   const safeStats = stats || {};
+  const safeDailyCounts = dailyActivityCounts || {};
   const safeManual = manualCounts || {};
 
   const sf = num(safeStats.sfProductivityToday ?? safeStats.surfaceScanActivityToday);
   const fsv = num(safeStats.fsvProductivityToday ?? safeStats.combinedFsvFrameActivityToday);
   const frameOnly = num(safeStats.frameOnlyProductivityToday ?? safeStats.framePickingActivityToday);
+  const frameOnlyWip = num(safeStats.frameOnlyScanVerifyWip ?? safeStats.frameOnlyWip);
   const lensPicking = num(safeStats.lensPickingActivityToday);
 
+  /*
+   * Record counts now come from PICKING_DAILY_ACTIVITY_LOG.
+   * Manual counts are only a fallback for old API payloads.
+   * Do not let a stale manual sheet override the new automatic log.
+   */
+  const dailyBreakage = getNullableNumber_(safeDailyCounts.breakageCountToday);
+  const dailyReplenishment = getNullableNumber_(safeDailyCounts.replenishmentCountToday);
   const manualRecordCounts = getManualRecordCounts_(safeManual);
 
-  const breakage = manualRecordCounts.breakageCountToday !== null
-    ? manualRecordCounts.breakageCountToday
-    : num(safeStats.breakageCountToday);
+  const breakage = dailyBreakage !== null
+    ? dailyBreakage
+    : getNullableNumber_(safeStats.breakageCountToday) !== null
+      ? num(safeStats.breakageCountToday)
+      : manualRecordCounts.breakageCountToday !== null
+        ? manualRecordCounts.breakageCountToday
+        : 0;
 
-  const replenishment = manualRecordCounts.replenishmentCountToday !== null
-    ? manualRecordCounts.replenishmentCountToday
-    : num(safeStats.replenishmentCountToday);
+  const replenishment = dailyReplenishment !== null
+    ? dailyReplenishment
+    : getNullableNumber_(safeStats.replenishmentCountToday) !== null
+      ? num(safeStats.replenishmentCountToday)
+      : manualRecordCounts.replenishmentCountToday !== null
+        ? manualRecordCounts.replenishmentCountToday
+        : 0;
 
   const totalProductivity = num(
     safeStats.totalProductivityToday ||
@@ -867,6 +894,7 @@ function normalizeDailyStats(stats, manualCounts = {}) {
 
   const recordCountToday = num(
     safeStats.recordCountToday ||
+    safeDailyCounts.recordCountToday ||
     (breakage + replenishment)
   );
 
@@ -874,6 +902,7 @@ function normalizeDailyStats(stats, manualCounts = {}) {
     sfProductivityToday: sf,
     fsvProductivityToday: fsv,
     frameOnlyProductivityToday: frameOnly,
+    frameOnlyScanVerifyWip: frameOnlyWip,
 
     surfaceScanActivityToday: num(safeStats.surfaceScanActivityToday ?? sf),
     combinedFsvFrameActivityToday: num(safeStats.combinedFsvFrameActivityToday ?? fsv),
@@ -887,14 +916,24 @@ function normalizeDailyStats(stats, manualCounts = {}) {
     recordCountToday: recordCountToday,
     totalProductivityToday: totalProductivity,
     activeOperators: num(safeStats.activeOperators),
-    calculationMode: safeStats.calculationMode || '',
+    calculationMode: safeStats.calculationMode || safeDailyCounts.recordCountMode || '',
     calculationNote: safeStats.calculationNote || '',
+    recordCountMode: safeStats.recordCountMode || safeDailyCounts.recordCountMode || '',
+    recordCountSource: safeStats.recordCountSource || safeDailyCounts.recordCountSource || '',
+    countRule: safeStats.countRule || safeDailyCounts.countRule || '',
+    dateBasis: safeStats.dateBasis || safeDailyCounts.dateBasis || '',
     manualOverrideActive: Boolean(
       safeStats.manualOverrideActive ||
       manualRecordCounts.manualOverrideActive
     ),
     manualOverrideNotes: safeStats.manualOverrideNotes || manualRecordCounts.manualOverrideNotes || []
   };
+}
+
+function getNullableNumber_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(String(value).replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : null;
 }
 
 function getManualRecordCounts_(manualCounts) {
@@ -1215,11 +1254,11 @@ function renderTrackingRows(wip, daily) {
     },
     {
       name: 'Frame Only Scan & Verify',
-      label: 'Frame Only Productive Today',
-      count: num(daily.frameOnlyProductivityToday),
+      label: 'Frame Only Scan & Verify WIP',
+      count: num(daily.frameOnlyScanVerifyWip || getWipFor('Frame Only Scan & Verify', wip)),
       current: getWipFor('Frame Only Scan & Verify', wip),
-      type: 'PRODUCTIVITY',
-      status: 'Frame Only',
+      type: 'WIP TRACKING',
+      status: 'Frame Only WIP',
       cls: 'frame',
       short: 'FO'
     },
