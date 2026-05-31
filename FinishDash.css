@@ -5975,3 +5975,283 @@ body.operator-drawer-open {
   z-index: 900 !important;
   pointer-events: auto !important;
 }
+
+/*******************************************************
+ * FINISH DASH — LMS CONTROL CENTER ROW LAYOUT FIX
+ * Add this to the bottom of FinishDash.css.
+ *******************************************************/
+
+.finish-roster-row-controls {
+  display: grid !important;
+  grid-template-columns:
+    minmax(120px, 0.75fr)
+    minmax(120px, 0.75fr)
+    minmax(150px, 1fr)
+    minmax(130px, 0.9fr)
+    minmax(150px, 1fr)
+    minmax(140px, 0.9fr)
+    minmax(100px, 0.65fr)
+    minmax(125px, 0.75fr)
+    minmax(190px, 0.9fr) !important;
+  gap: 12px !important;
+  align-items: end !important;
+}
+
+.finish-roster-row-controls label {
+  min-width: 0 !important;
+}
+
+.finish-roster-row-controls select,
+.finish-roster-row-controls input {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.finish-roster-actions {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  align-items: end !important;
+}
+
+.finish-roster-action-btn {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 42px !important;
+  white-space: nowrap !important;
+}
+
+.finish-roster-row-tags {
+  flex-wrap: wrap !important;
+}
+
+@media (max-width: 1500px) {
+  .finish-roster-row-controls {
+    grid-template-columns: repeat(3, minmax(160px, 1fr)) !important;
+  }
+
+  .finish-roster-actions {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .finish-roster-row-controls {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* =========================================================
+   CONFIG TAB — FULL POLISH
+   Scoped to [data-content="config"] so other tabs are untouched.
+   Covers the capacity accordion, cards, training metrics,
+   totals, action bar, and the injected roster panel headers.
+========================================================= */
+
+/* --- section heading accent --- */
+[data-content="config"] .section-heading h2 { letter-spacing: -0.01em; }
+[data-content="config"] .section-heading h2::after {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  box-shadow: 0 0 14px rgba(0, 217, 255, 0.4);
+}
+
+/* --- accordion group: left accent + hover + open state --- */
+[data-content="config"] .config-group {
+  position: relative;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease;
+}
+[data-content="config"] .config-group::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--cyan), var(--green));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: 3;
+}
+[data-content="config"] .config-group[open]::before { opacity: 0.75; }
+[data-content="config"] .config-group:hover {
+  border-color: rgba(0, 217, 255, 0.4);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.4), 0 0 26px rgba(0, 217, 255, 0.06);
+}
+
+/* --- summary: hover + animated chevron --- */
+[data-content="config"] .config-group summary { transition: background 0.2s ease; }
+[data-content="config"] .config-group summary:hover { background: rgba(0, 217, 255, 0.05); }
+[data-content="config"] .config-group summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+[data-content="config"] .config-group summary > span::after {
+  content: "";
+  width: 8px; height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.28s ease;
+}
+[data-content="config"] .config-group[open] summary > span::after { transform: rotate(225deg); }
+
+/* --- reveal grid when a group opens --- */
+@keyframes cfgReveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+[data-content="config"] .config-group[open] .config-grid {
+  animation: cfgReveal 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- capacity cards: tidy 2-col label|input, accent, hover, entrance --- */
+[data-content="config"] .config-accordion .config-card {
+  display: grid;
+  grid-template-columns: 1fr clamp(92px, 32%, 128px);
+  gap: 9px 12px;
+  align-items: center;
+  align-content: start;
+  min-height: 0;
+  padding: 18px 18px 16px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  animation: cfgReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+[data-content="config"] .config-accordion .config-card::after {
+  content: "";
+  position: absolute;
+  left: 18px; right: 18px; top: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  opacity: 0.45;
+}
+[data-content="config"] .config-accordion .config-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0, 217, 255, 0.42);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45), 0 0 26px rgba(0, 217, 255, 0.1);
+}
+[data-content="config"] .config-accordion .config-card:nth-child(1) { animation-delay: 0.03s; }
+[data-content="config"] .config-accordion .config-card:nth-child(2) { animation-delay: 0.08s; }
+[data-content="config"] .config-accordion .config-card:nth-child(3) { animation-delay: 0.13s; }
+[data-content="config"] .config-accordion .config-card:nth-child(4) { animation-delay: 0.18s; }
+[data-content="config"] .config-accordion .config-card:nth-child(5) { animation-delay: 0.23s; }
+
+[data-content="config"] .config-accordion .config-card > h3 {
+  grid-column: 1 / -1;
+  margin: 0 0 6px;
+  color: var(--cyan);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+[data-content="config"] .config-accordion .config-card > label {
+  margin: 0;
+  align-self: center;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  line-height: 1.35;
+}
+[data-content="config"] .config-accordion .config-card > input {
+  margin: 0;
+  height: 40px;
+  text-align: center;
+  border-radius: 11px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+[data-content="config"] .config-accordion .config-card > input:focus {
+  border-color: rgba(0, 217, 255, 0.75);
+  background: rgba(2, 18, 36, 0.9);
+  box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.16), 0 0 16px rgba(0, 217, 255, 0.22);
+}
+
+/* --- totals as highlighted chips --- */
+[data-content="config"] .config-accordion .config-card > .config-total {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid rgba(0, 217, 255, 0.2);
+  border-radius: 11px;
+  background: rgba(0, 217, 255, 0.07);
+  font-size: 11px;
+}
+[data-content="config"] .config-accordion .config-card > .config-total strong {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--cyan);
+  text-shadow: 0 0 14px rgba(0, 217, 255, 0.3);
+}
+/* the adjusted-target total (2nd chip in training cards) reads green */
+[data-content="config"] .config-accordion .config-card > .config-total + .config-total {
+  border-color: rgba(0, 245, 160, 0.24);
+  background: rgba(0, 245, 160, 0.07);
+}
+[data-content="config"] .config-accordion .config-card > .config-total + .config-total strong {
+  color: var(--green);
+  text-shadow: 0 0 14px rgba(0, 245, 160, 0.32);
+}
+
+/* --- training cards: pack week pairs 2-up instead of one long column --- */
+[data-content="config"] .config-accordion .training-card {
+  grid-template-columns: 1fr clamp(78px, 18%, 116px) 1fr clamp(78px, 18%, 116px);
+}
+[data-content="config"] .config-accordion .training-card > h3 { grid-column: 1 / -1; }
+[data-content="config"] .config-accordion .training-card > .config-total { grid-column: 1 / -1; }
+
+/* --- action bar + buttons --- */
+[data-content="config"] .config-actions {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(100, 221, 255, 0.14);
+}
+[data-content="config"] .primary-action { position: relative; overflow: hidden; }
+[data-content="config"] .primary-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 217, 255, 0.4);
+}
+[data-content="config"] .secondary-action:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 217, 255, 0.55);
+  color: var(--text);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+[data-content="config"] .primary-action:active,
+[data-content="config"] .secondary-action:active { transform: translateY(0) scale(0.98); }
+[data-content="config"] .primary-action::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 36%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: translateX(-160%);
+  transition: transform 0.6s ease;
+  pointer-events: none;
+}
+[data-content="config"] .primary-action:hover::after { transform: translateX(420%); }
+
+/* --- responsive --- */
+@media (max-width: 1000px) {
+  [data-content="config"] .config-accordion .training-card {
+    grid-template-columns: 1fr clamp(90px, 30%, 128px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-content="config"] .config-accordion .config-card,
+  [data-content="config"] .config-group[open] .config-grid { animation: none !important; }
+  [data-content="config"] .config-accordion .config-card,
+  [data-content="config"] .config-group,
+  [data-content="config"] .primary-action,
+  [data-content="config"] .secondary-action,
+  [data-content="config"] .primary-action::after { transition: none !important; }
+}

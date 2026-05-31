@@ -11,7 +11,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="FinishDash.css" />
+  <link rel="stylesheet" href="FinishDash.css?v=20260531-3">
 </head>
 
 <body>
@@ -19,94 +19,62 @@
   <!-- LOADING SCREEN -->
 <div id="loadingScreen" class="loading-screen">
   <div class="loading-bg-grid"></div>
-  <div class="loading-bg-glow loading-glow-a"></div>
-  <div class="loading-bg-glow loading-glow-b"></div>
-  <div class="loading-bg-glow loading-glow-c"></div>
 
   <div class="loading-shell">
-    <div class="loading-topline"></div>
-
-    <div class="loading-header">
-      <div class="loading-brand">
-        <div class="loading-brand-mark">
-          <span></span>
-        </div>
-        <div class="loading-brand-copy">
-          <h2>FINISH OPS</h2>
-          <p>Digital Twin Command Center</p>
-        </div>
-      </div>
-
-      <div class="loading-live-pill">
-        <span class="loading-live-dot"></span>
-        Initializing Live System
+    <div class="loading-brand">
+      <div class="loading-brand-mark"><span></span></div>
+      <div class="loading-brand-copy">
+        <h2>ZENNI</h2>
+        <p>Finish Department</p>
       </div>
     </div>
 
-    <div class="loading-core-wrap">
-      <div class="loading-radar-ring ring-1"></div>
-      <div class="loading-radar-ring ring-2"></div>
-      <div class="loading-radar-ring ring-3"></div>
+    <svg class="loading-flow" viewBox="0 0 340 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- rail -->
+      <line class="flow-rail" x1="26" y1="44" x2="250" y2="44"/>
 
-      <div class="loading-core-hex">
-        <div class="loading-core-inner">
-          <span>FIN</span>
-        </div>
-      </div>
+      <!-- station nodes (real Finish flow) -->
+      <circle class="flow-node n1" cx="26"  cy="44" r="8"/>
+      <circle class="flow-node n2" cx="82"  cy="44" r="8"/>
+      <circle class="flow-node n3" cx="138" cy="44" r="8"/>
+      <circle class="flow-node n4" cx="194" cy="44" r="8"/>
+      <circle class="flow-node n5" cx="250" cy="44" r="8"/>
 
-      <div class="loading-orbit loading-orbit-cyan"></div>
-      <div class="loading-orbit loading-orbit-purple"></div>
-      <div class="loading-orbit loading-orbit-orange"></div>
-    </div>
+      <!-- labels -->
+      <text class="flow-label n1" x="26"  y="68">SCAN</text>
+      <text class="flow-label n2" x="82"  y="68">UNBOX</text>
+      <text class="flow-label n3" x="138" y="68">EDGING</text>
+      <text class="flow-label n4" x="194" y="68">MOUNT</text>
+      <text class="flow-label n5" x="250" y="68">FINAL</text>
 
-    <div class="loading-copy">
-      <h1>Initializing Finish Dashboard</h1>
-      <p id="loadingStatusText">Syncing workflow nodes, WIP signals, and live station intelligence...</p>
-    </div>
+      <!-- lens travelling the line -->
+      <g class="flow-lens-group">
+        <circle class="flow-lens" cx="26" cy="44" r="10"/>
+        <circle class="flow-lens-glint" cx="23" cy="41" r="2"/>
+      </g>
 
-    <div class="loading-steps">
-      <div class="loading-step active" id="loadStep1">
-        <span class="step-dot"></span>
-        <span>Connecting API</span>
-      </div>
-      <div class="loading-step" id="loadStep2">
-        <span class="step-dot"></span>
-        <span>Reading station signals</span>
-      </div>
-      <div class="loading-step" id="loadStep3">
-        <span class="step-dot"></span>
-        <span>Calculating WIP + metrics</span>
-      </div>
-      <div class="loading-step" id="loadStep4">
-        <span class="step-dot"></span>
-        <span>Rendering command center</span>
-      </div>
-    </div>
+      <!-- finished glasses emerging at output -->
+      <g class="flow-glasses">
+        <rect class="lens-shape" x="278" y="36" width="20" height="16" rx="7"/>
+        <rect class="lens-shape" x="304" y="36" width="20" height="16" rx="7"/>
+        <path class="bridge" d="M298 42 q3 -3 6 0"/>
+        <path class="bridge" d="M278 42 q-4 -2 -6 2"/>
+        <path class="bridge" d="M324 42 q4 -2 6 2"/>
+      </g>
+    </svg>
+
+    <div class="loading-pill"><span class="dot"></span>Initializing Live System</div>
+
+    <h1 class="loading-title">Finish Department Command Center</h1>
 
     <div class="loading-progress-wrap">
       <div class="loading-progress-meta">
-        <span>SYSTEM BOOT PROGRESS</span>
+        <span id="loadingStatusText">Connecting to dashboard API&hellip;</span>
         <strong id="loadingPercent">0%</strong>
       </div>
-
       <div class="loading-progress-bar">
         <div class="loading-progress-fill" id="loadingProgressFill"></div>
         <div class="loading-progress-scan"></div>
-      </div>
-    </div>
-
-    <div class="loading-footer-cards">
-      <div class="loading-mini-card">
-        <span>Module</span>
-        <strong>Finish Flow</strong>
-      </div>
-      <div class="loading-mini-card">
-        <span>Theme</span>
-        <strong>Command Center</strong>
-      </div>
-      <div class="loading-mini-card">
-        <span>Status</span>
-        <strong id="loadingFooterStatus">Booting Systems</strong>
       </div>
     </div>
   </div>
@@ -1124,6 +1092,6 @@
 
   </main>
 
-  <script src="FinishDash.js?v=20260531-1"></script>
+  <script src="FinishDash.js?v=20260531-3"></script>
 </body>
 </html>
