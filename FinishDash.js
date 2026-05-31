@@ -709,6 +709,7 @@ function renderStationNumbers(stations) {
   const get = name => stations.find(s => s.flowStep === name || s.displayName === name) || {};
 
   const fsv = get("FSV Scan & Verify");
+  const frameOnly = get("Frame Only Scan & Verify");
   const unbox = get("Finish Unbox");
   const arout = get("AR-OUT");
 
@@ -723,6 +724,7 @@ function renderStationNumbers(stations) {
   const final = get("Final Inspection");
 
   setText("fsvWip", fsv.currentWip || 0);
+  setText("frameOnlyWip", frameOnly.currentWip || 0);
 
   setText("unboxWip", unbox.currentWip || 0);
   setText("unboxCnt", unbox.activityToday || 0);
@@ -863,8 +865,8 @@ function normalizeLegacyStations(rows) {
 function normalizeStationName(name) {
   const value = String(name || "").trim().toLowerCase();
 
+  if (value.includes("frame only")) return "Frame Only Scan & Verify";
   if (value.includes("fsv")) return "FSV Scan & Verify";
-  if (value.includes("frame only")) return "FSV Scan & Verify";
   if (value.includes("unbox")) return "Finish Unbox";
   if (value.includes("ar-out") || value.includes("ar out")) return "AR-OUT";
   if (value.includes("line b")) return "MEI Line B";
@@ -883,7 +885,8 @@ function buildSummaryFromStations(stations) {
   const get = name => stations.find(s => s.flowStep === name) || {};
 
   const incomingWip =
-    Number(get("FSV Scan & Verify").currentWip || 0);
+    Number(get("FSV Scan & Verify").currentWip || 0) +
+    Number(get("Frame Only Scan & Verify").currentWip || 0);
 
   const meiFeedWip =
     Number(get("Finish Unbox").currentWip || 0) +
@@ -2785,6 +2788,7 @@ function isFinishOperatorStationAllowed(stationName) {
     "FSV Scan & Verify",
     "FSV / Frame Only",
     "Frame Only",
+    "Frame Only Scan & Verify",
     "FSV Scan & Verify / Frame Only",
     "AR-OUT"
   ].includes(name);

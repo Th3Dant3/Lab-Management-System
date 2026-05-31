@@ -1264,9 +1264,14 @@ body {
   top: 28px;
 }
 
+.station-frame-only {
+  left: 30px;
+  top: 190px;
+}
+
 .station-unbox {
   left: 250px;
-  top: 28px;
+  top: 108px;
 }
 
 .station-arout {
@@ -2831,9 +2836,14 @@ body {
   top: 28px !important;
 }
 
+.station-frame-only {
+  left: 30px !important;
+  top: 190px !important;
+}
+
 .station-unbox {
   left: 250px !important;
-  top: 28px !important;
+  top: 108px !important;
 }
 
 .station-arout {
