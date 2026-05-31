@@ -5272,3 +5272,301 @@ document.addEventListener("DOMContentLoaded", () => {
   initFinishRosterApiPanel();
   loadFinishRosterBackend({ silent: true });
 });
+/*******************************************************
+ * CONFIGURATION — MY ACTIVE SHIFT ASSOCIATES FIX
+ *
+ * Paste this block at the VERY BOTTOM of FinishDash.js.
+ *
+ * Purpose:
+ * - Configuration no longer shows the full operator master.
+ * - Non-LMS users only see their own active associates.
+ * - Shift is locked from FINISH_USER_PROFILES ShiftGroup.
+ *   Example: BHECK = Weekend, so BHECK only sees Weekend.
+ * - LMS Control Center remains the only place to assign everyone.
+ *******************************************************/
+
+function getFinishProfileForUsernameFromRosterApi(username) {
+  const target = String(username || getCurrentUsername() || "")
+    .trim()
+    .toUpperCase();
+
+  return (finishRosterApiState.profiles || []).find(profile =>
+    String(profile.username || "").trim().toUpperCase() === target
+  ) || null;
+}
+
+function getMyConfigurationOwnerUsername() {
+  return String(getCurrentUsername() || "")
+    .trim()
+    .toUpperCase();
+}
+
+function getMyConfigurationShiftType() {
+  const profile = getFinishProfileForUsernameFromRosterApi(getMyConfigurationOwnerUsername());
+
+  const profileShift = String(profile?.shiftGroup || "")
+    .trim()
+    .toLowerCase();
+
+  if (profileShift === "weekend") return "Weekend";
+  return "Weekday";
+}
+
+function getMyActiveShiftRosterRows() {
+  const ownerUsername = getMyConfigurationOwnerUsername();
+  const shiftType = getMyConfigurationShiftType();
+
+  return (finishRosterApiState.roster || []).filter(row => {
+    const rowOwner = String(row.ownerUsername || "").trim().toUpperCase();
+    const rowShift = String(row.shiftType || "").trim().toLowerCase();
+    const status = String(row.activeStatus || "").trim().toLowerCase();
+
+    return (
+      rowOwner === ownerUsername &&
+      rowShift === shiftType.toLowerCase() &&
+      status === "active"
+    );
+  });
+}
+
+async function loadMyConfigurationRosterOnly(options = {}) {
+  const ownerUsername = getMyConfigurationOwnerUsername();
+  const shiftType = getMyConfigurationShiftType();
+
+  if (!ownerUsername) return [];
+
+  try {
+    const rosterPayload = await fetchFinishRosterApi("getFinishRosterControl", {
+      ownerUsername,
+      shiftType,
+      t: Date.now()
+    });
+
+    finishRosterApiState.ownerUsername = ownerUsername;
+    finishRosterApiState.shiftType = shiftType;
+    finishRosterApiState.roster = Array.isArray(rosterPayload.data) ? rosterPayload.data : [];
+
+    if (!options.silent) {
+      renderOperatorAssignmentConfigPanel();
+      renderFinishThreeLineCell();
+    }
+
+    return getMyActiveShiftRosterRows();
+  } catch (error) {
+    console.error("Could not load profile-locked Configuration roster:", error);
+    if (!options.silent) {
+      showFinishAssignmentToast(error.message || String(error));
+    }
+    return [];
+  }
+}
+
+function ensureOperatorAssignmentConfigPanel() {
+  if (document.getElementById("operatorAssignmentConfigPanel")) return;
+
+  injectOperatorAssignmentStyles?.();
+
+  const configTab = document.querySelector('[data-content="config"]');
+  const saveRow = document.querySelector(".config-actions") || document.getElementById("configSaveBtn")?.parentElement;
+  const targetParent = saveRow?.parentElement || configTab;
+  if (!targetParent) return;
+
+  const panel = document.createElement("details");
+  panel.id = "operatorAssignmentConfigPanel";
+  panel.className = "config-group operator-assignment-config-group";
+  panel.open = true;
+
+  panel.innerHTML = `
+    <summary>
+      <div>
+        <h3>My Active Shift Associates</h3>
+        <p>Shows only the active associates assigned to your login profile and your assigned shift group.</p>
+      </div>
+      <span>Open / Close</span>
+    </summary>
+
+    <div class="operator-assignment-shell">
+      <div class="assignment-warning-card">
+        <strong>Profile Locked View</strong>
+        <span id="myActiveAssociatesProfileText">Loading your assigned shift roster.</span>
+      </div>
+
+      <div id="finishAssignmentPermissionNotice" class="assignment-permission-notice"></div>
+
+      <div class="assignment-summary-grid">
+        <article>
+          <span>Shift Group</span>
+          <strong id="myActiveShiftGroup">--</strong>
+        </article>
+        <article>
+          <span>Active Associates</span>
+          <strong id="myActiveAssociateCount">0</strong>
+        </article>
+        <article>
+          <span>Mounting</span>
+          <strong id="myActiveMountingCount">0</strong>
+        </article>
+        <article>
+          <span>Final</span>
+          <strong id="myActiveFinalCount">0</strong>
+        </article>
+      </div>
+
+      <div class="assignment-filter-row">
+        <label>
+          Area Filter
+          <select id="assignmentStationFilter">
+            <option value="all">All assigned areas</option>
+            <option value="Mounting">Mounting</option>
+            <option value="Final Inspection">Final Inspection</option>
+          </select>
+        </label>
+
+        <button id="refreshMyActiveAssociatesBtn" class="roster-api-btn" type="button">
+          Refresh My Associates
+        </button>
+      </div>
+
+      <div id="operatorAssignmentRoster" class="operator-assignment-roster">
+        <article class="assignment-empty">Loading your active associates.</article>
+      </div>
+    </div>
+  `;
+
+  targetParent.insertBefore(panel, saveRow || null);
+
+  document.getElementById("assignmentStationFilter")?.addEventListener("change", () => {
+    renderOperatorAssignmentConfigPanel();
+  });
+
+  document.getElementById("refreshMyActiveAssociatesBtn")?.addEventListener("click", async () => {
+    await loadMyConfigurationRosterOnly();
+  });
+}
+
+function renderOperatorAssignmentConfigPanel() {
+  ensureOperatorAssignmentConfigPanel();
+
+  const rosterTarget = document.getElementById("operatorAssignmentRoster");
+  if (!rosterTarget) return;
+
+  const ownerUsername = getMyConfigurationOwnerUsername();
+  const shiftType = getMyConfigurationShiftType();
+  const currentProfile = getFinishProfileForUsernameFromRosterApi(ownerUsername);
+  const filter = document.getElementById("assignmentStationFilter")?.value || "all";
+
+  const rows = getMyActiveShiftRosterRows()
+    .filter(row => filter === "all" || String(row.defaultArea || "") === filter)
+    .sort((a, b) => {
+      const areaCompare = String(a.defaultArea || "").localeCompare(String(b.defaultArea || ""));
+      if (areaCompare !== 0) return areaCompare;
+
+      const lineCompare = String(a.defaultLine || "").localeCompare(String(b.defaultLine || ""));
+      if (lineCompare !== 0) return lineCompare;
+
+      return String(a.defaultPosition || "").localeCompare(String(b.defaultPosition || ""));
+    });
+
+  setText("myActiveShiftGroup", shiftType);
+  setText("myActiveAssociateCount", rows.length);
+  setText("myActiveMountingCount", rows.filter(row => String(row.defaultArea || "") === "Mounting").length);
+  setText("myActiveFinalCount", rows.filter(row => String(row.defaultArea || "") === "Final Inspection").length);
+
+  const profileText = document.getElementById("myActiveAssociatesProfileText");
+  if (profileText) {
+    profileText.textContent =
+      `${currentProfile?.fullName || getCurrentUserDisplayName()} · ${ownerUsername} · ${shiftType} only`;
+  }
+
+  const notice = document.getElementById("finishAssignmentPermissionNotice");
+  if (notice) {
+    notice.textContent =
+      `Showing active associates assigned to ${ownerUsername} / ${shiftType}. LMS Control Center controls profile assignment.`;
+    notice.className = "assignment-permission-notice active";
+  }
+
+  if (!rows.length) {
+    rosterTarget.innerHTML = `
+      <article class="assignment-empty">
+        No active associates are assigned to ${escapeHtml(ownerUsername)} / ${escapeHtml(shiftType)}.
+        LMS must assign operators in LMS Control Center.
+      </article>
+    `;
+    return;
+  }
+
+  rosterTarget.innerHTML = rows.map(row => {
+    const operatorName = row.operatorName || "";
+    const area = row.defaultArea || "Unassigned area";
+    const line = row.defaultLine || "No line";
+    const position = row.defaultPosition || "No position";
+    const role = row.roleType || "Unassigned";
+    const week = row.trainingWeek ? ` · ${row.trainingWeek}` : "";
+    const station = area;
+    const liveStation = finishOperatorState?.stations?.[normalizeFinishOperatorStation(station)];
+    const liveOperator = (liveStation?.operatorList || []).find(op =>
+      String(op.name || "").trim().toLowerCase() === String(operatorName || "").trim().toLowerCase()
+    );
+    const liveTotal = Number(liveOperator?.total || 0);
+
+    return `
+      <article class="assignment-row my-active-associate-row">
+        <div class="assignment-person">
+          <strong>${escapeHtml(operatorName)}</strong>
+          <span>${escapeHtml(area)} · ${escapeHtml(line)} · ${escapeHtml(position)}</span>
+        </div>
+
+        <div class="assignment-field">
+          <label>Role</label>
+          <strong>${escapeHtml(role)}${escapeHtml(week)}</strong>
+        </div>
+
+        <div class="assignment-field">
+          <label>Live Today</label>
+          <strong>${numberFmt(liveTotal)}</strong>
+        </div>
+
+        <div class="assignment-target">
+          <span>${escapeHtml(shiftType)}</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+/*******************************************************
+ * Patch roster backend load so Configuration never inherits
+ * the LMS Control Center selected profile/shift.
+ *******************************************************/
+const __originalLoadFinishRosterBackend_ProfileLock =
+  typeof loadFinishRosterBackend === "function" ? loadFinishRosterBackend : null;
+
+async function loadFinishRosterBackend(options = {}) {
+  if (__originalLoadFinishRosterBackend_ProfileLock) {
+    await __originalLoadFinishRosterBackend_ProfileLock(options);
+  }
+
+  // After the normal backend loads users/operators, force Configuration back
+  // to the logged-in user's own ShiftGroup roster.
+  await loadMyConfigurationRosterOnly({ silent: true }).catch(error => {
+    console.warn("Profile-locked Configuration roster failed after backend load:", error);
+  });
+
+  renderOperatorAssignmentConfigPanel();
+  renderFinishThreeLineCell();
+}
+
+/*******************************************************
+ * Patch tab visibility/init so Configuration view refreshes
+ * when the user opens the Configuration tab.
+ *******************************************************/
+document.addEventListener("click", event => {
+  const tab = event.target.closest?.('.tab-btn[data-tab="config"]');
+  if (!tab) return;
+
+  window.setTimeout(() => {
+    loadMyConfigurationRosterOnly().catch(error => {
+      console.warn("Configuration profile roster refresh failed:", error);
+    });
+  }, 50);
+});
