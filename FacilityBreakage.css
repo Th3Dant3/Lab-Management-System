@@ -2906,10 +2906,10 @@ body::before {
   background: linear-gradient(90deg, transparent, var(--cyan), #a78bfa, transparent);
   animation: connFlow 2.4s linear infinite;
 }
-.fcc-conn-1 { left: 14%;  width: 13%; }
-.fcc-conn-2 { left: 39%;  width: 13%; }
+.fcc-conn-1 { left: 10%;  width: 15%; }
+.fcc-conn-2 { left: 32%;  width: 17%; }
 .fcc-conn-2::after { animation-delay: 0.8s; }
-.fcc-conn-3 { left: 64%;  width: 13%; }
+.fcc-conn-3 { left: 60%;  width: 14%; }
 .fcc-conn-3::after { animation-delay: 1.6s; }
 @keyframes connFlow {
   from { transform: translateX(-130%); }
