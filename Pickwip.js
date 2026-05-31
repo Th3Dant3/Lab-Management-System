@@ -372,7 +372,7 @@ function setupTabs() {
       const labelEl = btn.querySelector('b');
 
       if (titleEl && labelEl) {
-        titleEl.textContent = 'Picking Floor — ' + labelEl.textContent;
+        titleEl.textContent = labelEl.textContent === 'Command Overview' ? 'Picking Dashboard' : 'Picking Floor — ' + labelEl.textContent;
       }
     });
   });
@@ -1109,6 +1109,7 @@ function renderAll() {
 
   const sfProductive = num(daily.sfProductivityToday);
   const fsvProductive = num(daily.fsvProductivityToday);
+  const frameOnlyProductive = num(daily.frameOnlyProductivityToday || daily.framePickingActivityToday);
   const breakageCount = num(daily.breakageCountToday);
   const replenishmentCount = num(daily.replenishmentCountToday);
   const totalProductive = num(daily.totalProductivityToday);
@@ -1126,9 +1127,11 @@ function renderAll() {
   animateNumber('kpiTotalWip', totalWip);
   animateNumber('kpiSFProductive', sfProductive);
   animateNumber('kpiFSVProductive', fsvProductive);
+  animateNumber('kpiFrameOnlyProductive', frameOnlyProductive);
   animateNumber('kpiBreakageCount', breakageCount);
   animateNumber('kpiReplenishmentCount', replenishmentCount);
   renderWipSplitCards();
+  renderCommandHeroMetrics(wip, daily, latest);
 
   const trendInfo = getOverallTrend();
 
@@ -1156,6 +1159,23 @@ function renderWipSplitCards() {
   animateNumber('kpiInventoryWip', inventoryWip);
   animateNumber('kpiScanVerifyWip', scanVerifyWip);
 }
+
+function renderCommandHeroMetrics(wip, daily, latest) {
+  const safeWip = Array.isArray(wip) ? wip : [];
+
+  setText('cmdRecordSource', daily.recordCountSource || daily.recordCountMode || 'API');
+  setText('cmdCountRule', daily.countRule || 'BOS baseline · positive increases');
+  setText('cmdLastSnapshot', daily.dateBasis || (latest ? 'Live snapshot' : 'Waiting'));
+
+  animateNumber('flowOutSurface', getWipFor('Out of Surface Queue', safeWip));
+  animateNumber('flowSfWip', getWipFor('SF Scan & Verify', safeWip));
+  animateNumber('flowOutFinish', getWipFor('Out of Finish Queue', safeWip));
+  animateNumber('flowFsvWip', getWipFor('FSV Scan & Verify', safeWip));
+  animateNumber('flowFrameOnlyWip', getWipFor('Frame Only Scan & Verify', safeWip));
+  animateNumber('flowBreakage', getWipFor('Breakage to Picking', safeWip));
+  animateNumber('flowReplenishment', getWipFor('Replenishment', safeWip));
+}
+
 
 function renderMovementCheck() {
   const statusEl = document.getElementById('movementStatus');
@@ -2673,9 +2693,13 @@ function renderReportsTab() {
 
   const sf = num(daily.sfProductivityToday);
   const fsv = num(daily.fsvProductivityToday);
+  const frame = num(daily.frameOnlyProductivityToday ?? daily.framePickingActivityToday);
   const brk = num(daily.breakageCountToday);
   const rep = num(daily.replenishmentCountToday);
-  const totalProductivity = num(daily.totalProductivityToday);
+
+  // Total Jobs of the Day must include all scan/verify production buckets.
+  // Rule: SF + FSV + Frame Only Scan & Verify.
+  const totalProductivity = sf + fsv + frame;
 
   const now = new Date().toLocaleString('en-US', {
     weekday: 'long',
@@ -2695,8 +2719,9 @@ function renderReportsTab() {
     const kpiData = [
       { label: 'Total WIP', val: totalWip, sub: 'Current live snapshot', cls: 'blue' },
       { label: 'Surface (SF) Total Jobs', val: sf, sub: 'Total Scan & Verify', cls: 'green' },
-      { label: 'FInish (FSV) Total Jobs', val: fsv, sub: 'Total Scan & Verify', cls: 'orange' },
-      { label: 'Total Jobs of the Day', val: totalProductivity, sub: 'SF + FSV productive count', cls: 'purple' },
+      { label: 'Finish (FSV) Total Jobs', val: fsv, sub: 'Total Scan & Verify', cls: 'orange' },
+      { label: 'Frame Only Total Jobs', val: frame, sub: 'Frame Only Scan & Verify', cls: 'yellow' },
+      { label: 'Total Jobs of the Day', val: totalProductivity, sub: 'SF + FSV + Frame Only', cls: 'purple' },
       { label: 'Breakage Count', val: brk, sub: 'Record count from Breakage', cls: 'orange' },
       { label: 'Replenishment Count', val: rep, sub: 'Record count from Replenishment', cls: 'blue' }
     ];
@@ -2838,10 +2863,10 @@ function renderReportsTab() {
 
   renderReportOperatorHourlyPerformance();
 
-  renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity);
+  renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProductivity);
 }
 
-function renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity) {
+function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProductivity) {
   const narrativeEl = document.getElementById('rptNarrative');
   if (!narrativeEl) return;
 
@@ -2887,7 +2912,7 @@ function renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity) {
         As of <strong>${timeNow}</strong>, total picking WIP stands at
         <span class="narr-num cyan">${totalWip.toLocaleString()}</span> items across
         <span class="narr-num">${STATE.wip.filter(r => r.total > 0).length}</span> active queues.
-        SF + FSV productive movement today is
+        SF + FSV + Frame Only productive movement today is
         <span class="narr-num green">${totalProductivity.toLocaleString()}</span>.
       </p>
     </div>
@@ -2937,7 +2962,7 @@ function renderNarrativeReport(totalWip, sf, fsv, brk, rep, totalProductivity) {
     ` : ''}
 
     <div class="narr-block narr-footer">
-      <span>⬡ Auto-generated by Zenni Lab — Picking Floor WIP Monitor</span>
+      <span>⬡ Auto-generated by Zenni Lab — Picking Dashboard</span>
       <span>Report time: ${new Date().toLocaleString()}</span>
     </div>
   `;

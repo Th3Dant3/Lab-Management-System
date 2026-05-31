@@ -1,919 +1,843 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inventory- Picking Dashboard</title>
-
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="Pickwip.css" />
-</head>
-
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Picking Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="Pickwip.css" rel="stylesheet">
+</link></head>
 <body>
-
-  <!-- ── LOADING SCREEN ── -->
-  <div id="loaderScreen" class="loader-screen">
-
-    <!-- Horizontal sweep lines — industrial feel -->
-    <div class="ld-sweep-a"></div>
-    <div class="ld-sweep-b"></div>
-
-    <!-- Top bar — facility identity -->
-    <div class="ld-topbar">
-      <div class="ld-topbar-left">
-        <span class="ld-cube">▦</span>
-        <div>
-          <div class="ld-facility">ZENNI USA · OPTICAL MANUFACTURING</div>
-          <div class="ld-station">PICKING FLOOR — WIP MONITOR</div>
-        </div>
-      </div>
-      <div class="ld-topbar-right">
-        <span class="ld-live-dot"></span>
-        <span class="ld-clock" id="loaderTime">--:--:--</span>
-      </div>
-    </div>
-
-    <!-- Main terminal block -->
-    <div class="ld-terminal">
-
-      <!-- Left: boot log stream -->
-      <div class="ld-log-panel">
-        <div class="ld-log-title">// SYSTEM BOOT LOG</div>
-        <div class="ld-log-body" id="ldLogBody">
-          <div class="ld-log-line" style="animation-delay:.1s"><span class="ld-tag ok">[  OK  ]</span> Initializing picking floor monitor...</div>
-          <div class="ld-log-line" style="animation-delay:.4s"><span class="ld-tag ok">[  OK  ]</span> Loading UI components</div>
-          <div class="ld-log-line" style="animation-delay:.7s"><span class="ld-tag ok">[  OK  ]</span> Establishing API connection</div>
-          <div class="ld-log-line" style="animation-delay:1.0s"><span class="ld-tag wait">[ WAIT ]</span> Syncing WIP, activity, and operator intelligence...</div>
-          <div class="ld-log-line ld-log-cursor" style="animation-delay:1.3s" id="ldCursorLine">
-            <span class="ld-tag pend">[ PEND ]</span> <span id="ldCursorText">Preparing Picking dashboard</span><span class="ld-blink">_</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right: system status panels -->
-      <div class="ld-status-panel">
-        <div class="ld-status-title">// SUBSYSTEM STATUS</div>
-
-        <div class="ld-status-row" id="lc-api">
-          <div class="ld-status-name">LIVE API</div>
-          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-api"></div></div>
-          <div class="ld-status-val" id="lsv-api">STANDBY</div>
-        </div>
-
-        <div class="ld-status-row" id="lc-wip">
-          <div class="ld-status-name">WIP DATA</div>
-          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-wip"></div></div>
-          <div class="ld-status-val" id="lsv-wip">STANDBY</div>
-        </div>
-
-        <div class="ld-status-row" id="lc-movement">
-          <div class="ld-status-name">MOVEMENT CHK</div>
-          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-movement"></div></div>
-          <div class="ld-status-val" id="lsv-movement">STANDBY</div>
-        </div>
-
-        <div class="ld-status-row" id="lc-stats">
-          <div class="ld-status-name">DAILY STATS</div>
-          <div class="ld-status-bar"><div class="ld-status-fill" id="lsf-stats"></div></div>
-          <div class="ld-status-val" id="lsv-stats">STANDBY</div>
-        </div>
-
-        <!-- Big progress readout -->
-        <div class="ld-pct-block">
-          <div class="ld-pct-num" id="ldPctNum">0<span>%</span></div>
-          <div class="ld-pct-label" id="loaderBarLabel">Initializing...</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Bottom master progress bar — full width -->
-    <div class="ld-master-bar">
-      <div class="ld-master-fill" id="loaderBarFill"></div>
-      <div class="ld-master-shimmer"></div>
-    </div>
-
-    <!-- Bottom strip -->
-    <div class="ld-footer-strip">
-      <span>FACILITY: ZENNI USA OPTICAL LAB</span>
-      <span>MODULE: PICKING FLOOR WIP MONITOR v2.1</span>
-      <span>STATUS: <span id="ldFooterStatus" style="color:var(--cyan)">BOOTING</span></span>
-    </div>
-
-  </div>
-
-  <div class="scan-line"></div>
-
-  <div class="data-ticker">
-    <div class="ticker-inner" id="tickerInner">
-      <span>ZENNI LAB &nbsp;&middot;&nbsp; PICKING FLOOR WIP MONITOR &nbsp;&middot;&nbsp; <em>LIVE</em></span>
-      <span>SF Productive: <b id="tk-sf">--</b></span>
-      <span>FSV Productive: <b id="tk-fsv">--</b></span>
-      <span>Breakage Count: <b id="tk-brk">--</b></span>
-      <span>Replenishment Count: <b id="tk-rep">--</b></span>
-      <span>Total WIP: <em id="tk-total">--</em></span>
-      <span>Active Lines: <b id="tk-lines">--</b></span>
-
-      <span>ZENNI LAB &nbsp;&middot;&nbsp; PICKING FLOOR WIP MONITOR &nbsp;&middot;&nbsp; <em>LIVE</em></span>
-      <span>SF Productive: <b id="tk-sf2">--</b></span>
-      <span>FSV Productive: <b id="tk-fsv2">--</b></span>
-      <span>Breakage Count: <b id="tk-brk2">--</b></span>
-      <span>Replenishment Count: <b id="tk-rep2">--</b></span>
-      <span>Total WIP: <em id="tk-total2">--</em></span>
-      <span>Active Lines: <b id="tk-lines2">--</b></span>
-    </div>
-  </div>
-
-  <div class="bg-grid"></div>
-  <div class="orb orb-a"></div>
-  <div class="orb orb-b"></div>
-  <div class="orb orb-c"></div>
-
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="side-logo">
-        <div class="cube-icon">▦</div>
-      </div>
-
-      <nav class="side-nav">
-        <button class="side-link active" type="button" data-tab="command-center">
-          <span>⌘</span>
-          <b>Process Flow</b>
-        </button>
-
-        <button class="side-link" type="button" data-tab="queues">
-          <span>☷</span>
-          <b>Queues</b>
-        </button>
-
-        <button class="side-link" type="button" data-tab="activity">
-          <span>◌</span>
-          <b>Activity Log</b>
-        </button>
-
-
-        <button class="side-link" type="button" data-tab="operators">
-          <span>👤</span>
-          <b>Operator Hourly Peformance</b>
-        </button>
-
-        <button class="side-link" type="button" data-tab="personal">
-          <span>⚙</span>
-          <b>JPH Setup</b>
-        </button>
-
-        <button class="side-link" type="button" data-tab="reports">
-          <span>▣</span>
-          <b>Reports</b>
-        </button>
-      </nav>
-
-      <div class="system-card">
-        <div class="sys-title">System Status</div>
-        <div class="sys-sub" id="sideSystemText">Connecting...</div>
-        <div class="radar"><span></span></div>
-      </div>
-    </aside>
-
-    <main class="main">
-      <header class="header">
-        <div>
-          <div class="title-row">
-            <button class="back-btn" type="button" onclick="window.location.href='index.html'" title="Back to Dashboard">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M19 12H5M12 5l-7 7 7 7"/>
-              </svg>
+<!-- ── LOADING SCREEN ── -->
+<div class="loader-screen" id="loaderScreen">
+<!-- Horizontal sweep lines — industrial feel -->
+<div class="ld-sweep-a"></div>
+<div class="ld-sweep-b"></div>
+<!-- Top bar — facility identity -->
+<div class="ld-topbar">
+<div class="ld-topbar-left">
+<span class="ld-cube">▦</span>
+<div>
+<div class="ld-facility">ZENNI USA · OPTICAL MANUFACTURING</div>
+<div class="ld-station">PICKING FLOOR — WIP MONITOR</div>
+</div>
+</div>
+<div class="ld-topbar-right">
+<span class="ld-live-dot"></span>
+<span class="ld-clock" id="loaderTime">--:--:--</span>
+</div>
+</div>
+<!-- Main terminal block -->
+<div class="ld-terminal">
+<!-- Left: boot log stream -->
+<div class="ld-log-panel">
+<div class="ld-log-title">// SYSTEM BOOT LOG</div>
+<div class="ld-log-body" id="ldLogBody">
+<div class="ld-log-line" style="animation-delay:.1s"><span class="ld-tag ok">[  OK  ]</span> Initializing picking floor monitor...</div>
+<div class="ld-log-line" style="animation-delay:.4s"><span class="ld-tag ok">[  OK  ]</span> Loading UI components</div>
+<div class="ld-log-line" style="animation-delay:.7s"><span class="ld-tag ok">[  OK  ]</span> Establishing API connection</div>
+<div class="ld-log-line" style="animation-delay:1.0s"><span class="ld-tag wait">[ WAIT ]</span> Syncing WIP, activity, and operator intelligence...</div>
+<div class="ld-log-line ld-log-cursor" id="ldCursorLine" style="animation-delay:1.3s">
+<span class="ld-tag pend">[ PEND ]</span> <span id="ldCursorText">Preparing Picking dashboard</span><span class="ld-blink">_</span>
+</div>
+</div>
+</div>
+<!-- Right: system status panels -->
+<div class="ld-status-panel">
+<div class="ld-status-title">// SUBSYSTEM STATUS</div>
+<div class="ld-status-row" id="lc-api">
+<div class="ld-status-name">LIVE API</div>
+<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-api"></div></div>
+<div class="ld-status-val" id="lsv-api">STANDBY</div>
+</div>
+<div class="ld-status-row" id="lc-wip">
+<div class="ld-status-name">WIP DATA</div>
+<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-wip"></div></div>
+<div class="ld-status-val" id="lsv-wip">STANDBY</div>
+</div>
+<div class="ld-status-row" id="lc-movement">
+<div class="ld-status-name">MOVEMENT CHK</div>
+<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-movement"></div></div>
+<div class="ld-status-val" id="lsv-movement">STANDBY</div>
+</div>
+<div class="ld-status-row" id="lc-stats">
+<div class="ld-status-name">DAILY STATS</div>
+<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-stats"></div></div>
+<div class="ld-status-val" id="lsv-stats">STANDBY</div>
+</div>
+<!-- Big progress readout -->
+<div class="ld-pct-block">
+<div class="ld-pct-num" id="ldPctNum">0<span>%</span></div>
+<div class="ld-pct-label" id="loaderBarLabel">Initializing...</div>
+</div>
+</div>
+</div>
+<!-- Bottom master progress bar — full width -->
+<div class="ld-master-bar">
+<div class="ld-master-fill" id="loaderBarFill"></div>
+<div class="ld-master-shimmer"></div>
+</div>
+<!-- Bottom strip -->
+<div class="ld-footer-strip">
+<span>FACILITY: ZENNI USA OPTICAL LAB</span>
+<span>MODULE: PICKING FLOOR WIP MONITOR v2.1</span>
+<span>STATUS: <span id="ldFooterStatus" style="color:var(--cyan)">BOOTING</span></span>
+</div>
+</div>
+<div class="scan-line"></div>
+<div class="data-ticker">
+<div class="ticker-inner" id="tickerInner">
+<span>ZENNI LAB  ·  PICKING FLOOR WIP MONITOR  ·  <em>LIVE</em></span>
+<span>SF Productive: <b id="tk-sf">--</b></span>
+<span>FSV Productive: <b id="tk-fsv">--</b></span>
+<span>Breakage Count: <b id="tk-brk">--</b></span>
+<span>Replenishment Count: <b id="tk-rep">--</b></span>
+<span>Total WIP: <em id="tk-total">--</em></span>
+<span>Active Lines: <b id="tk-lines">--</b></span>
+<span>ZENNI LAB  ·  PICKING FLOOR WIP MONITOR  ·  <em>LIVE</em></span>
+<span>SF Productive: <b id="tk-sf2">--</b></span>
+<span>FSV Productive: <b id="tk-fsv2">--</b></span>
+<span>Breakage Count: <b id="tk-brk2">--</b></span>
+<span>Replenishment Count: <b id="tk-rep2">--</b></span>
+<span>Total WIP: <em id="tk-total2">--</em></span>
+<span>Active Lines: <b id="tk-lines2">--</b></span>
+</div>
+</div>
+<div class="bg-grid"></div>
+<div class="orb orb-a"></div>
+<div class="orb orb-b"></div>
+<div class="orb orb-c"></div>
+<div class="app-shell">
+<aside class="sidebar">
+<div class="side-logo">
+<div class="cube-icon">▦</div>
+</div>
+<nav class="side-nav">
+<button class="side-link active" data-tab="command-center" type="button">
+<span>⌘</span>
+<b>Command Overview</b>
+</button>
+<button class="side-link" data-tab="queues" type="button">
+<span>☷</span>
+<b>Process Flow</b>
+</button>
+<button class="side-link" data-tab="activity" type="button">
+<span>◌</span>
+<b>Activity Log</b>
+</button>
+<button class="side-link" data-tab="operators" type="button">
+<span>👤</span>
+<b>Operator Performance</b>
+</button>
+<button class="side-link" data-tab="personal" type="button">
+<span>⚙</span>
+<b>JPH Setup</b>
+</button>
+<button class="side-link" data-tab="reports" type="button">
+<span>▣</span>
+<b>Reports</b>
+</button>
+</nav>
+<div class="system-card">
+<div class="sys-title">System Status</div>
+<div class="sys-sub" id="sideSystemText">Connecting...</div>
+<div class="radar"><span></span></div>
+</div>
+</aside>
+<main class="main">
+<header class="header">
+<div>
+<div class="title-row">
+<button class="back-btn" onclick="window.location.href='index.html'" title="Back to Dashboard" type="button">
+<svg fill="none" height="14" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="14">
+<path d="M19 12H5M12 5l-7 7 7 7"></path>
+</svg>
               Dashboard
             </button>
-
-            <h1>Picking Dashboard</h1>
-
-            <button class="live-pill" id="livePill" onclick="fetchAll(true)" type="button">
-              <span id="liveDot"></span>
-              <b id="liveText">LOADING</b>
-            </button>
-          </div>
-
-          <p>Production · Optical · Zenni Lab — Real-time picking floor status</p>
-        </div>
-
-        <div class="header-right">
-          <div class="pulse-line"></div>
-          <div class="last-updated">
-            <span>Last Updated</span>
-            <strong id="lastUpdated">--</strong>
-          </div>
-        </div>
-      </header>
-
-      <!-- TAB: Command Center -->
-      <div class="tab-content" id="tab-command-center">
-
-        <section class="kpi-strip">
-          <article class="kpi-card blue">
-            <div class="kpi-icon">▦</div>
-            <div>
-              <span>Total Picking WIP</span>
-              <strong id="kpiTotalWip">0</strong>
-              <small>Items currently in process</small>
+<h1>Picking Dashboard</h1>
+<button class="live-pill" id="livePill" onclick="fetchAll(true)" type="button">
+<span id="liveDot"></span>
+<b id="liveText">LOADING</b>
+</button>
+</div>
+<p>Production · Optical · Zenni Lab</p>
+</div>
+<div class="header-right">
+<div class="pulse-line"></div>
+<div class="last-updated">
+<span>Last Updated</span>
+<strong id="lastUpdated">--</strong>
+</div>
+</div>
+</header>
+<!-- TAB: Command Center -->
+<div class="tab-content" id="tab-command-center">
+<section class="command-hero">
+<div class="command-hero-copy">
+<span class="command-eyebrow">Live Picking Intelligence</span>
+<h2>Overview</h2>
+</div>
+</section>
+<section class="kpi-strip command-kpi-strip">
+<article class="kpi-card blue">
+<div class="kpi-icon">▦</div>
+<div>
+<span>Total Picking WIP</span>
+<strong id="kpiTotalWip">0</strong>
+<small>Items currently in process</small>
+</div>
+<svg class="spark" viewbox="0 0 100 36">
+<polyline points="0,28 12,27 20,30 31,20 43,26 55,13 68,21 82,4 100,14"></polyline>
+</svg>
+</article>
+<article class="kpi-card green">
+<div class="kpi-icon">SF</div>
+<div>
+<span>SF Productive Today</span>
+<strong id="kpiSFProductive">0</strong>
+<small>Total Surface Scan &amp; Verify</small>
+</div>
+<div class="mini-bars"><i></i><i></i><i></i><i></i></div>
+</article>
+<article class="kpi-card orange">
+<div class="kpi-icon">FSV</div>
+<div>
+<span>FSV Productive Today</span>
+<strong id="kpiFSVProductive">0</strong>
+<small>Total Finish Scan &amp; Verify</small>
+</div>
+<svg class="spark orange-spark" viewbox="0 0 100 36">
+<polyline points="0,29 12,30 20,24 31,27 43,18 55,24 68,9 82,20 100,15"></polyline>
+</svg>
+</article>
+<article class="kpi-card yellow">
+<div class="kpi-icon">FO</div>
+<div>
+<span>Frame Only Productive</span>
+<strong id="kpiFrameOnlyProductive">0</strong>
+<small>Total Frame Only Scan &amp; Verify</small>
+</div>
+<div class="mini-bars yellow-bars"><i></i><i></i><i></i><i></i></div>
+</article>
+<article class="kpi-card purple">
+<div class="kpi-icon">BR</div>
+<div>
+<span>Breakage Count Today</span>
+<strong id="kpiBreakageCount">0</strong>
+<small>Drops from Breakage to Picking</small>
+</div>
+<div class="mini-bars purple-bars"><i></i><i></i><i></i><i></i></div>
+</article>
+<article class="kpi-card teal">
+<div class="kpi-icon">RP</div>
+<div>
+<span>Replenishment Count</span>
+<strong id="kpiReplenishmentCount">0</strong>
+<small>Drops from Replenishment</small>
+</div>
+</article>
+</section>
+<section class="wip-split-strip">
+<article class="wip-split-card clean">
+<div class="split-icon">PK</div>
+<div>
+<span>Picking WIP</span>
+<strong id="kpiPickingWipSplit">0</strong>
+<small>Pickroom WIP</small>
+</div>
+</article>
+<article class="wip-split-card inventory">
+<div class="split-icon">INV</div>
+<div>
+<span>Inventory Department WIP</span>
+<strong id="kpiInventoryWip">0</strong>
+<small>Inventory/Picking WIP</small>
+</div>
+</article>
+<article class="wip-split-card scan">
+<div class="split-icon">SV</div>
+<div>
+<span>Scan Verify WIP</span>
+<strong id="kpiScanVerifyWip">0</strong>
+<small>SF + FSV + Frame Only WIP</small>
+</div>
+</article>
+</section>
+<section class="pick-flow-command">
+<div class="pick-flow-head">
+<div>
+<span class="command-eyebrow">Operational Flow</span>
+<h2>Picking Process Flow</h2>
+</div>
+<div class="flow-health-pill">
+<span></span>
+              Live station map
             </div>
-            <svg class="spark" viewBox="0 0 100 36">
-              <polyline points="0,28 12,27 20,30 31,20 43,26 55,13 68,21 82,4 100,14"/>
-            </svg>
-          </article>
-
-          <article class="kpi-card green">
-            <div class="kpi-icon">SF</div>
-            <div>
-              <span>SF Productive Today</span>
-              <strong id="kpiSFProductive">0</strong>
-              <small>Total Surface Scan & Verify</small>
-            </div>
-            <div class="mini-bars"><i></i><i></i><i></i><i></i></div>
-          </article>
-
-          <article class="kpi-card orange">
-            <div class="kpi-icon">FSV</div>
-            <div>
-              <span>FSV Productive Today</span>
-              <strong id="kpiFSVProductive">0</strong>
-              <small>Total Finish Scan & Verify</small>
-            </div>
-            <svg class="spark orange-spark" viewBox="0 0 100 36">
-              <polyline points="0,29 12,30 20,24 31,27 43,18 55,24 68,9 82,20 100,15"/>
-            </svg>
-          </article>
-
-          <article class="kpi-card purple">
-            <div class="kpi-icon">BR</div>
-            <div>
-              <span>Breakage Count Today</span>
-              <strong id="kpiBreakageCount">0</strong>
-              <small>Drops from Breakage to Picking</small>
-            </div>
-            <div class="mini-bars purple-bars"><i></i><i></i><i></i><i></i></div>
-          </article>
-
-          <article class="kpi-card teal">
-            <div class="kpi-icon">RP</div>
-            <div>
-              <span>Replenishment Count</span>
-              <strong id="kpiReplenishmentCount">0</strong>
-              <small>Drops from Replenishment</small>
-            </div>
-          </article>
-        </section>
-
-        <section class="wip-split-strip">
-          <article class="wip-split-card clean">
-            <div class="split-icon">PK</div>
-            <div>
-              <span>Picking WIP</span>
-              <strong id="kpiPickingWipSplit">0</strong>
-              <small>Pickroom WIP</small>
-            </div>
-          </article>
-
-          <article class="wip-split-card inventory">
-            <div class="split-icon">INV</div>
-            <div>
-              <span>Inventory Department WIP</span>
-              <strong id="kpiInventoryWip">0</strong>
-              <small>Inventory/Picking WIP</small>
-            </div>
-          </article>
-      
-        </section>
-
-        <!-- MOVEMENT CHECK PANEL -->
-        <section class="panel movement-panel">
-          <div class="panel-head">            
-            <small id="movementStatus">LOADING</small>
-          </div>
-
-          <div class="movement-banner" id="movementMessage">
-            Waiting for movement comparison...
-          </div>
-
-          <div class="movement-table">
-            <div class="movement-head">
-              <span>Station</span>
-              <span>Previous</span>
-              <span>Current</span>
-              <span>Difference</span>
-              <span>Type</span>
-            </div>
-            <div id="movementRows"></div>
-          </div>
-        </section>
-
-        <section class="dashboard-grid">
-          <div class="left-stack">
-            <section class="panel completion-panel">
-              <div class="panel-head">
-                <h2><span>◎</span> Daily Picking Metrics <em>(Productivity + Record Counts)</em></h2>
-                <button class="view-btn" type="button" onclick="fetchAll(true)">Refresh ›</button>
-              </div>
-
-              <div class="tracking-table">
-                <div class="tracking-head">
-                  <span>Metric</span>
-                  <span>Count Today</span>
-                  <span>Current WIP</span>
-                  <span>Metric Type</span>
-                  <span>Status</span>
-                </div>
-                <div id="trackingRows" class="tracking-rows"></div>
-              </div>
-            </section>
-
-            <section class="panel full-table-panel">
-              <div class="panel-head">
-                <h2><span>▤</span> Full WIP Breakdown</h2>
-                <small id="tableMeta">-- rows</small>
-              </div>
-
-              <div class="wip-table">
-                <div class="wip-head">
-                  <span>Picking Type</span>
-                  <span>Department</span>
-                  <span>WIP Count</span>
-                  <span>Last Updated</span>
-                </div>
-                <div id="wipRows"></div>
-              </div>
-            </section>
-          </div>
-
-          <aside class="right-stack">
-            <section class="panel donut-panel">
-              <h2>WIP Distribution</h2>
-              <div class="donut-layout">
-                <div class="donut" id="donutChart">
-                  <div>
-                    <span>Total</span>
-                    <strong id="donutTotal">0</strong>
-                    <small>WIP</small>
-                  </div>
-                </div>
-                <div class="legend" id="wipLegend"></div>
-              </div>
-            </section>
-
-            <section class="panel bar-panel">
-              <h2>Queue Counts <em>(Top Queues)</em></h2>
-              <div class="bar-chart" id="queueBars"></div>
-            </section>
-
-            <section class="focus-card">
-              <div class="focus-icon">◎</div>
-              <div>
-                <span>Top Focus</span>
-                <strong id="focusTitle">--</strong>
-                <p id="focusText">Waiting for live data...</p>
-              </div>
-              <div class="chevrons">›››</div>
-            </section>
-          </aside>
-        </section>
-      </div>
-
-      <!-- TAB: Queues -->
-      <div class="tab-content tab-hidden" id="tab-queues">
-        <section class="kpi-strip q-kpi-strip">
-          <article class="kpi-card blue">
-            <div class="kpi-icon">☷</div>
-            <div>
-              <span>Total Queues</span>
-              <strong id="qTabTotalQueues">0</strong>
-              <small>Active picking types</small>
-            </div>
-          </article>
-
-          <article class="kpi-card orange">
-            <div class="kpi-icon">▦</div>
-            <div>
-              <span>Total WIP</span>
-              <strong id="qTabTotalWip">0</strong>
-              <small>Across all queues</small>
-            </div>
-          </article>
-
-          <article class="kpi-card green">
-            <div class="kpi-icon">↑</div>
-            <div>
-              <span>Largest Queue</span>
-              <strong id="qTabLargest">--</strong>
-              <small id="qTabLargestName">--</small>
-            </div>
-          </article>
-
-          <article class="kpi-card purple">
-            <div class="kpi-icon">◎</div>
-            <div>
-              <span>Empty Queues</span>
-              <strong id="qTabEmpty">0</strong>
-              <small>At zero WIP</small>
-            </div>
-          </article>
-        </section>
-
-        <div class="q-grid">
-          <section class="panel q-cards-panel">
-            <div class="panel-head">
-              <h2><span>☷</span> All Queue Counts</h2>
-              <button class="view-btn" type="button" onclick="fetchAll(true)">Refresh ›</button>
-            </div>
-            <div id="queueCardGrid" class="queue-card-grid"></div>
-          </section>
-
-          <section class="panel q-chart-panel">
-            <div class="panel-head">
-              <h2><span>▤</span> WIP by Queue</h2>
-              <small id="qChartMeta">--</small>
-            </div>
-            <div class="q-bar-wrap" id="queueChartBars"></div>
-          </section>
-        </div>
-
-        <section class="panel q-table-panel">
-          <div class="panel-head">
-            <h2><span>▤</span> Full Queue Detail</h2>
-            <small id="qTableMeta">-- rows</small>
-          </div>
-
-          <div class="wip-table">
-            <div class="wip-head" style="grid-template-columns:1.8fr .9fr 1.1fr .8fr 1.25fr">
-              <span>Queue / Picking Type</span>
-              <span>Department</span>
-              <span>WIP Count</span>
-              <span>Priority</span>
-              <span>Last Updated</span>
-            </div>
-            <div id="queueTableRows"></div>
-          </div>
-        </section>
-      </div>
-
-      <!-- TAB: Activity Log -->
-      <div class="tab-content tab-hidden" id="tab-activity">
-        <section class="kpi-strip">
-          <article class="kpi-card blue">
-            <div class="kpi-icon">SF</div>
-            <div>
-              <span>SF Productive</span>
-              <strong id="actSFProductive">0</strong>
-              <small>Total Surface Scan & Verify</small>
-            </div>
-          </article>
-
-          <article class="kpi-card green">
-            <div class="kpi-icon">FSV</div>
-            <div>
-              <span>FSV Productive</span>
-              <strong id="actFSVProductive">0</strong>
-              <small>Total Finish Scan & Verify</small>
-            </div>
-          </article>
-
-          <article class="kpi-card orange">
-            <div class="kpi-icon">BR</div>
-            <div>
-              <span>Breakage Count</span>
-              <strong id="actBreakageCount">0</strong>
-              <small>Daily record count</small>
-            </div>
-          </article>
-
-          <article class="kpi-card purple">
-            <div class="kpi-icon">RP</div>
-            <div>
-              <span>Replenishment Count</span>
-              <strong id="actReplenishmentCount">0</strong>
-              <small>Daily record count</small>
-            </div>
-          </article>
-        </section>
-
-        <section class="panel act-log-panel">
-          <div class="panel-head">
-            <h2><span>◌</span> Daily Metric Log</h2>
-            <small id="actLogMeta">Backend daily activity summary</small>
-          </div>
-
-          <div class="act-log-head">
-            <span>Metric</span>
-            <span>Type</span>
-            <span>Current Count</span>
-            <span>Source</span>
-            <span>Status</span>
-            <span>Updated</span>
-            <span>Value</span>
-          </div>
-
-          <div id="actLogRows" class="act-log-body"></div>
-        </section>
-      </div>
+</div>
+<div class="pick-flow-grid">
+<article class="flow-control-card sf-control">
+<div class="flow-card-top">
+<div>
+<small>Lens Picking</small>
+<h3>Surface Scan Route</h3>
+</div>
+<b class="route-badge sf">SF</b>
+</div>
+<div class="route-chain">
+<div class="route-node input">
+<span>Queue Source</span>
+<strong id="flowOutSurface">0</strong>
+<em>Out of Surface Queue</em>
+</div>
+<div class="route-link"><i></i></div>
+<div class="route-node scan active">
+<span>Active Scan</span>
+<strong id="flowSfWip">0</strong>
+<em>SF Scan &amp; Verify</em>
+</div>
+<div class="route-link"><i></i></div>
+<div class="route-node output">
+<span>Destination</span>
+<strong>Surface</strong>
+<em>Sent to Surface Unbox</em>
+</div>
+</div>
+</article>
+<article class="flow-control-card fsv-control">
+<div class="flow-card-top">
+<div>
+<small>Lens Picking</small>
+<h3>Finish Scan Route</h3>
+</div>
+<b class="route-badge fsv">FSV</b>
+</div>
+<div class="route-chain">
+<div class="route-node input">
+<span>Queue Source</span>
+<strong id="flowOutFinish">0</strong>
+<em>Out of Finish Queue</em>
+</div>
+<div class="route-link"><i></i></div>
+<div class="route-node scan active amber">
+<span>Active Scan</span>
+<strong id="flowFsvWip">0</strong>
+<em>FSV Scan &amp; Verify</em>
+</div>
+<div class="route-link"><i></i></div>
+<div class="route-node output">
+<span>Destination</span>
+<strong>Finish</strong>
+<em>Sent to Finish Unbox</em>
+</div>
+</div>
+</article>
+</div>
+<div class="exception-rail">
+<article class="exception-card frame-only">
+<div class="exception-icon">FO</div>
+<div>
+<span>Frame Only Flow</span>
+<strong id="flowFrameOnlyWip">0</strong>
+<small>Frame Only Scan &amp; Verify WIP</small>
+</div>
+<div class="exception-path">Frame-only route</div>
+</article>
+<article class="exception-card breakage-card">
+<div class="exception-icon">BR</div>
+<div>
+<span>Recovery Queue</span>
+<strong id="flowBreakage">0</strong>
+<small>Breakage to Picking</small>
+</div>
+<div class="exception-path">Picking recovery</div>
+</article>
+<article class="exception-card replenish-card">
+<div class="exception-icon">RP</div>
+<div>
+<span>Supply Recovery</span>
+<strong id="flowReplenishment">0</strong>
+<small>Replenishment</small>
+</div>
+<div class="exception-path">Supply recovery</div>
+</article>
+</div>
+</section>
+<!-- MOVEMENT CHECK PANEL -->
 
 
-      <!-- TAB: Operator Activity -->
-      <div class="tab-content tab-hidden" id="tab-operators">
-        <section class="op-hero-panel">
-          <div class="op-hero-copy">
-            <span class="op-eyebrow">Live Operator Intelligence</span>
-            <h2>Picking Operator Activity</h2>
-            <p>Operator output by station, peak hour, and hourly production rhythm. FSV activity is displayed as <strong>FSV Scan & Verify</strong>.</p>
-          </div>
+</div>
+<!-- TAB: Queues -->
+<div class="tab-content tab-hidden" id="tab-queues">
+<section class="kpi-strip q-kpi-strip">
+<article class="kpi-card blue">
+<div class="kpi-icon">☷</div>
+<div>
+<span>Total Queues</span>
+<strong id="qTabTotalQueues">0</strong>
+<small>Active picking types</small>
+</div>
+</article>
+<article class="kpi-card orange">
+<div class="kpi-icon">▦</div>
+<div>
+<span>Total WIP</span>
+<strong id="qTabTotalWip">0</strong>
+<small>Across all queues</small>
+</div>
+</article>
+<article class="kpi-card green">
+<div class="kpi-icon">↑</div>
+<div>
+<span>Largest Queue</span>
+<strong id="qTabLargest">--</strong>
+<small id="qTabLargestName">--</small>
+</div>
+</article>
+<article class="kpi-card purple">
+<div class="kpi-icon">◎</div>
+<div>
+<span>Empty Queues</span>
+<strong id="qTabEmpty">0</strong>
+<small>At zero WIP</small>
+</div>
+</article>
+</section>
+<div class="q-grid">
+<section class="panel q-cards-panel">
+<div class="panel-head">
+<h2><span>☷</span> All Queue Counts</h2>
+<button class="view-btn" onclick="fetchAll(true)" type="button">Refresh ›</button>
+</div>
+<div class="queue-card-grid" id="queueCardGrid"></div>
+</section>
+<section class="panel q-chart-panel">
+<div class="panel-head">
+<h2><span>▤</span> WIP by Queue</h2>
+<small id="qChartMeta">--</small>
+</div>
+<div class="q-bar-wrap" id="queueChartBars"></div>
+</section>
+</div>
+<section class="panel q-table-panel">
+<div class="panel-head">
+<h2><span>▤</span> Full Queue Detail</h2>
+<small id="qTableMeta">-- rows</small>
+</div>
+<div class="wip-table">
+<div class="wip-head" style="grid-template-columns:1.8fr .9fr 1.1fr .8fr 1.25fr">
+<span>Queue / Picking Type</span>
+<span>Department</span>
+<span>WIP Count</span>
+<span>Priority</span>
+<span>Last Updated</span>
+</div>
+<div id="queueTableRows"></div>
+</div>
+</section>
+</div>
+<!-- TAB: Activity Log -->
+<div class="tab-content tab-hidden" id="tab-activity">
+<section class="kpi-strip">
+<article class="kpi-card blue">
+<div class="kpi-icon">SF</div>
+<div>
+<span>SF Productive</span>
+<strong id="actSFProductive">0</strong>
+<small>Total Surface Scan &amp; Verify</small>
+</div>
+</article>
+<article class="kpi-card green">
+<div class="kpi-icon">FSV</div>
+<div>
+<span>FSV Productive</span>
+<strong id="actFSVProductive">0</strong>
+<small>Total Finish Scan &amp; Verify</small>
+</div>
+</article>
+<article class="kpi-card orange">
+<div class="kpi-icon">BR</div>
+<div>
+<span>Breakage Count</span>
+<strong id="actBreakageCount">0</strong>
+<small>Daily record count</small>
+</div>
+</article>
+<article class="kpi-card purple">
+<div class="kpi-icon">RP</div>
+<div>
+<span>Replenishment Count</span>
+<strong id="actReplenishmentCount">0</strong>
+<small>Daily record count</small>
+</div>
+</article>
+</section>
+<section class="panel movement-panel activity-movement-panel">
+<div class="panel-head">
+<h2><span>↔</span> Movement Check</h2>
+<small id="movementStatus">LOADING</small>
+</div>
+<div class="movement-banner" id="movementMessage">
+    Waiting for movement comparison...
+  </div>
+<div class="movement-table">
+<div class="movement-head">
+<span>Station</span>
+<span>Previous</span>
+<span>Current</span>
+<span>Difference</span>
+<span>Type</span>
+</div>
+<div id="movementRows"></div>
+</div>
+</section>
 
-          <div class="op-hero-status">
-            <div class="op-live-orb"><span></span></div>
-            <div>
-              <strong id="operatorHeroStatus">ONLINE</strong>
-              <small id="operatorDataNote">Waiting for operator data...</small>
-            </div>
-          </div>
-        </section>
-
-        <section class="op-command-strip">
-          <article class="op-command-card cyan">
-            <span>Active Operators</span>
-            <strong id="opTotalOperators">0</strong>
-            <small>Operators with activity today</small>
-          </article>
-
-          <article class="op-command-card green">
-            <span>Total Operator Jobs</span>
-            <strong id="opTotalJobs">0</strong>
-            <small>SF + FSV Scan & Verify</small>
-          </article>
-
-          <article class="op-command-card orange">
-            <span>Top Operator</span>
-            <strong id="opTopOperatorTotal">0</strong>
-            <small id="opTopOperatorName">--</small>
-          </article>
-
-          <article class="op-command-card purple">
-            <span>Peak Hour</span>
-            <strong id="opPeakHourTotal">0</strong>
-            <small id="opPeakHourName">--</small>
-          </article>
-
-          <article class="op-command-card steel">
-            <span>Average / Operator</span>
-            <strong id="opAvgPerOperator">0</strong>
-            <small>Jobs per active operator</small>
-          </article>
-        </section>
-
-        <section class="panel op-station-scoreboard-panel">
-          <div class="panel-head op-panel-head">
-            <h2><span>▣</span> Scan & Verify Scorecards</h2>
-            <div class="op-score-actions">
-              <small id="operatorScorecardMeta">Click a station to focus operator activity</small>
-              <button class="view-btn" type="button" onclick="setOperatorStationView('all')">View All</button>
-            </div>
-          </div>
-
-          <div class="op-station-scorecards" id="operatorStationScorecards">
-            <article class="op-station-scorecard loading">
-              <span>Loading station activity...</span>
-            </article>
-          </div>
-        </section>
-
-        <section class="op-layout-grid">
-          <div class="op-main-stack">
-            <section class="panel op-leaderboard-panel">
-              <div class="panel-head op-panel-head">
-                <h2><span>★</span> Operator Leaderboard</h2>
-                <small id="operatorLeaderboardMeta">Top performers</small>
-              </div>
-              <div id="operatorLeaderboardCards" class="op-leaderboard-cards"></div>
-            </section>
-
-            <section class="panel op-control-panel pro">
-              <div class="panel-head op-panel-head">
-                <h2><span>⌁</span> Operator Controls</h2>
-                <button class="view-btn" type="button" onclick="fetchAll(true)">Refresh ›</button>
-              </div>
-
-              <div class="op-controls pro">
-                <label>
+<section class="panel act-log-panel">
+<div class="panel-head">
+<h2><span>◌</span> Daily Metric Log</h2>
+<small id="actLogMeta">Backend daily activity summary</small>
+</div>
+<div class="act-log-head">
+<span>Metric</span>
+<span>Type</span>
+<span>Current Count</span>
+<span>Source</span>
+<span>Status</span>
+<span>Updated</span>
+<span>Value</span>
+</div>
+<div class="act-log-body" id="actLogRows"></div>
+</section>
+</div>
+<!-- TAB: Operator Activity -->
+<div class="tab-content tab-hidden" id="tab-operators">
+<section class="op-hero-panel">
+<div class="op-hero-copy">
+<span class="op-eyebrow">Live Operator</span>
+<h2>Picking Operator Performance</h2>
+</div>
+<div class="op-hero-status">
+<div class="op-live-orb"><span></span></div>
+<div>
+<strong id="operatorHeroStatus">ONLINE</strong>
+<small id="operatorDataNote">Waiting for operator data...</small>
+</div>
+</div>
+</section>
+<section class="op-command-strip">
+<article class="op-command-card cyan">
+<span>Active Operators</span>
+<strong id="opTotalOperators">0</strong>
+<small>Operators with activity today</small>
+</article>
+<article class="op-command-card green">
+<span>Total Operator Jobs</span>
+<strong id="opTotalJobs">0</strong>
+<small>SF + FSV Scan &amp; Verify</small>
+</article>
+<article class="op-command-card orange">
+<span>Top Operator</span>
+<strong id="opTopOperatorTotal">0</strong>
+<small id="opTopOperatorName">--</small>
+</article>
+<article class="op-command-card purple">
+<span>Peak Hour</span>
+<strong id="opPeakHourTotal">0</strong>
+<small id="opPeakHourName">--</small>
+</article>
+<article class="op-command-card steel">
+<span>Average / Operator</span>
+<strong id="opAvgPerOperator">0</strong>
+<small>Jobs per active operator</small>
+</article>
+</section>
+<section class="panel op-station-scoreboard-panel">
+<div class="panel-head op-panel-head">
+<h2><span>▣</span> Scan &amp; Verify Scorecards</h2>
+<div class="op-score-actions">
+<small id="operatorScorecardMeta">Click a station to focus operator activity</small>
+<button class="view-btn" onclick="setOperatorStationView('all')" type="button">View All</button>
+</div>
+</div>
+<div class="op-station-scorecards" id="operatorStationScorecards">
+<article class="op-station-scorecard loading">
+<span>Loading station activity...</span>
+</article>
+</div>
+</section>
+<section class="op-layout-grid">
+<div class="op-main-stack">
+<section class="panel op-leaderboard-panel">
+<div class="panel-head op-panel-head">
+<h2><span>★</span> Operator Leaderboard</h2>
+<small id="operatorLeaderboardMeta">Top performers</small>
+</div>
+<div class="op-leaderboard-cards" id="operatorLeaderboardCards"></div>
+</section>
+<section class="panel op-control-panel pro">
+<div class="panel-head op-panel-head">
+<h2><span>⌁</span> Operator Controls</h2>
+<button class="view-btn" onclick="fetchAll(true)" type="button">Refresh ›</button>
+</div>
+<div class="op-controls pro">
+<label>
                   Search Operator
-                  <input id="operatorSearch" type="search" placeholder="Type operator name..." oninput="renderOperatorActivityTab()" />
-                </label>
-
-                <label>
+                  <input id="operatorSearch" oninput="renderOperatorActivityTab()" placeholder="Type operator name..." type="search"/>
+</label>
+<label>
                   Station
                   <select id="operatorStationFilter" onchange="renderOperatorActivityTab()">
-                    <option value="all">All Stations</option>
-                  </select>
-                </label>
-
-                <label>
+<option value="all">All Stations</option>
+</select>
+</label>
+<label>
                   Sort View
                   <select id="operatorSortMode" onchange="renderOperatorActivityTab()">
-                    <option value="total">Highest Output</option>
-                    <option value="operator">Operator Name</option>
-                    <option value="station">Station</option>
-                    <option value="bestHour">Best Hour</option>
-                  </select>
-                </label>
-              </div>
-            </section>
-
-            <section class="panel op-table-panel pro">
-              <div class="panel-head op-panel-head">
-                <h2><span>▤</span> Operator Production Detail</h2>
-                <small id="operatorTableMeta">-- rows</small>
-              </div>
-
-              <div class="operator-table pro">
-                <div class="operator-head pro">
-                  <span>Operator</span>
-                  <span>Station</span>
-                  <span>Total Output</span>
-                  <span>Best Hour</span>
-                  <span>Last Active</span>
-                  <span>Hourly Trend</span>
-                  <span>Status</span>
-                </div>
-                <div id="operatorActivityRows"></div>
-              </div>
-            </section>
-          </div>
-
-          <aside class="op-side-stack">
-            <section class="panel op-selected-panel">
-              <div class="panel-head op-panel-head">
-                <h2><span>◉</span> Selected Operator Hourly Output</h2>
-                <small>Click an operator row</small>
-              </div>
-              <div id="operatorSelectedPanel" class="operator-selected-panel">
-                <div class="op-selected-empty">
-                  <span>👤</span>
-                  <strong>Select an operator</strong>
-                  <small>Click any operator name/row to view their hourly output by hour.</small>
-                </div>
-              </div>
-            </section>
-            <section class="panel op-station-panel">
-              <div class="panel-head op-panel-head">
-                <h2><span>◎</span> Station Mix</h2>
-                <small id="operatorStationMeta">Live split</small>
-              </div>
-              <div id="operatorStationMix" class="op-station-mix"></div>
-            </section>
-          </aside>
-        </section>
-      </div>
-
-
-      <!-- TAB: Personal / Hourly Performance -->
-      <div class="tab-content tab-hidden" id="tab-personal">
-        <section class="op-hero-panel personal-hero-panel">
-          <div class="op-hero-copy">
-            <span class="op-eyebrow">Target Setup · Hourly Performance</span>
-            <h2>Picking Personal Setup</h2>
-            <p>Manage SF and FSV operator JPH targets, then review hourly performance with separate station colors.</p>
-          </div>
-
-          <div class="op-hero-status personal-hero-status">
-            <div class="op-live-orb"><span></span></div>
-            <div>
-              <strong>CONFIG READY</strong>
-              <small>Local target rules are applied to operator hourly output.</small>
-            </div>
-          </div>
-        </section>
-
-
-
-        <section class="panel op-jph-config-panel">
-          <div class="panel-head op-panel-head">
-            <h2><span>⚙</span> Operator JPH Configuration</h2>
-            <small id="cfgPickingSummary">Green: 100%+ · Amber: 90%–99% · Red: below 90%</small>
-          </div>
-
-          <div class="op-jph-config-grid">
-            <article class="op-jph-config-card sf">
-              <div class="op-jph-title">
-                <span>SF</span>
-                <div>
-                  <strong>SF Scan & Verify</strong>
-                  <small>Operator hourly target</small>
-                </div>
-              </div>
-              <label>100% JPH Target
-                <input id="cfgPickingSfTarget" type="number" min="0" step="1" value="98" onchange="renderPickingJphConfigPanel()" />
-              </label>
-              <div class="op-threshold-grid">
-                <div><span>Green</span><b>≥ 100%</b></div>
-                <div><span>Amber</span><b id="cfgPickingSfAmberLabel">89–97 / hr</b></div>
-                <div><span>Red</span><b id="cfgPickingSfRedLabel">< 89 / hr</b></div>
-              </div>
-            </article>
-
-            <article class="op-jph-config-card fsv">
-              <div class="op-jph-title">
-                <span>FSV</span>
-                <div>
-                  <strong>FSV Scan & Verify</strong>
-                  <small>Operator hourly target</small>
-                </div>
-              </div>
-              <label>100% JPH Target
-                <input id="cfgPickingFsvTarget" type="number" min="0" step="1" value="72" onchange="renderPickingJphConfigPanel()" />
-              </label>
-              <div class="op-threshold-grid">
-                <div><span>Green</span><b>≥ 100%</b></div>
-                <div><span>Amber</span><b id="cfgPickingFsvAmberLabel">65–71 / hr</b></div>
-                <div><span>Red</span><b id="cfgPickingFsvRedLabel">< 65 / hr</b></div>
-              </div>
-            </article>
-
-            <article class="op-jph-config-card rules">
-              <div class="op-jph-title">
-                <span>%</span>
-                <div>
-                  <strong>Threshold Rules</strong>
-                  <small>Applied to each operator hour</small>
-                </div>
-              </div>
-              <label>Amber Starts At
-                <input id="cfgPickingAmberPct" type="number" min="1" max="100" step="1" value="90" onchange="renderPickingJphConfigPanel()" />
-              </label>
-              <div class="op-config-actions">
-                <button type="button" onclick="savePickingJphConfigFromUi()">Save Configuration</button>
-                <button type="button" class="ghost" onclick="resetPickingJphConfig()">Reset</button>
-              </div>
-              <small id="cfgPickingSaveState">Local config active</small>
-            </article>
-          </div>
-        </section>
-
-        <section class="panel personal-hourly-performance-panel">
-          <div class="panel-head op-panel-head">
-            <h2><span>◷</span> Hourly Performance</h2>
-            <div class="personal-hourly-actions">
-              <small id="personalHourlyMeta">SF cyan / FSV orange · clearer hourly readout</small>
-              <button class="personal-filter-btn active" type="button" data-personal-hourly-filter="all" onclick="setPersonalHourlyStation('all')">All</button>
-              <button class="personal-filter-btn sf" type="button" data-personal-hourly-filter="SF Scan & Verify" onclick="setPersonalHourlyStation('SF Scan & Verify')">SF</button>
-              <button class="personal-filter-btn fsv" type="button" data-personal-hourly-filter="FSV Scan & Verify" onclick="setPersonalHourlyStation('FSV Scan & Verify')">FSV</button>
-            </div>
-          </div>
-
-          <div class="personal-hourly-legend">
-            <span><i class="sf"></i> SF Scan & Verify</span>
-            <span><i class="fsv"></i> FSV Scan & Verify</span>
-            <em>Green/amber/red status still follows the target configuration above.</em>
-          </div>
-
-          <div id="personalHourlySummary" class="op-hourly-summary personal-summary"></div>
-          <div id="personalHourlyRows" class="operator-hourly-rows pro personal-hourly-rows"></div>
-        </section>
-      </div>
-
-
-      <!-- Operator Station Detail Overlay -->
-      <div class="op-detail-overlay" id="operatorStationDetailOverlay" aria-hidden="true">
-        <section class="op-detail-modal" role="dialog" aria-modal="true" aria-labelledby="opStationDetailTitle">
-          <button class="op-detail-close" type="button" onclick="closeOperatorStationDetail()" title="Close">×</button>
-
-          <header class="op-detail-header">
-            <div>
-              <div class="op-detail-eyebrow"><span></span> Station Detail</div>
-              <h2 id="opStationDetailTitle">Scan & Verify</h2>
-              <p id="opStationDetailSub">Picking operator activity by hour</p>
-            </div>
-            <div class="op-detail-status">
-              <span class="online">ONLINE</span>
-              <span id="opStationDetailScope">LIVE</span>
-            </div>
-          </header>
-
-          <div class="op-detail-actions">
-            <button type="button" class="active">Online</button>
-            <button type="button">Issue</button>
-            <button type="button">Down</button>
-            <button type="button">Clear</button>
-          </div>
-
-          <section class="op-detail-kpis">
-            <article><span>Total Output</span><strong id="opDetailTotalOutput">0</strong><small>Jobs scanned today</small></article>
-            <article><span>Operators</span><strong id="opDetailOperators">0</strong><small>Active operator rows</small></article>
-            <article><span>Peak Hour</span><strong id="opDetailPeakHour">--</strong><small id="opDetailPeakCount">0 jobs</small></article>
-            <article><span>Top Operator</span><strong id="opDetailTopOperator">--</strong><small id="opDetailTopOperatorCount">0 jobs</small></article>
-          </section>
-
-          <section class="op-detail-operator-section">
-            <div class="op-detail-section-head">
-              <div>
-                <h3>Individual Operator Output</h3>
-                <p>Operator rows are expanded by hour. JPH targets can be connected later.</p>
-              </div>
-              <label>
+<option value="total">Highest Output</option>
+<option value="operator">Operator Name</option>
+<option value="station">Station</option>
+<option value="bestHour">Best Hour</option>
+</select>
+</label>
+</div>
+</section>
+<section class="panel op-table-panel pro">
+<div class="panel-head op-panel-head">
+<h2><span>▤</span> Operator Production Detail</h2>
+<small id="operatorTableMeta">-- rows</small>
+</div>
+<div class="operator-table pro">
+<div class="operator-head pro">
+<span>Operator</span>
+<span>Station</span>
+<span>Total Output</span>
+<span>Best Hour</span>
+<span>Last Active</span>
+<span>Hourly Trend</span>
+<span>Status</span>
+</div>
+<div id="operatorActivityRows"></div>
+</div>
+</section>
+</div>
+<aside class="op-side-stack">
+<section class="panel op-selected-panel">
+<div class="panel-head op-panel-head">
+<h2><span>◉</span> Selected Operator Hourly Output</h2>
+<small>Click an operator row</small>
+</div>
+<div class="operator-selected-panel" id="operatorSelectedPanel">
+<div class="op-selected-empty">
+<span>👤</span>
+<strong>Select an operator</strong>
+<small>Click any operator name/row to view their hourly output by hour.</small>
+</div>
+</div>
+</section>
+<section class="panel op-station-panel">
+<div class="panel-head op-panel-head">
+<h2><span>◎</span> Station Mix</h2>
+<small id="operatorStationMeta">Live split</small>
+</div>
+<div class="op-station-mix" id="operatorStationMix"></div>
+</section>
+</aside>
+</section>
+</div>
+<!-- TAB: Personal / Hourly Performance -->
+<div class="tab-content tab-hidden" id="tab-personal">
+<section class="op-hero-panel personal-hero-panel">
+<div class="op-hero-copy">
+<span class="op-eyebrow">Target Setup · Hourly Performance</span>
+<h2>Picking Personal Setup</h2>
+<p>Manage SF and FSV operator JPH targets, then review hourly performance with separate station colors.</p>
+</div>
+<div class="op-hero-status personal-hero-status">
+<div class="op-live-orb"><span></span></div>
+<div>
+<strong>CONFIG READY</strong>
+<small>Local target rules are applied to operator hourly output.</small>
+</div>
+</div>
+</section>
+<section class="panel op-jph-config-panel">
+<div class="panel-head op-panel-head">
+<h2><span>⚙</span> Operator JPH Configuration</h2>
+<small id="cfgPickingSummary">Green: 100%+ · Amber: 90%–99% · Red: below 90%</small>
+</div>
+<div class="op-jph-config-grid">
+<article class="op-jph-config-card sf">
+<div class="op-jph-title">
+<span>SF</span>
+<div>
+<strong>SF Scan &amp; Verify</strong>
+<small>Operator hourly target</small>
+</div>
+</div>
+<label>100% JPH Target
+                <input id="cfgPickingSfTarget" min="0" onchange="renderPickingJphConfigPanel()" step="1" type="number" value="98"/>
+</label>
+<div class="op-threshold-grid">
+<div><span>Green</span><b>≥ 100%</b></div>
+<div><span>Amber</span><b id="cfgPickingSfAmberLabel">89–97 / hr</b></div>
+<div><span>Red</span><b id="cfgPickingSfRedLabel">&lt; 89 / hr</b></div>
+</div>
+</article>
+<article class="op-jph-config-card fsv">
+<div class="op-jph-title">
+<span>FSV</span>
+<div>
+<strong>FSV Scan &amp; Verify</strong>
+<small>Operator hourly target</small>
+</div>
+</div>
+<label>100% JPH Target
+                <input id="cfgPickingFsvTarget" min="0" onchange="renderPickingJphConfigPanel()" step="1" type="number" value="72"/>
+</label>
+<div class="op-threshold-grid">
+<div><span>Green</span><b>≥ 100%</b></div>
+<div><span>Amber</span><b id="cfgPickingFsvAmberLabel">65–71 / hr</b></div>
+<div><span>Red</span><b id="cfgPickingFsvRedLabel">&lt; 65 / hr</b></div>
+</div>
+</article>
+<article class="op-jph-config-card rules">
+<div class="op-jph-title">
+<span>%</span>
+<div>
+<strong>Threshold Rules</strong>
+<small>Applied to each operator hour</small>
+</div>
+</div>
+<label>Amber Starts At
+                <input id="cfgPickingAmberPct" max="100" min="1" onchange="renderPickingJphConfigPanel()" step="1" type="number" value="90"/>
+</label>
+<div class="op-config-actions">
+<button onclick="savePickingJphConfigFromUi()" type="button">Save Configuration</button>
+<button class="ghost" onclick="resetPickingJphConfig()" type="button">Reset</button>
+</div>
+<small id="cfgPickingSaveState">Local config active</small>
+</article>
+</div>
+</section>
+<section class="panel personal-hourly-performance-panel">
+<div class="panel-head op-panel-head">
+<h2><span>◷</span> Hourly Performance</h2>
+<div class="personal-hourly-actions">
+<small id="personalHourlyMeta">SF cyan / FSV orange · clearer hourly readout</small>
+<button class="personal-filter-btn active" data-personal-hourly-filter="all" onclick="setPersonalHourlyStation('all')" type="button">All</button>
+<button class="personal-filter-btn sf" data-personal-hourly-filter="SF Scan &amp; Verify" onclick="setPersonalHourlyStation('SF Scan &amp; Verify')" type="button">SF</button>
+<button class="personal-filter-btn fsv" data-personal-hourly-filter="FSV Scan &amp; Verify" onclick="setPersonalHourlyStation('FSV Scan &amp; Verify')" type="button">FSV</button>
+</div>
+</div>
+<div class="personal-hourly-legend">
+<span><i class="sf"></i> SF Scan &amp; Verify</span>
+<span><i class="fsv"></i> FSV Scan &amp; Verify</span>
+<em>Green/amber/red status still follows the target configuration above.</em>
+</div>
+<div class="op-hourly-summary personal-summary" id="personalHourlySummary"></div>
+<div class="operator-hourly-rows pro personal-hourly-rows" id="personalHourlyRows"></div>
+</section>
+</div>
+<!-- Operator Station Detail Overlay -->
+<div aria-hidden="true" class="op-detail-overlay" id="operatorStationDetailOverlay">
+<section aria-labelledby="opStationDetailTitle" aria-modal="true" class="op-detail-modal" role="dialog">
+<button class="op-detail-close" onclick="closeOperatorStationDetail()" title="Close" type="button">×</button>
+<header class="op-detail-header">
+<div>
+<div class="op-detail-eyebrow"><span></span> Station Detail</div>
+<h2 id="opStationDetailTitle">Scan &amp; Verify</h2>
+<p id="opStationDetailSub">Picking operator activity by hour</p>
+</div>
+<div class="op-detail-status">
+<span class="online">ONLINE</span>
+<span id="opStationDetailScope">LIVE</span>
+</div>
+</header>
+<div class="op-detail-actions">
+<button class="active" type="button">Online</button>
+<button type="button">Issue</button>
+<button type="button">Down</button>
+<button type="button">Clear</button>
+</div>
+<section class="op-detail-kpis">
+<article><span>Total Output</span><strong id="opDetailTotalOutput">0</strong><small>Jobs scanned today</small></article>
+<article><span>Operators</span><strong id="opDetailOperators">0</strong><small>Active operator rows</small></article>
+<article><span>Peak Hour</span><strong id="opDetailPeakHour">--</strong><small id="opDetailPeakCount">0 jobs</small></article>
+<article><span>Top Operator</span><strong id="opDetailTopOperator">--</strong><small id="opDetailTopOperatorCount">0 jobs</small></article>
+</section>
+<section class="op-detail-operator-section">
+<div class="op-detail-section-head">
+<div>
+<h3>Individual Operator Output</h3>
+<p>Operator rows are expanded by hour. JPH targets can be connected later.</p>
+</div>
+<label>
                 Operator Filter
                 <select id="opDetailOperatorFilter" onchange="renderOperatorStationDetailModal()">
-                  <option value="all">All operators</option>
-                </select>
-              </label>
-            </div>
+<option value="all">All operators</option>
+</select>
+</label>
+</div>
+<div class="op-detail-operator-rows" id="opDetailOperatorRows"></div>
+</section>
+</section>
+</div>
+<!-- TAB: Reports -->
+<div class="tab-content tab-hidden" id="tab-reports">
+<div class="rpt-header">
+<div>
+<h2 class="rpt-title">⬡ Executive WIP Report</h2>
+<p class="rpt-subtitle" id="rptGeneratedAt">Generated --</p>
+</div>
+<div class="rpt-actions">
+<button class="view-btn" onclick="renderReportsTab()" type="button">↻ Regenerate</button>
+<button class="rpt-print-btn" onclick="window.print()" type="button">⎙ Print / Save PDF</button>
+</div>
+</div>
+<section class="rpt-scope-note">
+<div>
+<span>Report Scope</span>
+<strong>Executive summary, live WIP snapshot, and narrative only.</strong>
+</div>
+<p>Detailed movement rows stay in Activity Log. Queue-level investigation stays in Process Flow.</p>
+</section>
 
-            <div id="opDetailOperatorRows" class="op-detail-operator-rows"></div>
-          </section>
-        </section>
-      </div>
+<section class="panel rpt-section">
+<div class="panel-head">
+<h2><span>◎</span> Executive Summary</h2>
+</div>
+<div class="rpt-kpi-grid" id="rptKpiGrid"></div>
+</section>
 
-      <!-- TAB: Reports -->
-      <div class="tab-content tab-hidden" id="tab-reports">
-        <div class="rpt-header">
-          <div>
-            <h2 class="rpt-title">⬡ Automated WIP Report</h2>
-            <p class="rpt-subtitle" id="rptGeneratedAt">Generated --</p>
-          </div>
-
-          <div class="rpt-actions">
-            <button class="view-btn" type="button" onclick="renderReportsTab()">↻ Regenerate</button>
-            <button class="rpt-print-btn" type="button" onclick="window.print()">⎙ Print / Save PDF</button>
-          </div>
-        </div>
-
-        <section class="panel rpt-section">
-          <div class="panel-head">
-            <h2><span>◎</span> Executive Summary</h2>
-          </div>
-          <div class="rpt-kpi-grid" id="rptKpiGrid"></div>
-        </section>
-
-        <section class="panel rpt-section">
-          <div class="panel-head">
-            <h2><span>◌</span> Daily Picking Metrics</h2>
-          </div>
-          <div id="rptTrackedDetail"></div>
-        </section>
-
-        <section class="panel rpt-section">
-          <div class="panel-head">
-            <h2><span>▤</span> Full WIP Snapshot</h2>
-            <small id="rptSnapshotMeta">--</small>
-          </div>
-
-          <div class="wip-table">
-            <div class="wip-head" style="grid-template-columns:1.8fr .9fr 1fr .8fr 1.4fr">
-              <span>Picking Type</span>
-              <span>Dept</span>
-              <span>WIP Count</span>
-              <span>% of Total</span>
-              <span>Last Updated</span>
-            </div>
-            <div id="rptWipTable"></div>
-          </div>
-        </section>
-
-        <section class="panel rpt-section">
-          <div class="panel-head">
-            <h2><span>◷</span> Movement Summary</h2>
-          </div>
-          <div id="rptActivitySummary"></div>
-        </section>
+<section class="panel rpt-section">
+<div class="panel-head">
+<h2><span>▤</span> Full WIP Snapshot</h2>
+<small id="rptSnapshotMeta">--</small>
+</div>
+<div class="wip-table">
+<div class="wip-head" style="grid-template-columns:1.8fr .9fr 1fr .8fr 1.4fr">
+<span>Picking Type</span>
+<span>Dept</span>
+<span>WIP Count</span>
+<span>% of Total</span>
+<span>Last Updated</span>
+</div>
+<div id="rptWipTable"></div>
+</div>
+</section>
 
 
-        <section class="panel rpt-section rpt-operator-hourly-section">
-          <div class="panel-head">
-            <h2><span>👤</span> Operator Hourly Performance</h2>
-            <small id="rptOperatorHourlyMeta">--</small>
-          </div>
-
-          <div id="rptOperatorHourlySummary" class="rpt-op-summary"></div>
-
-          <div class="rpt-op-table">
-            <div class="rpt-op-head">
-              <span>Operator</span>
-              <span>Station</span>
-              <span>Total</span>
-              <span>Best Hour</span>
-              <span>Last Active</span>
-              <span>Hourly Pattern</span>
-              <span>Status</span>
-            </div>
-            <div id="rptOperatorHourlyRows"></div>
-          </div>
-        </section>
-
-        <section class="panel rpt-section">
-          <div class="panel-head">
-            <h2><span>✦</span> Day Summary — Narrative Report</h2>
-            <small id="rptNarrativeMeta">Auto-generated</small>
-          </div>
-          <div id="rptNarrative" class="rpt-narrative"></div>
-        </section>
-      </div>
-    </main>
-  </div>
-
-  <div class="toast" id="toast">Connecting to live API...</div>
-
-  <script src="Pickwip.js"></script>
+<section class="panel rpt-section">
+<div class="panel-head">
+<h2><span>✦</span> Day Summary — Narrative Report</h2>
+<small id="rptNarrativeMeta">Auto-generated</small>
+</div>
+<div class="rpt-narrative" id="rptNarrative"></div>
+</section>
+</div>
+</main>
+</div>
+<div class="toast" id="toast">Connecting to live API...</div>
+<script src="Pickwip.js"></script>
 </body>
 </html>
