@@ -5272,258 +5272,319 @@ document.addEventListener("DOMContentLoaded", () => {
   initFinishRosterApiPanel();
   loadFinishRosterBackend({ silent: true });
 });
+
 /*******************************************************
- * CONFIGURATION — MY ACTIVE SHIFT ASSOCIATES FIX
+ * FINAL REPAIR — STOP ROSTER STACK OVERFLOW + PROFILE LOCK CONFIG
  *
- * Paste this block at the VERY BOTTOM of FinishDash.js.
+ * Paste this at the VERY BOTTOM of FinishDash.js.
  *
- * Purpose:
- * - Configuration no longer shows the full operator master.
- * - Non-LMS users only see their own active associates.
- * - Shift is locked from FINISH_USER_PROFILES ShiftGroup.
- *   Example: BHECK = Weekend, so BHECK only sees Weekend.
- * - LMS Control Center remains the only place to assign everyone.
+ * This fixes:
+ * - Maximum call stack size exceeded at loadFinishRosterBackend
+ * - Configuration showing every operator
+ * - BHECK / Weekend showing Weekday rows
+ *
+ * Important:
+ * This block intentionally replaces loadFinishRosterBackend and
+ * renderOperatorAssignmentConfigPanel with safe versions.
  *******************************************************/
 
-function getFinishProfileForUsernameFromRosterApi(username) {
-  const target = String(username || getCurrentUsername() || "")
-    .trim()
-    .toUpperCase();
-
-  return (finishRosterApiState.profiles || []).find(profile =>
-    String(profile.username || "").trim().toUpperCase() === target
-  ) || null;
-}
-
-function getMyConfigurationOwnerUsername() {
-  return String(getCurrentUsername() || "")
-    .trim()
-    .toUpperCase();
-}
-
-function getMyConfigurationShiftType() {
-  const profile = getFinishProfileForUsernameFromRosterApi(getMyConfigurationOwnerUsername());
-
-  const profileShift = String(profile?.shiftGroup || "")
-    .trim()
-    .toLowerCase();
-
-  if (profileShift === "weekend") return "Weekend";
-  return "Weekday";
-}
-
-function getMyActiveShiftRosterRows() {
-  const ownerUsername = getMyConfigurationOwnerUsername();
-  const shiftType = getMyConfigurationShiftType();
-
-  return (finishRosterApiState.roster || []).filter(row => {
-    const rowOwner = String(row.ownerUsername || "").trim().toUpperCase();
-    const rowShift = String(row.shiftType || "").trim().toLowerCase();
-    const status = String(row.activeStatus || "").trim().toLowerCase();
-
-    return (
-      rowOwner === ownerUsername &&
-      rowShift === shiftType.toLowerCase() &&
-      status === "active"
-    );
-  });
-}
-
-async function loadMyConfigurationRosterOnly(options = {}) {
-  const ownerUsername = getMyConfigurationOwnerUsername();
-  const shiftType = getMyConfigurationShiftType();
-
-  if (!ownerUsername) return [];
-
-  try {
-    const rosterPayload = await fetchFinishRosterApi("getFinishRosterControl", {
-      ownerUsername,
-      shiftType,
-      t: Date.now()
-    });
-
-    finishRosterApiState.ownerUsername = ownerUsername;
-    finishRosterApiState.shiftType = shiftType;
-    finishRosterApiState.roster = Array.isArray(rosterPayload.data) ? rosterPayload.data : [];
-
-    if (!options.silent) {
-      renderOperatorAssignmentConfigPanel();
-      renderFinishThreeLineCell();
-    }
-
-    return getMyActiveShiftRosterRows();
-  } catch (error) {
-    console.error("Could not load profile-locked Configuration roster:", error);
-    if (!options.silent) {
-      showFinishAssignmentToast(error.message || String(error));
-    }
-    return [];
+function hideLegacyOperatorCapacityPanelFinal_() {
+  const oldPanel = document.getElementById("operatorAssignmentConfigPanel");
+  if (oldPanel) {
+    oldPanel.style.display = "none";
+    oldPanel.setAttribute("aria-hidden", "true");
   }
 }
 
-function ensureOperatorAssignmentConfigPanel() {
-  if (document.getElementById("operatorAssignmentConfigPanel")) return;
+/* SAFE VERSION: no recursion, no original wrapper call */
+async function loadFinishRosterBackend(options = {}) {
+  const silent = !!options.silent;
 
-  injectOperatorAssignmentStyles?.();
+  if (!window.finishRosterApiState) {
+    console.warn("finishRosterApiState is not available yet.");
+    return;
+  }
+
+  finishRosterApiState.loading = true;
+  finishRosterApiState.lastError = "";
+  setText("finishRosterApiStatus", "Loading.");
+
+  try {
+    const currentUsername = getCurrentUsername();
+
+    if (!finishRosterApiState.ownerUsername) {
+      finishRosterApiState.ownerUsername = currentUsername;
+    }
+
+    const [profilesPayload, operatorsPayload] = await Promise.all([
+      fetchFinishRosterApi("getFinishUserProfiles", { t: Date.now() }),
+      fetchFinishRosterApi("getFinishOperatorMaster", { t: Date.now() })
+    ]);
+
+    finishRosterApiState.profiles = Array.isArray(profilesPayload.data) ? profilesPayload.data : [];
+    finishRosterApiState.operators = Array.isArray(operatorsPayload.data) ? operatorsPayload.data : [];
+
+    const currentProfile = finishRosterApiState.profiles.find(profile =>
+      String(profile.username || "").trim().toUpperCase() === currentUsername
+    );
+
+    if (!finishRosterApiState.ownerUsername || finishRosterApiState.ownerUsername === "DEFAULT") {
+      finishRosterApiState.ownerUsername = currentUsername;
+    }
+
+    const profileShift = String(currentProfile?.shiftGroup || "").trim().toLowerCase();
+    finishRosterApiState.shiftType = profileShift === "weekend" ? "Weekend" : "Weekday";
+
+    const rosterPayload = await fetchFinishRosterApi("getFinishRosterControl", {
+      ownerUsername: currentUsername,
+      shiftType: finishRosterApiState.shiftType,
+      t: Date.now()
+    });
+
+    finishRosterApiState.roster = Array.isArray(rosterPayload.data) ? rosterPayload.data : [];
+    finishRosterApiState.audit = [];
+    finishRosterApiState.ready = true;
+
+    setText("finishRosterApiStatus", "Connected");
+
+    renderFinishRosterApiPanel?.();
+    renderOperatorAssignmentConfigPanel?.();
+    updateConfigTotals?.();
+    renderFinishThreeLineCell?.();
+
+    if (!silent) {
+      showFinishAssignmentToast?.("Finish roster refreshed.");
+    }
+  } catch (error) {
+    finishRosterApiState.lastError = error.message || String(error);
+    console.error("Finish roster backend error:", error);
+    setText("finishRosterApiStatus", "Error");
+    renderFinishRosterApiPanel?.();
+    if (!silent) showFinishAssignmentToast?.(finishRosterApiState.lastError);
+  } finally {
+    finishRosterApiState.loading = false;
+    hideLegacyOperatorCapacityPanelFinal_();
+  }
+}
+
+/* LMS Control Center can still load selected profile separately */
+async function loadFinishRosterForSelectedProfile(options = {}) {
+  const ownerUsername = getRosterOwnerUsername();
+  const shiftType = getRosterShiftType();
+
+  const [rosterPayload, auditPayload] = await Promise.all([
+    fetchFinishRosterApi("getFinishRosterControl", {
+      ownerUsername,
+      shiftType,
+      t: Date.now()
+    }),
+    fetchFinishRosterApi("getFinishRosterAuditLog", {
+      targetUsername: ownerUsername,
+      limit: 75,
+      t: Date.now()
+    })
+  ]);
+
+  finishRosterApiState.roster = Array.isArray(rosterPayload.data) ? rosterPayload.data : [];
+  finishRosterApiState.audit = Array.isArray(auditPayload.data) ? auditPayload.data : [];
+
+  if (!options.silent) {
+    renderFinishRosterApiPanel?.();
+    renderOperatorAssignmentConfigPanel?.();
+    updateConfigTotals?.();
+    renderFinishThreeLineCell?.();
+  }
+
+  hideLegacyOperatorCapacityPanelFinal_();
+}
+
+function getConfigLockedProfileFinal_() {
+  const username = String(getCurrentUsername() || "").trim().toUpperCase();
+
+  return (finishRosterApiState.profiles || []).find(profile =>
+    String(profile.username || "").trim().toUpperCase() === username
+  ) || null;
+}
+
+function getConfigLockedShiftFinal_() {
+  const profile = getConfigLockedProfileFinal_();
+  const shift = String(profile?.shiftGroup || "").trim().toLowerCase();
+  return shift === "weekend" ? "Weekend" : "Weekday";
+}
+
+function getConfigLockedRosterFinal_() {
+  const username = String(getCurrentUsername() || "").trim().toUpperCase();
+  const shiftType = getConfigLockedShiftFinal_();
+
+  return (finishRosterApiState.roster || []).filter(row => {
+    const owner = String(row.ownerUsername || "").trim().toUpperCase();
+    const shift = String(row.shiftType || "").trim().toLowerCase();
+    const status = String(row.activeStatus || "").trim().toLowerCase();
+
+    return owner === username && shift === shiftType.toLowerCase() && status === "active";
+  });
+}
+
+function ensureOperatorAssignmentConfigPanel() {
+  hideLegacyOperatorCapacityPanelFinal_();
+
+  let panel = document.getElementById("myActiveShiftAssociatesPanel");
+  if (panel) return panel;
 
   const configTab = document.querySelector('[data-content="config"]');
-  const saveRow = document.querySelector(".config-actions") || document.getElementById("configSaveBtn")?.parentElement;
-  const targetParent = saveRow?.parentElement || configTab;
-  if (!targetParent) return;
+  if (!configTab) return null;
 
-  const panel = document.createElement("details");
-  panel.id = "operatorAssignmentConfigPanel";
-  panel.className = "config-group operator-assignment-config-group";
+  const saveRow =
+    document.querySelector(".config-actions") ||
+    document.getElementById("configSaveBtn")?.parentElement;
+
+  panel = document.createElement("details");
+  panel.id = "myActiveShiftAssociatesPanel";
+  panel.className = "config-group operator-assignment-config-group my-active-shift-panel";
   panel.open = true;
 
   panel.innerHTML = `
     <summary>
       <div>
         <h3>My Active Shift Associates</h3>
-        <p>Shows only the active associates assigned to your login profile and your assigned shift group.</p>
+        <p>Shows only associates assigned to your login profile and your assigned shift group.</p>
       </div>
       <span>Open / Close</span>
     </summary>
 
     <div class="operator-assignment-shell">
       <div class="assignment-warning-card">
-        <strong>Profile Locked View</strong>
-        <span id="myActiveAssociatesProfileText">Loading your assigned shift roster.</span>
+        <strong>Profile Locked</strong>
+        <span id="myActiveFinalProfileText">Loading your assigned roster.</span>
       </div>
-
-      <div id="finishAssignmentPermissionNotice" class="assignment-permission-notice"></div>
 
       <div class="assignment-summary-grid">
         <article>
-          <span>Shift Group</span>
-          <strong id="myActiveShiftGroup">--</strong>
+          <span>Profile</span>
+          <strong id="myActiveFinalOwner">--</strong>
         </article>
         <article>
-          <span>Active Associates</span>
-          <strong id="myActiveAssociateCount">0</strong>
+          <span>Shift</span>
+          <strong id="myActiveFinalShift">--</strong>
         </article>
         <article>
-          <span>Mounting</span>
-          <strong id="myActiveMountingCount">0</strong>
-        </article>
-        <article>
-          <span>Final</span>
+          <span>Active</span>
           <strong id="myActiveFinalCount">0</strong>
+        </article>
+        <article>
+          <span>Mount / Final</span>
+          <strong id="myActiveFinalAreaCount">0 / 0</strong>
         </article>
       </div>
 
       <div class="assignment-filter-row">
         <label>
           Area Filter
-          <select id="assignmentStationFilter">
+          <select id="myActiveFinalAreaFilter">
             <option value="all">All assigned areas</option>
             <option value="Mounting">Mounting</option>
             <option value="Final Inspection">Final Inspection</option>
           </select>
         </label>
 
-        <button id="refreshMyActiveAssociatesBtn" class="roster-api-btn" type="button">
+        <button id="myActiveFinalRefreshBtn" class="roster-api-btn" type="button">
           Refresh My Associates
         </button>
       </div>
 
-      <div id="operatorAssignmentRoster" class="operator-assignment-roster">
+      <div id="myActiveFinalList" class="operator-assignment-roster">
         <article class="assignment-empty">Loading your active associates.</article>
       </div>
     </div>
   `;
 
-  targetParent.insertBefore(panel, saveRow || null);
+  if (saveRow && saveRow.parentElement) {
+    saveRow.parentElement.insertBefore(panel, saveRow);
+  } else {
+    configTab.appendChild(panel);
+  }
 
-  document.getElementById("assignmentStationFilter")?.addEventListener("change", () => {
+  panel.querySelector("#myActiveFinalAreaFilter")?.addEventListener("change", renderOperatorAssignmentConfigPanel);
+  panel.querySelector("#myActiveFinalRefreshBtn")?.addEventListener("click", async () => {
+    await loadFinishRosterBackend({ silent: true });
     renderOperatorAssignmentConfigPanel();
   });
 
-  document.getElementById("refreshMyActiveAssociatesBtn")?.addEventListener("click", async () => {
-    await loadMyConfigurationRosterOnly();
-  });
+  return panel;
 }
 
+/* FINAL CONFIG VIEW: profile + ShiftGroup only */
 function renderOperatorAssignmentConfigPanel() {
-  ensureOperatorAssignmentConfigPanel();
+  hideLegacyOperatorCapacityPanelFinal_();
 
-  const rosterTarget = document.getElementById("operatorAssignmentRoster");
-  if (!rosterTarget) return;
+  const panel = ensureOperatorAssignmentConfigPanel();
+  if (!panel) return;
 
-  const ownerUsername = getMyConfigurationOwnerUsername();
-  const shiftType = getMyConfigurationShiftType();
-  const currentProfile = getFinishProfileForUsernameFromRosterApi(ownerUsername);
-  const filter = document.getElementById("assignmentStationFilter")?.value || "all";
+  const username = String(getCurrentUsername() || "").trim().toUpperCase();
+  const profile = getConfigLockedProfileFinal_();
+  const shiftType = getConfigLockedShiftFinal_();
+  const filter = panel.querySelector("#myActiveFinalAreaFilter")?.value || "all";
 
-  const rows = getMyActiveShiftRosterRows()
-    .filter(row => filter === "all" || String(row.defaultArea || "") === filter)
-    .sort((a, b) => {
-      const areaCompare = String(a.defaultArea || "").localeCompare(String(b.defaultArea || ""));
-      if (areaCompare !== 0) return areaCompare;
+  let rows = getConfigLockedRosterFinal_();
 
-      const lineCompare = String(a.defaultLine || "").localeCompare(String(b.defaultLine || ""));
-      if (lineCompare !== 0) return lineCompare;
-
-      return String(a.defaultPosition || "").localeCompare(String(b.defaultPosition || ""));
-    });
-
-  setText("myActiveShiftGroup", shiftType);
-  setText("myActiveAssociateCount", rows.length);
-  setText("myActiveMountingCount", rows.filter(row => String(row.defaultArea || "") === "Mounting").length);
-  setText("myActiveFinalCount", rows.filter(row => String(row.defaultArea || "") === "Final Inspection").length);
-
-  const profileText = document.getElementById("myActiveAssociatesProfileText");
-  if (profileText) {
-    profileText.textContent =
-      `${currentProfile?.fullName || getCurrentUserDisplayName()} · ${ownerUsername} · ${shiftType} only`;
+  if (filter !== "all") {
+    rows = rows.filter(row => String(row.defaultArea || "") === filter);
   }
 
-  const notice = document.getElementById("finishAssignmentPermissionNotice");
-  if (notice) {
-    notice.textContent =
-      `Showing active associates assigned to ${ownerUsername} / ${shiftType}. LMS Control Center controls profile assignment.`;
-    notice.className = "assignment-permission-notice active";
-  }
+  rows.sort((a, b) => {
+    const areaCompare = String(a.defaultArea || "").localeCompare(String(b.defaultArea || ""));
+    if (areaCompare !== 0) return areaCompare;
+
+    const lineCompare = String(a.defaultLine || "").localeCompare(String(b.defaultLine || ""));
+    if (lineCompare !== 0) return lineCompare;
+
+    return String(a.defaultPosition || "").localeCompare(String(b.defaultPosition || ""));
+  });
+
+  const mountCount = rows.filter(row => String(row.defaultArea || "") === "Mounting").length;
+  const finalCount = rows.filter(row => String(row.defaultArea || "") === "Final Inspection").length;
+
+  const profileName = profile?.fullName || getCurrentUserDisplayName();
+
+  panel.querySelector("#myActiveFinalProfileText").textContent =
+    `${profileName} · ${username} · ${shiftType} only`;
+
+  panel.querySelector("#myActiveFinalOwner").textContent = username;
+  panel.querySelector("#myActiveFinalShift").textContent = shiftType;
+  panel.querySelector("#myActiveFinalCount").textContent = String(rows.length);
+  panel.querySelector("#myActiveFinalAreaCount").textContent = `${mountCount} / ${finalCount}`;
+
+  const list = panel.querySelector("#myActiveFinalList");
+  if (!list) return;
 
   if (!rows.length) {
-    rosterTarget.innerHTML = `
+    list.innerHTML = `
       <article class="assignment-empty">
-        No active associates are assigned to ${escapeHtml(ownerUsername)} / ${escapeHtml(shiftType)}.
-        LMS must assign operators in LMS Control Center.
+        No active associates are assigned to ${escapeHtml(username)} / ${escapeHtml(shiftType)}.
+        LMS must assign them in LMS Control Center.
       </article>
     `;
     return;
   }
 
-  rosterTarget.innerHTML = rows.map(row => {
-    const operatorName = row.operatorName || "";
-    const area = row.defaultArea || "Unassigned area";
-    const line = row.defaultLine || "No line";
-    const position = row.defaultPosition || "No position";
+  list.innerHTML = rows.map(row => {
     const role = row.roleType || "Unassigned";
     const week = row.trainingWeek ? ` · ${row.trainingWeek}` : "";
-    const station = area;
-    const liveStation = finishOperatorState?.stations?.[normalizeFinishOperatorStation(station)];
-    const liveOperator = (liveStation?.operatorList || []).find(op =>
-      String(op.name || "").trim().toLowerCase() === String(operatorName || "").trim().toLowerCase()
-    );
-    const liveTotal = Number(liveOperator?.total || 0);
 
     return `
       <article class="assignment-row my-active-associate-row">
         <div class="assignment-person">
-          <strong>${escapeHtml(operatorName)}</strong>
-          <span>${escapeHtml(area)} · ${escapeHtml(line)} · ${escapeHtml(position)}</span>
+          <strong>${escapeHtml(row.operatorName || "")}</strong>
+          <span>
+            ${escapeHtml(row.defaultArea || "Unassigned")} ·
+            ${escapeHtml(row.defaultLine || "No line")} ·
+            ${escapeHtml(row.defaultPosition || "No position")}
+          </span>
         </div>
 
         <div class="assignment-field">
           <label>Role</label>
           <strong>${escapeHtml(role)}${escapeHtml(week)}</strong>
-        </div>
-
-        <div class="assignment-field">
-          <label>Live Today</label>
-          <strong>${numberFmt(liveTotal)}</strong>
         </div>
 
         <div class="assignment-target">
@@ -5534,419 +5595,20 @@ function renderOperatorAssignmentConfigPanel() {
   }).join("");
 }
 
-/*******************************************************
- * Patch roster backend load so Configuration never inherits
- * the LMS Control Center selected profile/shift.
- *******************************************************/
-const __originalLoadFinishRosterBackend_ProfileLock =
-  typeof loadFinishRosterBackend === "function" ? loadFinishRosterBackend : null;
-
-async function loadFinishRosterBackend(options = {}) {
-  if (__originalLoadFinishRosterBackend_ProfileLock) {
-    await __originalLoadFinishRosterBackend_ProfileLock(options);
-  }
-
-  // After the normal backend loads users/operators, force Configuration back
-  // to the logged-in user's own ShiftGroup roster.
-  await loadMyConfigurationRosterOnly({ silent: true }).catch(error => {
-    console.warn("Profile-locked Configuration roster failed after backend load:", error);
-  });
-
+window.forceMyActiveShiftAssociates = function () {
+  hideLegacyOperatorCapacityPanelFinal_();
   renderOperatorAssignmentConfigPanel();
-  renderFinishThreeLineCell();
-}
+};
 
-/*******************************************************
- * Patch tab visibility/init so Configuration view refreshes
- * when the user opens the Configuration tab.
- *******************************************************/
 document.addEventListener("click", event => {
-  const tab = event.target.closest?.('.tab-btn[data-tab="config"]');
-  if (!tab) return;
+  const configTab = event.target.closest?.('.tab-btn[data-tab="config"]');
+  if (!configTab) return;
 
   window.setTimeout(() => {
-    loadMyConfigurationRosterOnly().catch(error => {
-      console.warn("Configuration profile roster refresh failed:", error);
-    });
-  }, 50);
+    hideLegacyOperatorCapacityPanelFinal_();
+    loadFinishRosterBackend({ silent: true }).catch(console.error);
+  }, 100);
 });
 
+window.setInterval(hideLegacyOperatorCapacityPanelFinal_, 1000);
 
-/*******************************************************
- * FINAL OVERRIDE FIX — CONFIGURATION PROFILE LOCK
- * Brian: this replaces the old Configuration operator panel.
- *
- * Rules:
- * - Configuration shows ONLY logged-in profile's Active associates.
- * - Shift is taken from FINISH_USER_PROFILES ShiftGroup.
- * - BHECK Weekend = Weekend only.
- * - No full operator master list in Configuration.
- * - LMS Control Center remains the only global assignment area.
- *******************************************************/
-(function finishConfigurationProfileLockFinalFix() {
-  const PANEL_ID = "operatorAssignmentConfigPanel";
-
-  function cfgCleanUsername(value) {
-    return String(value || "")
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9._@-]/g, "");
-  }
-
-  function cfgCurrentUsername() {
-    return cfgCleanUsername(
-      (typeof getCurrentUsername === "function" ? getCurrentUsername() : "") ||
-      sessionStorage.getItem("lms_user") ||
-      sessionStorage.getItem("lmsUsername") ||
-      sessionStorage.getItem("username") ||
-      localStorage.getItem("lms_user") ||
-      localStorage.getItem("lmsUsername") ||
-      localStorage.getItem("username") ||
-      "DEFAULT"
-    );
-  }
-
-  function cfgCurrentDisplayName() {
-    try {
-      return typeof getCurrentUserDisplayName === "function"
-        ? getCurrentUserDisplayName()
-        : cfgCurrentUsername();
-    } catch {
-      return cfgCurrentUsername();
-    }
-  }
-
-  function cfgEscape(value) {
-    if (typeof escapeHtml === "function") return escapeHtml(value);
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function cfgNumber(value) {
-    if (typeof numberFmt === "function") return numberFmt(value);
-    return Number(value || 0).toLocaleString();
-  }
-
-  async function cfgFetchFinishRosterApi(action, params = {}) {
-    if (typeof fetchFinishRosterApi === "function") {
-      return fetchFinishRosterApi(action, { ...params, _: Date.now() });
-    }
-
-    const base = String(FINISH_API_URL || "").split("?")[0];
-    const url = new URL(base);
-    url.searchParams.set("action", action);
-
-    Object.entries(params || {}).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        url.searchParams.set(key, value);
-      }
-    });
-
-    url.searchParams.set("_", Date.now());
-
-    const res = await fetch(url.toString(), { cache: "no-store" });
-    const json = await res.json();
-
-    if (!json.success && json.status !== "success") {
-      throw new Error(json.error || json.message || `API failed: ${action}`);
-    }
-
-    return json;
-  }
-
-  async function cfgGetUserProfile(username) {
-    const cleanUser = cfgCleanUsername(username);
-
-    if (window.finishRosterApiState?.profiles?.length) {
-      const found = window.finishRosterApiState.profiles.find(profile =>
-        cfgCleanUsername(profile.username) === cleanUser
-      );
-      if (found) return found;
-    }
-
-    const payload = await cfgFetchFinishRosterApi("getFinishUserProfiles");
-    const profiles = Array.isArray(payload.data) ? payload.data : [];
-
-    if (window.finishRosterApiState) {
-      window.finishRosterApiState.profiles = profiles;
-    }
-
-    return profiles.find(profile => cfgCleanUsername(profile.username) === cleanUser) || null;
-  }
-
-  function cfgShiftFromProfile(profile) {
-    const shift = String(profile?.shiftGroup || "").trim().toLowerCase();
-    return shift === "weekend" ? "Weekend" : "Weekday";
-  }
-
-  function cfgAreaFromRoster(row) {
-    return String(row.defaultArea || row.DefaultArea || "").trim();
-  }
-
-  function cfgRoleFromRoster(row) {
-    return String(row.roleType || row.RoleType || "Unassigned").trim() || "Unassigned";
-  }
-
-  function cfgGetLiveTotal(operatorName, area) {
-    try {
-      const stationName = typeof normalizeFinishOperatorStation === "function"
-        ? normalizeFinishOperatorStation(area)
-        : area;
-
-      const station = finishOperatorState?.stations?.[stationName];
-      const match = (station?.operatorList || []).find(op =>
-        String(op.name || "").trim().toLowerCase() === String(operatorName || "").trim().toLowerCase()
-      );
-
-      return Number(match?.total || 0);
-    } catch {
-      return 0;
-    }
-  }
-
-  function cfgRemoveExistingPanelIfOld() {
-    const existing = document.getElementById(PANEL_ID);
-    if (!existing) return;
-
-    // Always remove it because the old panel reused the same ID and could be created first.
-    existing.remove();
-  }
-
-  window.ensureOperatorAssignmentConfigPanel = function ensureOperatorAssignmentConfigPanel_ProfileLocked() {
-    let panel = document.getElementById(PANEL_ID);
-    if (panel && panel.dataset.profileLocked === "true") return panel;
-
-    cfgRemoveExistingPanelIfOld();
-
-    if (typeof injectOperatorAssignmentStyles === "function") {
-      injectOperatorAssignmentStyles();
-    }
-
-    const configTab = document.querySelector('[data-content="config"]');
-    if (!configTab) return null;
-
-    const saveRow =
-      document.querySelector(".config-actions") ||
-      document.getElementById("configSaveBtn")?.parentElement;
-
-    const targetParent = saveRow?.parentElement || configTab;
-    if (!targetParent) return null;
-
-    panel = document.createElement("details");
-    panel.id = PANEL_ID;
-    panel.dataset.profileLocked = "true";
-    panel.className = "config-group operator-assignment-config-group my-active-shift-panel";
-    panel.open = true;
-
-    panel.innerHTML = `
-      <summary>
-        <div>
-          <h3>My Active Shift Associates</h3>
-          <p>Shows only the active associates assigned to your login profile and your assigned shift group.</p>
-        </div>
-        <span>Open / Close</span>
-      </summary>
-
-      <div class="operator-assignment-shell">
-        <div class="assignment-warning-card">
-          <strong>Profile Locked View</strong>
-          <span id="myActiveAssociatesProfileText">Loading your assigned shift roster.</span>
-        </div>
-
-        <div id="finishAssignmentPermissionNotice" class="assignment-permission-notice active"></div>
-
-        <div class="assignment-summary-grid">
-          <article>
-            <span>Profile</span>
-            <strong id="myActiveProfileOwner">--</strong>
-          </article>
-          <article>
-            <span>Shift Group</span>
-            <strong id="myActiveShiftGroup">--</strong>
-          </article>
-          <article>
-            <span>Active Associates</span>
-            <strong id="myActiveAssociateCount">0</strong>
-          </article>
-          <article>
-            <span>Mount / Final</span>
-            <strong id="myActiveAreaSplit">0 / 0</strong>
-          </article>
-        </div>
-
-        <div class="assignment-filter-row">
-          <label>
-            Area Filter
-            <select id="assignmentStationFilter">
-              <option value="all">All assigned areas</option>
-              <option value="Mounting">Mounting</option>
-              <option value="Final Inspection">Final Inspection</option>
-            </select>
-          </label>
-
-          <button id="refreshMyActiveAssociatesBtn" class="roster-api-btn" type="button">
-            Refresh My Associates
-          </button>
-        </div>
-
-        <div id="operatorAssignmentRoster" class="operator-assignment-roster">
-          <article class="assignment-empty">Loading your active associates.</article>
-        </div>
-      </div>
-    `;
-
-    if (saveRow && saveRow.parentElement) {
-      saveRow.parentElement.insertBefore(panel, saveRow);
-    } else {
-      targetParent.appendChild(panel);
-    }
-
-    panel.querySelector("#assignmentStationFilter")?.addEventListener("change", () => {
-      window.renderOperatorAssignmentConfigPanel();
-    });
-
-    panel.querySelector("#refreshMyActiveAssociatesBtn")?.addEventListener("click", () => {
-      window.renderOperatorAssignmentConfigPanel();
-    });
-
-    return panel;
-  };
-
-  window.renderOperatorAssignmentConfigPanel = async function renderOperatorAssignmentConfigPanel_ProfileLocked() {
-    const panel = window.ensureOperatorAssignmentConfigPanel();
-    if (!panel) return;
-
-    const rosterTarget = panel.querySelector("#operatorAssignmentRoster");
-    if (!rosterTarget) return;
-
-    const ownerUsername = cfgCurrentUsername();
-
-    try {
-      const profile = await cfgGetUserProfile(ownerUsername);
-      const shiftType = cfgShiftFromProfile(profile);
-      const areaFilter = panel.querySelector("#assignmentStationFilter")?.value || "all";
-
-      const rosterPayload = await cfgFetchFinishRosterApi("getFinishRosterControl", {
-        ownerUsername,
-        shiftType
-      });
-
-      const rows = (Array.isArray(rosterPayload.data) ? rosterPayload.data : [])
-        .filter(row => cfgCleanUsername(row.ownerUsername || row.OwnerUsername) === ownerUsername)
-        .filter(row => String(row.shiftType || row.ShiftType || "").trim().toLowerCase() === shiftType.toLowerCase())
-        .filter(row => String(row.activeStatus || row.ActiveStatus || "").trim().toLowerCase() === "active")
-        .filter(row => areaFilter === "all" || cfgAreaFromRoster(row) === areaFilter)
-        .sort((a, b) => {
-          const areaCompare = cfgAreaFromRoster(a).localeCompare(cfgAreaFromRoster(b));
-          if (areaCompare !== 0) return areaCompare;
-
-          const lineCompare = String(a.defaultLine || a.DefaultLine || "").localeCompare(String(b.defaultLine || b.DefaultLine || ""));
-          if (lineCompare !== 0) return lineCompare;
-
-          return String(a.defaultPosition || a.DefaultPosition || "").localeCompare(String(b.defaultPosition || b.DefaultPosition || ""));
-        });
-
-      const mountCount = rows.filter(row => cfgAreaFromRoster(row) === "Mounting").length;
-      const finalCount = rows.filter(row => cfgAreaFromRoster(row) === "Final Inspection").length;
-      const profileName = profile?.fullName || cfgCurrentDisplayName();
-
-      const profileText = panel.querySelector("#myActiveAssociatesProfileText");
-      if (profileText) {
-        profileText.textContent = `${profileName} · ${ownerUsername} · ${shiftType} only`;
-      }
-
-      const notice = panel.querySelector("#finishAssignmentPermissionNotice");
-      if (notice) {
-        notice.textContent = `Showing active associates assigned to ${ownerUsername} / ${shiftType}. LMS Control Center controls profile assignment.`;
-        notice.className = "assignment-permission-notice active";
-      }
-
-      const ownerEl = panel.querySelector("#myActiveProfileOwner");
-      const shiftEl = panel.querySelector("#myActiveShiftGroup");
-      const countEl = panel.querySelector("#myActiveAssociateCount");
-      const splitEl = panel.querySelector("#myActiveAreaSplit");
-
-      if (ownerEl) ownerEl.textContent = ownerUsername;
-      if (shiftEl) shiftEl.textContent = shiftType;
-      if (countEl) countEl.textContent = String(rows.length);
-      if (splitEl) splitEl.textContent = `${mountCount} / ${finalCount}`;
-
-      if (!rows.length) {
-        rosterTarget.innerHTML = `
-          <article class="assignment-empty">
-            No active associates are assigned to ${cfgEscape(ownerUsername)} / ${cfgEscape(shiftType)}.
-            LMS must assign operators in LMS Control Center.
-          </article>
-        `;
-        return;
-      }
-
-      rosterTarget.innerHTML = rows.map(row => {
-        const operatorName = row.operatorName || row.OperatorName || "";
-        const area = cfgAreaFromRoster(row) || "Unassigned area";
-        const line = row.defaultLine || row.DefaultLine || "No line";
-        const position = row.defaultPosition || row.DefaultPosition || "No position";
-        const role = cfgRoleFromRoster(row);
-        const week = row.trainingWeek || row.TrainingWeek ? ` · ${row.trainingWeek || row.TrainingWeek}` : "";
-        const liveTotal = cfgGetLiveTotal(operatorName, area);
-
-        return `
-          <article class="assignment-row my-active-associate-row">
-            <div class="assignment-person">
-              <strong>${cfgEscape(operatorName)}</strong>
-              <span>${cfgEscape(area)} · ${cfgEscape(line)} · ${cfgEscape(position)}</span>
-            </div>
-
-            <div class="assignment-field">
-              <label>Role</label>
-              <strong>${cfgEscape(role)}${cfgEscape(week)}</strong>
-            </div>
-
-            <div class="assignment-field">
-              <label>Live Today</label>
-              <strong>${cfgNumber(liveTotal)}</strong>
-            </div>
-
-            <div class="assignment-target">
-              <span>${cfgEscape(shiftType)}</span>
-            </div>
-          </article>
-        `;
-      }).join("");
-
-    } catch (error) {
-      console.error("Configuration profile-locked associate load failed:", error);
-      rosterTarget.innerHTML = `
-        <article class="assignment-empty">
-          Could not load your active associates: ${cfgEscape(error.message || error)}
-        </article>
-      `;
-    }
-  };
-
-  // Console test helper.
-  window.forceMyActiveShiftAssociates = function forceMyActiveShiftAssociates() {
-    return window.renderOperatorAssignmentConfigPanel();
-  };
-
-  document.addEventListener("DOMContentLoaded", () => {
-    window.setTimeout(() => {
-      window.ensureOperatorAssignmentConfigPanel();
-      window.renderOperatorAssignmentConfigPanel();
-    }, 700);
-  });
-
-  document.addEventListener("click", event => {
-    const configTab = event.target.closest?.('.tab-btn[data-tab="config"]');
-    if (!configTab) return;
-
-    window.setTimeout(() => {
-      window.ensureOperatorAssignmentConfigPanel();
-      window.renderOperatorAssignmentConfigPanel();
-    }, 100);
-  });
-})();
