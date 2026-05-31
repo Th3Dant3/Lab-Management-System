@@ -607,6 +607,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initHoverEffects();
   initOperatorCommandUI();
   initFinishThreeLineCell();
+  initMorningSetupControls();
 
   loadDashboard({ showLoader: true });
   loadFinishOperatorActivity();
@@ -2509,6 +2510,7 @@ function initTabs() {
 
       if (tab === "personal" && typeof renderFinishThreeLineCell === "function") {
         renderFinishThreeLineCell();
+    renderMorningSetupRosterSummary();
       }
     });
   });
@@ -3821,7 +3823,79 @@ const FINISH_LINE_LAYOUT = {
 };
 
 function initFinishThreeLineCell() {
+  installFinishLineSlotDelegatedClickHandler();
   renderFinishThreeLineCell();
+}
+
+/*
+  Hard click fix for Morning Set Up slots.
+  Some visual layers can sit above the station cards depending on screen width.
+  This delegated handler detects the slot by coordinates, so M01-M10 and FI-01-FI-04
+  open even if a converter/connector layer receives the actual click target.
+*/
+function installFinishLineSlotDelegatedClickHandler() {
+  if (window.__finishLineSlotDelegatedClickInstalled) return;
+  window.__finishLineSlotDelegatedClickInstalled = true;
+
+  document.addEventListener("click", event => {
+    const target = event.target;
+
+    // Do not steal clicks from line controls, modal controls, tabs, or form fields.
+    if (target?.closest?.(
+      "button, a, input, select, textarea, [data-line-toggle], [data-line-status], .line-status-buttons, .morning-slot-modal"
+    )) {
+      return;
+    }
+
+    const lineCell = target?.closest?.(".finish-line-cell");
+    if (!lineCell) return;
+
+    let slotEl = target.closest?.("[data-line-slot]");
+
+    if (!slotEl) {
+      slotEl = getFinishLineSlotAtPoint(event.clientX, event.clientY, lineCell);
+    }
+
+    if (!slotEl) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    openMorningLineSlotAssignment(
+      slotEl.dataset.line,
+      slotEl.dataset.station,
+      slotEl.dataset.slot,
+      slotEl.dataset.operator || ""
+    );
+  }, true);
+}
+
+function getFinishLineSlotAtPoint(clientX, clientY, lineCell) {
+  const slots = Array.from(lineCell.querySelectorAll("[data-line-slot]"));
+
+  // First pass: exact rectangle hit.
+  const directHit = slots.find(slot => {
+    const rect = slot.getBoundingClientRect();
+    return (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    );
+  });
+
+  if (directHit) return directHit;
+
+  // Second pass: small tolerance for tight/overlapped visuals.
+  const tolerance = 8;
+  return slots.find(slot => {
+    const rect = slot.getBoundingClientRect();
+    return (
+      clientX >= rect.left - tolerance &&
+      clientX <= rect.right + tolerance &&
+      clientY >= rect.top - tolerance &&
+      clientY <= rect.bottom + tolerance
+    );
+  }) || null;
 }
 
 function isLineSlotStation(stationName) {
@@ -3904,8 +3978,12 @@ function buildLineSlotAssignmentControls(stationName, operatorName, assignment =
     </label>`;
 }
 
-function getAssignedLineSlots(config = loadConfig()) {
-  const assignments = Object.values(config.operatorAssignments || {});
+function getAssignedLineSlots(config = loadConfig(), rosterRows = null) {
+  const sourceRows = Array.isArray(rosterRows)
+    ? rosterRows
+    : (finishRosterApiState.morningRoster || []);
+
+  const assignments = Object.values(loadFinishPersonalOperatorAssignments(sourceRows) || {});
   const map = {};
 
   assignments.forEach(assignment => {
@@ -3943,115 +4021,97 @@ function renderFinishThreeLineCell() {
   if (!grid) return;
 
   const config = loadConfig();
-  const assignmentMap = getAssignedLineSlots(config);
+  const assignmentMap = getAssignedLineSlots(config, finishRosterApiState.morningRoster || []);
   const statusMap = loadFinishLineSlotStatus();
 
+  renderMorningSetupRosterSummary();
   grid.innerHTML = FINISH_LINE_NAMES.map(line => renderOneFinishLine(line, assignmentMap, statusMap)).join("");
   bindFinishLineCellEvents();
 }
 
 
-function getLineStationJphStats(lineAssignments, stationName) {
+function getLineStationCapacityStats(lineAssignments, stationName) {
   const station = normalizeFinishOperatorStation(stationName);
   const assigned = (lineAssignments || []).filter(a => normalizeFinishOperatorStation(a.station) === station);
   const assignedCount = assigned.length;
+  const shiftType = getMorningSetupShiftType();
+  const shiftHours = getMorningSetupShiftHours();
 
-  if (!assignedCount) {
-    return {
-      assignedCount: 0,
-      hour: "",
-      value: 0,
-      target: 0,
-      avgValue: 0,
-      avgTarget: 0,
-      pct: 0,
-      className: "neutral",
-      color: "#38bdf8",
-      label: "No Target"
-    };
-  }
+  let totalJph = 0;
 
-  const hourSet = {};
   assigned.forEach(item => {
-    const live = getLiveOperatorForStation(item.operator, station) || item;
-    Object.keys(live?.hourly || {}).forEach(hour => hourSet[hour] = true);
-  });
+    const role = String(item.role || "").toLowerCase();
+    let rate = 0;
 
-  const hourOrder = getOperatorHourOrder(hourSet);
-  let selectedHour = "";
-
-  hourOrder.forEach(hour => {
-    let hourValue = 0;
-    let hourTarget = 0;
-
-    assigned.forEach(item => {
-      const live = getLiveOperatorForStation(item.operator, station) || item;
-      hourValue += Number((live?.hourly || {})[hour] || 0);
-      hourTarget += Number(getOperatorHourTarget(station, hour, "operator", item.operator) || 0);
-    });
-
-    if (hourTarget > 0 && hourValue > 0) {
-      selectedHour = hour;
+    if (role === "training") {
+      rate = Number(getTrainingRateForStationWeek(station, item.trainingWeek || 1)) || 0;
+    } else if (["core", "certified", "tq"].includes(role)) {
+      rate = Number(getFinishOperatorBaseRate(station, item.operator)) || 0;
     }
+
+    totalJph += rate;
   });
 
-  if (!selectedHour) {
-    const now = new Date();
-    const currentHour = now
-      .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-      .replace(/:\d{2}/, ":00");
-
-    selectedHour = hourOrder.includes(currentHour)
-      ? currentHour
-      : (hourOrder[hourOrder.length - 1] || "");
-  }
-
-  let value = 0;
-  let target = 0;
-
-  assigned.forEach(item => {
-    const live = getLiveOperatorForStation(item.operator, station) || item;
-    value += Number((live?.hourly || {})[selectedHour] || 0);
-    target += Number(getOperatorHourTarget(station, selectedHour, "operator", item.operator) || 0);
-  });
-
-  const avgValue = assignedCount > 0 ? Math.round(value / assignedCount) : 0;
-  const avgTarget = assignedCount > 0 ? Math.round(target / assignedCount) : 0;
-  const status = getOperatorPerformanceStatus(avgValue, avgTarget);
+  const shiftCapacity = Math.round(totalJph * shiftHours);
+  const avgJph = assignedCount ? Math.round(totalJph / assignedCount) : 0;
 
   return {
     assignedCount,
-    hour: selectedHour,
-    value,
-    target,
-    avgValue,
-    avgTarget,
-    ...status
+    shiftType,
+    shiftHours,
+    totalJph,
+    avgJph,
+    shiftCapacity,
+    className: assignedCount ? "capacity" : "neutral",
+    color: assignedCount ? "#00f5a0" : "#38bdf8",
+    label: assignedCount ? `${shiftHours}h shift capacity` : "No assigned operators"
   };
 }
 
-function renderLineAverageMetric(label, stats) {
-  const targetText = stats.avgTarget > 0
-    ? `${numberFmt(stats.avgValue)} / ${numberFmt(stats.avgTarget)}`
+function renderLineCapacityMetric(label, stats) {
+  const mainText = stats.assignedCount
+    ? `${numberFmt(stats.shiftCapacity)} jobs`
     : "No Target";
 
-  const hourText = stats.hour ? shortHour(stats.hour) : "--";
+  const smallText = stats.assignedCount
+    ? `${numberFmt(stats.totalJph)} JPH · AVG ${numberFmt(stats.avgJph)} · ${numberFmt(stats.assignedCount)} op`
+    : "Assign active roster";
 
   return `
     <div class="line-jph-metric perf-${escapeHtml(stats.className)}" style="--metric-color:${escapeHtml(stats.color)};">
       <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(targetText)}</strong>
-      <small>${escapeHtml(stats.label)} · ${escapeHtml(hourText)} · ${numberFmt(stats.assignedCount)} op</small>
+      <strong>${escapeHtml(mainText)}</strong>
+      <small>${escapeHtml(smallText)}</small>
     </div>`;
 }
 
+function renderMorningSetupRosterSummary() {
+  const host = document.getElementById("morningSetupRosterSummary");
+  if (!host) return;
+
+  const rows = (finishRosterApiState.morningRoster || [])
+    .filter(row => String(row.activeStatus || "").toLowerCase() === "active");
+
+  const shiftType = getMorningSetupShiftType();
+  const hours = getMorningSetupShiftHours();
+  const mount = rows.filter(row => normalizeFinishOperatorStation(row.defaultArea) === "Mounting").length;
+  const final = rows.filter(row => normalizeFinishOperatorStation(row.defaultArea) === "Final Inspection").length;
+
+  host.innerHTML = `
+    <div><span>Profile</span><strong>${escapeHtml(getCurrentUsername())}</strong></div>
+    <div><span>Shift</span><strong>${escapeHtml(shiftType)}</strong></div>
+    <div><span>Hours</span><strong>${hours}</strong></div>
+    <div><span>Active</span><strong>${numberFmt(rows.length)}</strong></div>
+    <div><span>Mounting</span><strong>${numberFmt(mount)}</strong></div>
+    <div><span>Final</span><strong>${numberFmt(final)}</strong></div>`;
+}
 function renderOneFinishLine(line, assignmentMap, statusMap) {
   const lineAssignments = Object.values(assignmentMap).filter(a => a.line === line);
   const mountingCount = lineAssignments.filter(a => a.station === "Mounting").length;
   const finalCount = lineAssignments.filter(a => a.station === "Final Inspection").length;
   const liveTotal = lineAssignments.reduce((sum, a) => sum + Number(a.total || 0), 0);
-  const mountingStats = getLineStationJphStats(lineAssignments, "Mounting");
-  const finalStats = getLineStationJphStats(lineAssignments, "Final Inspection");
+  const mountingStats = getLineStationCapacityStats(lineAssignments, "Mounting");
+  const finalStats = getLineStationCapacityStats(lineAssignments, "Final Inspection");
   const isCollapsed = finishRosterUiState.collapsedLines.has(line);
 
   return `
@@ -4064,8 +4124,8 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
         <div class="finish-line-metrics">
           <div><span>Mounting</span><strong>${numberFmt(mountingCount)}/10</strong></div>
           <div><span>Final</span><strong>${numberFmt(finalCount)}/4</strong></div>
-          ${renderLineAverageMetric("Mount Avg", mountingStats)}
-          ${renderLineAverageMetric("Final Avg", finalStats)}
+          ${renderLineCapacityMetric("Mount Cap", mountingStats)}
+          ${renderLineCapacityMetric("Final Cap", finalStats)}
           <div><span>Live Output</span><strong>${numberFmt(liveTotal)}</strong></div>
           <button class="finish-line-collapse-btn" type="button" data-line-toggle="${escapeHtml(line)}">
             ${isCollapsed ? "Open" : "Close"}
@@ -4109,8 +4169,8 @@ function renderLineSlot(line, station, slot, assignmentMap, statusMap, side) {
   const assignment = assignmentMap[key];
   const status = statusMap[key] || "online";
   const isFinal = normalizeFinishOperatorStation(station) === "Final Inspection";
-  const operator = assignment?.operator || "Unassigned";
-  const role = assignment ? getAssignmentRoleLabel(assignment.operator, station, loadConfig()) : "Open Slot";
+  const operator = assignment?.operator || "Click to assign";
+  const role = assignment ? getAssignmentRoleLabel(assignment.operator, station, loadConfig()) : "Select from your active roster";
   const total = Number(assignment?.total || 0);
   const liveText = assignment?.liveNow ? "Live" : (assignment ? "Saved" : "Open");
   const direction = side === "left" ? "→" : "←";
@@ -4146,14 +4206,10 @@ function bindFinishLineCellEvents() {
   });
 
   document.querySelectorAll("[data-line-slot]").forEach(slot => {
-    slot.addEventListener("click", () => {
-      const operator = slot.dataset.operator;
-      const station = slot.dataset.station;
-      if (operator && station && finishOperatorState?.stations?.[normalizeFinishOperatorStation(station)]) {
-        openExpandedOperatorViewer(normalizeFinishOperatorStation(station), operator);
-      } else {
-        showFinishAssignmentToast("Assign an operator in Configuration to activate this position.");
-      }
+    slot.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openMorningLineSlotAssignment(slot.dataset.line, slot.dataset.station, slot.dataset.slot, slot.dataset.operator || "");
     });
   });
 
@@ -4175,6 +4231,196 @@ function bindFinishLineCellEvents() {
   });
 }
 
+
+function getMorningActiveRosterRows() {
+  return (finishRosterApiState.morningRoster || [])
+    .filter(row => String(row.activeStatus || "").toLowerCase() === "active")
+    .filter(row => normalizeAssignmentOperatorName(row.operatorName || ""));
+}
+
+function findMorningRosterRow(operatorName) {
+  const target = normalizeAssignmentOperatorName(operatorName).toLowerCase();
+  return getMorningActiveRosterRows().find(row =>
+    normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === target
+  ) || null;
+}
+
+function ensureMorningSlotModal() {
+  let modal = document.getElementById("morningSlotAssignModal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "morningSlotAssignModal";
+  modal.className = "morning-slot-modal";
+  modal.innerHTML = `
+    <div class="morning-slot-backdrop" data-morning-slot-close></div>
+    <section class="morning-slot-card" role="dialog" aria-modal="true" aria-label="Morning slot assignment">
+      <header>
+        <div>
+          <span>Morning Set Up</span>
+          <h3 id="morningSlotModalTitle">Assign Position</h3>
+          <p id="morningSlotModalSub">Select from your active roster.</p>
+        </div>
+        <button type="button" data-morning-slot-close>×</button>
+      </header>
+      <div id="morningSlotModalBody" class="morning-slot-body"></div>
+    </section>`;
+
+  document.body.appendChild(modal);
+  modal.querySelectorAll("[data-morning-slot-close]").forEach(btn => {
+    btn.addEventListener("click", closeMorningLineSlotAssignment);
+  });
+  return modal;
+}
+
+function openMorningLineSlotAssignment(line, station, slot, currentOperator = "") {
+  const modal = ensureMorningSlotModal();
+  const title = modal.querySelector("#morningSlotModalTitle");
+  const sub = modal.querySelector("#morningSlotModalSub");
+  const body = modal.querySelector("#morningSlotModalBody");
+  const rows = getMorningActiveRosterRows();
+  const canEdit = canEditFinishOperatorAssignments();
+
+  if (title) title.textContent = `${line} · ${slot}`;
+  if (sub) {
+    sub.textContent = `${normalizeFinishOperatorStation(station)} · ${getMorningSetupShiftType()} · ${getCurrentUsername()}`;
+  }
+
+  if (!rows.length) {
+    body.innerHTML = `<article class="morning-slot-empty">No active associates are assigned to your ${escapeHtml(getMorningSetupShiftType())} roster yet. LMS must add them first.</article>`;
+  } else {
+    body.innerHTML = `
+      <div class="morning-slot-current">
+        <span>Current</span>
+        <strong>${escapeHtml(currentOperator || "Open position")}</strong>
+      </div>
+      <div class="morning-slot-list">
+        ${rows.map(row => {
+          const name = normalizeAssignmentOperatorName(row.operatorName || "");
+          const isCurrent = name === currentOperator;
+          const placement = [row.defaultLine, row.defaultArea, row.defaultPosition].filter(Boolean).join(" / ") || "No position";
+          const role = row.roleType === "Training" ? `${row.roleType} ${row.trainingWeek || ""}` : (row.roleType || "Unassigned");
+          return `
+            <button type="button" class="morning-slot-choice ${isCurrent ? "is-current" : ""}" data-morning-slot-operator="${escapeHtml(name)}" ${canEdit ? "" : "disabled"}>
+              <strong>${escapeHtml(name)}</strong>
+              <span>${escapeHtml(placement)} · ${escapeHtml(role)}</span>
+            </button>`;
+        }).join("")}
+      </div>
+      <div class="morning-slot-actions">
+        ${currentOperator ? `<button type="button" class="morning-slot-secondary" data-morning-slot-view="${escapeHtml(currentOperator)}">View Output</button>` : ""}
+        ${currentOperator && canEdit ? `<button type="button" class="morning-slot-danger" data-morning-slot-clear="${escapeHtml(currentOperator)}">Clear Position</button>` : ""}
+      </div>`;
+
+    body.querySelectorAll("[data-morning-slot-operator]").forEach(button => {
+      button.addEventListener("click", () => assignMorningOperatorToSlot(button.dataset.morningSlotOperator, line, station, slot));
+    });
+
+    body.querySelector("[data-morning-slot-view]")?.addEventListener("click", event => {
+      const op = event.currentTarget.dataset.morningSlotView;
+      closeMorningLineSlotAssignment();
+      if (finishOperatorState?.stations?.[normalizeFinishOperatorStation(station)]) {
+        openExpandedOperatorViewer(normalizeFinishOperatorStation(station), op);
+      }
+    });
+
+    body.querySelector("[data-morning-slot-clear]")?.addEventListener("click", event => {
+      clearMorningOperatorPosition(event.currentTarget.dataset.morningSlotClear, station);
+    });
+  }
+
+  modal.dataset.line = line;
+  modal.dataset.station = station;
+  modal.dataset.slot = slot;
+  modal.classList.add("open");
+}
+
+function closeMorningLineSlotAssignment() {
+  document.getElementById("morningSlotAssignModal")?.classList.remove("open");
+}
+
+async function assignMorningOperatorToSlot(operatorName, line, station, slot) {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role cannot change Morning Set Up positions.");
+    return;
+  }
+
+  const existing = findMorningRosterRow(operatorName);
+  if (!existing) {
+    showFinishAssignmentToast("This associate is not active on your selected shift roster.");
+    return;
+  }
+
+  try {
+    await fetchFinishRosterApi("saveFinishRosterControl", {
+      updatedBy: getCurrentUsername(),
+      ownerUsername: getMorningSetupOwnerUsername(),
+      shiftType: getMorningSetupShiftType(),
+      operatorName,
+      activeStatus: "Active",
+      defaultLine: line,
+      defaultArea: normalizeFinishOperatorStation(station),
+      defaultPosition: slot,
+      roleType: existing.roleType || "Unassigned",
+      trainingWeek: existing.roleType === "Training" ? (existing.trainingWeek || "") : ""
+    });
+
+    showFinishAssignmentToast(`Assigned ${operatorName} to ${line} / ${slot}`);
+    closeMorningLineSlotAssignment();
+    await loadMorningSetupRoster({ silent: true });
+    await loadFinishRosterForSelectedProfile({ silent: true }).catch(() => {});
+    renderOperatorAssignmentConfigPanel();
+    updateConfigTotals();
+    renderFinishThreeLineCell();
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+  }
+}
+
+async function clearMorningOperatorPosition(operatorName, station) {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role cannot clear Morning Set Up positions.");
+    return;
+  }
+
+  const existing = findMorningRosterRow(operatorName);
+  if (!existing) return;
+
+  try {
+    await fetchFinishRosterApi("saveFinishRosterControl", {
+      updatedBy: getCurrentUsername(),
+      ownerUsername: getMorningSetupOwnerUsername(),
+      shiftType: getMorningSetupShiftType(),
+      operatorName,
+      activeStatus: "Active",
+      defaultLine: "",
+      defaultArea: normalizeFinishOperatorStation(station),
+      defaultPosition: "",
+      roleType: existing.roleType || "Unassigned",
+      trainingWeek: existing.roleType === "Training" ? (existing.trainingWeek || "") : ""
+    });
+
+    showFinishAssignmentToast(`Cleared position for ${operatorName}`);
+    closeMorningLineSlotAssignment();
+    await loadMorningSetupRoster({ silent: true });
+    renderFinishThreeLineCell();
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+  }
+}
+
+function initMorningSetupControls() {
+  const select = document.getElementById("morningSetupShiftSelect");
+  if (!select) return;
+
+  select.value = getMorningSetupShiftType();
+  select.addEventListener("change", async event => {
+    finishRosterApiState.morningShiftType = String(event.target.value || "Weekday");
+    await loadMorningSetupRoster({ silent: false });
+  });
+}
 
 function renderOperatorError(error) {
   const grid = document.getElementById("operatorStationGrid");
@@ -4203,6 +4449,13 @@ const finishRosterApiState = {
   audit: [],
   ownerUsername: "",
   shiftType: "Weekday",
+
+  // Morning Set Up is intentionally separate from LMS Control Center.
+  // It always belongs to the logged-in profile and selected Morning shift.
+  morningOwnerUsername: "",
+  morningShiftType: "Weekday",
+  morningRoster: [],
+
   loading: false,
   ready: false,
   lastError: ""
@@ -4268,6 +4521,56 @@ function getRosterShiftType() {
   return finishRosterApiState.shiftType || "Weekday";
 }
 
+function getMorningSetupOwnerUsername() {
+  return getCurrentUsername();
+}
+
+function getMorningSetupShiftType() {
+  const select = document.getElementById("morningSetupShiftSelect");
+  const value = String(select?.value || finishRosterApiState.morningShiftType || "Weekday").trim().toLowerCase();
+  return value === "weekend" ? "Weekend" : "Weekday";
+}
+
+function getMorningSetupShiftHours() {
+  return getMorningSetupShiftType() === "Weekend" ? 11 : 9.5;
+}
+
+async function loadMorningSetupRoster(options = {}) {
+  const ownerUsername = getMorningSetupOwnerUsername();
+  const shiftType = getMorningSetupShiftType();
+
+  finishRosterApiState.morningOwnerUsername = ownerUsername;
+  finishRosterApiState.morningShiftType = shiftType;
+
+  try {
+    const rosterPayload = await fetchFinishRosterApi("getFinishRosterControl", {
+      ownerUsername,
+      shiftType
+    });
+
+    finishRosterApiState.morningRoster = (rosterPayload.data || [])
+      .filter(row => String(row.ownerUsername || "").toUpperCase() === ownerUsername)
+      .filter(row => String(row.shiftType || "").toLowerCase() === shiftType.toLowerCase())
+      .filter(row => String(row.activeStatus || "").toLowerCase() !== "removed");
+
+    if (!options.silent) {
+      renderFinishThreeLineCell();
+      renderMorningSetupRosterSummary();
+    }
+
+    return finishRosterApiState.morningRoster;
+  } catch (error) {
+    console.error("Morning Set Up roster load failed:", error);
+    finishRosterApiState.morningRoster = [];
+    if (!options.silent) {
+      showFinishAssignmentToast(error.message || String(error));
+      renderFinishThreeLineCell();
+      renderMorningSetupRosterSummary();
+    }
+    return [];
+  }
+}
+
 function convertApiRoleToLocal(roleType) {
   const role = String(roleType || "").toLowerCase();
   if (role === "certified") return "core";
@@ -4294,10 +4597,11 @@ function convertNumberToApiWeek(week) {
   return n > 0 ? `W${n}` : "";
 }
 
-function loadFinishPersonalOperatorAssignments() {
+function loadFinishPersonalOperatorAssignments(rosterRows) {
   const assignments = {};
+  const sourceRows = Array.isArray(rosterRows) ? rosterRows : (finishRosterApiState.roster || []);
 
-  (finishRosterApiState.roster || [])
+  sourceRows
     .filter(row => String(row.activeStatus || "").toLowerCase() !== "removed")
     .forEach(row => {
       const station = normalizeFinishOperatorStation(row.defaultArea || row.station || "");
@@ -4400,6 +4704,7 @@ async function loadFinishRosterBackend(options = {}) {
     }
 
     await loadFinishRosterForSelectedProfile({ silent: true });
+    await loadMorningSetupRoster({ silent: true });
     finishRosterApiState.ready = true;
     setText("finishRosterApiStatus", "Connected");
     renderFinishRosterApiPanel();
@@ -4919,7 +5224,8 @@ async function saveOperatorAssignment(stationName, operatorName, role, trainingW
     renderFinishRosterApiPanel();
     renderOperatorAssignmentConfigPanel();
     updateConfigTotals();
-    loadDashboard();
+    loadDashboard({ showLoader: false });
+    await loadMorningSetupRoster({ silent: true }).catch(() => {});
     renderFinishThreeLineCell();
 
     if (finishOperatorState?.selectedStation) {

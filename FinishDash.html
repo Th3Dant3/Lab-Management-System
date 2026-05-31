@@ -128,8 +128,8 @@
           <span></span>
         </div>
         <div>
-          <div class="brand-title">FINISH OPS</div>
-          <div class="brand-sub">Digital Twin Command Center</div>
+          <div class="brand-title">FINISH Dept</div>
+          <div class="brand-sub">Dashboard Center</div>
         </div>
       </div>
 
@@ -642,12 +642,30 @@
             <h2>Morning Finish Line Assignment</h2>
             <p>Line A, B, and C morning floor view. LMS controls roster assignments from the LMS Control Center; this tab stays visible for the floor team to review the active setup.</p>
           </div>
-          <div class="three-line-legend">
-            <span><i class="legend-chip orange"></i> Mounting</span>
-            <span><i class="legend-chip cyan"></i> Final Inspection</span>
-            <span><i class="legend-chip green"></i> Operator assigned</span>
+          <div class="three-line-tools">
+            <label class="morning-shift-picker">
+              <span>View Shift</span>
+              <select id="morningSetupShiftSelect">
+                <option value="Weekday">Weekday · 9.5 hrs</option>
+                <option value="Weekend">Weekend · 11 hrs</option>
+              </select>
+            </label>
+            <div class="three-line-legend">
+              <span><i class="legend-chip orange"></i> Mounting</span>
+              <span><i class="legend-chip cyan"></i> Final Inspection</span>
+              <span><i class="legend-chip green"></i> Click any station to assign</span>
+            </div>
           </div>
         </header>
+
+        <div id="morningSetupRosterSummary" class="morning-setup-summary">
+          <div><span>Profile</span><strong>--</strong></div>
+          <div><span>Shift</span><strong>--</strong></div>
+          <div><span>Hours</span><strong>--</strong></div>
+          <div><span>Active</span><strong>0</strong></div>
+          <div><span>Mounting</span><strong>0</strong></div>
+          <div><span>Final</span><strong>0</strong></div>
+        </div>
 
         <div id="finishThreeLineGrid" class="finish-three-line-grid">
           <article class="three-line-empty">Waiting for Finish operator assignments...</article>

@@ -2843,7 +2843,7 @@ body {
 
 .station-unbox {
   left: 250px !important;
-  top: 108px !important;
+  top: 28px !important;
 }
 
 .station-arout {
@@ -5598,4 +5598,380 @@ body.operator-drawer-open {
 
 .tab-content[data-content="personal"] .finish-three-line-cell {
   margin-top: 0;
+}
+
+/* =========================================================
+   MORNING SET UP SHIFT PICKER + CLICKABLE SLOT ASSIGNMENT
+   - Morning Set Up is profile-locked to the logged-in user.
+   - Weekday = 9.5 hours, Weekend = 11 hours.
+   - Every M/FI slot opens the assignment picker.
+========================================================= */
+.three-line-tools {
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+  align-items: start;
+}
+
+.morning-shift-picker {
+  display: grid;
+  gap: 6px;
+  min-width: 230px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(100, 221, 255, 0.18);
+  background: rgba(2, 8, 18, 0.68);
+}
+
+.morning-shift-picker span {
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.morning-shift-picker select {
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 217, 255, 0.28);
+  background: rgba(2, 12, 24, 0.94);
+  color: var(--text);
+  padding: 0 12px;
+  font-weight: 900;
+  outline: none;
+}
+
+.morning-setup-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+
+.morning-setup-summary div {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(100, 221, 255, 0.14);
+  background: rgba(2, 8, 18, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.morning-setup-summary span {
+  display: block;
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.morning-setup-summary strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--cyan);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.finish-slot.empty {
+  opacity: 0.92 !important;
+  border-style: dashed;
+}
+
+.finish-slot.empty:hover {
+  opacity: 1 !important;
+  border-color: rgba(0, 245, 160, 0.65);
+  box-shadow: 0 0 20px rgba(0,245,160,.16), inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+.finish-slot.empty .slot-copy strong {
+  color: var(--soft) !important;
+}
+
+.line-jph-metric.perf-capacity strong {
+  color: var(--green) !important;
+}
+
+.morning-slot-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: none;
+  place-items: center;
+  padding: 24px;
+}
+
+.morning-slot-modal.open {
+  display: grid;
+}
+
+.morning-slot-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 4, 12, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.morning-slot-card {
+  position: relative;
+  width: min(760px, 94vw);
+  max-height: min(760px, 88vh);
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid rgba(100, 221, 255, 0.22);
+  background: linear-gradient(180deg, rgba(10, 28, 52, 0.98), rgba(2, 8, 18, 0.98));
+  box-shadow: 0 28px 80px rgba(0,0,0,.55), 0 0 34px rgba(0,217,255,.12);
+}
+
+.morning-slot-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(100, 221, 255, 0.14);
+}
+
+.morning-slot-card header span {
+  color: var(--orange);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.morning-slot-card header h3 {
+  margin: 5px 0 0;
+  font-size: 24px;
+}
+
+.morning-slot-card header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.morning-slot-card header button {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(100, 221, 255, 0.18);
+  background: rgba(2, 12, 24, 0.86);
+  color: var(--soft);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.morning-slot-body {
+  max-height: 610px;
+  overflow-y: auto;
+  padding: 18px 22px 22px;
+}
+
+.morning-slot-current {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 245, 160, 0.18);
+  background: rgba(0, 245, 160, 0.06);
+  margin-bottom: 14px;
+}
+
+.morning-slot-current span {
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.morning-slot-current strong {
+  color: var(--green);
+}
+
+.morning-slot-list {
+  display: grid;
+  gap: 10px;
+}
+
+.morning-slot-choice {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 13px 15px;
+  border-radius: 16px;
+  border: 1px solid rgba(100, 221, 255, 0.16);
+  background: rgba(2, 12, 24, 0.82);
+  color: var(--text);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.morning-slot-choice:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 217, 255, 0.42);
+  box-shadow: 0 0 18px rgba(0,217,255,.14);
+}
+
+.morning-slot-choice.is-current {
+  border-color: rgba(0, 245, 160, 0.44);
+  background: rgba(0, 245, 160, 0.08);
+}
+
+.morning-slot-choice strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.morning-slot-choice span {
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.morning-slot-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.morning-slot-actions button {
+  height: 40px;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.morning-slot-secondary {
+  border: 1px solid rgba(0,217,255,.3);
+  background: rgba(0,217,255,.08);
+  color: var(--cyan);
+}
+
+.morning-slot-danger {
+  border: 1px solid rgba(251,113,133,.34);
+  background: rgba(251,113,133,.08);
+  color: var(--red);
+}
+
+.morning-slot-empty {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px dashed rgba(100,221,255,.24);
+  color: var(--muted);
+  background: rgba(2, 8, 18, .66);
+}
+
+@media (max-width: 900px) {
+  .morning-setup-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .three-line-tools {
+    justify-items: stretch;
+  }
+}
+
+/* =========================================================
+   MORNING SET UP SLOT CLICK FIX
+   Ensures every Mounting M01-M10 and Final FI-01-FI-04 slot
+   receives click events. Converter/connector visuals cannot
+   sit on top of station cards anymore.
+========================================================= */
+.finish-line-body {
+  z-index: 15 !important;
+  pointer-events: none !important;
+}
+
+.finish-line-cell .line-side,
+.finish-line-cell .line-status-buttons {
+  pointer-events: auto !important;
+}
+
+.finish-line-cell .finish-slot {
+  position: relative !important;
+  z-index: 40 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.finish-line-cell .finish-slot * {
+  pointer-events: none !important;
+}
+
+.finish-line-cell .finish-slot::after {
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+
+.finish-line-cell .line-converter-core,
+.finish-line-cell .line-converter-core::before,
+.finish-line-cell .line-converter-core::after,
+.finish-line-cell .line-converter-arrows,
+.finish-line-cell .line-converter-arrows * {
+  pointer-events: none !important;
+}
+
+.finish-line-cell .line-converter-core {
+  z-index: 5 !important;
+}
+
+.finish-line-cell .line-side {
+  z-index: 35 !important;
+}
+
+
+/* =========================================================
+   HARD SLOT CLICK FIX - MORNING SET UP
+   Keep every station card above converter/connector visuals.
+   Do not put pointer-events:none on the line body; it can break
+   children in some browser/layout combinations.
+========================================================= */
+.finish-line-cell,
+.finish-line-body {
+  pointer-events: auto !important;
+}
+
+.finish-line-cell .line-side {
+  z-index: 500 !important;
+  pointer-events: auto !important;
+}
+
+.finish-line-cell .finish-slot {
+  position: relative !important;
+  z-index: 800 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+.finish-line-cell .finish-slot *,
+.finish-line-cell .finish-slot::before,
+.finish-line-cell .finish-slot::after {
+  pointer-events: none !important;
+}
+
+.finish-line-cell .line-converter-core,
+.finish-line-cell .line-converter-core *,
+.finish-line-cell .line-converter-core::before,
+.finish-line-cell .line-converter-core::after {
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+
+.finish-line-cell .line-status-buttons,
+.finish-line-cell .finish-line-collapse-btn {
+  position: relative !important;
+  z-index: 900 !important;
+  pointer-events: auto !important;
 }
