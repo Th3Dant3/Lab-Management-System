@@ -4347,6 +4347,32 @@ function getLiveOperatorForStation(operatorName, stationName) {
   return (station.operatorList || []).find(op => normalizeAssignmentOperatorName(op.name) === target) || null;
 }
 
+
+function getSelectedFinishMorningLine() {
+  const selected = finishRosterUiState.selectedMorningLine || FINISH_LINE_NAMES[0];
+  return FINISH_LINE_NAMES.includes(selected) ? selected : FINISH_LINE_NAMES[0];
+}
+
+function renderFinishLineSelector(assignmentMap = {}) {
+  return `
+    <aside class="finish-line-selector" aria-label="Finish line selector">
+      <span class="line-selector-kicker">Production Cell</span>
+      ${FINISH_LINE_NAMES.map(line => {
+        const lineAssignments = Object.values(assignmentMap || {}).filter(a => a.line === line);
+        const mount = lineAssignments.filter(a => a.station === "Mounting").length;
+        const final = lineAssignments.filter(a => a.station === "Final Inspection").length;
+        const liveTotal = lineAssignments.reduce((sum, a) => sum + Number(a.total || 0), 0);
+        const active = getSelectedFinishMorningLine() === line;
+        return `
+          <button type="button" class="finish-line-selector-btn ${active ? "active" : ""}" data-finish-line-select="${escapeHtml(line)}">
+            <span>${escapeHtml(line)}</span>
+            <strong>${numberFmt(mount)}/10 Mount · ${numberFmt(final)}/4 Final</strong>
+            <em>${numberFmt(liveTotal)} live output</em>
+          </button>`;
+      }).join("")}
+    </aside>`;
+}
+
 function renderFinishThreeLineCell() {
   const grid = document.getElementById("finishThreeLineGrid");
   if (!grid) return;
@@ -4354,12 +4380,16 @@ function renderFinishThreeLineCell() {
   const config = loadConfig();
   const assignmentMap = getAssignedLineSlots(config, finishRosterApiState.morningRoster || []);
   const statusMap = loadFinishLineSlotStatus();
+  const selectedLine = getSelectedFinishMorningLine();
 
   renderMorningSetupRosterSummary();
-  grid.innerHTML = FINISH_LINE_NAMES.map(line => renderOneFinishLine(line, assignmentMap, statusMap)).join("");
+  grid.innerHTML = `
+    ${renderFinishLineSelector(assignmentMap)}
+    <div class="finish-line-stage">
+      ${renderOneFinishLine(selectedLine, assignmentMap, statusMap)}
+    </div>`;
   bindFinishLineCellEvents();
 }
-
 
 function getLineStationCapacityStats(lineAssignments, stationName) {
   const station = normalizeFinishOperatorStation(stationName);
@@ -4400,19 +4430,22 @@ function getLineStationCapacityStats(lineAssignments, stationName) {
 }
 
 function renderLineCapacityMetric(label, stats) {
-  const mainText = stats.assignedCount
-    ? `${numberFmt(stats.shiftCapacity)} jobs`
-    : "No Target";
-
-  const smallText = stats.assignedCount
-    ? `${numberFmt(stats.totalJph)} JPH · AVG ${numberFmt(stats.avgJph)} · ${numberFmt(stats.assignedCount)} op`
-    : "Assign active roster";
+  const hasAssigned = !!stats.assignedCount;
+  const mainText = hasAssigned ? `${numberFmt(stats.shiftCapacity)}` : "No Target";
+  const unitText = hasAssigned ? "jobs" : "";
+  const jphText = hasAssigned ? `${numberFmt(stats.totalJph)} JPH` : "Assign roster";
+  const avgText = hasAssigned ? `AVG ${numberFmt(stats.avgJph)}` : "No avg";
+  const opText = hasAssigned ? `${numberFmt(stats.assignedCount)} OP` : "";
 
   return `
     <div class="line-jph-metric perf-${escapeHtml(stats.className)}" style="--metric-color:${escapeHtml(stats.color)};">
       <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(mainText)}</strong>
-      <small>${escapeHtml(smallText)}</small>
+      <strong>${escapeHtml(mainText)}${unitText ? `<em>${escapeHtml(unitText)}</em>` : ""}</strong>
+      <small>
+        <b>${escapeHtml(jphText)}</b>
+        <b>${escapeHtml(avgText)}</b>
+        ${opText ? `<b>${escapeHtml(opText)}</b>` : ""}
+      </small>
     </div>`;
 }
 
@@ -4443,10 +4476,10 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
   const liveTotal = lineAssignments.reduce((sum, a) => sum + Number(a.total || 0), 0);
   const mountingStats = getLineStationCapacityStats(lineAssignments, "Mounting");
   const finalStats = getLineStationCapacityStats(lineAssignments, "Final Inspection");
-  const isCollapsed = finishRosterUiState.collapsedLines.has(line);
+  const isCollapsed = false;
 
   return `
-    <article class="finish-line-cell ${isCollapsed ? "is-collapsed" : "is-expanded"}" data-finish-line="${escapeHtml(line)}">
+    <article class="finish-line-cell is-expanded" data-finish-line="${escapeHtml(line)}">
       <header class="finish-line-topbar">
         <div class="finish-line-title">
           <span>Finish Production Cell</span>
@@ -4458,9 +4491,6 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
           ${renderLineCapacityMetric("Mount Cap", mountingStats)}
           ${renderLineCapacityMetric("Final Cap", finalStats)}
           <div><span>Live Output</span><strong>${numberFmt(liveTotal)}</strong></div>
-          <button class="finish-line-collapse-btn" type="button" data-line-toggle="${escapeHtml(line)}">
-            ${isCollapsed ? "Open" : "Close"}
-          </button>
         </div>
       </header>
 
@@ -4522,6 +4552,18 @@ function renderLineSlot(line, station, slot, assignmentMap, statusMap, side) {
 }
 
 function bindFinishLineCellEvents() {
+  document.querySelectorAll("[data-finish-line-select]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const line = button.dataset.finishLineSelect;
+      if (!FINISH_LINE_NAMES.includes(line)) return;
+      finishRosterUiState.selectedMorningLine = line;
+      renderFinishThreeLineCell();
+    });
+  });
+
+
   document.querySelectorAll("[data-line-toggle]").forEach(button => {
     button.addEventListener("click", event => {
       event.stopPropagation();
@@ -4563,17 +4605,61 @@ function bindFinishLineCellEvents() {
 }
 
 
-function getMorningActiveRosterRows() {
+function getRawMorningActiveRosterRows() {
   return (finishRosterApiState.morningRoster || [])
     .filter(row => String(row.activeStatus || "").toLowerCase() === "active")
     .filter(row => normalizeAssignmentOperatorName(row.operatorName || ""));
 }
 
+function getMorningActiveRosterRows() {
+  return dedupeMorningRosterRowsByOperator(getRawMorningActiveRosterRows());
+}
+
+function getMorningRosterRowScore(row, targetStation = "", currentOperator = "") {
+  let score = 0;
+  const rowStation = normalizeFinishOperatorStation(row.defaultArea || "");
+  const target = normalizeFinishOperatorStation(targetStation || "");
+  const rowName = normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase();
+  const current = normalizeAssignmentOperatorName(currentOperator || "").toLowerCase();
+
+  if (current && rowName === current) score += 10000;
+  if (target && rowStation === target) score += 1000;
+  if (row.defaultLine) score += 120;
+  if (row.defaultPosition) score += 120;
+  if (String(row.roleType || "").toLowerCase() !== "unassigned") score += 40;
+  if (Number(row.individualJph || row.IndividualJPH || 0) > 0) score += 20;
+  if (String(row.activeStatus || "").toLowerCase() === "active") score += 10;
+  return score;
+}
+
+function dedupeMorningRosterRowsByOperator(rows = [], targetStation = "", currentOperator = "") {
+  const best = new Map();
+
+  (Array.isArray(rows) ? rows : []).forEach(row => {
+    const operatorName = normalizeAssignmentOperatorName(row.operatorName || "");
+    if (!operatorName) return;
+
+    const key = operatorName.toLowerCase();
+    const current = best.get(key);
+
+    if (!current || getMorningRosterRowScore(row, targetStation, currentOperator) >= getMorningRosterRowScore(current, targetStation, currentOperator)) {
+      best.set(key, row);
+    }
+  });
+
+  return Array.from(best.values());
+}
+
+function getMorningAssignableRosterRows(targetStation = "", currentOperator = "") {
+  return dedupeMorningRosterRowsByOperator(getRawMorningActiveRosterRows(), targetStation, currentOperator);
+}
+
 function findMorningRosterRow(operatorName) {
   const target = normalizeAssignmentOperatorName(operatorName).toLowerCase();
-  return getMorningActiveRosterRows().find(row =>
+  const rows = getRawMorningActiveRosterRows().filter(row =>
     normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === target
-  ) || null;
+  );
+  return dedupeMorningRosterRowsByOperator(rows)[0] || null;
 }
 
 function ensureMorningSlotModal() {
@@ -4604,65 +4690,201 @@ function ensureMorningSlotModal() {
   return modal;
 }
 
+
+function getMorningSlotRoleLabel(row) {
+  const role = row.roleType === "Training"
+    ? `${row.roleType} ${row.trainingWeek || ""}`.trim()
+    : (row.roleType || "Unassigned");
+  return role;
+}
+
+function getMorningSlotPlacementLabel(row) {
+  return [row.defaultArea, row.defaultLine, row.defaultPosition].filter(Boolean).join(" · ") || "No assigned position";
+}
+
+function getMorningSlotJphLabel(row) {
+  const explicit = Number(row.individualJph || row.IndividualJPH || 0) || 0;
+  if (explicit > 0) return `${numberFmt(explicit)} JPH`;
+
+  const target = getFinishConfigRoleTarget({
+    defaultArea: row.defaultArea || "",
+    roleType: row.roleType || "",
+    trainingWeek: row.trainingWeek || "",
+    individualJph: ""
+  }, loadConfig());
+
+  return target > 0 ? `${numberFmt(target)} JPH` : "Default JPH";
+}
+
+function sortMorningSlotRowsForTarget(rows, station, currentOperator = "") {
+  const targetStation = normalizeFinishOperatorStation(station);
+  const currentName = normalizeAssignmentOperatorName(currentOperator || "").toLowerCase();
+
+  return [...rows].sort((a, b) => {
+    const aName = normalizeAssignmentOperatorName(a.operatorName || "").toLowerCase();
+    const bName = normalizeAssignmentOperatorName(b.operatorName || "").toLowerCase();
+
+    const score = row => {
+      let value = 0;
+      const rowName = normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase();
+      const rowStation = normalizeFinishOperatorStation(row.defaultArea || "");
+      if (rowName === currentName) value -= 1000;
+      if (rowStation === targetStation) value -= 200;
+      if (!row.defaultLine && !row.defaultPosition) value -= 40;
+      if (String(row.roleType || "").toLowerCase() === "training") value += 10;
+      return value;
+    };
+
+    const scoreDiff = score(a) - score(b);
+    if (scoreDiff !== 0) return scoreDiff;
+    return aName.localeCompare(bName);
+  });
+}
+
+function applyMorningSlotChoiceFilter(modal) {
+  const search = String(modal.querySelector("[data-morning-slot-search]")?.value || "").toLowerCase().trim();
+  const mode = modal.querySelector("[data-morning-slot-filter].active")?.dataset.morningSlotFilter || "best";
+  const targetStation = normalizeFinishOperatorStation(modal.dataset.station || "");
+
+  let visibleCount = 0;
+  modal.querySelectorAll("[data-morning-slot-operator]").forEach(choice => {
+    const haystack = String(choice.dataset.search || "").toLowerCase();
+    const rowStation = normalizeFinishOperatorStation(choice.dataset.station || "");
+    const hasPosition = String(choice.dataset.hasPosition || "") === "true";
+    const matchesSearch = !search || haystack.includes(search);
+    const matchesMode =
+      mode === "all" ||
+      (mode === "best" && rowStation === targetStation) ||
+      (mode === "open" && !hasPosition);
+
+    const show = matchesSearch && matchesMode;
+    choice.hidden = !show;
+    if (show) visibleCount++;
+  });
+
+  const empty = modal.querySelector("[data-morning-slot-filter-empty]");
+  if (empty) {
+    empty.hidden = visibleCount > 0;
+  }
+}
+
+function bindMorningSlotModalFilters(modal) {
+  modal.querySelector("[data-morning-slot-search]")?.addEventListener("input", () => applyMorningSlotChoiceFilter(modal));
+
+  modal.querySelectorAll("[data-morning-slot-filter]").forEach(button => {
+    button.addEventListener("click", () => {
+      modal.querySelectorAll("[data-morning-slot-filter]").forEach(btn => btn.classList.remove("active"));
+      button.classList.add("active");
+      applyMorningSlotChoiceFilter(modal);
+    });
+  });
+
+  applyMorningSlotChoiceFilter(modal);
+}
+
 function openMorningLineSlotAssignment(line, station, slot, currentOperator = "") {
   const modal = ensureMorningSlotModal();
   const title = modal.querySelector("#morningSlotModalTitle");
   const sub = modal.querySelector("#morningSlotModalSub");
   const body = modal.querySelector("#morningSlotModalBody");
-  const rows = getMorningActiveRosterRows();
+  const rows = sortMorningSlotRowsForTarget(getMorningAssignableRosterRows(station, currentOperator), station, currentOperator);
   const canEdit = canEditFinishOperatorAssignments();
+  const stationName = normalizeFinishOperatorStation(station);
+  const currentRow = currentOperator ? findMorningRosterRow(currentOperator) : null;
+
+  modal.dataset.line = line;
+  modal.dataset.station = stationName;
+  modal.dataset.slot = slot;
 
   if (title) title.textContent = `${line} · ${slot}`;
   if (sub) {
-    sub.textContent = `${normalizeFinishOperatorStation(station)} · ${getMorningSetupShiftType()} · ${getCurrentUsername()}`;
+    sub.textContent = `${stationName} · ${getMorningSetupShiftType()} · ${getCurrentUsername()}`;
   }
 
   if (!rows.length) {
     body.innerHTML = `<article class="morning-slot-empty">No active associates are assigned to your ${escapeHtml(getMorningSetupShiftType())} roster yet. LMS must add them first.</article>`;
   } else {
     body.innerHTML = `
-      <div class="morning-slot-current">
-        <span>Current</span>
-        <strong>${escapeHtml(currentOperator || "Open position")}</strong>
+      <div class="morning-slot-command">
+        <div class="morning-slot-current">
+          <span>Current Assignment</span>
+          <strong>${escapeHtml(currentOperator || "Open position")}</strong>
+          ${currentRow ? `<small>${escapeHtml(getMorningSlotRoleLabel(currentRow))} · ${escapeHtml(getMorningSlotJphLabel(currentRow))}</small>` : `<small>Ready for assignment</small>`}
+        </div>
+        <div class="morning-slot-target">
+          <span>Target Slot</span>
+          <strong>${escapeHtml(line)} / ${escapeHtml(slot)}</strong>
+          <small>${escapeHtml(stationName)}</small>
+        </div>
       </div>
+
+      <div class="morning-slot-toolbar">
+        <input type="search" data-morning-slot-search placeholder="Search associate, role, line, or position..." />
+        <div class="morning-slot-filter-pills">
+          <button type="button" class="active" data-morning-slot-filter="best">Best match</button>
+          <button type="button" data-morning-slot-filter="open">Open roster</button>
+          <button type="button" data-morning-slot-filter="all">All active</button>
+        </div>
+      </div>
+
       <div class="morning-slot-list">
         ${rows.map(row => {
           const name = normalizeAssignmentOperatorName(row.operatorName || "");
           const isCurrent = name === currentOperator;
-          const placement = [row.defaultLine, row.defaultArea, row.defaultPosition].filter(Boolean).join(" / ") || "No position";
-          const role = row.roleType === "Training" ? `${row.roleType} ${row.trainingWeek || ""}` : (row.roleType || "Unassigned");
+          const rowStation = normalizeFinishOperatorStation(row.defaultArea || "");
+          const placement = getMorningSlotPlacementLabel(row);
+          const role = getMorningSlotRoleLabel(row);
+          const jph = getMorningSlotJphLabel(row);
+          const liveTotal = getFinishConfigLiveOperatorTotal(name, rowStation || stationName);
+          const hasPosition = !!(row.defaultLine || row.defaultPosition);
+          const searchText = [name, rowStation, row.defaultLine, row.defaultPosition, role, jph].join(" ");
           return `
-            <button type="button" class="morning-slot-choice ${isCurrent ? "is-current" : ""}" data-morning-slot-operator="${escapeHtml(name)}" ${canEdit ? "" : "disabled"}>
-              <strong>${escapeHtml(name)}</strong>
-              <span>${escapeHtml(placement)} · ${escapeHtml(role)}</span>
+            <button
+              type="button"
+              class="morning-slot-choice ${isCurrent ? "is-current" : ""} ${rowStation === stationName ? "is-match" : ""}"
+              data-morning-slot-operator="${escapeHtml(name)}"
+              data-station="${escapeHtml(rowStation)}"
+              data-has-position="${hasPosition ? "true" : "false"}"
+              data-search="${escapeHtml(searchText)}"
+              ${canEdit ? "" : "disabled"}
+            >
+              <div>
+                <strong>${escapeHtml(name)}</strong>
+                <span>${escapeHtml(placement)} · ${escapeHtml(role)}</span>
+              </div>
+              <aside>
+                <small>${escapeHtml(jph)}</small>
+                <em>${numberFmt(liveTotal)}</em>
+              </aside>
             </button>`;
         }).join("")}
+        <article class="morning-slot-empty" data-morning-slot-filter-empty hidden>No associates match this filter.</article>
       </div>
+
       <div class="morning-slot-actions">
         ${currentOperator ? `<button type="button" class="morning-slot-secondary" data-morning-slot-view="${escapeHtml(currentOperator)}">View Output</button>` : ""}
-        ${currentOperator && canEdit ? `<button type="button" class="morning-slot-danger" data-morning-slot-clear="${escapeHtml(currentOperator)}">Clear Position</button>` : ""}
+        ${currentOperator && canEdit ? `<button type="button" class="morning-slot-danger" data-morning-slot-clear="${escapeHtml(currentOperator)}">Clear Current Assignment</button>` : ""}
       </div>`;
 
     body.querySelectorAll("[data-morning-slot-operator]").forEach(button => {
-      button.addEventListener("click", () => assignMorningOperatorToSlot(button.dataset.morningSlotOperator, line, station, slot));
+      button.addEventListener("click", () => assignMorningOperatorToSlot(button.dataset.morningSlotOperator, line, stationName, slot, currentOperator));
     });
 
     body.querySelector("[data-morning-slot-view]")?.addEventListener("click", event => {
       const op = event.currentTarget.dataset.morningSlotView;
       closeMorningLineSlotAssignment();
-      if (finishOperatorState?.stations?.[normalizeFinishOperatorStation(station)]) {
-        openExpandedOperatorViewer(normalizeFinishOperatorStation(station), op);
+      if (finishOperatorState?.stations?.[stationName]) {
+        openExpandedOperatorViewer(stationName, op);
       }
     });
 
     body.querySelector("[data-morning-slot-clear]")?.addEventListener("click", event => {
-      clearMorningOperatorPosition(event.currentTarget.dataset.morningSlotClear, station);
+      clearMorningOperatorPosition(event.currentTarget.dataset.morningSlotClear, stationName, line, slot);
     });
+
+    bindMorningSlotModalFilters(modal);
   }
 
-  modal.dataset.line = line;
-  modal.dataset.station = station;
-  modal.dataset.slot = slot;
   modal.classList.add("open");
 }
 
@@ -4670,7 +4892,39 @@ function closeMorningLineSlotAssignment() {
   document.getElementById("morningSlotAssignModal")?.classList.remove("open");
 }
 
-async function assignMorningOperatorToSlot(operatorName, line, station, slot) {
+
+function patchMorningRosterRowInMemory(operatorName, updates = {}, matcher = null) {
+  const target = normalizeAssignmentOperatorName(operatorName || "").toLowerCase();
+  let changed = false;
+
+  finishRosterApiState.morningRoster = (finishRosterApiState.morningRoster || []).map(row => {
+    const isOperator = normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === target;
+    const passesMatcher = typeof matcher === "function" ? matcher(row) : true;
+    if (!isOperator || !passesMatcher) return row;
+    changed = true;
+    return { ...row, ...updates };
+  });
+
+  finishRosterApiState.roster = (finishRosterApiState.roster || []).map(row => {
+    const isOperator = normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === target;
+    const passesMatcher = typeof matcher === "function" ? matcher(row) : true;
+    if (!isOperator || !passesMatcher) return row;
+    return { ...row, ...updates };
+  });
+
+  return changed;
+}
+
+function refreshMorningSetupUiFast() {
+  closeMorningLineSlotAssignment();
+  renderFinishThreeLineCell();
+  updateConfigTotals();
+  if (typeof renderOperatorAssignmentConfigPanel === "function") {
+    renderOperatorAssignmentConfigPanel();
+  }
+}
+
+async function assignMorningOperatorToSlot(operatorName, line, station, slot, currentOperatorToReplace = "") {
   if (!canEditFinishOperatorAssignments()) {
     showFinishAssignmentToast("View only. Your role cannot change Morning Set Up positions.");
     return;
@@ -4682,15 +4936,69 @@ async function assignMorningOperatorToSlot(operatorName, line, station, slot) {
     return;
   }
 
+  const stationName = normalizeFinishOperatorStation(station);
+  const previousOperator = normalizeAssignmentOperatorName(currentOperatorToReplace || "");
+  const nextOperator = normalizeAssignmentOperatorName(operatorName || "");
+  const previousRows = previousOperator && previousOperator !== nextOperator
+    ? findMorningRosterRowsForSlot(previousOperator, stationName, line, slot)
+    : [];
+
+  const slotMatcher = row =>
+    normalizeFinishOperatorStation(row.defaultArea || "") === stationName &&
+    String(row.defaultLine || "").trim() === String(line || "").trim() &&
+    String(row.defaultPosition || "").trim() === String(slot || "").trim();
+
+  // Optimistic UI: clear/redraw immediately instead of waiting for Google Apps Script round trips.
+  if (previousRows.length) {
+    patchMorningRosterRowInMemory(previousOperator, {
+      defaultLine: "",
+      defaultArea: stationName,
+      defaultPosition: ""
+    }, slotMatcher);
+  }
+
+  patchMorningRosterRowInMemory(operatorName, {
+    defaultLine: line,
+    defaultArea: stationName,
+    defaultPosition: slot,
+    roleType: existing.roleType || "Unassigned",
+    trainingWeek: existing.roleType === "Training" ? (existing.trainingWeek || "") : "",
+    individualJph: existing.individualJph || ""
+  });
+
+  showFinishAssignmentToast(`Assigning ${operatorName} to ${line} / ${slot}...`);
+  refreshMorningSetupUiFast();
+
   try {
-    await fetchFinishRosterApi("saveFinishRosterControl", {
+    const requests = [];
+
+    previousRows.forEach(previous => {
+      requests.push(fetchFinishRosterApi("saveFinishRosterControl", {
+        updatedBy: getCurrentUsername(),
+        ownerUsername: getMorningSetupOwnerUsername(),
+        shiftType: getMorningSetupShiftType(),
+        operatorName: previousOperator,
+        activeStatus: "Active",
+        defaultLine: "",
+        defaultArea: stationName,
+        defaultPosition: "",
+        roleType: previous.roleType || "Unassigned",
+        trainingWeek: previous.roleType === "Training" ? (previous.trainingWeek || "") : "",
+        individualJph: previous.individualJph || "",
+        originalDefaultArea: previous.defaultArea || stationName,
+        originalDefaultLine: previous.defaultLine || line,
+        originalDefaultPosition: previous.defaultPosition || slot
+      }));
+    });
+
+    requests.push(fetchFinishRosterApi("saveFinishRosterControl", {
       updatedBy: getCurrentUsername(),
       ownerUsername: getMorningSetupOwnerUsername(),
       shiftType: getMorningSetupShiftType(),
       operatorName,
       activeStatus: "Active",
       defaultLine: line,
-      defaultArea: normalizeFinishOperatorStation(station),
+      defaultArea: stationName,
       defaultPosition: slot,
       roleType: existing.roleType || "Unassigned",
       trainingWeek: existing.roleType === "Training" ? (existing.trainingWeek || "") : "",
@@ -4698,51 +5006,78 @@ async function assignMorningOperatorToSlot(operatorName, line, station, slot) {
       originalDefaultArea: existing.defaultArea || "",
       originalDefaultLine: existing.defaultLine || "",
       originalDefaultPosition: existing.defaultPosition || ""
-    });
+    }));
+
+    await Promise.all(requests);
 
     showFinishAssignmentToast(`Assigned ${operatorName} to ${line} / ${slot}`);
-    closeMorningLineSlotAssignment();
-    await loadMorningSetupRoster({ silent: true });
-    await loadFinishRosterForSelectedProfile({ silent: true }).catch(() => {});
-    renderOperatorAssignmentConfigPanel();
-    updateConfigTotals();
-    renderFinishThreeLineCell();
+    loadMorningSetupRoster({ silent: true }).then(() => renderFinishThreeLineCell()).catch(() => {});
+    loadFinishRosterForSelectedProfile({ silent: true }).catch(() => {});
   } catch (error) {
     console.error(error);
     showFinishAssignmentToast(error.message || String(error));
+    await loadMorningSetupRoster({ silent: true }).catch(() => {});
+    renderFinishThreeLineCell();
   }
 }
 
-async function clearMorningOperatorPosition(operatorName, station) {
+async function clearMorningOperatorPosition(operatorName, station, line = "", slot = "") {
   if (!canEditFinishOperatorAssignments()) {
     showFinishAssignmentToast("View only. Your role cannot clear Morning Set Up positions.");
     return;
   }
 
-  const existing = findMorningRosterRow(operatorName);
-  if (!existing) return;
+  const stationName = normalizeFinishOperatorStation(station || "");
+  const matches = findMorningRosterRowsForSlot(operatorName, stationName, line, slot);
+
+  if (!matches.length) {
+    showFinishAssignmentToast("No active roster row found for that associate/slot.");
+    return;
+  }
+
+  const slotMatcher = row =>
+    normalizeFinishOperatorStation(row.defaultArea || "") === stationName &&
+    String(row.defaultLine || "").trim() === String(line || "").trim() &&
+    String(row.defaultPosition || "").trim() === String(slot || "").trim();
+
+  // Optimistic UI: remove from station instantly, then save to Google Sheet in the background.
+  patchMorningRosterRowInMemory(operatorName, {
+    defaultLine: "",
+    defaultArea: stationName,
+    defaultPosition: ""
+  }, slotMatcher);
+
+  showFinishAssignmentToast(`Clearing ${operatorName} from ${line || stationName} ${slot || ""}...`);
+  refreshMorningSetupUiFast();
 
   try {
-    await fetchFinishRosterApi("saveFinishRosterControl", {
-      updatedBy: getCurrentUsername(),
-      ownerUsername: getMorningSetupOwnerUsername(),
-      shiftType: getMorningSetupShiftType(),
-      operatorName,
-      activeStatus: "Active",
-      defaultLine: "",
-      defaultArea: normalizeFinishOperatorStation(station),
-      defaultPosition: "",
-      roleType: existing.roleType || "Unassigned",
-      trainingWeek: existing.roleType === "Training" ? (existing.trainingWeek || "") : ""
-    });
+    await Promise.all(matches.map(existing =>
+      fetchFinishRosterApi("saveFinishRosterControl", {
+        updatedBy: getCurrentUsername(),
+        ownerUsername: getMorningSetupOwnerUsername(),
+        shiftType: getMorningSetupShiftType(),
+        operatorName,
+        activeStatus: "Active",
+        defaultLine: "",
+        defaultArea: stationName || normalizeFinishOperatorStation(existing.defaultArea || ""),
+        defaultPosition: "",
+        roleType: existing.roleType || "Unassigned",
+        trainingWeek: existing.roleType === "Training" ? (existing.trainingWeek || "") : "",
+        individualJph: existing.individualJph || "",
+        originalDefaultArea: existing.defaultArea || stationName,
+        originalDefaultLine: existing.defaultLine || line || "",
+        originalDefaultPosition: existing.defaultPosition || slot || ""
+      })
+    ));
 
     showFinishAssignmentToast(`Cleared position for ${operatorName}`);
-    closeMorningLineSlotAssignment();
-    await loadMorningSetupRoster({ silent: true });
-    renderFinishThreeLineCell();
+    loadMorningSetupRoster({ silent: true }).then(() => renderFinishThreeLineCell()).catch(() => {});
+    loadFinishRosterForSelectedProfile({ silent: true }).catch(() => {});
   } catch (error) {
     console.error(error);
     showFinishAssignmentToast(error.message || String(error));
+    await loadMorningSetupRoster({ silent: true }).catch(() => {});
+    renderFinishThreeLineCell();
   }
 }
 
@@ -5339,6 +5674,113 @@ function bindFinishRosterDetailEvents(selected, isDraft, canEdit) {
   deleteBtn?.addEventListener('click', () => updateFinishRosterDetailStatus(selected, 'deleteFinishRosterOperator'));
 }
 
+
+function getRosterRowDuplicateScore(row) {
+  let score = 0;
+  if (String(row.activeStatus || "").toLowerCase() === "active") score += 100;
+  if (row.defaultArea) score += 10;
+  if (row.defaultLine) score += 20;
+  if (row.defaultPosition) score += 20;
+  if (row.roleType && String(row.roleType).toLowerCase() !== "unassigned") score += 10;
+  if (Number(row.individualJph || row.IndividualJPH || 0) > 0) score += 5;
+  return score;
+}
+
+function makeRosterDuplicateUiKey(row) {
+  return [
+    String(row.ownerUsername || row.OwnerUsername || getRosterOwnerUsername() || "").trim().toUpperCase(),
+    String(row.shiftType || row.ShiftType || getRosterShiftType() || "").trim().toLowerCase(),
+    normalizeAssignmentOperatorName(row.operatorName || row.OperatorName || "").toLowerCase(),
+    normalizeFinishOperatorStation(row.defaultArea || row.DefaultArea || "")
+  ].join("||");
+}
+
+function dedupeFinishRosterRowsForUi(rows = []) {
+  const best = new Map();
+
+  (Array.isArray(rows) ? rows : []).forEach(row => {
+    const key = makeRosterDuplicateUiKey(row);
+    if (!key || key.includes("||||")) return;
+
+    const current = best.get(key);
+    if (!current || getRosterRowDuplicateScore(row) >= getRosterRowDuplicateScore(current)) {
+      best.set(key, row);
+    }
+  });
+
+  return Array.from(best.values());
+}
+
+function findMorningRosterRowsForSlot(operatorName, station, line = "", slot = "") {
+  const targetName = normalizeAssignmentOperatorName(operatorName || "").toLowerCase();
+  const targetArea = normalizeFinishOperatorStation(station || "");
+  const targetLine = String(line || "").trim();
+  const targetSlot = String(slot || "").trim();
+
+  const rows = getRawMorningActiveRosterRows().filter(row =>
+    normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === targetName &&
+    (!targetArea || normalizeFinishOperatorStation(row.defaultArea || "") === targetArea)
+  );
+
+  if (!rows.length) return [];
+
+  const exact = rows.filter(row =>
+    String(row.defaultLine || "").trim() === targetLine &&
+    String(row.defaultPosition || "").trim() === targetSlot
+  );
+
+  if (exact.length) return exact;
+
+  const blank = rows.filter(row =>
+    !String(row.defaultLine || "").trim() &&
+    !String(row.defaultPosition || "").trim()
+  );
+
+  return blank.length ? blank : rows;
+}
+
+function findMorningRosterRowForSlot(operatorName, station, line = "", slot = "") {
+  return findMorningRosterRowsForSlot(operatorName, station, line, slot)[0] || null;
+}
+
+function findExistingRosterRowForUpsert(payload = {}) {
+  const targetName = normalizeAssignmentOperatorName(payload.operatorName || "").toLowerCase();
+  const targetShift = String(payload.shiftType || "").trim().toLowerCase();
+  const targetArea = normalizeFinishOperatorStation(payload.defaultArea || "");
+  const targetLine = String(payload.defaultLine || "").trim();
+  const targetPosition = String(payload.defaultPosition || "").trim();
+
+  const candidates = (finishRosterApiState.roster || []).filter(row =>
+    String(row.activeStatus || "").toLowerCase() !== "removed" &&
+    normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === targetName &&
+    String(row.shiftType || "").trim().toLowerCase() === targetShift
+  );
+
+  if (!candidates.length) return null;
+
+  return candidates.find(row =>
+    normalizeFinishOperatorStation(row.defaultArea || "") === targetArea &&
+    String(row.defaultLine || "").trim() === targetLine &&
+    String(row.defaultPosition || "").trim() === targetPosition
+  ) || candidates.find(row =>
+    normalizeFinishOperatorStation(row.defaultArea || "") === targetArea &&
+    !String(row.defaultLine || "").trim() &&
+    !String(row.defaultPosition || "").trim()
+  ) || candidates.find(row =>
+    !String(row.defaultArea || "").trim() &&
+    !String(row.defaultLine || "").trim() &&
+    !String(row.defaultPosition || "").trim()
+  ) || null;
+}
+
+function applyOriginalRosterLookupToPayload(payload, sourceRow) {
+  if (!payload || !sourceRow) return payload;
+  payload.originalDefaultArea = sourceRow.defaultArea || "";
+  payload.originalDefaultLine = sourceRow.defaultLine || "";
+  payload.originalDefaultPosition = sourceRow.defaultPosition || "";
+  return payload;
+}
+
 async function saveFinishRosterDetail(selected, isDraft) {
   if (!canEditFinishOperatorAssignments()) { showFinishAssignmentToast('View only. Your role cannot edit Finish roster rows.'); return; }
   const operatorName = String(document.getElementById('finishRosterDetailOperator')?.value || selected.operatorName || '').trim();
@@ -5346,7 +5788,15 @@ async function saveFinishRosterDetail(selected, isDraft) {
   const selectedShiftValue = document.getElementById('finishRosterDetailShift')?.value || '';
   if (!selectedShiftValue) { showFinishAssignmentToast('Select Weekday or Weekend before saving this operator.'); return; }
   const payload = { updatedBy: getCurrentUsername(), ownerUsername: getRosterOwnerUsername(), shiftType: selectedShiftValue, operatorName, activeStatus: document.getElementById('finishRosterDetailStatus')?.value || 'Active', defaultArea: document.getElementById('finishRosterDetailArea')?.value || '', defaultLine: document.getElementById('finishRosterDetailLine')?.value || '', defaultPosition: document.getElementById('finishRosterDetailPosition')?.value || '', roleType: document.getElementById('finishRosterDetailRole')?.value || 'Unassigned', trainingWeek: document.getElementById('finishRosterDetailRole')?.value === 'Training' ? (document.getElementById('finishRosterDetailWeek')?.value || '') : '', individualJph: document.getElementById('finishRosterDetailJph')?.value || '' };
-  if (!isDraft) { payload.originalDefaultArea = selected.defaultArea || ''; payload.originalDefaultLine = selected.defaultLine || ''; payload.originalDefaultPosition = selected.defaultPosition || ''; }
+  if (!isDraft) {
+    payload.originalDefaultArea = selected.defaultArea || '';
+    payload.originalDefaultLine = selected.defaultLine || '';
+    payload.originalDefaultPosition = selected.defaultPosition || '';
+  } else {
+    const existingForUpsert = findExistingRosterRowForUpsert(payload);
+    if (existingForUpsert) applyOriginalRosterLookupToPayload(payload, existingForUpsert);
+  }
+
   try {
     await fetchFinishRosterApi('saveFinishRosterControl', payload);
     finishRosterUiState.draftAssignment = null;
@@ -5384,7 +5834,7 @@ function makeFinishRosterAssignmentKey(row) {
 function buildFinishRosterEditorRows(options = {}) {
   const { filterArea = "all", filterRole = "all", searchText = "" } = options || {};
   const selectedShift = getRosterShiftType();
-  const rosterRows = Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : [];
+  const rosterRows = dedupeFinishRosterRowsForUi(Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : []);
   const masterOps = Array.isArray(finishRosterApiState.operators) ? finishRosterApiState.operators : [];
 
   const liveByName = {};
@@ -6230,10 +6680,10 @@ async function loadFinishConfigAssignedRosterRows() {
 
   const rows = Array.isArray(payload.data) ? payload.data : [];
 
-  return rows
+  return dedupeFinishRosterRowsForUi(rows
     .filter(row => String(row.ownerUsername || "").trim().toUpperCase() === ownerUsername)
     .filter(row => String(row.shiftType || "").trim().toLowerCase() === shiftType.toLowerCase())
-    .filter(row => String(row.activeStatus || "").trim().toLowerCase() === "active")
+    .filter(row => String(row.activeStatus || "").trim().toLowerCase() === "active"))
     .sort((a, b) => {
       const areaCompare = String(a.defaultArea || "").localeCompare(String(b.defaultArea || ""));
       if (areaCompare !== 0) return areaCompare;
