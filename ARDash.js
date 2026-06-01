@@ -179,6 +179,19 @@ let chartInstances = {
   wipTrend: null
 };
 
+const AR_METRICS_STATE = {
+  owner: "BLOPEZ",
+  shift: "Weekday",
+  rosterPayload: null,
+  metricsPayload: null,
+  isSaving: false,
+  selectedOperator: null,
+  selectedStation: "ALL"
+};
+
+const AR_ROLE_ORDER = ["AR-IN", "Basket", "Oven", "Sectoring", "DeRing", "AR-OUT"];
+
+
 /* ─────────────────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────────────────── */
@@ -297,19 +310,242 @@ async function fetchProductionFlowAR() {
   return fetchJson(`${API_URL}?action=productionFlow&area=AR&debug=true`);
 }
 
+function getAROwner() {
+  const input = $("arMetricOwner");
+  return String(input?.value || AR_METRICS_STATE.owner || "BLOPEZ").trim().toUpperCase() || "BLOPEZ";
+}
+
+function getARShift() {
+  const select = $("arMetricShift");
+  return String(select?.value || AR_METRICS_STATE.shift || "Weekday").trim() || "Weekday";
+}
+
+
+function parseARStoredUserValue(raw) {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "object") return raw;
+
+  const text = String(raw).trim();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+function readARNestedField(obj, keys) {
+  if (!obj || typeof obj !== "object") return "";
+
+  for (const key of keys) {
+    if (obj[key] != null && String(obj[key]).trim() !== "") {
+      return String(obj[key]).trim();
+    }
+  }
+
+  const nestedObjects = [obj.user, obj.profile, obj.account, obj.auth, obj.data, obj.currentUser];
+  for (const nested of nestedObjects) {
+    if (!nested || typeof nested !== "object") continue;
+    for (const key of keys) {
+      if (nested[key] != null && String(nested[key]).trim() !== "") {
+        return String(nested[key]).trim();
+      }
+    }
+  }
+
+  return "";
+}
+
+function getARCurrentUserProfile() {
+  const objectKeys = [
+    "lms_user",
+    "lmsUser",
+    "currentUser",
+    "current_user",
+    "loggedInUser",
+    "logged_in_user",
+    "userProfile",
+    "authUser",
+    "user"
+  ];
+
+  const stringRoleKeys = [
+    "lms_role",
+    "lmsRole",
+    "LMS_ROLE",
+    "currentUserRole",
+    "loggedInRole",
+    "userRole",
+    "role",
+    "Role"
+  ];
+
+  const stringUserKeys = [
+    "lms_user",
+    "lmsUser",
+    "lms_username",
+    "lmsUsername",
+    "LMS_USERNAME",
+    "currentUsername",
+    "loggedInUsername",
+    "username",
+    "Username"
+  ];
+
+  let username = "";
+  let role = "";
+  let displayName = "";
+
+  for (const key of objectKeys) {
+    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+    const parsed = parseARStoredUserValue(raw);
+
+    if (!parsed) continue;
+
+    if (typeof parsed === "string") {
+      if (!username && key.toLowerCase().includes("user")) username = parsed;
+      continue;
+    }
+
+    username = username || readARNestedField(parsed, ["username", "Username", "userName", "UserName", "login", "Login", "email", "Email"]);
+    role = role || readARNestedField(parsed, ["role", "Role", "userRole", "UserRole", "accessRole", "AccessRole"]);
+    displayName = displayName || readARNestedField(parsed, ["displayName", "DisplayName", "name", "Name", "fullName", "FullName"]);
+  }
+
+  for (const key of stringRoleKeys) {
+    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+    const parsed = parseARStoredUserValue(raw);
+    if (typeof parsed === "string" && parsed.trim()) {
+      role = role || parsed.trim();
+    } else if (parsed && typeof parsed === "object") {
+      role = role || readARNestedField(parsed, ["role", "Role", "userRole", "UserRole", "accessRole", "AccessRole"]);
+    }
+  }
+
+  for (const key of stringUserKeys) {
+    const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
+    const parsed = parseARStoredUserValue(raw);
+    if (typeof parsed === "string" && parsed.trim()) {
+      username = username || parsed.trim();
+    } else if (parsed && typeof parsed === "object") {
+      username = username || readARNestedField(parsed, ["username", "Username", "userName", "UserName", "login", "Login", "email", "Email"]);
+    }
+  }
+
+  return {
+    username: String(username || "").trim().toUpperCase(),
+    role: String(role || "").trim(),
+    displayName: String(displayName || "").trim()
+  };
+}
+
+function isARLMSUser() {
+  const profile = getARCurrentUserProfile();
+  const role = String(profile.role || "").trim().toLowerCase();
+  const username = String(profile.username || "").trim().toUpperCase();
+  const selectedOwner = String(getAROwner ? getAROwner() : "").trim().toUpperCase();
+
+  // BLOPEZ fallback keeps Brian's LMS setup visible even if the login script only saved username.
+  // The selected Profile dropdown is also checked because AR Metrics is profile-driven.
+  return (
+    role === "lms" ||
+    username === "BLOPEZ" ||
+    username === "BRIAN LOPEZ CABRERA" ||
+    selectedOwner === "BLOPEZ"
+  );
+}
+
+function applyARLMSOnlyVisibility() {
+  const canSee = isARLMSUser();
+  const panel = $("arLmsRosterAdminPanel");
+  const page = $("arLmsSetupPage");
+  const nav = $("arLmsSetupNav");
+
+  [panel, page, nav].forEach(el => {
+    if (!el) return;
+    el.hidden = !canSee;
+    el.classList.toggle("is-hidden", !canSee);
+    el.setAttribute("aria-hidden", canSee ? "false" : "true");
+  });
+
+  if (!canSee && document.querySelector('.page-section.active')?.dataset.page === "lmsSetup") {
+    const overviewBtn = document.querySelector('.nav-item[data-section="overview"]');
+    if (overviewBtn) overviewBtn.click();
+  }
+
+  const assignBtn = $("arAssignBtn");
+  if (assignBtn) assignBtn.disabled = !canSee;
+
+  document.body.classList.toggle("ar-is-lms", canSee);
+  document.body.classList.toggle("ar-not-lms", !canSee);
+
+  return canSee;
+}
+
+async function fetchARRosterControl() {
+  const owner = encodeURIComponent(getAROwner());
+  const shift = encodeURIComponent(getARShift());
+  return fetchJson(`${API_URL}?action=getArRosterControl&owner=${owner}&shift=${shift}`);
+}
+
 async function fetchARCapacity() {
-  return fetchJson(`${API_URL}?action=arCapacity`);
+  const owner = encodeURIComponent(getAROwner());
+  const shift = encodeURIComponent(getARShift());
+  return fetchJson(`${API_URL}?action=getArCapacityMetrics&owner=${owner}&shift=${shift}`);
+}
+
+async function saveARRosterAssignment(payload) {
+  const params = new URLSearchParams({
+    action: "saveArRosterControl",
+    owner: getAROwner(),
+    shift: getARShift(),
+    operatorName: payload.operatorName || "",
+    role: payload.role || "AR-IN",
+    defaultRole: payload.role || "AR-IN",
+    certificationStatus: payload.certificationStatus || "Certified",
+    trainingWeek: String(payload.trainingWeek || 1),
+    individualJPH: String(payload.individualJPH || 0),
+    updatedBy: getAROwner()
+  });
+
+  return fetchJson(`${API_URL}?${params.toString()}`);
+}
+
+async function clearARRosterAssignment(operatorName, role) {
+  const params = new URLSearchParams({
+    action: "clearArRosterAssignment",
+    owner: getAROwner(),
+    shift: getARShift(),
+    operatorName: operatorName || "",
+    role: role || "",
+    defaultRole: role || "",
+    updatedBy: getAROwner()
+  });
+
+  return fetchJson(`${API_URL}?${params.toString()}`);
 }
 
 async function loadARData() {
   try {
-    const [flowPayload, capacityPayload] = await Promise.all([
+    const [flowPayload, capacityPayload, rosterPayload] = await Promise.all([
       fetchProductionFlowAR(),
-      fetchARCapacity().catch(() => null)
+      fetchARCapacity().catch(err => {
+        console.warn("AR capacity metrics failed:", err);
+        return null;
+      }),
+      fetchARRosterControl().catch(err => {
+        console.warn("AR roster control failed:", err);
+        return null;
+      })
     ]);
 
     LAST_FLOW_PAYLOAD = flowPayload;
     LAST_CAPACITY_PAYLOAD = capacityPayload || null;
+    AR_METRICS_STATE.metricsPayload = capacityPayload || null;
+    AR_METRICS_STATE.rosterPayload = rosterPayload || null;
+    AR_METRICS_STATE.owner = getAROwner();
+    AR_METRICS_STATE.shift = getARShift();
 
     console.log("REAL AR FLOW PAYLOAD:", flowPayload);
     console.table(flowPayload.productionFlow || []);
@@ -675,6 +911,7 @@ function renderDashboard(flowPayload, capacityPayload) {
   renderAlerts(LAST_VALUES);
   renderDailyBrief(LAST_VALUES);
   renderSummaryBreakdown(LAST_VALUES);
+  renderARMetricsPanel(LAST_CAPACITY_PAYLOAD, AR_METRICS_STATE.rosterPayload);
   renderCharts(flowPayload, arRows, LAST_VALUES);
   placeArrows();
 }
@@ -1144,6 +1381,1040 @@ function renderSummaryBreakdown(values) {
   setText("summaryBalanceText", balanceText);
 }
 
+
+function normalizeARText(value, fallback = "--") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function getRosterOperatorName(row) {
+  return normalizeARText(row.operatorName || row.OperatorName || row.name || row.Name, "");
+}
+
+function getRosterRole(row) {
+  return normalizeARText(row.defaultRole || row.DefaultRole || row.role || row.Role, "AR-IN");
+}
+
+function getRosterFinalJph(row) {
+  return toNumber(row.finalJph || row.FinalJPH || row.jph || row.JPH);
+}
+
+function getRosterCert(row) {
+  return normalizeARText(row.certificationStatus || row.CertificationStatus || "Certified", "Certified");
+}
+
+function getOperatorMasterRows(rosterPayload, metricsPayload) {
+  const fromMaster = Array.isArray(rosterPayload?.operatorMaster) ? rosterPayload.operatorMaster : [];
+  const fromActivity = Array.isArray(metricsPayload?.operatorActivity) ? metricsPayload.operatorActivity : [];
+
+  const map = new Map();
+
+  fromMaster.forEach(row => {
+    const name = getRosterOperatorName(row);
+    if (!name) return;
+    map.set(name.toUpperCase(), {
+      operatorName: name,
+      defaultRole: normalizeARText(row.defaultRole || row.DefaultRole || row.role || row.Role, "AR-IN")
+    });
+  });
+
+  fromActivity.forEach(row => {
+    const name = normalizeARText(row.Operator || row.operator || row.operatorName, "");
+    if (!name) return;
+    const station = normalizeARText(row.FlowStation || row.flowStation || row.AccessPoint || row.accessPoint, "AR-IN");
+    if (!map.has(name.toUpperCase())) {
+      map.set(name.toUpperCase(), {
+        operatorName: name,
+        defaultRole: station
+      });
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => a.operatorName.localeCompare(b.operatorName));
+}
+
+
+function normalizeARStationFilter(value) {
+  const clean = normalizeARText(value, "ALL");
+  if (!clean || clean.toUpperCase() === "ALL") return "ALL";
+
+  const upper = clean.toUpperCase();
+  const match = AR_ROLE_ORDER.find(role => role.toUpperCase() === upper);
+  if (match) return match;
+
+  if (upper.includes("AR-IN") || upper.includes("AR IN")) return "AR-IN";
+  if (upper.includes("BASKET")) return "Basket";
+  if (upper.includes("OVEN")) return "Oven";
+  if (upper.includes("SECTOR")) return "Sectoring";
+  if (upper.includes("DERING") || upper.includes("DE RING")) return "DeRing";
+  if (upper.includes("AR-OUT") || upper.includes("AR OUT")) return "AR-OUT";
+
+  return clean;
+}
+
+function getSelectedARStation() {
+  return normalizeARStationFilter(AR_METRICS_STATE.selectedStation || "ALL");
+}
+
+function isARStationMatch(value, selectedStation = getSelectedARStation()) {
+  const selected = normalizeARStationFilter(selectedStation);
+  if (selected === "ALL") return true;
+  return normalizeARStationFilter(value).toUpperCase() === selected.toUpperCase();
+}
+
+function getARStationMetricRows(metricsPayload) {
+  return Array.isArray(metricsPayload?.stationMetrics) ? metricsPayload.stationMetrics : [];
+}
+
+function getAvailableARStationFilters(metricsPayload) {
+  const found = new Set();
+
+  getARStationMetricRows(metricsPayload).forEach(row => {
+    const role = normalizeARStationFilter(row.role || row.station);
+    if (role && role !== "ALL") found.add(role);
+  });
+
+  (metricsPayload?.operatorActivity || []).forEach(row => {
+    const station = normalizeARStationFilter(readStationFromActivity(row));
+    if (station && station !== "ALL") found.add(station);
+  });
+
+  return AR_ROLE_ORDER.filter(role => found.has(role));
+}
+
+function renderARStationFilterTabs(metricsPayload) {
+  const box = $("arStationFilterTabs");
+  const label = $("arSelectedStationLabel");
+  if (!box) return;
+
+  const selected = getSelectedARStation();
+  const stations = getAvailableARStationFilters(metricsPayload);
+  const buttons = ["ALL", ...stations];
+
+  if (selected !== "ALL" && !buttons.some(v => v.toUpperCase() === selected.toUpperCase())) {
+    AR_METRICS_STATE.selectedStation = "ALL";
+  }
+
+  const activeStation = getSelectedARStation();
+  if (label) label.textContent = activeStation === "ALL" ? "All AR" : activeStation;
+
+  box.innerHTML = buttons.map(station => {
+    const text = station === "ALL" ? "All AR" : station;
+    const active = normalizeARStationFilter(station).toUpperCase() === activeStation.toUpperCase() ? "active" : "";
+    return `<button class="${active}" type="button" data-ar-station-filter="${escapeHtml(station)}">${escapeHtml(text)}</button>`;
+  }).join("");
+
+  box.querySelectorAll("[data-ar-station-filter]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      AR_METRICS_STATE.selectedStation = normalizeARStationFilter(btn.dataset.arStationFilter || "ALL");
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    });
+  });
+}
+
+function calculateStationPeakFromOperators(operatorList) {
+  const hourTotals = {};
+  operatorList.forEach(item => {
+    Object.entries(item.hours || {}).forEach(([hour, value]) => {
+      hourTotals[hour] = toNumber(hourTotals[hour]) + toNumber(value);
+    });
+  });
+
+  const entries = Object.entries(hourTotals);
+  if (!entries.length) return { hour: "--", value: 0 };
+
+  const top = entries.reduce((best, cur) => toNumber(cur[1]) > toNumber(best[1]) ? cur : best, entries[0]);
+  return { hour: top[0], value: toNumber(top[1]) };
+}
+
+function renderARMetricsPanel(metricsPayload, rosterPayload) {
+  renderARStationFilterTabs(metricsPayload);
+  renderARMetricSummary(metricsPayload);
+  renderARStationMetrics(metricsPayload);
+  renderAROperatorPerformance(metricsPayload);
+  renderARRosterControls(metricsPayload, rosterPayload);
+
+  if (AR_METRICS_STATE.selectedOperator) {
+    const stillExists = buildAROperatorRollups(metricsPayload || {}).some(item => item.name.toUpperCase() === AR_METRICS_STATE.selectedOperator.toUpperCase());
+    if (stillExists && $("arAssociateDrawer")?.classList.contains("open")) {
+      openARAssociateDrawer(AR_METRICS_STATE.selectedOperator);
+    }
+  }
+}
+
+function renderARMetricSummary(metricsPayload) {
+  const summary = metricsPayload?.summary || {};
+  const shiftHours = metricsPayload?.shiftHours || (getARShift() === "Weekend" ? 10.5 : 9.5);
+  const selectedStation = getSelectedARStation();
+
+  if (selectedStation === "ALL") {
+    setText("arMetricTotalOutput", fmt(summary.totalActualOutput || 0));
+    setText("arMetricAssigned", fmt(summary.assignedAssociates || 0));
+    setText("arMetricCapacity", fmt(summary.totalCapacity || 0));
+    setText("arMetricPace", `${fmt(summary.outputVsCapacityPercent || 0)}%`);
+    setText("arMetricGap", `Gap: ${fmt(summary.gapToCapacity || 0)}`);
+    setText("arMetricTopStation", summary.topStation || "--");
+    setText("arMetricTopStationText", `${fmt(summary.topStationOutput || 0)} output today`);
+    setText("arMetricPeakHour", summary.peakHour || "--");
+    setText("arMetricPeakHourText", `${fmt(summary.peakHourValue || 0)} scans during peak hour`);
+    setText("arMetricStatus", `${normalizeARText(metricsPayload?.shiftType, getARShift())} · ${shiftHours} hrs`);
+    return;
+  }
+
+  const stationRow = getARStationMetricRows(metricsPayload).find(row => isARStationMatch(row.role || row.station, selectedStation)) || {};
+  const stationOperators = buildAROperatorRollups(metricsPayload, selectedStation);
+  const peak = calculateStationPeakFromOperators(stationOperators);
+  const topOperator = stationOperators[0] || {};
+
+  const actual = toNumber(stationRow.actualOutput) || stationOperators.reduce((sum, row) => sum + toNumber(row.total), 0);
+  const assigned = toNumber(stationRow.assignedCount);
+  const capacity = toNumber(stationRow.capacity);
+  const pace = selectedStation === "Oven" ? 0 : toNumber(stationRow.pacePercent) || (capacity > 0 ? Math.round((actual / capacity) * 100) : 0);
+  const gap = toNumber(stationRow.gap) || (capacity ? actual - capacity : 0);
+
+  setText("arMetricTotalOutput", fmt(actual));
+  setText("arMetricAssigned", fmt(assigned));
+  setText("arMetricCapacity", selectedStation === "Oven" ? "N/A" : fmt(capacity));
+  setText("arMetricPace", selectedStation === "Oven" ? "Process" : `${fmt(pace)}%`);
+  setText("arMetricGap", selectedStation === "Oven" ? "1 hr cooldown / No JPH" : `Gap: ${fmt(gap)}`);
+  setText("arMetricTopStation", selectedStation);
+  setText("arMetricTopStationText", topOperator.name ? `Top: ${topOperator.name} · ${fmt(topOperator.total)}` : "No operator output found");
+  setText("arMetricPeakHour", peak.hour || "--");
+  setText("arMetricPeakHourText", `${fmt(peak.value)} scans during selected station peak`);
+  setText("arMetricStatus", `${selectedStation} view · ${normalizeARText(metricsPayload?.shiftType, getARShift())} · ${shiftHours} hrs`);
+}
+function renderARStationMetrics(metricsPayload) {
+  const box = $("arStationMetricGrid");
+  if (!box) return;
+
+  const selectedStation = getSelectedARStation();
+  const rows = getARStationMetricRows(metricsPayload).filter(row => isARStationMatch(row.role || row.station, selectedStation));
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="ar-empty-state">No AR capacity metrics returned yet.</div>`;
+    return;
+  }
+
+  const ordered = rows.slice().sort((a, b) => AR_ROLE_ORDER.indexOf(a.role) - AR_ROLE_ORDER.indexOf(b.role));
+
+  box.innerHTML = ordered.map(row => {
+    const role = normalizeARText(row.role || row.station, "AR");
+    const actual = toNumber(row.actualOutput);
+    const capacity = toNumber(row.capacity);
+    const assigned = toNumber(row.assignedCount);
+    const pace = toNumber(row.pacePercent);
+    const gap = toNumber(row.gap);
+    const status = normalizeARText(row.status, "NO_ASSIGNED_CAPACITY");
+    const note = normalizeARText(row.note, "Operator JPH capacity");
+    const top = row.topOperator || {};
+    const topName = normalizeARText(top.name || top.operatorName, "No operator");
+    const topTotal = toNumber(top.total || top.Total);
+    const width = role === "Oven" ? 100 : Math.max(2, Math.min(100, pace || 0));
+    const statusClass = status.includes("AHEAD") ? "good" : status.includes("BEHIND") ? "bad" : status.includes("NO_ASSIGNED") ? "warn" : "neutral";
+
+    return `
+      <article class="ar-station-metric ${statusClass}" role="button" tabindex="0" data-ar-station-card="${escapeHtml(role)}">
+        <div class="ar-station-metric-head">
+          <strong>${escapeHtml(role)}</strong>
+          <span>${escapeHtml(status.replaceAll("_", " "))}</span>
+        </div>
+
+        <div class="ar-station-numbers">
+          <div>
+            <em>Actual</em>
+            <b>${fmt(actual)}</b>
+          </div>
+          <div>
+            <em>Assigned</em>
+            <b>${fmt(assigned)}</b>
+          </div>
+          <div>
+            <em>Capacity</em>
+            <b>${role === "Oven" ? "N/A" : fmt(capacity)}</b>
+          </div>
+        </div>
+
+        <div class="ar-capacity-bar">
+          <span style="width:${width}%"></span>
+        </div>
+
+        <div class="ar-station-meta">
+          <span>${role === "Oven" ? escapeHtml(note) : `Pace ${fmt(pace)}% · Gap ${fmt(gap)}`}</span>
+          <span>Top: ${escapeHtml(topName)}${topTotal ? ` · ${fmt(topTotal)}` : ""}</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-ar-station-card]").forEach(card => {
+    card.addEventListener("click", () => {
+      AR_METRICS_STATE.selectedStation = normalizeARStationFilter(card.dataset.arStationCard || "ALL");
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    });
+
+    card.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        card.click();
+      }
+    });
+  });
+}
+
+
+function readOperatorNameFromActivity(row) {
+  return normalizeARText(row.Operator || row.operator || row.operatorName || row.name, "");
+}
+
+function readStationFromActivity(row) {
+  return normalizeARText(row.FlowStation || row.flowStation || row.AccessPoint || row.accessPoint || row.station, "AR");
+}
+
+function readHoursObject(row) {
+  const raw = row.Hours || row.hours || row.hourly || row.Hourly || {};
+  return raw && typeof raw === "object" ? raw : {};
+}
+
+function getARHourLabels(metricsPayload) {
+  const fromPayload = Array.isArray(metricsPayload?.hours) ? metricsPayload.hours : [];
+  if (fromPayload.length) return fromPayload.map(h => String(h));
+
+  const set = new Set();
+  (metricsPayload?.operatorActivity || []).forEach(row => {
+    Object.keys(readHoursObject(row)).forEach(h => set.add(h));
+  });
+
+  const fallback = ["6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM"];
+  return set.size ? fallback.filter(h => set.has(h)).concat(Array.from(set).filter(h => !fallback.includes(h))) : fallback;
+}
+
+function getActiveARRoster(metricsPayload) {
+  const roster = Array.isArray(metricsPayload?.roster) ? metricsPayload.roster : [];
+  return roster.filter(row => normalizeARText(row.activeStatus || row.ActiveStatus, "Active").toLowerCase() === "active");
+}
+
+function getRosterByOperator(metricsPayload, operatorName) {
+  const target = String(operatorName || "").trim().toUpperCase();
+  return getActiveARRoster(metricsPayload).find(row => getRosterOperatorName(row).toUpperCase() === target) || null;
+}
+
+
+function getRosterByOperatorAndRole(metricsPayload, operatorName, role) {
+  const targetName = String(operatorName || "").trim().toUpperCase();
+  const targetRole = normalizeARStationFilter(role || "").toUpperCase();
+
+  return getActiveARRoster(metricsPayload).find(row => {
+    const nameMatch = getRosterOperatorName(row).toUpperCase() === targetName;
+    const roleMatch = normalizeARStationFilter(getRosterRole(row)).toUpperCase() === targetRole;
+    return nameMatch && roleMatch;
+  }) || null;
+}
+
+function getARCertifiedJphForRole(metricsPayload, role) {
+  const target = normalizeARStationFilter(role || "");
+  if (!target || target === "ALL" || target === "Oven") return 0;
+
+  const config = metricsPayload?.capacityConfig || {};
+  const direct = config[target] || config[target.toUpperCase()] || config[target.toLowerCase()];
+
+  if (direct && typeof direct === "object") {
+    return toNumber(
+      direct.certifiedJph ||
+      direct.CertifiedJPH ||
+      direct.defaultJph ||
+      direct.DefaultJPH ||
+      direct.jph ||
+      direct.JPH
+    );
+  }
+
+  if (typeof direct === "number" || typeof direct === "string") {
+    return toNumber(direct);
+  }
+
+  const roleDefaults = {
+    "AR-IN": 120,
+    "Basket": 64,
+    "Sectoring": 48,
+    "DeRing": 120,
+    "AR-OUT": 100
+  };
+
+  return toNumber(roleDefaults[target]);
+}
+
+function getARLastActiveHourFromHours(hours, hourLabels) {
+  let last = "--";
+  hourLabels.forEach(hour => {
+    if (toNumber(hours?.[hour]) > 0) last = hour;
+  });
+  return last;
+}
+
+function buildAROperatorStationBreakdown(metricsPayload, operatorName) {
+  const target = String(operatorName || "").trim().toUpperCase();
+  const hourLabels = getARHourLabels(metricsPayload);
+  const byStation = new Map();
+
+  (Array.isArray(metricsPayload?.operatorActivity) ? metricsPayload.operatorActivity : []).forEach(row => {
+    const name = readOperatorNameFromActivity(row);
+    if (!name || name.toUpperCase() !== target) return;
+
+    const station = normalizeARStationFilter(readStationFromActivity(row));
+    if (!station || station === "ALL") return;
+
+    if (!byStation.has(station)) {
+      byStation.set(station, {
+        station,
+        total: 0,
+        rows: [],
+        hours: Object.fromEntries(hourLabels.map(h => [h, 0])),
+        bestHour: "--",
+        bestValue: 0,
+        lastActiveHour: "--",
+        targetJph: 0,
+        pace: 0,
+        capacity: 0,
+        cert: "Not Assigned"
+      });
+    }
+
+    const item = byStation.get(station);
+    const rowHours = readHoursObject(row);
+    const rowTotal = toNumber(row.Total || row.total || row.ActivityToday || row.activityToday);
+
+    item.total += rowTotal;
+    item.rows.push(row);
+
+    hourLabels.forEach(hour => {
+      item.hours[hour] = toNumber(item.hours[hour]) + toNumber(rowHours[hour]);
+    });
+  });
+
+  const shiftHours = toNumber(metricsPayload?.shiftHours || (getARShift() === "Weekend" ? 10.5 : 9.5));
+
+  Array.from(byStation.values()).forEach(item => {
+    const rosterRow = getRosterByOperatorAndRole(metricsPayload, operatorName, item.station);
+    const exactJph = rosterRow ? getRosterFinalJph(rosterRow) : 0;
+    const defaultJph = getARCertifiedJphForRole(metricsPayload, item.station);
+
+    item.targetJph = item.station === "Oven" ? 0 : (exactJph || defaultJph);
+    item.capacity = item.targetJph > 0 ? Math.round(item.targetJph * shiftHours) : 0;
+    item.pace = item.capacity > 0 ? Math.round((item.total / item.capacity) * 100) : 0;
+    item.cert = rosterRow ? getRosterCert(rosterRow) : (item.targetJph ? "Live role target" : "No JPH target");
+
+    hourLabels.forEach(hour => {
+      const value = toNumber(item.hours[hour]);
+      if (value > item.bestValue) {
+        item.bestValue = value;
+        item.bestHour = hour;
+      }
+    });
+
+    item.lastActiveHour = getARLastActiveHourFromHours(item.hours, hourLabels);
+  });
+
+  return Array.from(byStation.values()).sort((a, b) => {
+    const ia = AR_ROLE_ORDER.indexOf(a.station);
+    const ib = AR_ROLE_ORDER.indexOf(b.station);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+}
+
+function buildAROperatorRollups(metricsPayload, stationFilter = getSelectedARStation()) {
+  const selectedStation = normalizeARStationFilter(stationFilter || "ALL");
+  const rows = (Array.isArray(metricsPayload?.operatorActivity) ? metricsPayload.operatorActivity : [])
+    .filter(row => isARStationMatch(readStationFromActivity(row), selectedStation));
+  const hourLabels = getARHourLabels(metricsPayload);
+  const byName = new Map();
+
+  rows.forEach(row => {
+    const name = readOperatorNameFromActivity(row);
+    if (!name) return;
+
+    const key = name.toUpperCase();
+    const total = toNumber(row.Total || row.total || row.ActivityToday || row.activityToday);
+    const station = readStationFromActivity(row);
+    const bestHour = normalizeARText(row.BestHour || row.bestHour || row.besthour, "--");
+    const bestValue = toNumber(row.BestHourValue || row.bestHourValue || row.bestvalue);
+    const lastActiveHour = normalizeARText(row.LastActiveHour || row.lastActiveHour || row.lastactivehour, "--");
+    const hours = readHoursObject(row);
+
+    if (!byName.has(key)) {
+      byName.set(key, {
+        name,
+        total: 0,
+        stations: new Set(),
+        rows: [],
+        hours: Object.fromEntries(hourLabels.map(h => [h, 0])),
+        bestHour: "--",
+        bestValue: 0,
+        lastActiveHour: "--"
+      });
+    }
+
+    const item = byName.get(key);
+    item.total += total;
+    item.stations.add(station);
+    item.rows.push(row);
+
+    hourLabels.forEach(hour => {
+      item.hours[hour] = toNumber(item.hours[hour]) + toNumber(hours[hour]);
+    });
+
+    if (bestValue > item.bestValue) {
+      item.bestHour = bestHour;
+      item.bestValue = bestValue;
+    }
+
+    if (lastActiveHour && lastActiveHour !== "--") {
+      item.lastActiveHour = lastActiveHour;
+    }
+  });
+
+  const roster = getActiveARRoster(metricsPayload);
+  const rosterByName = new Map(roster.map(row => [getRosterOperatorName(row).toUpperCase(), row]));
+
+  return Array.from(byName.values()).map(item => {
+    const rosterRow = rosterByName.get(item.name.toUpperCase()) || null;
+    const role = rosterRow ? getRosterRole(rosterRow) : Array.from(item.stations)[0] || "AR";
+    const cert = rosterRow ? getRosterCert(rosterRow) : "Not Assigned";
+    const finalJph = rosterRow ? getRosterFinalJph(rosterRow) : 0;
+    const shiftHours = toNumber(metricsPayload?.shiftHours || (getARShift() === "Weekend" ? 10.5 : 9.5));
+    const capacity = role === "Oven" ? 0 : Math.round(finalJph * shiftHours);
+    const pace = capacity > 0 ? Math.round((item.total / capacity) * 100) : 0;
+
+    return {
+      ...item,
+      role,
+      cert,
+      finalJph,
+      capacity,
+      pace,
+      assigned: !!rosterRow,
+      rosterRow
+    };
+  }).sort((a, b) => b.total - a.total);
+}
+
+function openARAssociateDrawer(operatorName) {
+  const metricsPayload = AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {};
+  const target = String(operatorName || "").trim().toUpperCase();
+  const item = buildAROperatorRollups(metricsPayload).find(row => row.name.toUpperCase() === target);
+  const stationBreakdown = buildAROperatorStationBreakdown(metricsPayload, operatorName);
+
+  if (!item && !stationBreakdown.length) {
+    showToast("No hourly activity found for that associate.");
+    return;
+  }
+
+  const activeItem = item || {
+    name: operatorName,
+    total: stationBreakdown.reduce((sum, row) => sum + toNumber(row.total), 0),
+    stations: new Set(stationBreakdown.map(row => row.station)),
+    bestHour: "--",
+    bestValue: 0,
+    lastActiveHour: "--",
+    role: "Multiple areas",
+    cert: "Live activity",
+    finalJph: 0,
+    capacity: 0,
+    pace: 0
+  };
+
+  AR_METRICS_STATE.selectedOperator = activeItem.name;
+
+  const drawer = $("arAssociateDrawer");
+  const backdrop = $("arAssociateDrawerBackdrop");
+  if (!drawer) return;
+
+  const shiftHours = toNumber(metricsPayload?.shiftHours || (getARShift() === "Weekend" ? 10.5 : 9.5));
+  const totalOutput = stationBreakdown.length
+    ? stationBreakdown.reduce((sum, row) => sum + toNumber(row.total), 0)
+    : toNumber(activeItem.total);
+  const totalCapacity = stationBreakdown.reduce((sum, row) => sum + toNumber(row.capacity), 0);
+  const totalPace = totalCapacity > 0 ? Math.round((totalOutput / totalCapacity) * 100) : 0;
+
+  const bestStation = stationBreakdown.reduce((best, row) => {
+    return toNumber(row.bestValue) > toNumber(best.bestValue || 0) ? row : best;
+  }, {});
+
+  const lastActive = stationBreakdown.reduce((last, row) => {
+    return row.lastActiveHour && row.lastActiveHour !== "--" ? row.lastActiveHour : last;
+  }, activeItem.lastActiveHour || "--");
+
+  const roleText = stationBreakdown.length > 1
+    ? `${stationBreakdown.length} areas`
+    : (stationBreakdown[0]?.station || activeItem.role || "AR");
+
+  const capText = totalCapacity > 0 ? `${fmt(totalCapacity)} total cap` : "By area / No JPH";
+  const paceText = totalCapacity > 0 ? `${fmt(totalPace)}%` : "By area";
+
+  setText("arDrawerName", activeItem.name);
+  setText("arDrawerMeta", `${roleText} · ${capText} · ${shiftHours} hr shift`);
+  setText("arDrawerRole", roleText);
+  setText("arDrawerJph", stationBreakdown.length > 1 ? "By area" : (stationBreakdown[0]?.targetJph ? fmt(stationBreakdown[0].targetJph) : "--"));
+  setText("arDrawerTotal", fmt(totalOutput));
+  setText("arDrawerPace", paceText);
+  setText("arDrawerBestHour", bestStation.station ? `${bestStation.station} · ${bestStation.bestHour} (${fmt(bestStation.bestValue)})` : `${activeItem.bestHour} (${fmt(activeItem.bestValue)})`);
+  setText("arDrawerLastHour", lastActive || "--");
+  setText("arDrawerStations", stationBreakdown.map(row => `${row.station}: ${fmt(row.total)}`).join(" · ") || Array.from(activeItem.stations || []).join(" · ") || "--");
+
+  const hoursBox = $("arDrawerHours");
+  if (hoursBox) {
+    const labels = getARHourLabels(metricsPayload);
+
+    if (!stationBreakdown.length) {
+      const maxHour = Math.max(...Object.values(activeItem.hours || {}).map(toNumber), 1);
+      const targetJph = getAROperatorHourlyTarget(activeItem);
+      const hasTarget = targetJph > 0 && activeItem.role !== "Oven";
+
+      hoursBox.innerHTML = labels.map(hour => {
+        const value = toNumber(activeItem.hours?.[hour]);
+        const width = Math.max(value > 0 ? 4 : 0, Math.round((value / maxHour) * 100));
+        const pctVal = hasTarget ? Math.round((value / targetJph) * 100) : 0;
+        const perfClass = value === 0 && !hasTarget ? "no-target" : getARPerformanceClass(pctVal, hasTarget);
+        return `
+          <div class="ar-hour-line ${value > 0 ? "active" : ""} ${perfClass}">
+            <span>${escapeHtml(hour)}</span>
+            <div><i style="width:${width}%"></i></div>
+            <strong>${fmt(value)}${hasTarget ? ` · ${pctVal}%` : ""}</strong>
+          </div>
+        `;
+      }).join("");
+    } else {
+      hoursBox.innerHTML = stationBreakdown.map(section => {
+        const maxHour = Math.max(...Object.values(section.hours || {}).map(toNumber), 1);
+        const hasTarget = section.targetJph > 0 && section.station !== "Oven";
+        const sectionPerf = getARPerformanceClass(section.pace, hasTarget);
+        const capacityText = section.station === "Oven"
+          ? "Process constraint · 1 hr cooldown · No JPH"
+          : hasTarget
+            ? `${fmt(section.targetJph)} JPH · ${fmt(section.capacity)} cap · ${fmt(section.pace)}% pace`
+            : "No JPH target";
+
+        return `
+          <article class="ar-drawer-station-block perf-${sectionPerf}">
+            <div class="ar-drawer-station-head">
+              <div>
+                <strong>${escapeHtml(section.station)}</strong>
+                <span>${escapeHtml(section.cert)} · ${escapeHtml(capacityText)}</span>
+              </div>
+              <div>
+                <b>${fmt(section.total)}</b>
+                <em>output</em>
+              </div>
+            </div>
+
+            <div class="ar-drawer-station-meta">
+              <span>Best: ${escapeHtml(section.bestHour)} (${fmt(section.bestValue)})</span>
+              <span>Last active: ${escapeHtml(section.lastActiveHour || "--")}</span>
+            </div>
+
+            <div class="ar-drawer-station-hours">
+              ${labels.map(hour => {
+                const value = toNumber(section.hours?.[hour]);
+                const width = Math.max(value > 0 ? 4 : 0, Math.round((value / maxHour) * 100));
+                const pctVal = hasTarget ? Math.round((value / section.targetJph) * 100) : 0;
+                const perfClass = value === 0 && !hasTarget ? "no-target" : getARPerformanceClass(pctVal, hasTarget);
+                return `
+                  <div class="ar-hour-line ${value > 0 ? "active" : ""} ${perfClass}">
+                    <span>${escapeHtml(hour)}</span>
+                    <div><i style="width:${width}%"></i></div>
+                    <strong>${fmt(value)}${hasTarget ? ` · ${pctVal}%` : ""}</strong>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+  }
+
+  drawer.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  if (backdrop) backdrop.classList.add("open");
+
+  document.querySelectorAll(".ar-operator-row.active, .ar-roster-item.active").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(`[data-operator-detail="${CSS.escape(activeItem.name)}"], [data-operator="${CSS.escape(activeItem.name)}"]`).forEach(el => el.classList.add("active"));
+}
+
+function closeARAssociateDrawer() {
+  const drawer = $("arAssociateDrawer");
+  const backdrop = $("arAssociateDrawerBackdrop");
+  if (drawer) {
+    drawer.classList.remove("open");
+    drawer.setAttribute("aria-hidden", "true");
+  }
+  if (backdrop) backdrop.classList.remove("open");
+}
+
+
+function getARPerformanceClass(percent, hasTarget = true) {
+  if (!hasTarget) return "no-target";
+  const p = toNumber(percent);
+  if (p >= 100) return "good";
+  if (p >= 90) return "amber";
+  return "bad";
+}
+
+function getAROperatorHourlyTarget(item) {
+  const target = toNumber(item?.finalJph);
+  return target > 0 ? target : 0;
+}
+
+function renderAROperatorHourStrip(item, metricsPayload) {
+  const labels = getARHourLabels(metricsPayload);
+  const target = getAROperatorHourlyTarget(item);
+  const hasTarget = target > 0 && item.role !== "Oven";
+
+  return `
+    <div class="ar-hourly-strip" aria-label="Hourly operator output">
+      ${labels.map(hour => {
+        const value = toNumber(item.hours?.[hour]);
+        const pctVal = hasTarget ? Math.round((value / target) * 100) : 0;
+        const cls = value === 0 && !hasTarget ? "no-target" : getARPerformanceClass(pctVal, hasTarget);
+        const shortHour = String(hour).replace(":00 ", "").replace(" AM", "A").replace(" PM", "P");
+        return `
+          <div class="ar-hour-cell ${cls}" title="${escapeHtml(hour)} · ${fmt(value)}${hasTarget ? ` / ${fmt(target)} (${pctVal}%)` : ""}">
+            <span>${escapeHtml(shortHour)}</span>
+            <strong>${fmt(value)}</strong>
+            <em>${hasTarget ? `${fmt(pctVal)}%` : "No Target"}</em>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderAROperatorPerformance(metricsPayload) {
+  const box = $("arOperatorPerformanceList");
+  if (!box) return;
+
+  const list = buildAROperatorRollups(metricsPayload);
+  if (!list.length) {
+    box.innerHTML = `<div class="ar-empty-state">No AR operator activity found.</div>`;
+    return;
+  }
+
+  box.innerHTML = list.map((item, index) => {
+    const target = getAROperatorHourlyTarget(item);
+    const hasTarget = target > 0 && item.role !== "Oven";
+    const currentPct = hasTarget ? Math.round((item.bestValue / target) * 100) : 0;
+    const perfClass = getARPerformanceClass(currentPct, hasTarget);
+    const assignClass = item.assigned ? "assigned" : "not-assigned";
+    const capacityText = item.role === "Oven"
+      ? "Process constraint · 1 hr cooldown · No JPH capacity"
+      : item.capacity
+        ? `Current JPH ${fmt(currentPct)}% · ${fmt(item.bestValue)} / ${fmt(target)}`
+        : "No assigned capacity";
+
+    return `
+      <button class="ar-operator-row ${assignClass} perf-${perfClass}" type="button" data-operator-detail="${escapeHtml(item.name)}">
+        <div class="ar-operator-topline">
+          <div class="ar-operator-rank">${index + 1}</div>
+          <div class="ar-operator-main">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${escapeHtml(item.role)} · ${escapeHtml(item.cert)} · Peak ${escapeHtml(item.bestHour)} (${fmt(item.bestValue)})</span>
+          </div>
+          <div class="ar-operator-score">
+            <strong>${fmt(item.total)}</strong>
+            <span>${hasTarget ? "JPH" : "Output"}</span>
+          </div>
+        </div>
+
+        <div class="ar-operator-jph-pill ${perfClass}">
+          ${escapeHtml(capacityText)}
+        </div>
+
+        ${renderAROperatorHourStrip(item, metricsPayload)}
+      </button>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-operator-detail]").forEach(btn => {
+    btn.addEventListener("click", () => openARAssociateDrawer(btn.dataset.operatorDetail));
+  });
+}
+
+function renderARRosterControls(metricsPayload, rosterPayload) {
+  const ownerInput = $("arMetricOwner");
+  const shiftSelect = $("arMetricShift");
+
+  if (ownerInput && !ownerInput.value) ownerInput.value = AR_METRICS_STATE.owner || "BLOPEZ";
+  if (shiftSelect) shiftSelect.value = AR_METRICS_STATE.shift || "Weekday";
+
+  const canSeeRosterAdmin = applyARLMSOnlyVisibility();
+  if (!canSeeRosterAdmin) {
+    return;
+  }
+
+  const operatorSelect = $("arAssignOperator");
+  if (operatorSelect) {
+    const selected = operatorSelect.value;
+    const options = getOperatorMasterRows(rosterPayload, metricsPayload);
+
+    operatorSelect.innerHTML = `<option value="">Select associate</option>` + options.map(row => `
+      <option value="${escapeHtml(row.operatorName)}" data-role="${escapeHtml(row.defaultRole)}">${escapeHtml(row.operatorName)}</option>
+    `).join("");
+
+    if (selected) operatorSelect.value = selected;
+  }
+
+  renderARRosterList(metricsPayload?.roster || rosterPayload?.roster || []);
+}
+
+
+function getARRosterDisplayKey(row) {
+  return getRosterOperatorName(row).toUpperCase();
+}
+
+function compactARRosterForDisplay(roster) {
+  const map = new Map();
+  (Array.isArray(roster) ? roster : []).forEach(row => {
+    const status = normalizeARText(row.activeStatus || row.ActiveStatus, "Active").toLowerCase();
+    if (status !== "active") return;
+
+    const key = getARRosterDisplayKey(row);
+    const current = map.get(key);
+    if (!current) {
+      map.set(key, row);
+      return;
+    }
+
+    const currentTime = new Date(current.updatedAt || current.UpdatedAt || 0).getTime() || 0;
+    const rowTime = new Date(row.updatedAt || row.UpdatedAt || 0).getTime() || 0;
+    if (rowTime >= currentTime) map.set(key, row);
+  });
+
+  return Array.from(map.values()).sort((a, b) => {
+    const nameA = getRosterOperatorName(a).toUpperCase();
+    const nameB = getRosterOperatorName(b).toUpperCase();
+    return nameA.localeCompare(nameB);
+  });
+}
+
+function renderARRosterList(roster) {
+  const box = $("arRosterList");
+  const count = $("arRosterCount");
+  const active = compactARRosterForDisplay(roster);
+
+  if (count) count.textContent = `${active.length} assigned`;
+
+  if (!box) return;
+
+  if (!active.length) {
+    box.innerHTML = `<div class="ar-empty-state">No assigned associates yet. Select an associate and role to start capacity tracking.</div>`;
+    return;
+  }
+
+  box.innerHTML = active.map(row => {
+    const name = getRosterOperatorName(row);
+    const role = getRosterRole(row);
+    const cert = getRosterCert(row);
+    const week = toNumber(row.trainingWeek || row.TrainingWeek) || 1;
+    const custom = toNumber(row.individualJph || row.IndividualJPH);
+    const finalJph = getRosterFinalJph(row);
+
+    return `
+      <div class="ar-roster-item" role="button" tabindex="0" data-operator="${escapeHtml(name)}">
+        <div>
+          <strong>${escapeHtml(name)}</strong>
+          <span>${escapeHtml(role)} · ${escapeHtml(cert)}${cert === "Training" ? ` W${week}` : ""}${custom ? ` · Custom ${fmt(custom)} JPH` : ""}</span>
+        </div>
+        <div class="ar-roster-actions">
+          <em>${fmt(finalJph)} JPH</em>
+          <button type="button" class="ar-mini-btn" data-edit-ar="${escapeHtml(name)}" data-edit-role="${escapeHtml(role)}">Edit</button>
+          <button type="button" class="ar-mini-btn danger" data-clear-ar="${escapeHtml(name)}" data-clear-role="${escapeHtml(role)}">Clear</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-operator]").forEach(row => {
+    row.addEventListener("click", () => openARAssociateDrawer(row.dataset.operator));
+    row.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openARAssociateDrawer(row.dataset.operator);
+      }
+    });
+  });
+
+  box.querySelectorAll("[data-clear-ar]").forEach(btn => {
+    btn.addEventListener("click", event => {
+      event.stopPropagation();
+      handleClearARAssignment(btn.dataset.clearAr, btn.dataset.clearRole);
+    });
+  });
+
+  box.querySelectorAll("[data-edit-ar]").forEach(btn => {
+    btn.addEventListener("click", event => {
+      event.stopPropagation();
+      fillARRosterForm(btn.dataset.editAr, active, btn.dataset.editRole);
+    });
+  });
+}
+
+function fillARRosterForm(operatorName, roster, role) {
+  const operatorKey = String(operatorName || "").toUpperCase();
+  const roleKey = String(role || "").toUpperCase();
+  const row = roster.find(item =>
+    getRosterOperatorName(item).toUpperCase() === operatorKey &&
+    (!roleKey || getRosterRole(item).toUpperCase() === roleKey)
+  );
+  if (!row) return;
+
+  const operatorSelect = $("arAssignOperator");
+  const roleSelect = $("arAssignRole");
+  const certSelect = $("arAssignCert");
+  const weekSelect = $("arAssignWeek");
+  const customInput = $("arAssignCustomJph");
+
+  if (operatorSelect) operatorSelect.value = getRosterOperatorName(row);
+  if (roleSelect) roleSelect.value = getRosterRole(row);
+  if (certSelect) certSelect.value = getRosterCert(row);
+  if (weekSelect) weekSelect.value = String(toNumber(row.trainingWeek || row.TrainingWeek) || 1);
+  if (customInput) customInput.value = toNumber(row.individualJph || row.IndividualJPH) || "";
+}
+
+async function handleSaveARAssignment() {
+  if (!isARLMSUser()) {
+    showToast("AR assignment control is LMS only.");
+    applyARLMSOnlyVisibility();
+    return;
+  }
+
+  if (AR_METRICS_STATE.isSaving) return;
+
+  const operatorName = $("arAssignOperator")?.value || "";
+  if (!operatorName) {
+    showToast("Select an AR associate first.");
+    return;
+  }
+
+  const payload = {
+    operatorName,
+    role: $("arAssignRole")?.value || "AR-IN",
+    certificationStatus: $("arAssignCert")?.value || "Certified",
+    trainingWeek: $("arAssignWeek")?.value || 1,
+    individualJPH: $("arAssignCustomJph")?.value || 0
+  };
+
+  try {
+    AR_METRICS_STATE.isSaving = true;
+    const btn = $("arAssignBtn");
+    if (btn) btn.textContent = "Saving...";
+
+    await saveARRosterAssignment(payload);
+    showToast("AR assignment saved.");
+    await loadARData();
+  } catch (err) {
+    console.error("AR assignment save failed:", err);
+    showToast("AR assignment save failed.");
+  } finally {
+    AR_METRICS_STATE.isSaving = false;
+    const btn = $("arAssignBtn");
+    if (btn) btn.textContent = "Assign / Update";
+  }
+}
+
+async function handleClearARAssignment(operatorName, role) {
+  if (!isARLMSUser()) {
+    showToast("AR assignment clear is LMS only.");
+    applyARLMSOnlyVisibility();
+    return;
+  }
+
+  if (!operatorName || AR_METRICS_STATE.isSaving) return;
+
+  try {
+    AR_METRICS_STATE.isSaving = true;
+    await clearARRosterAssignment(operatorName, role);
+
+    const operatorKey = String(operatorName || "").toUpperCase();
+    const roleKey = String(role || "").toUpperCase();
+    const current = AR_METRICS_STATE.metricsPayload?.roster || [];
+    renderARRosterList(current.filter(row => {
+      const sameOperator = getRosterOperatorName(row).toUpperCase() === operatorKey;
+      const sameRole = getRosterRole(row).toUpperCase() === roleKey;
+      return !(sameOperator && sameRole);
+    }));
+
+    showToast("AR assignment cleared.");
+    await loadARData();
+  } catch (err) {
+    console.error("AR assignment clear failed:", err);
+    showToast("AR assignment clear failed.");
+  } finally {
+    AR_METRICS_STATE.isSaving = false;
+  }
+}
+
+function bindARMetricEvents() {
+  applyARLMSOnlyVisibility();
+
+  const refresh = $("arMetricRefresh");
+  const owner = $("arMetricOwner");
+  const shift = $("arMetricShift");
+  const assign = $("arAssignBtn");
+  const operatorSelect = $("arAssignOperator");
+  const drawerClose = $("arAssociateDrawerClose");
+  const drawerBackdrop = $("arAssociateDrawerBackdrop");
+
+  if (refresh && !refresh.dataset.bound) {
+    refresh.addEventListener("click", loadARData);
+    refresh.dataset.bound = "1";
+  }
+
+  if (owner && !owner.dataset.bound) {
+    owner.addEventListener("change", loadARData);
+    owner.dataset.bound = "1";
+  }
+
+  if (shift && !shift.dataset.bound) {
+    shift.addEventListener("change", loadARData);
+    shift.dataset.bound = "1";
+  }
+
+  if (assign && !assign.dataset.bound) {
+    assign.addEventListener("click", handleSaveARAssignment);
+    assign.dataset.bound = "1";
+  }
+
+  if (drawerClose && !drawerClose.dataset.bound) {
+    drawerClose.addEventListener("click", closeARAssociateDrawer);
+    drawerClose.dataset.bound = "1";
+  }
+
+  if (drawerBackdrop && !drawerBackdrop.dataset.bound) {
+    drawerBackdrop.addEventListener("click", closeARAssociateDrawer);
+    drawerBackdrop.dataset.bound = "1";
+  }
+
+  if (operatorSelect && !operatorSelect.dataset.bound) {
+    operatorSelect.addEventListener("change", () => {
+      const option = operatorSelect.options[operatorSelect.selectedIndex];
+      const role = option?.dataset?.role;
+      if (role && $("arAssignRole")) $("arAssignRole").value = role;
+    });
+    operatorSelect.dataset.bound = "1";
+  }
+
+  if (!bindARMetricEvents._escapeBound) {
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeARAssociateDrawer();
+    });
+    bindARMetricEvents._escapeBound = true;
+  }
+}
+
+
 /* ─────────────────────────────────────────────────────
    CHARTS
 ───────────────────────────────────────────────────── */
@@ -1388,6 +2659,17 @@ function bindPageNavigation() {
 
       if (section === "summary") {
         renderSummaryBreakdown(LAST_VALUES);
+        renderARMetricsPanel(LAST_CAPACITY_PAYLOAD, AR_METRICS_STATE.rosterPayload);
+      }
+
+      if (section === "lmsSetup") {
+        if (!applyARLMSOnlyVisibility()) {
+          showToast("LMS Setup is restricted to LMS users.");
+          const overviewBtn = document.querySelector('.nav-item[data-section="overview"]');
+          if (overviewBtn) overviewBtn.click();
+          return;
+        }
+        renderARRosterControls(LAST_CAPACITY_PAYLOAD, AR_METRICS_STATE.rosterPayload);
       }
 
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1511,6 +2793,7 @@ function bindEvents() {
 
   bindPageNavigation();
   bindSplitTabs();
+  bindARMetricEvents();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
