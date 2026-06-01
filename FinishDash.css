@@ -6255,3 +6255,866 @@ body.operator-drawer-open {
   [data-content="config"] .secondary-action,
   [data-content="config"] .primary-action::after { transition: none !important; }
 }
+
+/* =========================================================
+   VIDEOGAME SIDE-TAB CONFIGURATION UI
+   Replaces accordion feel with a game-settings layout.
+========================================================= */
+.config-game-shell {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(0, 217, 255, 0.28) !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(0, 217, 255, 0.13), transparent 34%),
+    radial-gradient(circle at 90% 12%, rgba(176, 108, 255, 0.10), transparent 32%),
+    linear-gradient(180deg, rgba(5, 18, 35, 0.92), rgba(2, 8, 18, 0.98)) !important;
+}
+
+.config-game-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 217, 255, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 217, 255, .035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(180deg, #000, transparent 92%);
+}
+
+.config-game-header,
+.config-game-layout,
+.config-game-actions {
+  position: relative;
+  z-index: 2;
+}
+
+.config-game-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(100, 221, 255, 0.14);
+}
+
+.config-game-eyebrow {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--cyan);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.config-game-header h2 {
+  margin: 0;
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 900;
+  letter-spacing: -.04em;
+  text-transform: uppercase;
+}
+
+.config-game-header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.config-profile-card {
+  min-width: 250px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 217, 255, .24);
+  background: rgba(2, 12, 24, .74);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 0 22px rgba(0,217,255,.08);
+  text-align: right;
+}
+
+.config-profile-card span,
+.config-profile-card small {
+  display: block;
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.config-profile-card strong {
+  display: block;
+  margin: 5px 0;
+  color: var(--green);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.config-game-layout {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.config-side-tabs {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 14px;
+  border-radius: 24px;
+  border: 1px solid rgba(100, 221, 255, .18);
+  background: rgba(2, 10, 22, .72);
+}
+
+.config-side-tab {
+  position: relative;
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  column-gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(100, 221, 255, .14);
+  background: linear-gradient(135deg, rgba(12, 32, 58, .72), rgba(3, 12, 24, .94));
+  color: var(--soft);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .22s ease, border-color .22s ease, background .22s ease, box-shadow .22s ease;
+}
+
+.config-side-tab::after {
+  content: "›";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--cyan);
+  font-size: 26px;
+  opacity: .45;
+}
+
+.config-side-tab:hover,
+.config-side-tab.active {
+  transform: translateX(4px);
+  border-color: rgba(0, 217, 255, .62);
+  background:
+    linear-gradient(90deg, rgba(0, 217, 255, .18), rgba(3, 12, 24, .94));
+  box-shadow: 0 0 28px rgba(0, 217, 255, .14);
+}
+
+.config-side-tab.active::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--green), var(--cyan));
+  box-shadow: 0 0 18px var(--cyan);
+}
+
+.config-side-tab i {
+  grid-row: 1 / span 3;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  border: 1px solid rgba(0, 217, 255, .24);
+  color: var(--cyan);
+  background: rgba(0, 217, 255, .08);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.config-side-icon {
+  display: none;
+}
+
+.config-side-tab strong {
+  display: block;
+  padding-right: 18px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.config-side-tab small {
+  display: block;
+  grid-column: 2;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.config-pane-stage {
+  min-height: 625px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(100, 221, 255, .20);
+  background: rgba(2, 10, 22, .62);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.config-pane {
+  display: none;
+  animation: configPaneIn .25s ease both;
+}
+
+.config-pane.active {
+  display: block;
+}
+
+@keyframes configPaneIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.config-pane-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(100, 221, 255, .16);
+  background: linear-gradient(90deg, rgba(0, 217, 255, .08), rgba(255,255,255,.02));
+}
+
+.config-pane-header span {
+  color: var(--cyan);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.config-pane-header h3 {
+  margin: 6px 0 5px;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -.03em;
+}
+
+.config-pane-header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.config-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,245,160,.30);
+  color: var(--green);
+  background: rgba(0,245,160,.07);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.config-status-pill span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 14px var(--green);
+}
+
+.config-module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.core-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.config-module-card,
+.training-week-grid label {
+  position: relative;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(100, 221, 255, .18);
+  background: linear-gradient(180deg, rgba(12,32,58,.78), rgba(3,12,24,.92));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+.config-module-card h4 {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.config-control-row {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.config-control-row label,
+.training-week-grid span {
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.config-stepper {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  border-radius: 13px;
+  border: 1px solid rgba(0,217,255,.22);
+  overflow: hidden;
+  background: rgba(2, 12, 24, .74);
+}
+
+.config-stepper button {
+  border: 0;
+  background: rgba(0, 217, 255, .08);
+  color: var(--cyan);
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.config-stepper button:hover {
+  background: rgba(0, 217, 255, .18);
+}
+
+.config-stepper input,
+.training-week-grid input {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: center;
+  font-size: 16px;
+  font-weight: 900;
+  outline: none;
+}
+
+.config-total {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0,245,160,.20);
+  background: rgba(0,245,160,.06);
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.config-total strong {
+  color: var(--green);
+  font-size: 18px;
+}
+
+.config-quick-view {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.config-quick-view article {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(100, 221, 255, .16);
+  background: rgba(2, 12, 24, .66);
+  text-align: center;
+}
+
+.config-quick-view span,
+.config-quick-view small {
+  display: block;
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.config-quick-view strong {
+  display: block;
+  margin: 6px 0;
+  color: var(--cyan);
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.training-week-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.final-training-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.training-week-grid label {
+  display: grid;
+  gap: 12px;
+}
+
+.training-week-grid input {
+  border-radius: 13px;
+  border: 1px solid rgba(0,217,255,.22);
+  background: rgba(2, 12, 24, .74);
+}
+
+.config-game-actions {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(100, 221, 255, .14);
+}
+
+.finish-assignment-toast {
+  right: 22px !important;
+  bottom: 22px !important;
+  border-color: rgba(0, 245, 160, .38) !important;
+  background:
+    linear-gradient(180deg, rgba(5, 20, 36, .98), rgba(2, 8, 18, .98)) !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .42), 0 0 30px rgba(0,245,160,.12) !important;
+}
+
+.finish-assignment-toast::before {
+  content: "✓";
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  border-radius: 999px;
+  color: #02110c;
+  background: var(--green);
+  box-shadow: 0 0 14px rgba(0,245,160,.45);
+}
+
+@media (max-width: 1250px) {
+  .config-game-layout { grid-template-columns: 1fr; }
+  .config-side-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .config-module-grid,
+  .core-grid,
+  .training-week-grid,
+  .final-training-grid,
+  .config-quick-view { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .config-game-header { flex-direction: column; }
+  .config-profile-card { width: 100%; text-align: left; }
+  .config-side-tabs,
+  .config-module-grid,
+  .core-grid,
+  .training-week-grid,
+  .final-training-grid,
+  .config-quick-view { grid-template-columns: 1fr; }
+}
+
+
+/* ===============================
+   LMS CONTROL CENTER V3
+================================ */
+.finish-roster-v3-panel {
+  padding: 18px;
+}
+
+.finish-roster-v3-header {
+  align-items: start;
+}
+
+.finish-roster-status-card small {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finish-roster-v3-toolbar {
+  grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
+  align-items: end;
+}
+
+.finish-roster-toolbar-actions {
+  display: flex;
+  gap: 12px;
+  align-self: end;
+}
+
+.roster-api-btn.primary {
+  background: linear-gradient(135deg, rgba(0,217,255,0.18), rgba(56,189,248,0.25));
+  border-color: rgba(0, 217, 255, 0.45);
+  color: var(--text);
+}
+
+.finish-roster-kpi-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.finish-roster-kpi-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.finish-roster-kpi-card small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finish-roster-kpi-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--cyan);
+  box-shadow: 0 0 18px currentColor;
+}
+.finish-roster-kpi-card.green::before { background: var(--green); }
+.finish-roster-kpi-card.blue::before { background: var(--blue); }
+.finish-roster-kpi-card.purple::before { background: var(--purple); }
+.finish-roster-kpi-card.amber::before { background: var(--amber); }
+.finish-roster-kpi-card.orange::before { background: var(--orange); }
+
+.finish-roster-v3-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.85fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.finish-roster-main,
+.finish-roster-overview-card {
+  border: 1px solid rgba(100, 221, 255, 0.18);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(7, 18, 35, 0.88), rgba(3, 10, 20, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 32px rgba(0,0,0,0.22);
+}
+
+.finish-roster-main {
+  padding: 16px;
+}
+
+.finish-roster-overview {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.finish-roster-overview-card {
+  padding: 16px;
+}
+
+.finish-roster-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.finish-roster-section-title h3 {
+  margin: 0;
+  font-size: 22px;
+}
+.finish-roster-section-title span {
+  color: var(--muted);
+  font-size: 12px;
+  font-family: "JetBrains Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.finish-roster-v3-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.finish-roster-search-sort {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#finishRosterSearchInput {
+  min-width: 280px;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(100,221,255,0.2);
+  background: rgba(2, 10, 22, 0.85);
+  color: var(--text);
+  outline: none;
+}
+#finishRosterSearchInput:focus {
+  border-color: rgba(0,217,255,0.45);
+  box-shadow: 0 0 0 3px rgba(0,217,255,0.12);
+}
+#finishRosterSortHint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finish-roster-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.finish-roster-row {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(100,221,255,0.18);
+  background: linear-gradient(180deg, rgba(10,25,46,0.76), rgba(2,10,20,0.92));
+}
+.finish-roster-row.is-active { box-shadow: 0 0 0 1px rgba(0,217,255,0.08), var(--shadow-cyan); }
+.finish-roster-row.is-archived { opacity: 0.82; }
+.finish-roster-row-head { display: block; }
+.finish-roster-row.is-collapsed .finish-roster-row-controls { display: none; }
+.finish-roster-operator strong { display: block; font-size: 18px; }
+.finish-roster-operator span { display: block; margin-top: 6px; color: var(--muted); line-height: 1.4; }
+.finish-roster-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 12px;
+}
+.finish-roster-row-tags span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(100,221,255,0.16);
+  background: rgba(255,255,255,0.04);
+  color: var(--soft);
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+}
+.finish-roster-row-toggle {
+  width: 100%;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(100,221,255,0.22);
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+.finish-roster-row-toggle:hover { border-color: rgba(0,217,255,0.4); background: rgba(0,217,255,0.08); }
+.finish-roster-row-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.finish-roster-row-controls input,
+.finish-roster-row-controls select {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(100,221,255,0.18);
+  background: rgba(2, 10, 22, 0.84);
+  color: var(--text);
+}
+.finish-roster-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+}
+.finish-roster-action-btn {
+  flex: 1;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(100,221,255,0.18);
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+.finish-roster-action-btn.archive { border-color: rgba(251,191,36,0.36); color: var(--amber); }
+.finish-roster-action-btn.delete { border-color: rgba(251,113,133,0.36); color: var(--red); }
+
+.finish-roster-overview-list {
+  display: grid;
+  gap: 12px;
+}
+.finish-overview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+}
+.finish-overview-row strong { font-size: 14px; }
+.finish-overview-row span { color: var(--muted); font-size: 12px; }
+.finish-overview-bar {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.finish-overview-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), var(--blue));
+}
+.finish-roster-profile-summary {
+  display: grid;
+  gap: 12px;
+}
+.finish-roster-profile-summary article {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(100,221,255,0.1);
+}
+.finish-roster-profile-summary article:last-child { border-bottom: 0; padding-bottom: 0; }
+.finish-roster-profile-summary span { color: var(--muted); }
+.finish-roster-profile-summary strong { text-align: right; }
+
+@media (max-width: 1500px) {
+  .finish-roster-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .finish-roster-v3-shell { grid-template-columns: 1fr; }
+}
+@media (max-width: 1100px) {
+  .finish-roster-v3-toolbar { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .finish-roster-toolbar-actions { grid-column: 1 / -1; }
+  .finish-roster-v3-controls { flex-direction: column; align-items: stretch; }
+  .finish-roster-search-sort { flex-direction: column; align-items: stretch; }
+  #finishRosterSearchInput { min-width: 0; width: 100%; }
+}
+@media (max-width: 780px) {
+  .finish-roster-kpi-grid { grid-template-columns: 1fr; }
+  .finish-roster-v3-toolbar { grid-template-columns: 1fr; }
+  .finish-roster-card-grid { grid-template-columns: 1fr; }
+  .finish-roster-row-controls { grid-template-columns: 1fr; }
+}
+
+
+/* ===== LMS CONTROL CENTER — IMAGE 2 ADMIN LAYOUT ===== */
+.finish-roster-admin-shell { padding: 18px; }
+.finish-roster-admin-header { align-items: start; }
+.finish-roster-admin-status small { display:block; margin-top:8px; color:var(--muted); font-size:12px; }
+.finish-roster-admin-layout { display:grid; grid-template-columns:260px minmax(0,1fr) 340px; gap:16px; align-items:start; }
+.finish-roster-left-rail, .finish-roster-detail-rail { display:grid; gap:16px; }
+.finish-roster-side-card, .finish-roster-table-card, .finish-roster-detail-card { border:1px solid rgba(100,221,255,0.18); border-radius:22px; background:linear-gradient(180deg, rgba(7,18,35,0.88), rgba(3,10,20,0.96)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 32px rgba(0,0,0,0.22); }
+.finish-roster-side-card { padding:16px; }
+.finish-side-title { display:block; margin-bottom:16px; color:var(--cyan); font-family:"JetBrains Mono", monospace; font-size:13px; text-transform:uppercase; letter-spacing:.08em; }
+.finish-roster-left-rail label { display:grid; gap:8px; margin-bottom:14px; color:var(--soft); font-size:13px; font-family:"JetBrains Mono", monospace; text-transform:uppercase; letter-spacing:.08em; }
+.finish-roster-left-rail select { width:100%; height:44px; border-radius:14px; padding:0 12px; border:1px solid rgba(100,221,255,0.2); background:rgba(2,10,22,0.85); color:var(--text); }
+.finish-roster-left-rail .roster-api-btn { width:100%; margin-top:4px; }
+.finish-roster-left-rail .roster-api-btn + .roster-api-btn { margin-top:10px; }
+.finish-roster-left-rail .roster-api-btn.primary { background:linear-gradient(135deg, rgba(0,217,255,0.18), rgba(56,189,248,0.25)); border-color:rgba(0,217,255,0.45); }
+.finish-roster-mini-summary article { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid rgba(100,221,255,0.08); }
+.finish-roster-mini-summary article:last-child { border-bottom:0; }
+.finish-roster-mini-summary span { color:var(--muted); }
+.finish-roster-mini-summary strong { color:var(--cyan); font-size:28px; line-height:1; }
+.finish-roster-center-stage { min-width:0; }
+.finish-roster-top-kpis { grid-template-columns: repeat(5, minmax(0,1fr)); margin-top:14px; }
+.finish-roster-top-kpis article { position:relative; overflow:hidden; }
+.finish-roster-top-kpis article small { display:block; margin-top:8px; color:var(--muted); font-size:12px; }
+.finish-roster-table-card { margin-top:16px; padding:16px; }
+.finish-roster-table-head { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:14px; }
+.finish-roster-table-head h3 { margin:0; font-size:22px; }
+.finish-roster-table-head span { color:var(--muted); font-size:12px; font-family:"JetBrains Mono", monospace; text-transform:uppercase; }
+.finish-roster-table-tools { display:flex; align-items:center; gap:12px; }
+#finishRosterSearchInput { min-width:280px; height:44px; padding:0 14px; border-radius:14px; border:1px solid rgba(100,221,255,0.2); background:rgba(2,10,22,0.85); color:var(--text); outline:none; }
+#finishRosterSearchInput:focus { border-color:rgba(0,217,255,0.45); box-shadow:0 0 0 3px rgba(0,217,255,0.12); }
+.finish-roster-table-wrap { max-height:58vh; overflow:auto; border-radius:16px; }
+.finish-roster-table { width:100%; border-collapse:separate; border-spacing:0 8px; }
+.finish-roster-table thead th { position:sticky; top:0; z-index:2; background:rgba(7,18,35,0.96); color:var(--muted); font-size:12px; padding:12px 10px; text-align:left; text-transform:uppercase; font-family:"JetBrains Mono", monospace; letter-spacing:.06em; }
+.finish-roster-table tbody tr { background:linear-gradient(180deg, rgba(8,22,40,0.82), rgba(3,11,22,0.96)); cursor:pointer; transition:.18s ease; }
+.finish-roster-table tbody tr:hover td, .finish-roster-table tbody tr.is-selected td { background:rgba(0,217,255,0.08); border-top-color:rgba(0,217,255,0.35); border-bottom-color:rgba(0,217,255,0.35); }
+.finish-roster-table tbody td { padding:12px 10px; border-top:1px solid rgba(100,221,255,0.12); border-bottom:1px solid rgba(100,221,255,0.12); vertical-align:middle; }
+.finish-roster-table tbody td:first-child { border-left:1px solid rgba(100,221,255,0.12); border-radius:14px 0 0 14px; }
+.finish-roster-table tbody td:last-child { border-right:1px solid rgba(100,221,255,0.12); border-radius:0 14px 14px 0; }
+.finish-roster-associate { display:flex; gap:12px; align-items:center; }
+.finish-roster-associate-badge { width:42px; height:42px; border-radius:14px; display:grid; place-items:center; flex:0 0 auto; border:1px solid rgba(0,217,255,0.3); background:rgba(0,217,255,0.1); color:var(--cyan); font-weight:900; font-family:"JetBrains Mono", monospace; }
+.finish-roster-associate strong { display:block; font-size:16px; }
+.finish-roster-associate span { display:block; margin-top:4px; color:var(--muted); font-size:12px; }
+.finish-roster-pill { display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:0 10px; border-radius:999px; border:1px solid rgba(100,221,255,0.16); background:rgba(255,255,255,0.04); color:var(--soft); font-size:12px; font-weight:700; }
+.finish-roster-pill.active { color:var(--green); border-color:rgba(0,245,160,0.22); background:rgba(0,245,160,0.06); }
+.finish-roster-pill.archived { color:var(--amber); border-color:rgba(251,191,36,0.22); background:rgba(251,191,36,0.06); }
+.finish-roster-row-view { display:inline-flex; align-items:center; justify-content:center; min-width:78px; height:36px; border-radius:12px; border:1px solid rgba(100,221,255,0.18); background:rgba(255,255,255,0.03); color:var(--text); font-family:"JetBrains Mono", monospace; text-transform:uppercase; font-size:12px; }
+.finish-roster-detail-card { padding:16px; position:sticky; top:10px; }
+.finish-roster-detail-header { display:flex; justify-content:space-between; gap:12px; align-items:start; margin-bottom:16px; }
+.finish-roster-detail-header h3 { margin:0; font-size:30px; line-height:1; }
+.finish-roster-detail-header p { margin:8px 0 0; color:var(--muted); }
+.finish-roster-detail-tag { padding:6px 10px; border-radius:999px; border:1px solid rgba(0,245,160,0.2); color:var(--green); background:rgba(0,245,160,0.06); font-size:12px; font-weight:700; }
+.finish-roster-detail-meta { display:grid; gap:12px; margin-bottom:16px; }
+.finish-roster-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.finish-roster-detail-grid label { display:grid; gap:8px; color:var(--muted); font-size:12px; text-transform:uppercase; font-family:"JetBrains Mono", monospace; }
+.finish-roster-detail-grid select, .finish-roster-detail-grid input { width:100%; height:42px; padding:0 12px; border-radius:12px; border:1px solid rgba(100,221,255,0.18); background:rgba(2,10,22,0.84); color:var(--text); }
+.finish-roster-detail-grid .full { grid-column:1 / -1; }
+.finish-roster-detail-summary { display:grid; gap:10px; margin:18px 0; }
+.finish-roster-detail-summary article { display:flex; justify-content:space-between; gap:10px; padding-bottom:8px; border-bottom:1px solid rgba(100,221,255,0.08); }
+.finish-roster-detail-summary article:last-child { border-bottom:0; }
+.finish-roster-detail-summary span { color:var(--muted); }
+.finish-roster-detail-actions { display:grid; gap:10px; }
+.finish-roster-detail-btn { width:100%; height:44px; border-radius:12px; border:1px solid rgba(100,221,255,0.18); background:rgba(255,255,255,0.03); color:var(--text); font-weight:800; }
+.finish-roster-detail-btn.primary { border-color:rgba(0,217,255,0.35); color:var(--cyan); }
+.finish-roster-detail-btn.archive { border-color:rgba(251,191,36,0.35); color:var(--amber); }
+.finish-roster-detail-btn.delete { border-color:rgba(251,113,133,0.35); color:var(--red); }
+.finish-roster-detail-empty { padding:26px 8px; text-align:center; color:var(--muted); }
+.finish-roster-detail-empty h3 { margin:0 0 10px; color:var(--text); }
+@media (max-width: 1500px) { .finish-roster-admin-layout { grid-template-columns:240px minmax(0,1fr) 300px; } .finish-roster-top-kpis { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+@media (max-width: 1200px) { .finish-roster-admin-layout { grid-template-columns:1fr; } .finish-roster-detail-card { position:static; } .finish-roster-top-kpis { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 820px) { .finish-roster-table-head { flex-direction:column; align-items:stretch; } .finish-roster-table-tools { flex-direction:column; align-items:stretch; } #finishRosterSearchInput { min-width:0; width:100%; } .finish-roster-top-kpis { grid-template-columns:1fr; } .finish-roster-detail-grid { grid-template-columns:1fr; } }
+
+
+/* ===== LMS CONTROL SHIFT ASSIGNMENT RULE ===== */
+.finish-side-help {
+  margin: -6px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.finish-roster-pill.unassigned {
+  color: var(--amber);
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.07);
+}
+.finish-roster-shift-unassigned {
+  color: var(--amber);
+  font-weight: 800;
+}
+.finish-roster-detail-note {
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  background: rgba(251, 191, 36, 0.07);
+  color: var(--soft);
+  font-size: 12px;
+  line-height: 1.45;
+}

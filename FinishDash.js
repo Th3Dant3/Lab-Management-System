@@ -513,6 +513,59 @@ function getFinishPersonalProfileMetaKey() {
   return `${FINISH_PERSONAL_PROFILE_META_BASE_KEY}_${getCurrentUsername()}`;
 }
 
+function getFinishCapacityConfigKey() {
+  return `${FINISH_CAPACITY_CONFIG_KEY}_${getCurrentUsername()}`;
+}
+
+function setConfigSaveState(message) {
+  const el = document.getElementById("configSaveState");
+  if (el) el.textContent = message || "Ready";
+}
+
+function updateConfigProfileDisplay() {
+  setText("configActiveProfileName", getCurrentUserDisplayName());
+  setConfigSaveState("Ready");
+}
+
+function showFinishProfileSavedToast(message = "Change saved") {
+  const profile = getCurrentUserDisplayName();
+  showFinishAssignmentToast(`${message} for ${profile}`);
+}
+
+function initConfigSideTabs() {
+  const tabs = document.querySelectorAll(".config-side-tab[data-config-pane]");
+  const panes = document.querySelectorAll(".config-pane[data-config-panel]");
+  if (!tabs.length || !panes.length) return;
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      const key = tab.dataset.configPane;
+      tabs.forEach(btn => btn.classList.toggle("active", btn === tab));
+      panes.forEach(pane => pane.classList.toggle("active", pane.dataset.configPanel === key));
+
+      if (key === "associates") {
+        renderOperatorAssignmentConfigPanel();
+      }
+    });
+  });
+}
+
+function initConfigSteppers() {
+  document.querySelectorAll("[data-step-target]").forEach(button => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById(button.dataset.stepTarget || "");
+      if (!input) return;
+
+      const step = Number(button.dataset.step || 1);
+      const current = Number(input.value || 0);
+      const min = input.min !== "" ? Number(input.min) : -Infinity;
+      input.value = Math.max(min, current + step);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      setConfigSaveState("Unsaved changes");
+    });
+  });
+}
+
 function showFinishAssignmentToast(message) {
   let toast = document.getElementById("finishAssignmentToast");
   if (!toast) {
@@ -1461,7 +1514,7 @@ function saveFinishPersonalOperatorAssignments(assignments) {
 
 function loadConfig() {
   try {
-    const saved = localStorage.getItem(FINISH_CAPACITY_CONFIG_KEY);
+    const saved = localStorage.getItem(getFinishCapacityConfigKey());
     const baseConfig = saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : { ...DEFAULT_CONFIG };
     return {
       ...baseConfig,
@@ -1478,10 +1531,13 @@ function loadConfig() {
 function saveConfig(config) {
   const safeConfig = { ...(config || {}) };
   delete safeConfig.operatorAssignments;
-  localStorage.setItem(FINISH_CAPACITY_CONFIG_KEY, JSON.stringify(safeConfig));
+  localStorage.setItem(getFinishCapacityConfigKey(), JSON.stringify({ ...safeConfig, savedAt: new Date().toISOString(), savedBy: getCurrentUsername() }));
 }
 
 function initConfigPanel() {
+  updateConfigProfileDisplay();
+  initConfigSideTabs();
+  initConfigSteppers();
   const config = loadConfig();
 
   setInputValue("cfgUnboxRate", config.unboxRate);
@@ -1549,7 +1605,10 @@ setInputValue("cfgFinalTraineeW5", config.finalTraineeW5);
 "cfgFinalTraineeW5"
 
   ].forEach(id => {
-    document.getElementById(id)?.addEventListener("input", updateConfigTotals);
+    document.getElementById(id)?.addEventListener("input", () => {
+      updateConfigTotals();
+      setConfigSaveState("Unsaved changes");
+    });
   });
 
   document.getElementById("configSaveBtn")?.addEventListener("click", () => {
@@ -1590,12 +1649,16 @@ finalTraineeW5: getInputValue("cfgFinalTraineeW5"),
 
     saveConfig(newConfig);
     flashButton("configSaveBtn", "Saved");
+    setConfigSaveState("Saved just now");
+    showFinishProfileSavedToast("Change saved");
     loadDashboard({ showLoader: false });
   });
 
   document.getElementById("configResetBtn")?.addEventListener("click", () => {
-    localStorage.removeItem(FINISH_CAPACITY_CONFIG_KEY);
+    localStorage.removeItem(getFinishCapacityConfigKey());
     initConfigPanel();
+    setConfigSaveState("Defaults restored");
+    showFinishProfileSavedToast("Defaults restored");
     loadDashboard({ showLoader: false });
   });
 }
@@ -4735,7 +4798,9 @@ const finishRosterApiState = {
 
 const finishRosterUiState = {
   expandedRosterRows: new Set(),
-  collapsedLines: new Set()
+  collapsedLines: new Set(),
+  selectedRosterKey: "",
+  draftAssignment: null
 };
 
 function buildFinishRosterApiUrl(action, params = {}) {
@@ -5023,22 +5088,33 @@ async function loadFinishRosterForSelectedProfile(options = {}) {
 function initFinishRosterApiPanel() {
   const ownerSelect = document.getElementById("finishRosterOwnerSelect");
   const shiftSelect = document.getElementById("finishRosterShiftSelect");
+  const roleFilter = document.getElementById("finishRosterRoleFilter");
   const areaFilter = document.getElementById("finishRosterAreaFilter");
+  const searchInput = document.getElementById("finishRosterSearchInput");
   const refreshBtn = document.getElementById("finishRosterRefreshBtn");
+  const addBtn = document.getElementById("finishRosterAddOperatorBtn");
 
   ownerSelect?.addEventListener("change", async event => {
     finishRosterApiState.ownerUsername = String(event.target.value || getCurrentUsername()).toUpperCase();
+    finishRosterUiState.selectedRosterKey = "";
+    finishRosterUiState.draftAssignment = null;
     await loadFinishRosterForSelectedProfile();
   });
 
   shiftSelect?.addEventListener("change", async event => {
     finishRosterApiState.shiftType = String(event.target.value || "Weekday");
+    finishRosterUiState.selectedRosterKey = "";
+    finishRosterUiState.draftAssignment = null;
     await loadFinishRosterForSelectedProfile();
   });
 
+  roleFilter?.addEventListener("change", renderFinishRosterApiPanel);
   areaFilter?.addEventListener("change", renderFinishRosterApiPanel);
+  searchInput?.addEventListener("input", renderFinishRosterApiPanel);
   refreshBtn?.addEventListener("click", () => loadFinishRosterBackend());
+  addBtn?.addEventListener("click", () => openNewFinishRosterAssignment());
 }
+
 
 function renderFinishRosterApiPanel() {
   const panel = document.getElementById("finishRosterApiPanel");
@@ -5046,8 +5122,10 @@ function renderFinishRosterApiPanel() {
 
   const ownerSelect = document.getElementById("finishRosterOwnerSelect");
   const shiftSelect = document.getElementById("finishRosterShiftSelect");
+  const roleFilter = document.getElementById("finishRosterRoleFilter");
   const areaFilter = document.getElementById("finishRosterAreaFilter");
-  const list = document.getElementById("finishRosterEditorList");
+  const searchInput = document.getElementById("finishRosterSearchInput");
+  const tableBody = document.getElementById("finishRosterTableBody");
   const banner = document.getElementById("finishRosterPermissionBanner");
 
   const currentUsername = getCurrentUsername();
@@ -5057,20 +5135,31 @@ function renderFinishRosterApiPanel() {
   const selectedShift = getRosterShiftType();
 
   if (ownerSelect) {
-    const profiles = finishRosterApiState.profiles.length
+    const allProfiles = finishRosterApiState.profiles.length
       ? finishRosterApiState.profiles
       : [{ username: currentUsername, fullName: getCurrentUserDisplayName(), role: getCurrentUserRole(), shiftGroup: "Weekday" }];
+
+    const currentRoleValue = String(currentProfile?.role || getCurrentUserRole() || "").trim().toLowerCase();
+    const canSwitchProfiles = currentRoleValue === "lms";
+    const profiles = canSwitchProfiles
+      ? allProfiles
+      : allProfiles.filter(profile => String(profile.username || "").toUpperCase() === currentUsername);
 
     ownerSelect.innerHTML = profiles.map(profile => {
       const username = String(profile.username || "").toUpperCase();
       const label = `${profile.fullName || username} · ${profile.role || "Role"} · ${profile.shiftGroup || "Shift"}`;
       return `<option value="${escapeHtml(username)}" ${username === selectedOwner ? "selected" : ""}>${escapeHtml(label)}</option>`;
     }).join("");
-    ownerSelect.disabled = !canEdit;
+
+    if (!canSwitchProfiles && selectedOwner !== currentUsername) {
+      finishRosterApiState.ownerUsername = currentUsername;
+      ownerSelect.value = currentUsername;
+    }
+
+    ownerSelect.disabled = !canEdit || !canSwitchProfiles;
   }
 
   if (shiftSelect) shiftSelect.value = selectedShift;
-
   if (banner) {
     banner.classList.toggle("can-edit", canEdit);
     banner.innerHTML = canEdit
@@ -5078,39 +5167,222 @@ function renderFinishRosterApiPanel() {
       : `<strong>View only</strong><span>${escapeHtml(getCurrentUserDisplayName())} · your role can view this roster, but the API blocks edit/delete.</span>`;
   }
 
-  const filter = areaFilter?.value || "all";
-  const rows = buildFinishRosterEditorRows(filter);
+  const filterArea = areaFilter?.value || "all";
+  const filterRole = roleFilter?.value || "all";
+  const searchText = String(searchInput?.value || "").trim().toLowerCase();
+  const rows = buildFinishRosterEditorRows({ filterArea, filterRole, searchText });
+  const savedRows = (finishRosterApiState.roster || []).filter(r => String(r.activeStatus || "").toLowerCase() !== "removed");
+  const activeRows = savedRows.filter(r => String(r.activeStatus || "").toLowerCase() === "active");
+  const mountingCount = activeRows.filter(r => normalizeFinishOperatorStation(r.defaultArea || "") === "Mounting").length;
+  const finalCount = activeRows.filter(r => normalizeFinishOperatorStation(r.defaultArea || "") === "Final Inspection").length;
+  const exceptionCount = rows.filter(r => !r.isSaved || !r.shiftType || !r.defaultArea || !r.defaultPosition || String(r.roleType || "").toLowerCase() === "unassigned").length;
 
-  setText("finishRosterOperatorCount", finishRosterApiState.operators.length || 0);
-  setText("finishRosterActiveCount", (finishRosterApiState.roster || []).filter(r => String(r.activeStatus).toLowerCase() === "active").length);
-  setText("finishRosterMountingCount", (finishRosterApiState.roster || []).filter(r => String(r.activeStatus).toLowerCase() === "active" && r.defaultArea === "Mounting").length);
-  setText("finishRosterFinalCount", (finishRosterApiState.roster || []).filter(r => String(r.activeStatus).toLowerCase() === "active" && r.defaultArea === "Final Inspection").length);
+  [["finishRosterOperatorCount", finishRosterApiState.operators.length || 0], ["finishRosterActiveCount", activeRows.length], ["finishRosterMountingCount", mountingCount], ["finishRosterFinalCount", finalCount], ["finishRosterExceptionCount", exceptionCount], ["finishRosterOperatorCountTop", finishRosterApiState.operators.length || 0], ["finishRosterActiveCountTop", activeRows.length], ["finishRosterMountingCountTop", mountingCount], ["finishRosterFinalCountTop", finalCount], ["finishRosterExceptionCountTop", exceptionCount]].forEach(([id, value]) => setText(id, value));
+  setText("finishRosterCountMeta", `${rows.length} results`);
+  setText("finishRosterApiSyncNote", `Last synced: ${formatTime(new Date())}`);
 
-  if (list) {
+  if (tableBody) {
     if (finishRosterApiState.lastError) {
-      list.innerHTML = `<article class="roster-api-empty">${escapeHtml(finishRosterApiState.lastError)}</article>`;
+      tableBody.innerHTML = `<tr><td colspan="10" class="roster-api-empty">${escapeHtml(finishRosterApiState.lastError)}</td></tr>`;
     } else if (!rows.length) {
-      list.innerHTML = `<article class="roster-api-empty">No floor operators available yet. Run syncFinishOperatorMasterFromRawActivity() or wait for RAW_ACTIVITY_CURRENT to populate.</article>`;
+      tableBody.innerHTML = `<tr><td colspan="10" class="roster-api-empty">No operators match the current filter selection.</td></tr>`;
     } else {
-      list.innerHTML = rows.map(row => renderFinishRosterEditorRow(row, canEdit)).join("");
-      bindFinishRosterEditorEvents();
+      tableBody.innerHTML = rows.map(renderFinishRosterTableRow).join("");
+      bindFinishRosterTableEvents(rows);
     }
   }
 
+  if (!finishRosterUiState.selectedRosterKey && rows.length && !finishRosterUiState.draftAssignment) {
+    finishRosterUiState.selectedRosterKey = makeFinishRosterAssignmentKey(rows[0]);
+  }
+
+  renderFinishRosterDetailPanel(rows, currentProfile, canEdit);
   renderFinishRosterAuditLog();
+}
+
+function renderFinishRosterTableRow(row) {
+  const selected = finishRosterUiState.selectedRosterKey === makeFinishRosterAssignmentKey(row) && !finishRosterUiState.draftAssignment;
+  const initials = String(row.operatorName || "").split(/\s+/).filter(Boolean).slice(0,2).map(part => part[0]).join("").toUpperCase() || "OP";
+  const status = String(row.activeStatus || "Active");
+  const isAssigned = !!row.isSaved && !!row.shiftType;
+  const shiftDisplay = isAssigned ? row.shiftType : "Not Assigned";
+  const statusClass = status.toLowerCase() === "active" ? "active" : "archived";
+
+  return `
+    <tr class="${selected ? 'is-selected' : ''}" data-roster-select="${escapeHtml(makeFinishRosterAssignmentKey(row))}">
+      <td>
+        <div class="finish-roster-associate">
+          <span class="finish-roster-associate-badge">${escapeHtml(initials)}</span>
+          <div>
+            <strong>${escapeHtml(row.operatorName)}</strong>
+            <span>${escapeHtml(row.liveStation || '—')} · Today ${numberFmt(row.lastTotal)}${isAssigned ? '' : ' · Not assigned'}</span>
+          </div>
+        </div>
+      </td>
+      <td><span class="finish-roster-pill ${isAssigned ? statusClass : 'unassigned'}">${escapeHtml(isAssigned ? status : 'Unassigned')}</span></td>
+      <td><span class="${isAssigned ? '' : 'finish-roster-shift-unassigned'}">${escapeHtml(shiftDisplay)}</span></td>
+      <td>${escapeHtml(row.defaultArea || '—')}</td>
+      <td>${escapeHtml(row.defaultLine || '—')}</td>
+      <td>${escapeHtml(row.defaultPosition || '—')}</td>
+      <td>${escapeHtml(row.roleType || 'Unassigned')}</td>
+      <td>${escapeHtml(row.trainingWeek || '—')}</td>
+      <td>${escapeHtml(row.individualJph || 'Default')}</td>
+      <td><button type="button" class="finish-roster-row-view" data-roster-view="${escapeHtml(makeFinishRosterAssignmentKey(row))}">View</button></td>
+    </tr>`;
+}
+
+function bindFinishRosterTableEvents(rows) {
+  const map = {};
+  rows.forEach(row => { map[makeFinishRosterAssignmentKey(row)] = row; });
+  document.querySelectorAll('[data-roster-select], [data-roster-view]').forEach(el => {
+    el.addEventListener('click', event => {
+      const key = event.currentTarget.dataset.rosterSelect || event.currentTarget.dataset.rosterView || '';
+      if (!key || !map[key]) return;
+      finishRosterUiState.selectedRosterKey = key;
+      finishRosterUiState.draftAssignment = null;
+      renderFinishRosterApiPanel();
+    });
+  });
+}
+
+function renderFinishRosterDetailPanel(rows, currentProfile, canEdit) {
+  const target = document.getElementById('finishRosterDetailPanel');
+  if (!target) return;
+
+  const selected = finishRosterUiState.draftAssignment ? finishRosterUiState.draftAssignment : (rows || []).find(row => makeFinishRosterAssignmentKey(row) === finishRosterUiState.selectedRosterKey);
+
+  if (!selected) {
+    target.innerHTML = `<div class="finish-roster-detail-empty"><h3>Select an operator</h3><p>Click a row to view or edit the assignment. Use Add Operator to create a new LMS roster row.</p></div>`;
+    return;
+  }
+
+  const isDraft = !!selected.__draft;
+  const operatorOptions = buildFinishRosterOperatorOptions(selected.operatorName || '');
+  const disabled = canEdit ? '' : 'disabled';
+  const statusTag = String((selected.isSaved || selected.__draft) ? (selected.activeStatus || 'Active') : 'Unassigned');
+
+  target.innerHTML = `
+    <div class="finish-roster-detail-header">
+      <div>
+        <h3>${escapeHtml(selected.operatorName || 'New Assignment')}</h3>
+        <p>${isDraft ? 'Draft assignment' : `Live: ${escapeHtml(selected.liveStation || '—')}`} · ${escapeHtml(selected.shiftType || 'Not Assigned')}</p>
+      </div>
+      <span class="finish-roster-detail-tag">${escapeHtml(statusTag)}</span>
+    </div>
+
+    ${(!selected.isSaved || !selected.shiftType || isDraft) ? `<div class="finish-roster-detail-note">Shift is not auto-assigned. Select Weekday or Weekend, then save. After it is saved, Supervisor, Training, Manager, Director, or LMS profiles can manage it in Configuration.</div>` : ""}
+
+    <div class="finish-roster-detail-meta">
+      <div class="finish-roster-detail-grid">
+        <label class="full"><span>Operator</span>${isDraft ? `<select id="finishRosterDetailOperator" ${disabled}>${operatorOptions}</select>` : `<input id="finishRosterDetailOperator" value="${escapeHtml(selected.operatorName || '')}" disabled />`}</label>
+        <label><span>Status</span><select id="finishRosterDetailStatus" ${disabled}>${['Active','Archived'].map(v => `<option value="${v}" ${statusTag === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label><span>Shift</span><select id="finishRosterDetailShift" ${disabled}>${['','Weekday','Weekend'].map(v => `<option value="${v}" ${String(selected.shiftType || '') === v ? 'selected' : ''}>${v || 'Select Shift'}</option>`).join('')}</select></label>
+        <label><span>Area</span><select id="finishRosterDetailArea" ${disabled}>${['Mounting','Final Inspection','Drill'].map(v => `<option value="${v}" ${String(selected.defaultArea || '') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label><span>Line</span><select id="finishRosterDetailLine" ${disabled}>${['','Line A','Line B','Line C'].map(v => `<option value="${v}" ${String(selected.defaultLine || '') === v ? 'selected' : ''}>${v || 'Select'}</option>`).join('')}</select></label>
+        <label><span>Position</span><select id="finishRosterDetailPosition" ${disabled}>${buildRosterPositionOptions(selected.defaultArea || '', selected.defaultPosition || '')}</select></label>
+        <label><span>Role</span><select id="finishRosterDetailRole" ${disabled}>${['Unassigned','Certified','TQ','Training'].map(v => `<option value="${v}" ${String(selected.roleType || 'Unassigned') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label><span>Week</span><select id="finishRosterDetailWeek" ${disabled}>${['','W1','W2','W3','W4','W5','W6','W7','W8'].map(v => `<option value="${v}" ${String(selected.trainingWeek || '') === v ? 'selected' : ''}>${v || '—'}</option>`).join('')}</select></label>
+        <label><span>Individual JPH</span><input id="finishRosterDetailJph" type="number" min="0" step="0.1" value="${escapeHtml(selected.individualJph || '')}" placeholder="Default" ${disabled} /></label>
+      </div>
+    </div>
+
+    <div class="finish-roster-detail-summary">
+      <article><span>Editing Profile</span><strong>${escapeHtml(currentProfile?.fullName || getRosterOwnerUsername())}</strong></article>
+      <article><span>Target Username</span><strong>${escapeHtml(getRosterOwnerUsername())}</strong></article>
+      <article><span>Last Updated</span><strong>${escapeHtml(selected.updatedAt || '—')}</strong></article>
+      <article><span>Updated By</span><strong>${escapeHtml(selected.updatedBy || '—')}</strong></article>
+    </div>
+
+    <div class="finish-roster-detail-actions">
+      <button id="finishRosterDetailSave" class="finish-roster-detail-btn primary" type="button" ${disabled}>${isDraft ? 'Create Assignment' : 'Save Assignment'}</button>
+      <button id="finishRosterDetailArchive" class="finish-roster-detail-btn archive" type="button" ${disabled}>Archive Operator</button>
+      <button id="finishRosterDetailDelete" class="finish-roster-detail-btn delete" type="button" ${disabled}>Delete Operator</button>
+    </div>`;
+
+  bindFinishRosterDetailEvents(selected, isDraft, canEdit);
+}
+
+function buildFinishRosterOperatorOptions(selectedName) {
+  const options = (finishRosterApiState.operators || [])
+    .map(op => normalizeAssignmentOperatorName(op.operatorName || ''))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  const list = options.length ? options : [selectedName || ''];
+  return list.map(name => `<option value="${escapeHtml(name)}" ${String(selectedName || '') === name ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('');
+}
+
+function openNewFinishRosterAssignment() {
+  const canEdit = canEditFinishOperatorAssignments();
+  if (!canEdit) {
+    showFinishAssignmentToast('View only. Your role cannot create new roster rows.');
+    return;
+  }
+  const firstAvailable = (finishRosterApiState.operators || []).map(op => normalizeAssignmentOperatorName(op.operatorName || '')).find(Boolean) || '';
+  finishRosterUiState.selectedRosterKey = '';
+  finishRosterUiState.draftAssignment = { __draft: true, operatorName: firstAvailable, shiftType: '', activeStatus: 'Active', defaultArea: 'Mounting', defaultLine: '', defaultPosition: '', roleType: 'Unassigned', trainingWeek: '', individualJph: '', updatedBy: getCurrentUsername(), updatedAt: '' };
+  renderFinishRosterApiPanel();
+}
+
+function bindFinishRosterDetailEvents(selected, isDraft, canEdit) {
+  const areaSelect = document.getElementById('finishRosterDetailArea');
+  const positionSelect = document.getElementById('finishRosterDetailPosition');
+  const roleSelect = document.getElementById('finishRosterDetailRole');
+  const weekSelect = document.getElementById('finishRosterDetailWeek');
+  const lineSelect = document.getElementById('finishRosterDetailLine');
+  const saveBtn = document.getElementById('finishRosterDetailSave');
+  const archiveBtn = document.getElementById('finishRosterDetailArchive');
+  const deleteBtn = document.getElementById('finishRosterDetailDelete');
+  areaSelect?.addEventListener('change', event => { if (positionSelect) positionSelect.innerHTML = buildRosterPositionOptions(event.target.value, ''); if (lineSelect && event.target.value === 'Drill') lineSelect.value = 'Line C'; });
+  roleSelect?.addEventListener('change', event => { if (!weekSelect) return; const enabled = event.target.value === 'Training'; weekSelect.disabled = !enabled || !canEdit; if (!enabled) weekSelect.value = ''; });
+  saveBtn?.addEventListener('click', () => saveFinishRosterDetail(selected, isDraft));
+  archiveBtn?.addEventListener('click', () => updateFinishRosterDetailStatus(selected, 'archiveFinishRosterOperator'));
+  deleteBtn?.addEventListener('click', () => updateFinishRosterDetailStatus(selected, 'deleteFinishRosterOperator'));
+}
+
+async function saveFinishRosterDetail(selected, isDraft) {
+  if (!canEditFinishOperatorAssignments()) { showFinishAssignmentToast('View only. Your role cannot edit Finish roster rows.'); return; }
+  const operatorName = String(document.getElementById('finishRosterDetailOperator')?.value || selected.operatorName || '').trim();
+  if (!operatorName) { showFinishAssignmentToast('Pick an operator before saving.'); return; }
+  const selectedShiftValue = document.getElementById('finishRosterDetailShift')?.value || '';
+  if (!selectedShiftValue) { showFinishAssignmentToast('Select Weekday or Weekend before saving this operator.'); return; }
+  const payload = { updatedBy: getCurrentUsername(), ownerUsername: getRosterOwnerUsername(), shiftType: selectedShiftValue, operatorName, activeStatus: document.getElementById('finishRosterDetailStatus')?.value || 'Active', defaultArea: document.getElementById('finishRosterDetailArea')?.value || '', defaultLine: document.getElementById('finishRosterDetailLine')?.value || '', defaultPosition: document.getElementById('finishRosterDetailPosition')?.value || '', roleType: document.getElementById('finishRosterDetailRole')?.value || 'Unassigned', trainingWeek: document.getElementById('finishRosterDetailRole')?.value === 'Training' ? (document.getElementById('finishRosterDetailWeek')?.value || '') : '', individualJph: document.getElementById('finishRosterDetailJph')?.value || '' };
+  if (!isDraft) { payload.originalDefaultArea = selected.defaultArea || ''; payload.originalDefaultLine = selected.defaultLine || ''; payload.originalDefaultPosition = selected.defaultPosition || ''; }
+  try {
+    await fetchFinishRosterApi('saveFinishRosterControl', payload);
+    finishRosterUiState.draftAssignment = null;
+    showFinishAssignmentToast(`Saved ${operatorName} / ${payload.shiftType}`);
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    const rows = buildFinishRosterEditorRows({ filterArea: document.getElementById('finishRosterAreaFilter')?.value || 'all', filterRole: document.getElementById('finishRosterRoleFilter')?.value || 'all', searchText: String(document.getElementById('finishRosterSearchInput')?.value || '').trim().toLowerCase() });
+    const match = rows.find(row => normalizeAssignmentOperatorName(row.operatorName || '') === normalizeAssignmentOperatorName(operatorName) && String(row.defaultArea || '') === String(payload.defaultArea || '') && String(row.defaultLine || '') === String(payload.defaultLine || '') && String(row.defaultPosition || '') === String(payload.defaultPosition || ''));
+    finishRosterUiState.selectedRosterKey = match ? makeFinishRosterAssignmentKey(match) : '';
+    renderFinishRosterApiPanel();
+  } catch (error) { console.error(error); showFinishAssignmentToast(error.message || String(error)); }
+}
+
+async function updateFinishRosterDetailStatus(selected, action) {
+  if (!selected || selected.__draft || !selected.shiftType) { showFinishAssignmentToast('Save the assignment with a shift first before archive/delete.'); return; }
+  if (!canEditFinishOperatorAssignments()) { showFinishAssignmentToast('View only. Your role cannot delete/archive Finish roster rows.'); return; }
+  try {
+    await fetchFinishRosterApi(action, { updatedBy: getCurrentUsername(), ownerUsername: getRosterOwnerUsername(), shiftType: selected.shiftType || getRosterShiftType(), operatorName: selected.operatorName, defaultArea: selected.defaultArea || '', defaultLine: selected.defaultLine || '', defaultPosition: selected.defaultPosition || '' });
+    showFinishAssignmentToast(`${action.includes('delete') ? 'Deleted' : 'Archived'} ${selected.operatorName}`);
+    finishRosterUiState.selectedRosterKey = ''; finishRosterUiState.draftAssignment = null;
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    renderFinishRosterApiPanel();
+  } catch (error) { console.error(error); showFinishAssignmentToast(error.message || String(error)); }
 }
 
 function makeFinishRosterAssignmentKey(row) {
   return [
     normalizeAssignmentOperatorName(row.operatorName || ""),
-    String(row.shiftType || getRosterShiftType() || "Weekday"),
+    String(row.shiftType || row.rosterBucket || "Not Assigned"),
     normalizeFinishOperatorStation(row.defaultArea || ""),
     String(row.defaultLine || ""),
     String(row.defaultPosition || "")
   ].join("||").toLowerCase();
 }
 
-function buildFinishRosterEditorRows(filter = "all") {
+function buildFinishRosterEditorRows(options = {}) {
+  const { filterArea = "all", filterRole = "all", searchText = "" } = options || {};
   const selectedShift = getRosterShiftType();
   const rosterRows = Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : [];
   const masterOps = Array.isArray(finishRosterApiState.operators) ? finishRosterApiState.operators : [];
@@ -5128,13 +5400,10 @@ function buildFinishRosterEditorRows(filter = "all") {
 
   const rows = [];
 
-  // 1) Saved assignments first. This is the source of truth.
   rosterRows.forEach(saved => {
     const operatorName = normalizeAssignmentOperatorName(saved.operatorName || "");
     if (!operatorName) return;
-
     const live = liveByName[operatorName.toLowerCase()] || {};
-
     rows.push({
       operatorName,
       shiftType: saved.shiftType || selectedShift,
@@ -5151,28 +5420,29 @@ function buildFinishRosterEditorRows(filter = "all") {
     });
   });
 
-  // 2) Add unsaved floor operators so LMS can assign new people.
-  const savedNames = new Set(
-    rows.map(row => normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase())
-  );
+  const savedKeys = new Set(rows.map(row => `${normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase()}||${String(row.defaultArea || "").toLowerCase()}||${String(row.defaultLine || "").toLowerCase()}||${String(row.defaultPosition || "").toLowerCase()}`));
 
   masterOps.forEach(op => {
     const operatorName = normalizeAssignmentOperatorName(op.operatorName || "");
     if (!operatorName) return;
     if (operatorName.toLowerCase().includes("unassigned")) return;
-    if (savedNames.has(operatorName.toLowerCase())) return;
 
     const liveStation = normalizeFinishOperatorStation(op.lastFlowStation || op.lastAccessPoint || "");
     if (liveStation === "FSV Scan & Verify") return;
 
+    const key = `${operatorName.toLowerCase()}||||`;
+    const alreadySaved = rows.some(row => normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === operatorName.toLowerCase());
+    if (alreadySaved) return;
+
     rows.push({
       operatorName,
-      shiftType: selectedShift,
+      shiftType: "",
+      rosterBucket: "Not Assigned",
       liveStation,
       lastTotal: Number(op.lastTotal || 0) || 0,
-      activeStatus: "Active",
-      defaultLine: "",
-      defaultArea: isLineSlotStation(liveStation) ? liveStation : "Mounting",
+      activeStatus: "Unassigned",
+      defaultLine: liveStation === "Drill" ? "Line C" : "",
+      defaultArea: (isLineSlotStation(liveStation) || liveStation === "Drill") ? liveStation : "",
       defaultPosition: "",
       roleType: "Unassigned",
       trainingWeek: "",
@@ -5182,23 +5452,23 @@ function buildFinishRosterEditorRows(filter = "all") {
   });
 
   return rows
-    .filter(row => filter === "all" || row.defaultArea === filter || row.liveStation === filter)
+    .filter(row => filterArea === "all" || row.defaultArea === filterArea || row.liveStation === filterArea)
+    .filter(row => filterRole === "all" || (filterRole === "Unassigned" ? (!row.isSaved || String(row.roleType || "Unassigned") === "Unassigned") : String(row.roleType || "Unassigned") === filterRole))
+    .filter(row => {
+      if (!searchText) return true;
+      const haystack = [row.operatorName, row.defaultArea, row.defaultLine, row.defaultPosition, row.roleType, row.liveStation]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(searchText);
+    })
     .sort((a, b) => {
       const activeA = a.activeStatus === "Active" ? 0 : 1;
       const activeB = b.activeStatus === "Active" ? 0 : 1;
       if (activeA !== activeB) return activeA - activeB;
-
       const savedA = a.isSaved ? 0 : 1;
       const savedB = b.isSaved ? 0 : 1;
       if (savedA !== savedB) return savedA - savedB;
-
-      const nameCompare = a.operatorName.localeCompare(b.operatorName);
-      if (nameCompare !== 0) return nameCompare;
-
-      const areaCompare = String(a.defaultArea || "").localeCompare(String(b.defaultArea || ""));
-      if (areaCompare !== 0) return areaCompare;
-
-      return String(a.defaultPosition || "").localeCompare(String(b.defaultPosition || ""));
+      return a.operatorName.localeCompare(b.operatorName);
     });
 }
 
@@ -5208,12 +5478,7 @@ function renderFinishRosterEditorRow(row, canEdit) {
   const rowKey = makeFinishRosterAssignmentKey(row);
   const expanded = finishRosterUiState.expandedRosterRows.has(rowKey);
   const shiftType = row.shiftType || getRosterShiftType();
-
-  const target = row.roleType === "Training"
-    ? `${row.trainingWeek || "W?"}`
-    : row.roleType && row.roleType !== "Unassigned"
-      ? row.roleType
-      : "—";
+  const roleLabel = row.roleType === "Training" ? `${row.roleType} ${row.trainingWeek || ""}`.trim() : (row.roleType || "Unassigned");
 
   return `
     <article
@@ -5228,11 +5493,8 @@ function renderFinishRosterEditorRow(row, canEdit) {
       <div class="finish-roster-row-head">
         <div class="finish-roster-operator">
           <strong>${escapeHtml(row.operatorName)}</strong>
-          <span>
-            Live: ${escapeHtml(row.liveStation || "—")}
-            · Today ${numberFmt(row.lastTotal)}
-            · ${row.isSaved ? "Saved" : "Not saved"}
-          </span>
+          <span>${escapeHtml(row.defaultArea || row.liveStation || "Unassigned")} · ${escapeHtml(row.defaultLine || "No Line")} · ${escapeHtml(row.defaultPosition || "No Position")}</span>
+          <span>${escapeHtml(roleLabel)} · ${escapeHtml(shiftType)} · Today ${numberFmt(row.lastTotal)}</span>
         </div>
 
         <div class="finish-roster-row-tags">
@@ -5241,7 +5503,7 @@ function renderFinishRosterEditorRow(row, canEdit) {
           <span>${escapeHtml(row.defaultArea || "No area")}</span>
           <span>${escapeHtml(row.defaultLine || "No line")}</span>
           <span>${escapeHtml(row.defaultPosition || "No position")}</span>
-          <span>${escapeHtml(target)}</span>
+          <span>${row.isSaved ? "Saved" : "Not saved"}</span>
         </div>
 
         <button class="finish-roster-row-toggle" type="button" data-roster-toggle>
@@ -5293,15 +5555,7 @@ function renderFinishRosterEditorRow(row, canEdit) {
         </label>
 
         <label><span>Individual JPH</span>
-          <input
-            data-roster-field="individualJph"
-            type="number"
-            min="0"
-            step="0.1"
-            placeholder="Default"
-            value="${escapeHtml(row.individualJph || "")}"
-            ${disabled}
-          />
+          <input data-roster-field="individualJph" type="number" min="0" step="0.1" placeholder="Default" value="${escapeHtml(row.individualJph || "")}" ${disabled} />
         </label>
 
         <div class="finish-roster-actions">
@@ -5662,6 +5916,8 @@ async function saveOperatorAssignment(stationName, operatorName, role, trainingW
       const activeStation = finishOperatorState.stations?.[finishOperatorState.selectedStation];
       if (activeStation) renderDrawerOperators(activeStation);
     }
+
+    showFinishProfileSavedToast("Roster change saved");
   } catch (error) {
     console.error(error);
     showFinishAssignmentToast(error.message || String(error));
@@ -5868,10 +6124,6 @@ function getFinishConfigRoleTarget(row, config = loadConfig()) {
 function ensureOperatorAssignmentConfigPanel() {
   let panel = document.getElementById("operatorAssignmentConfigPanel");
 
-  if (panel) {
-    return panel;
-  }
-
   if (typeof injectOperatorAssignmentStyles === "function") {
     injectOperatorAssignmentStyles();
   }
@@ -5879,70 +6131,71 @@ function ensureOperatorAssignmentConfigPanel() {
   const configTab = document.querySelector('[data-content="config"]');
   const saveRow = document.querySelector(".config-actions") || document.getElementById("configSaveBtn")?.parentElement;
   const targetParent = saveRow?.parentElement || configTab;
-  if (!targetParent) return null;
+  if (!targetParent && !panel) return null;
 
-  panel = document.createElement("details");
-  panel.id = "operatorAssignmentConfigPanel";
-  panel.className = "config-group operator-assignment-config-group";
-  panel.open = true;
-  panel.innerHTML = `
-    <summary>
-      <div>
-        <h3>My Active Associates</h3>
-        <p>Shows associates assigned to your profile. Use Weekday / Weekend to view your assigned shift roster.</p>
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "operatorAssignmentConfigPanel";
+    panel.className = "operator-assignment-config-panel";
+
+    if (saveRow && saveRow.parentElement) {
+      saveRow.parentElement.insertBefore(panel, saveRow);
+    } else {
+      targetParent.appendChild(panel);
+    }
+  }
+
+  // The side-tab HTML already includes an empty #operatorAssignmentConfigPanel.
+  // If we return early, the roster list never gets created. Always hydrate it.
+  if (!panel.querySelector("#operatorAssignmentRoster")) {
+    panel.innerHTML = `
+      <div class="operator-assignment-shell config-associates-shell">
+        <div class="assignment-warning-card">
+          <strong>Assigned Roster View</strong>
+          <span id="configAssignedRosterStatus">Roster source: FINISH_OPERATOR_ROSTER_CONTROL. Output source: Operator Activity.</span>
+        </div>
+
+        <div id="finishAssignmentPermissionNotice" class="assignment-permission-notice can-edit"></div>
+
+        <div class="assignment-summary-grid">
+          <article><span>Shift</span><strong id="configAssignedShiftSummary">--</strong></article>
+          <article><span>Active Associates</span><strong id="configAssignedActiveCount">0</strong></article>
+          <article><span>Mounting</span><strong id="configAssignedMountingCount">0</strong></article>
+          <article><span>Final / Drill</span><strong id="configAssignedFinalDrillCount">0 / 0</strong></article>
+        </div>
+
+        <div class="assignment-toolbar">
+          <label>
+            Shift
+            <select id="configAssignedShiftSelect">
+              <option value="Weekday">Weekday</option>
+              <option value="Weekend">Weekend</option>
+            </select>
+          </label>
+
+          <label>
+            Area Filter
+            <select id="configAssignedAreaFilter">
+              <option value="all">All assigned areas</option>
+              <option value="Mounting">Mounting</option>
+              <option value="Final Inspection">Final Inspection</option>
+              <option value="Drill">Drill</option>
+            </select>
+          </label>
+
+          <button id="configAssignedRefreshBtn" type="button">Refresh Assigned Roster</button>
+        </div>
+
+        <div id="operatorAssignmentRoster" class="assignment-roster">
+          <article class="assignment-empty">Waiting for assigned roster...</article>
+        </div>
       </div>
-      <span>Open / Close</span>
-    </summary>
-
-    <div class="operator-assignment-shell">
-      <div class="assignment-warning-card">
-        <strong>Assigned Roster View</strong>
-        <span id="configAssignedRosterStatus">Roster source: FINISH_OPERATOR_ROSTER_CONTROL. Output source: Operator Activity.</span>
-      </div>
-
-      <div id="finishAssignmentPermissionNotice" class="assignment-permission-notice can-edit"></div>
-
-      <div class="assignment-summary-grid">
-        <article><span>Shift</span><strong id="configAssignedShiftSummary">--</strong></article>
-        <article><span>Active Associates</span><strong id="configAssignedActiveCount">0</strong></article>
-        <article><span>Mounting</span><strong id="configAssignedMountingCount">0</strong></article>
-        <article><span>Final / Drill</span><strong id="configAssignedFinalDrillCount">0 / 0</strong></article>
-      </div>
-
-      <div class="assignment-toolbar">
-        <label>
-          Shift
-          <select id="configAssignedShiftSelect">
-            <option value="Weekday">Weekday</option>
-            <option value="Weekend">Weekend</option>
-          </select>
-        </label>
-
-        <label>
-          Area Filter
-          <select id="configAssignedAreaFilter">
-            <option value="all">All assigned areas</option>
-            <option value="Mounting">Mounting</option>
-            <option value="Final Inspection">Final Inspection</option>
-            <option value="Drill">Drill</option>
-          </select>
-        </label>
-
-        <button id="configAssignedRefreshBtn" type="button">Refresh Assigned Roster</button>
-      </div>
-
-      <div id="operatorAssignmentRoster" class="assignment-roster"></div>
-    </div>
-  `;
-
-  if (saveRow && saveRow.parentElement) {
-    saveRow.parentElement.insertBefore(panel, saveRow);
-  } else {
-    targetParent.appendChild(panel);
+    `;
   }
 
   const shiftSelect = document.getElementById("configAssignedShiftSelect");
-  if (shiftSelect) {
+  if (shiftSelect && !shiftSelect.dataset.boundConfigAssignedShift) {
+    shiftSelect.dataset.boundConfigAssignedShift = "1";
     shiftSelect.value = window.__finishConfigSelectedShiftType || getFinishConfigDefaultShiftType();
     shiftSelect.addEventListener("change", () => {
       window.__finishConfigSelectedShiftType = getFinishConfigSelectedShiftType();
@@ -5950,8 +6203,17 @@ function ensureOperatorAssignmentConfigPanel() {
     });
   }
 
-  document.getElementById("configAssignedAreaFilter")?.addEventListener("change", renderOperatorAssignmentConfigPanel);
-  document.getElementById("configAssignedRefreshBtn")?.addEventListener("click", renderOperatorAssignmentConfigPanel);
+  const areaFilter = document.getElementById("configAssignedAreaFilter");
+  if (areaFilter && !areaFilter.dataset.boundConfigAssignedArea) {
+    areaFilter.dataset.boundConfigAssignedArea = "1";
+    areaFilter.addEventListener("change", renderOperatorAssignmentConfigPanel);
+  }
+
+  const refreshBtn = document.getElementById("configAssignedRefreshBtn");
+  if (refreshBtn && !refreshBtn.dataset.boundConfigAssignedRefresh) {
+    refreshBtn.dataset.boundConfigAssignedRefresh = "1";
+    refreshBtn.addEventListener("click", renderOperatorAssignmentConfigPanel);
+  }
 
   return panel;
 }
@@ -6023,12 +6285,12 @@ async function renderOperatorAssignmentConfigPanel() {
 
     const notice = document.getElementById("finishAssignmentPermissionNotice");
     if (notice) {
-      notice.classList.add("can-edit");
-      notice.classList.remove("view-only");
-      notice.innerHTML = `
-        <strong>Assigned roster only</strong>
-        <span>Associate list comes from saved roster assignment. Live totals come from Operator Activity.</span>
-      `;
+      const canEdit = canEditFinishOperatorAssignments();
+      notice.classList.toggle("can-edit", canEdit);
+      notice.classList.toggle("view-only", !canEdit);
+      notice.innerHTML = canEdit
+        ? `<strong>Role + training control active</strong><span>Supervisor, Training, Manager, Director, and LMS can set Certified / Training role, training week, and JPH right here.</span>`
+        : `<strong>Assigned roster only</strong><span>Associate list comes from saved roster assignment. Live totals come from Operator Activity.</span>`;
     }
 
     if (!visibleRows.length) {
@@ -6038,6 +6300,7 @@ async function renderOperatorAssignmentConfigPanel() {
         </article>
       `;
       updateConfigTotals();
+      applyFinishAssignmentPermissionLock();
       return;
     }
 
@@ -6049,9 +6312,10 @@ async function renderOperatorAssignmentConfigPanel() {
       const line = row.defaultLine || "No line";
       const position = row.defaultPosition || "No position";
       const role = row.roleType || "Unassigned";
-      const week = row.trainingWeek ? ` · ${row.trainingWeek}` : "";
       const liveTotal = getFinishConfigLiveOperatorTotal(operatorName, area);
       const target = getFinishConfigRoleTarget(row, config);
+      const canTrain = finishConfigAreaSupportsTraining(area);
+      const weekValue = String(convertApiWeekToNumber(row.trainingWeek || "") || 1);
 
       return `
         <article class="assignment-row" data-assigned-roster-row="${escapeHtml(operatorName)}" data-area="${escapeHtml(area)}" data-line="${escapeHtml(line)}" data-position="${escapeHtml(position)}">
@@ -6060,10 +6324,19 @@ async function renderOperatorAssignmentConfigPanel() {
             <span>${escapeHtml(area)} · ${escapeHtml(line)} · ${escapeHtml(position)} · ${escapeHtml(getFinishConfigLiveOperatorLabel(operatorName, area))}</span>
           </div>
 
-          <div class="assignment-field assignment-field--role">
-            <label>Role</label>
-            <strong class="assignment-role-badge" data-role="${escapeHtml(String(role).toLowerCase())}">${escapeHtml(role)}${escapeHtml(week)}</strong>
-          </div>
+          <label class="assignment-field assignment-field--role">
+            <span>Role</span>
+            <select data-config-role-select>
+              ${buildConfigAssignedRoleOptions(area, role)}
+            </select>
+          </label>
+
+          <label class="assignment-field assignment-field--week ${role === 'Training' && canTrain ? 'active' : 'disabled'}">
+            <span>Week</span>
+            <select data-config-week-select ${role === 'Training' && canTrain ? '' : 'disabled'}>
+              ${buildConfigAssignedWeekOptions(area, role, weekValue)}
+            </select>
+          </label>
 
           <div class="assignment-field assignment-field--output">
             <label>Today Output</label>
@@ -6079,12 +6352,31 @@ async function renderOperatorAssignmentConfigPanel() {
       `;
     }).join("");
 
+    rosterTarget.querySelectorAll(".assignment-row").forEach(rowEl => {
+      syncConfigAssignedRowInputs(rowEl, { force: false });
+    });
+
+    rosterTarget.querySelectorAll("[data-config-role-select]").forEach(select => {
+      select.addEventListener("change", event => {
+        const rowEl = event.target.closest(".assignment-row");
+        syncConfigAssignedRowInputs(rowEl, { force: true });
+      });
+    });
+
+    rosterTarget.querySelectorAll("[data-config-week-select]").forEach(select => {
+      select.addEventListener("change", event => {
+        const rowEl = event.target.closest(".assignment-row");
+        syncConfigAssignedRowInputs(rowEl, { force: true });
+      });
+    });
+
     rosterTarget.querySelectorAll("[data-config-jph-save]").forEach(button => {
       button.addEventListener("click", event => saveConfigAssignedIndividualJph(event.target.closest(".assignment-row")));
     });
 
     updateConfigTotals();
     renderFinishThreeLineCell();
+    applyFinishAssignmentPermissionLock();
   } catch (error) {
     console.error("Assigned roster render failed:", error);
     rosterTarget.innerHTML = `
@@ -6095,12 +6387,85 @@ async function renderOperatorAssignmentConfigPanel() {
   }
 }
 
+function finishConfigAreaSupportsTraining(area) {
+  const station = normalizeFinishOperatorStation(area || '');
+  return station === 'Mounting' || station === 'Final Inspection';
+}
+
+function buildConfigAssignedRoleOptions(area, selectedRole) {
+  const role = String(selectedRole || 'Unassigned');
+  const options = [
+    { value: 'Certified', label: 'Certified' },
+    { value: 'TQ', label: 'TQ' }
+  ];
+
+  if (finishConfigAreaSupportsTraining(area)) {
+    options.push({ value: 'Training', label: 'Training' });
+  }
+
+  options.push({ value: 'Unassigned', label: 'Unassigned' });
+
+  return options.map(opt => `<option value="${escapeHtml(opt.value)}" ${String(role).toLowerCase() === String(opt.value).toLowerCase() ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
+}
+
+function buildConfigAssignedWeekOptions(area, roleType, selectedWeek) {
+  if (String(roleType || '').toLowerCase() !== 'training' || !finishConfigAreaSupportsTraining(area)) {
+    return '<option value="1">Week 1</option>';
+  }
+  return buildTrainingWeekOptions(area, Number(selectedWeek || 1));
+}
+
+function getConfigAssignedSuggestedTarget(area, roleType, weekValue) {
+  return getFinishConfigRoleTarget({
+    defaultArea: area,
+    roleType,
+    trainingWeek: String(roleType || '').toLowerCase() === 'training' ? `W${Number(weekValue || 1)}` : '',
+    individualJph: ''
+  }, loadConfig());
+}
+
+function syncConfigAssignedRowInputs(rowEl, { force = false } = {}) {
+  if (!rowEl) return;
+  const area = rowEl.dataset.area || '';
+  const roleSelect = rowEl.querySelector('[data-config-role-select]');
+  const weekSelect = rowEl.querySelector('[data-config-week-select]');
+  const weekWrap = weekSelect?.closest('.assignment-field') || weekSelect?.closest('label');
+  const jphInput = rowEl.querySelector('[data-config-jph-input]');
+  if (!roleSelect || !jphInput) return;
+
+  const roleType = roleSelect.value || 'Unassigned';
+  const canTrain = finishConfigAreaSupportsTraining(area) && String(roleType).toLowerCase() === 'training';
+
+  if (weekSelect) {
+    const selectedWeek = weekSelect.value || '1';
+    weekSelect.innerHTML = buildConfigAssignedWeekOptions(area, roleType, selectedWeek);
+    weekSelect.disabled = !canTrain;
+    if (!canTrain) {
+      weekSelect.value = '1';
+    } else if (!weekSelect.value) {
+      weekSelect.value = '1';
+    }
+  }
+  if (weekWrap) weekWrap.classList.toggle('disabled', !canTrain);
+  if (weekWrap) weekWrap.classList.toggle('active', canTrain);
+
+  const suggested = Number(getConfigAssignedSuggestedTarget(area, roleType, weekSelect?.value || '1')) || 0;
+  jphInput.placeholder = suggested > 0 ? numberFmt(suggested) : 'Default';
+  if (force) {
+    jphInput.value = suggested > 0 ? String(suggested) : '';
+  }
+}
 
 async function saveConfigAssignedIndividualJph(rowEl) {
   if (!rowEl) return;
 
   const operatorName = rowEl.dataset.assignedRosterRow || "";
   const source = (window.__finishConfigAssignedRosterRows || []).find(row =>
+    normalizeAssignmentOperatorName(row.operatorName || "") === normalizeAssignmentOperatorName(operatorName) &&
+    normalizeFinishOperatorStation(row.defaultArea || "") === normalizeFinishOperatorStation(rowEl.dataset.area || rowEl.querySelector(".assignment-operator span")?.textContent?.split(" · ")?.[0] || "") &&
+    String(row.defaultLine || "No line") === String(rowEl.dataset.line || '') &&
+    String(row.defaultPosition || "No position") === String(rowEl.dataset.position || '')
+  ) || (window.__finishConfigAssignedRosterRows || []).find(row =>
     normalizeAssignmentOperatorName(row.operatorName || "") === normalizeAssignmentOperatorName(operatorName) &&
     normalizeFinishOperatorStation(row.defaultArea || "") === normalizeFinishOperatorStation(rowEl.dataset.area || rowEl.querySelector(".assignment-operator span")?.textContent?.split(" · ")?.[0] || "")
   );
@@ -6109,8 +6474,11 @@ async function saveConfigAssignedIndividualJph(rowEl) {
   const parts = areaLinePositionText.split(" · ").map(x => String(x || "").trim());
 
   const defaultArea = source?.defaultArea || parts[0] || "";
-  const defaultLine = source?.defaultLine || parts[1] || "";
-  const defaultPosition = source?.defaultPosition || parts[2] || "";
+  const defaultLine = source?.defaultLine || rowEl.dataset.line || parts[1] || "";
+  const defaultPosition = source?.defaultPosition || rowEl.dataset.position || parts[2] || "";
+  const roleType = rowEl.querySelector('[data-config-role-select]')?.value || source?.roleType || 'Unassigned';
+  const weekNumber = rowEl.querySelector('[data-config-week-select]')?.value || '1';
+  const trainingWeek = String(roleType).toLowerCase() === 'training' && finishConfigAreaSupportsTraining(defaultArea) ? `W${Number(weekNumber || 1)}` : '';
   const individualJph = rowEl.querySelector("[data-config-jph-input]")?.value || "";
 
   try {
@@ -6123,15 +6491,15 @@ async function saveConfigAssignedIndividualJph(rowEl) {
       defaultLine,
       defaultArea,
       defaultPosition,
-      roleType: source?.roleType || "Unassigned",
-      trainingWeek: source?.roleType === "Training" ? (source?.trainingWeek || "") : "",
+      roleType,
+      trainingWeek,
       individualJph,
       originalDefaultArea: defaultArea,
       originalDefaultLine: defaultLine,
       originalDefaultPosition: defaultPosition
     });
 
-    showFinishAssignmentToast(`Saved JPH for ${operatorName}`);
+    showFinishAssignmentToast(`Saved ${operatorName} / ${roleType}${trainingWeek ? ' ' + trainingWeek : ''}`);
     await renderOperatorAssignmentConfigPanel();
     await loadMorningSetupRoster({ silent: true }).catch(() => {});
     renderFinishThreeLineCell();
@@ -6142,14 +6510,26 @@ async function saveConfigAssignedIndividualJph(rowEl) {
 }
 
 function applyFinishAssignmentPermissionLock() {
-  // Configuration My Active Associates is a view-only assigned roster list.
-  // LMS assignment controls live in LMS Control Center.
+  const canEdit = canEditFinishOperatorAssignments();
   const shift = document.getElementById("configAssignedShiftSelect");
   const area = document.getElementById("configAssignedAreaFilter");
   const refresh = document.getElementById("configAssignedRefreshBtn");
   if (shift) shift.disabled = false;
   if (area) area.disabled = false;
   if (refresh) refresh.disabled = false;
+
+  document.querySelectorAll('#operatorAssignmentConfigPanel [data-config-role-select], #operatorAssignmentConfigPanel [data-config-week-select], #operatorAssignmentConfigPanel [data-config-jph-input], #operatorAssignmentConfigPanel [data-config-jph-save]').forEach(el => {
+    if (!el) return;
+    if (el.hasAttribute('data-config-week-select')) {
+      const row = el.closest('.assignment-row');
+      const roleType = row?.querySelector('[data-config-role-select]')?.value || 'Unassigned';
+      const trainingEnabled = String(roleType).toLowerCase() === 'training';
+      el.disabled = !canEdit || !trainingEnabled;
+    } else {
+      el.disabled = !canEdit;
+    }
+    el.classList.toggle('locked', !canEdit);
+  });
 }
 
 // Re-render Configuration when the tab is opened, using selected Weekday/Weekend.
