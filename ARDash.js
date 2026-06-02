@@ -1825,6 +1825,54 @@ function buildAROperatorStationBreakdown(metricsPayload, operatorName) {
   });
 }
 
+// Station-independent floater map. Scans ALL operatorActivity (ignores the
+// station filter) so the floater badge is correct under any view.
+// Floater = operator appears in >1 distinct FlowStation in what the API sent.
+// Per-station hours = count of Hours buckets > 0; output = Total. The API owns
+// any noise filtering (e.g. thin rows); the frontend trusts the payload.
+function buildARFloaterMap(metricsPayload) {
+  const rows = Array.isArray(metricsPayload?.operatorActivity) ? metricsPayload.operatorActivity : [];
+  const byName = new Map();
+
+  rows.forEach(row => {
+    const name = readOperatorNameFromActivity(row);
+    if (!name || /unassigned|no operator/i.test(name)) return;
+
+    const station = readStationFromActivity(row);
+    const output = toNumber(row.Total || row.total || row.ActivityToday || row.activityToday);
+    const hours = readHoursObject(row);
+    const activeHours = Object.keys(hours).reduce((n, h) => n + (toNumber(hours[h]) > 0 ? 1 : 0), 0);
+
+    const key = name.toUpperCase();
+    if (!byName.has(key)) byName.set(key, { name, stationMap: new Map() });
+
+    const map = byName.get(key).stationMap;
+    const prev = map.get(station) || { station, activeHours: 0, output: 0 };
+    prev.activeHours += activeHours;
+    prev.output += output;
+    map.set(station, prev);
+  });
+
+  const out = {};
+  byName.forEach((entry, key) => {
+    const stations = Array.from(entry.stationMap.values()).sort((a, b) => b.output - a.output);
+    out[key] = { name: entry.name, stations, isFloater: stations.length > 1 };
+  });
+  return out;
+}
+
+// Chips for the stations a floater worked OTHER than the one being rendered.
+function renderARFloaterChips(floaterMap, operatorName, excludeStation) {
+  const f = floaterMap[String(operatorName || "").toUpperCase()];
+  if (!f || !f.isFloater) return "";
+  const ex = String(excludeStation || "").trim().toUpperCase();
+  const others = f.stations.filter(s => String(s.station || "").trim().toUpperCase() !== ex);
+  if (!others.length) return "";
+  return `<div class="ar-floated-chips">${others.map(s =>
+    `<span class="ar-floated-chip"><span class="st">${escapeHtml(s.station)}</span> <b>${fmt(s.activeHours)}h</b> · <b>${fmt(s.output)}</b></span>`
+  ).join("")}</div>`;
+}
+
 function buildAROperatorRollups(metricsPayload, stationFilter = getSelectedARStation()) {
   const selectedStation = normalizeARStationFilter(stationFilter || "ALL");
   const rows = (Array.isArray(metricsPayload?.operatorActivity) ? metricsPayload.operatorActivity : [])
@@ -2097,6 +2145,7 @@ function renderAROperatorPerformance(metricsPayload) {
   if (!box) return;
 
   const list = buildAROperatorRollups(metricsPayload);
+  const floaterMap = buildARFloaterMap(metricsPayload);
   if (!list.length) {
     box.innerHTML = `<div class="ar-empty-state">No AR operator activity found.</div>`;
     return;
@@ -2119,7 +2168,7 @@ function renderAROperatorPerformance(metricsPayload) {
         <div class="ar-operator-topline">
           <div class="ar-operator-rank">${index + 1}</div>
           <div class="ar-operator-main">
-            <strong>${escapeHtml(item.name)}</strong>
+            <strong>${escapeHtml(item.name)}${floaterMap[item.name.toUpperCase()]?.isFloater ? ` <span class="ar-floater-badge">⇄ Floater</span>` : ""}</strong>
             <span>${escapeHtml(item.role)} · ${escapeHtml(item.cert)} · Peak ${escapeHtml(item.bestHour)} (${fmt(item.bestValue)})</span>
           </div>
           <div class="ar-operator-score">
@@ -2132,6 +2181,7 @@ function renderAROperatorPerformance(metricsPayload) {
           ${escapeHtml(capacityText)}
         </div>
 
+        ${renderARFloaterChips(floaterMap, item.name, item.role)}
         ${renderAROperatorHourStrip(item, metricsPayload)}
       </button>
     `;
@@ -2199,43 +2249,118 @@ function compactARRosterForDisplay(roster) {
   });
 }
 
+// Champ-select lane definitions. Order + colors map to the AR station tokens.
+const AR_ROSTER_LANES = [
+  { key: "AR-IN",     tag: "Intake",    color: "var(--cyan)",   glow: "rgba(0,217,255,.10)",  constraint: false },
+  { key: "Basket",    tag: "Sorting",   color: "var(--purple)", glow: "rgba(155,92,255,.10)", constraint: false },
+  { key: "Oven",      tag: "Cure",      color: "var(--red)",    glow: "rgba(255,64,64,.10)",  constraint: true  },
+  { key: "Sectoring", tag: "Routing",   color: "var(--green)",  glow: "rgba(86,227,109,.10)", constraint: false },
+  { key: "DeRing",    tag: "Finishing", color: "var(--orange)", glow: "rgba(255,153,0,.10)",  constraint: false },
+  { key: "AR-OUT",    tag: "Dispatch",  color: "var(--amber)",  glow: "rgba(255,191,63,.10)", constraint: false },
+];
+
+function arRosterInitials(name) {
+  return String(name || "")
+    .split(/\s+/).filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "??";
+}
+
+function renderARRosterCard(row, lane, floaterMap) {
+  floaterMap = floaterMap || {};
+  const name = getRosterOperatorName(row);
+  const role = getRosterRole(row);
+  const cert = getRosterCert(row);
+  const week = toNumber(row.trainingWeek || row.TrainingWeek) || 1;
+  const custom = toNumber(row.individualJph || row.IndividualJPH);
+  const finalJph = getRosterFinalJph(row);
+  const training = cert === "Training";
+  const isFloater = !!(floaterMap[name.toUpperCase()] && floaterMap[name.toUpperCase()].isFloater);
+
+  const pips = training
+    ? `<span class="ar-champ-pips">${[1, 2, 3, 4, 5]
+        .map(i => `<span class="ar-champ-pip ${i <= week ? "on" : ""}"></span>`).join("")}</span>`
+    : "";
+
+  const stat = lane.constraint
+    ? `<span class="ar-champ-jph process">PROCESS · NO JPH</span>`
+    : `<span class="ar-champ-jph">${fmt(finalJph)}<small>JPH</small></span>${custom ? `<span class="ar-champ-custom">CUSTOM</span>` : ""}`;
+
+  return `
+    <div class="ar-champ${isFloater ? " is-floater" : ""}" role="button" tabindex="0" data-operator="${escapeHtml(name)}">
+      <div class="ar-champ-top">
+        <div class="ar-champ-av">${escapeHtml(arRosterInitials(name))}</div>
+        <div class="ar-champ-id">
+          <div class="nm">${escapeHtml(name)}</div>
+          <div class="rl">${escapeHtml(role)}${isFloater ? " · home" : ""}</div>
+        </div>
+      </div>
+      <div class="ar-champ-badges">
+        <span class="ar-champ-cert ${training ? "training" : "certified"}">${escapeHtml(cert)}${training ? ` W${week}` : ""}${pips}</span>
+        ${isFloater ? `<span class="ar-floater-badge">⇄ Floater</span>` : ""}
+      </div>
+      <div class="ar-champ-stat">${stat}</div>
+      ${renderARFloaterChips(floaterMap, name, role)}
+      <div class="ar-champ-actions">
+        <button type="button" class="ar-mini-btn" data-edit-ar="${escapeHtml(name)}" data-edit-role="${escapeHtml(role)}">Edit</button>
+        <button type="button" class="ar-mini-btn danger" data-clear-ar="${escapeHtml(name)}" data-clear-role="${escapeHtml(role)}">Clear</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderARRosterList(roster) {
   const box = $("arRosterList");
   const count = $("arRosterCount");
   const active = compactARRosterForDisplay(roster);
+  // Floater map comes from live activity on the current metrics payload, so a
+  // roster card badges automatically when that person gets scanned in 2+ areas.
+  const floaterMap = buildARFloaterMap(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {});
 
   if (count) count.textContent = `${active.length} assigned`;
 
   if (!box) return;
 
-  if (!active.length) {
-    box.innerHTML = `<div class="ar-empty-state">No assigned associates yet. Select an associate and role to start capacity tracking.</div>`;
-    return;
-  }
-
-  box.innerHTML = active.map(row => {
-    const name = getRosterOperatorName(row);
+  // Group active roster rows by role for the lane view.
+  const byRole = new Map(AR_ROSTER_LANES.map(l => [l.key, []]));
+  const overflowRole = [];
+  active.forEach(row => {
     const role = getRosterRole(row);
-    const cert = getRosterCert(row);
-    const week = toNumber(row.trainingWeek || row.TrainingWeek) || 1;
-    const custom = toNumber(row.individualJph || row.IndividualJPH);
-    const finalJph = getRosterFinalJph(row);
+    if (byRole.has(role)) byRole.get(role).push(row);
+    else overflowRole.push(row); // unknown role still gets shown
+  });
+
+  box.innerHTML = AR_ROSTER_LANES.map(lane => {
+    const rows = byRole.get(lane.key) || [];
+    const laneJph = lane.constraint
+      ? "—"
+      : fmt(rows.reduce((sum, r) => sum + (getRosterFinalJph(r) || 0), 0));
+
+    const cards = rows.map(r => renderARRosterCard(r, lane, floaterMap)).join("");
+    const constraintChip = lane.constraint
+      ? `<span class="ar-lane-constraint">⚠ Constraint · 1h Cooldown</span>` : "";
 
     return `
-      <div class="ar-roster-item" role="button" tabindex="0" data-operator="${escapeHtml(name)}">
-        <div>
-          <strong>${escapeHtml(name)}</strong>
-          <span>${escapeHtml(role)} · ${escapeHtml(cert)}${cert === "Training" ? ` W${week}` : ""}${custom ? ` · Custom ${fmt(custom)} JPH` : ""}</span>
+      <div class="ar-lane${lane.constraint ? " constraint" : ""}" style="--lane:${lane.color};--lane-glow:${lane.glow}">
+        <div class="ar-lane-head">
+          <div class="ar-lane-title">
+            <span class="ar-lane-dot"></span>
+            <span class="ar-lane-name">${escapeHtml(lane.key)}</span>
+            <span class="ar-lane-tag">${escapeHtml(lane.tag)}</span>
+            ${constraintChip}
+          </div>
+          <div class="ar-lane-stats">
+            <div class="ar-lane-stat"><div class="v">${rows.length}</div><div class="l">Assigned</div></div>
+            <div class="ar-lane-stat"><div class="v">${laneJph}</div><div class="l">Lane JPH</div></div>
+          </div>
         </div>
-        <div class="ar-roster-actions">
-          <em>${fmt(finalJph)} JPH</em>
-          <button type="button" class="ar-mini-btn" data-edit-ar="${escapeHtml(name)}" data-edit-role="${escapeHtml(role)}">Edit</button>
-          <button type="button" class="ar-mini-btn danger" data-clear-ar="${escapeHtml(name)}" data-clear-role="${escapeHtml(role)}">Clear</button>
+        <div class="ar-lane-slots">
+          ${cards}
+          <div class="ar-slot-empty" data-assign-role="${escapeHtml(lane.key)}">+ Assign to ${escapeHtml(lane.key)}</div>
         </div>
       </div>
     `;
   }).join("");
 
+  // Operator card / drawer open (click + keyboard) — unchanged behavior.
   box.querySelectorAll("[data-operator]").forEach(row => {
     row.addEventListener("click", () => openARAssociateDrawer(row.dataset.operator));
     row.addEventListener("keydown", event => {
@@ -2246,6 +2371,7 @@ function renderARRosterList(roster) {
     });
   });
 
+  // Clear — same handler as before.
   box.querySelectorAll("[data-clear-ar]").forEach(btn => {
     btn.addEventListener("click", event => {
       event.stopPropagation();
@@ -2253,12 +2379,32 @@ function renderARRosterList(roster) {
     });
   });
 
+  // Edit — same handler as before.
   box.querySelectorAll("[data-edit-ar]").forEach(btn => {
     btn.addEventListener("click", event => {
       event.stopPropagation();
       fillARRosterForm(btn.dataset.editAr, active, btn.dataset.editRole);
     });
   });
+
+  // Empty slot → preset the console role and focus the associate picker.
+  box.querySelectorAll("[data-assign-role]").forEach(slot => {
+    slot.addEventListener("click", () => {
+      const roleSelect = $("arAssignRole");
+      const opSelect = $("arAssignOperator");
+      if (roleSelect) roleSelect.value = slot.dataset.assignRole;
+      if (typeof syncARAssignWeekField === "function") syncARAssignWeekField();
+      if (opSelect) opSelect.focus();
+    });
+  });
+}
+
+// Hide Training Week unless Status = Training (matches the card model).
+function syncARAssignWeekField() {
+  const cert = $("arAssignCert");
+  const field = $("arAssignWeekField");
+  if (!field) return;
+  field.style.display = (cert && cert.value === "Training") ? "" : "none";
 }
 
 function fillARRosterForm(operatorName, roster, role) {
@@ -2405,6 +2551,13 @@ function bindARMetricEvents() {
     });
     operatorSelect.dataset.bound = "1";
   }
+
+  const certSelect = $("arAssignCert");
+  if (certSelect && !certSelect.dataset.bound) {
+    certSelect.addEventListener("change", syncARAssignWeekField);
+    certSelect.dataset.bound = "1";
+  }
+  syncARAssignWeekField();
 
   if (!bindARMetricEvents._escapeBound) {
     document.addEventListener("keydown", event => {
@@ -2779,6 +2932,21 @@ function animateValue(id, target) {
   requestAnimationFrame(update);
 }
 
+
+function bindARLoadoutToggle() {
+  const section = $("arLoadoutSection");
+  const toggle = $("arLoadoutToggle");
+  if (!section || !toggle || toggle.dataset.bound) return;
+
+  toggle.addEventListener("click", () => {
+    const isOpen = section.classList.toggle("open");
+    section.classList.toggle("closed", !isOpen);
+    toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+
+  toggle.dataset.bound = "1";
+}
+
 function bindEvents() {
   const refresh = $("refreshBtn");
 
@@ -2794,6 +2962,7 @@ function bindEvents() {
   bindPageNavigation();
   bindSplitTabs();
   bindARMetricEvents();
+  bindARLoadoutToggle();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -2804,3 +2973,982 @@ window.addEventListener("DOMContentLoaded", () => {
   setInterval(updateClock, 1000 * 30);
   setInterval(loadARData, REFRESH_MS);
 });
+
+/* =====================================================
+   AR PRODUCTIVITY COMMAND CENTER — ADVANCED UI RENDERERS
+   These override the summary tab renderers with the advanced layout.
+===================================================== */
+
+function arGetInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "AR";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function arStatusFromPace(role, pace, statusText) {
+  const roleText = normalizeARStationFilter(role || "");
+  const status = String(statusText || "").toUpperCase();
+  const p = toNumber(pace);
+
+  if (roleText === "Oven" || status.includes("CONSTRAINT") || status.includes("NO_JPH")) {
+    return { key: "constraint", label: "Constraint" };
+  }
+  if (p >= 100 || status.includes("AHEAD")) return { key: "good", label: "On Track" };
+  if (p >= 75) return { key: "watch", label: "Watch" };
+  return { key: "bad", label: "Behind" };
+}
+
+function arOperatorStatus(item, percent, hasTarget) {
+  if (!hasTarget || item.role === "Oven") return { key: "constraint", label: "Constraint" };
+  const p = toNumber(percent);
+  if (p >= 100) return { key: "good", label: "Elite" };
+  if (p >= 90) return { key: "watch", label: "On Target" };
+  if (p >= 75) return { key: "watch", label: "Watch" };
+  return { key: "bad", label: "Needs Support" };
+}
+
+function arShortHourLabel(hour) {
+  return String(hour || "")
+    .replace(":00 ", "")
+    .replace(" AM", "A")
+    .replace(" PM", "P");
+}
+
+function renderARMetricsPanel(metricsPayload, rosterPayload) {
+  renderARMetricSummary(metricsPayload);
+  renderARAdvancedProcessFlow(metricsPayload);
+  renderARProductivityOverview(metricsPayload);
+  renderAROperatorLeaderboard(metricsPayload);
+  renderARHourlyTrend(metricsPayload);
+  renderARCapacityOverview(metricsPayload);
+  renderAROperatorPerformance(metricsPayload);
+  renderARCommandTip(metricsPayload);
+  renderARRosterControls(metricsPayload, rosterPayload);
+
+  if (AR_METRICS_STATE.selectedOperator) {
+    const stillExists = buildAROperatorRollups(metricsPayload || {}).some(item => item.name.toUpperCase() === AR_METRICS_STATE.selectedOperator.toUpperCase());
+    if (stillExists && $("arAssociateDrawer")?.classList.contains("open")) {
+      openARAssociateDrawer(AR_METRICS_STATE.selectedOperator);
+    }
+  }
+}
+
+function renderARAdvancedProcessFlow(metricsPayload) {
+  const box = $("arAdvancedProcessFlow");
+  if (!box) return;
+
+  const rows = getARStationMetricRows(metricsPayload)
+    .slice()
+    .sort((a, b) => AR_ROLE_ORDER.indexOf(normalizeARStationFilter(a.role || a.station)) - AR_ROLE_ORDER.indexOf(normalizeARStationFilter(b.role || b.station)));
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="ar-empty-state">No station flow metrics returned yet.</div>`;
+    return;
+  }
+
+  const selectedStation = getSelectedARStation();
+  const allBtn = $("arProcessAllBtn");
+  if (allBtn) {
+    allBtn.classList.toggle("active", selectedStation === "ALL");
+    allBtn.onclick = () => {
+      AR_METRICS_STATE.selectedStation = "ALL";
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    };
+  }
+
+  box.innerHTML = rows.map(row => {
+    const role = normalizeARStationFilter(row.role || row.station || "AR");
+    const activeClass = role.toUpperCase() === selectedStation.toUpperCase() ? "active" : "";
+    const actual = toNumber(row.actualOutput);
+    const capacity = toNumber(row.capacity);
+    const assigned = toNumber(row.assignedCount);
+    const pace = role === "Oven" ? 0 : toNumber(row.pacePercent) || (capacity ? Math.round((actual / capacity) * 100) : 0);
+    const gap = toNumber(row.gap) || (capacity ? actual - capacity : 0);
+    const status = arStatusFromPace(role, pace, row.status || row.note);
+    const width = role === "Oven" ? 100 : Math.max(2, Math.min(100, pace || 0));
+
+    return `
+      <article class="ar-flow-node ${status.key} ${activeClass}" role="button" tabindex="0" data-ar-station-card="${escapeHtml(role)}">
+        <div class="ar-flow-node-head">
+          <strong>${escapeHtml(role)}</strong>
+          <span>${escapeHtml(status.label)}</span>
+        </div>
+        <div class="ar-flow-node-main">
+          <div><span>Output</span><strong>${fmt(actual)}</strong></div>
+          <div><span>Capacity</span><strong>${role === "Oven" ? "N/A" : fmt(capacity)}</strong></div>
+        </div>
+        <div class="ar-flow-bar"><i style="width:${width}%"></i></div>
+        <div class="ar-flow-node-foot">
+          <div><span>Pace</span>${role === "Oven" ? "Process" : `${fmt(pace)}%`}</div>
+          <div><span>Gap</span>${role === "Oven" ? "No JPH" : fmt(gap)}</div>
+          <div><span>Assigned</span>${fmt(assigned)}</div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-ar-station-card]").forEach(card => {
+    card.addEventListener("click", () => {
+      AR_METRICS_STATE.selectedStation = normalizeARStationFilter(card.dataset.arStationCard || "ALL");
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    });
+    card.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        card.click();
+      }
+    });
+  });
+}
+
+function renderARProductivityOverview(metricsPayload) {
+  const list = buildAROperatorRollups(metricsPayload);
+  const scored = list.map(item => {
+    const target = getAROperatorHourlyTarget(item);
+    const hasTarget = target > 0 && item.role !== "Oven";
+    const percent = hasTarget ? Math.round((toNumber(item.bestValue) / target) * 100) : 0;
+    return { item, target, hasTarget, percent };
+  });
+
+  const targetRows = scored.filter(row => row.hasTarget);
+  const avg = targetRows.length
+    ? Math.round(targetRows.reduce((sum, row) => sum + Math.min(row.percent, 150), 0) / targetRows.length)
+    : 0;
+
+  const full = targetRows.filter(row => row.percent >= 100).length;
+  const near = targetRows.filter(row => row.percent >= 90 && row.percent < 100).length;
+  const below = targetRows.filter(row => row.percent >= 50 && row.percent < 90).length;
+  const low = targetRows.filter(row => row.percent < 50).length;
+
+  const ring = $("arProductivityRing");
+  if (ring) ring.style.setProperty("--score", Math.max(0, Math.min(100, avg)));
+
+  setText("arProductivityScore", `${fmt(avg)}%`);
+  setText("arTierFull", fmt(full));
+  setText("arTierNear", fmt(near));
+  setText("arTierBelow", fmt(below));
+  setText("arTierLow", fmt(low));
+  setText("arProductivitySubText", `${fmt(targetRows.length)} operators with active JPH targets`);
+
+  const best = scored.filter(row => row.hasTarget).sort((a, b) => b.percent - a.percent)[0] || scored[0];
+  if (best) {
+    setText("arBestPerformer", best.item.name);
+    setText("arBestPerformerText", `${fmt(best.percent)}% of target · ${escapeHtml(best.item.role)}`);
+  } else {
+    setText("arBestPerformer", "--");
+    setText("arBestPerformerText", "No operator activity found");
+  }
+
+  const pressure = getARStationMetricRows(metricsPayload)
+    .filter(row => normalizeARStationFilter(row.role || row.station) !== "Oven")
+    .sort((a, b) => toNumber(a.gap) - toNumber(b.gap))[0];
+
+  if (pressure) {
+    setText("arPressureStation", normalizeARStationFilter(pressure.role || pressure.station));
+    setText("arPressureStationText", `Gap ${fmt(pressure.gap)} · Pace ${fmt(pressure.pacePercent)}%`);
+  } else {
+    setText("arPressureStation", "--");
+    setText("arPressureStationText", "No station capacity data");
+  }
+}
+
+function renderAROperatorLeaderboard(metricsPayload) {
+  const box = $("arOperatorLeaderboard");
+  if (!box) return;
+
+  const list = buildAROperatorRollups(metricsPayload).slice(0, 5);
+  if (!list.length) {
+    box.innerHTML = `<div class="ar-empty-state">No operator activity found.</div>`;
+    return;
+  }
+
+  box.innerHTML = list.map((item, index) => {
+    const target = getAROperatorHourlyTarget(item);
+    const hasTarget = target > 0 && item.role !== "Oven";
+    const percent = hasTarget ? Math.round((toNumber(item.bestValue) / target) * 100) : 0;
+    const status = arOperatorStatus(item, percent, hasTarget);
+
+    return `
+      <button class="ar-leader-row" type="button" data-operator-detail="${escapeHtml(item.name)}">
+        <div class="ar-leader-rank">${index + 1}</div>
+        <div class="ar-leader-main">
+          <strong>${escapeHtml(item.name)}</strong>
+          <span>${escapeHtml(item.role)} · ${escapeHtml(item.cert)}</span>
+        </div>
+        <div class="ar-leader-cell"><span>Current JPH</span><strong>${fmt(item.total)}</strong></div>
+        <div class="ar-leader-cell"><span>Target %</span><strong>${hasTarget ? `${fmt(percent)}%` : "N/A"}</strong></div>
+        <div class="ar-leader-cell optional"><span>Peak Hour</span><strong>${escapeHtml(item.bestHour)}</strong></div>
+        <span class="ar-status-badge ${status.key}">${escapeHtml(status.label)}</span>
+      </button>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-operator-detail]").forEach(btn => {
+    btn.addEventListener("click", () => openARAssociateDrawer(btn.dataset.operatorDetail));
+  });
+
+  renderARPerformanceInsights(metricsPayload);
+}
+
+function renderARPerformanceInsights(metricsPayload) {
+  const box = $("arPerformanceInsights");
+  if (!box) return;
+
+  const summary = metricsPayload?.summary || {};
+  const stationRows = getARStationMetricRows(metricsPayload);
+  const list = buildAROperatorRollups(metricsPayload);
+  const selected = getSelectedARStation();
+
+  const worstStation = stationRows
+    .filter(row => normalizeARStationFilter(row.role || row.station) !== "Oven")
+    .sort((a, b) => toNumber(a.gap) - toNumber(b.gap))[0];
+
+  const bestOperator = list[0];
+  const peakHour = summary.peakHour || calculateStationPeakFromOperators(list).hour || "--";
+
+  const insights = [
+    {
+      title: "Station Focus",
+      text: worstStation
+        ? `${normalizeARStationFilter(worstStation.role || worstStation.station)} has the largest gap (${fmt(worstStation.gap)}).`
+        : "No station gap is available yet."
+    },
+    {
+      title: "Labor Signal",
+      text: bestOperator
+        ? `${bestOperator.name} is leading output at ${fmt(bestOperator.total)} total scans.`
+        : "No associate output is available yet."
+    },
+    {
+      title: "Peak Demand",
+      text: `${peakHour} is the current peak hour${summary.peakHourValue ? ` with ${fmt(summary.peakHourValue)} scans.` : "."}`
+    }
+  ];
+
+  if (selected !== "ALL") {
+    insights[0].text = `Focused station view: ${selected}. Use All AR to compare the full department.`;
+  }
+
+  box.innerHTML = insights.map(item => `
+    <div class="ar-insight-item">
+      <strong>${escapeHtml(item.title)}</strong>
+      <span>${escapeHtml(item.text)}</span>
+    </div>
+  `).join("");
+}
+
+function renderARHourlyTrend(metricsPayload) {
+  const box = $("arHourlyTrend");
+  if (!box) return;
+
+  const labels = getARHourLabels(metricsPayload);
+  const operators = buildAROperatorRollups(metricsPayload);
+  const totals = labels.map(hour => operators.reduce((sum, item) => sum + toNumber(item.hours?.[hour]), 0));
+  const max = Math.max(...totals, 1);
+
+  box.innerHTML = labels.map((hour, index) => {
+    const value = totals[index];
+    const height = Math.max(value > 0 ? 8 : 2, Math.round((value / max) * 160));
+    return `
+      <div class="ar-trend-bar" title="${escapeHtml(hour)} · ${fmt(value)} output">
+        <i style="height:${height}px"></i>
+        <strong>${fmt(value)}</strong>
+        <span>${escapeHtml(arShortHourLabel(hour))}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderARCapacityOverview(metricsPayload) {
+  const summary = metricsPayload?.summary || {};
+  const totalOutput = toNumber(summary.totalActualOutput);
+  const totalCapacity = toNumber(summary.totalCapacity);
+  const pace = toNumber(summary.outputVsCapacityPercent) || (totalCapacity ? Math.round((totalOutput / totalCapacity) * 100) : 0);
+  const gap = toNumber(summary.gapToCapacity) || (totalCapacity ? totalOutput - totalCapacity : 0);
+
+  const gauge = $("arCapacityGauge");
+  if (gauge) gauge.style.setProperty("--score", Math.max(0, Math.min(100, pace)));
+
+  setText("arCapacityGaugeValue", `${fmt(pace)}%`);
+  setText("arCapacityTotalOutput", fmt(totalOutput));
+  setText("arCapacityTotalCap", fmt(totalCapacity));
+  setText("arCapacityGapValue", fmt(gap));
+  setText("arCapacityPeakHour", summary.peakHour || "--");
+
+  const statusText = pace >= 100 ? "Capacity target met" : pace >= 75 ? "Watch capacity gap" : "Behind daily capacity";
+  setText("arCapacityStatusText", statusText);
+}
+
+function renderARStationMetrics(metricsPayload) {
+  const box = $("arStationMetricGrid");
+  if (!box) return;
+
+  const selectedStation = getSelectedARStation();
+  const rows = getARStationMetricRows(metricsPayload).filter(row => isARStationMatch(row.role || row.station, selectedStation));
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="ar-empty-state">No AR capacity metrics returned yet.</div>`;
+    return;
+  }
+
+  const ordered = rows.slice().sort((a, b) => AR_ROLE_ORDER.indexOf(normalizeARStationFilter(a.role || a.station)) - AR_ROLE_ORDER.indexOf(normalizeARStationFilter(b.role || b.station)));
+
+  box.innerHTML = ordered.map(row => {
+    const role = normalizeARStationFilter(row.role || row.station || "AR");
+    const actual = toNumber(row.actualOutput);
+    const capacity = toNumber(row.capacity);
+    const assigned = toNumber(row.assignedCount);
+    const pace = role === "Oven" ? 0 : toNumber(row.pacePercent) || (capacity ? Math.round((actual / capacity) * 100) : 0);
+    const gap = toNumber(row.gap) || (capacity ? actual - capacity : 0);
+    const top = row.topOperator || {};
+    const topName = normalizeARText(top.name || top.operatorName, "No operator");
+    const topTotal = toNumber(top.total || top.Total);
+    const status = arStatusFromPace(role, pace, row.status || row.note);
+    const width = role === "Oven" ? 100 : Math.max(2, Math.min(100, pace || 0));
+    const action = role === "Oven" ? "Resolve constraint" : pace >= 100 ? "Maintain pace" : "Add support";
+
+    return `
+      <article class="ar-station-metric ${status.key}" role="button" tabindex="0" data-ar-station-card="${escapeHtml(role)}">
+        <div class="ar-station-metric-head">
+          <strong>${escapeHtml(role)}</strong>
+          <span>${escapeHtml(status.label)}</span>
+        </div>
+        <div class="ar-station-numbers">
+          <div><em>Output</em><b>${fmt(actual)}</b></div>
+          <div><em>Assigned</em><b>${fmt(assigned)}</b></div>
+          <div><em>Capacity</em><b>${role === "Oven" ? "N/A" : fmt(capacity)}</b></div>
+        </div>
+        <div class="ar-capacity-bar"><span style="width:${width}%"></span></div>
+        <div class="ar-station-meta">
+          <span>${role === "Oven" ? "Process constraint / No JPH capacity" : `Pace ${fmt(pace)}% · Gap ${fmt(gap)}`}</span>
+          <span>Top: ${escapeHtml(topName)}${topTotal ? ` · ${fmt(topTotal)}` : ""}</span>
+        </div>
+        <div class="ar-station-action">Action: ${escapeHtml(action)}</div>
+      </article>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-ar-station-card]").forEach(card => {
+    card.addEventListener("click", () => {
+      AR_METRICS_STATE.selectedStation = normalizeARStationFilter(card.dataset.arStationCard || "ALL");
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    });
+    card.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        card.click();
+      }
+    });
+  });
+}
+
+function renderAROperatorPerformance(metricsPayload) {
+  const box = $("arOperatorPerformanceList");
+  if (!box) return;
+
+  const list = buildAROperatorRollups(metricsPayload);
+  const floaterMap = buildARFloaterMap(metricsPayload);
+
+  if (!list.length) {
+    box.innerHTML = `<div class="ar-empty-state">No AR operator activity found.</div>`;
+    return;
+  }
+
+  box.innerHTML = list.map((item, index) => {
+    const target = getAROperatorHourlyTarget(item);
+    const hasTarget = target > 0 && item.role !== "Oven";
+    const currentPct = hasTarget ? Math.round((item.bestValue / target) * 100) : 0;
+    const perfClass = getARPerformanceClass(currentPct, hasTarget);
+    const status = arOperatorStatus(item, currentPct, hasTarget);
+    const initials = arGetInitials(item.name);
+    const capacityText = item.role === "Oven"
+      ? "Process constraint · 1 hr cooldown · No JPH capacity"
+      : hasTarget
+        ? `${fmt(currentPct)}% target · ${fmt(item.bestValue)} / ${fmt(target)} best hour`
+        : "No assigned capacity";
+
+    return `
+      <button class="ar-operator-loadout-card perf-${perfClass}" type="button" data-operator-detail="${escapeHtml(item.name)}">
+        <div class="ar-loadout-top">
+          <div class="ar-loadout-avatar">${escapeHtml(initials)}</div>
+          <div class="ar-loadout-name">
+            <strong>${escapeHtml(item.name)}${floaterMap[item.name.toUpperCase()]?.isFloater ? ` <span class="ar-floater-badge">⇄ Floater</span>` : ""}</strong>
+            <span>#${index + 1} · ${escapeHtml(item.role)} · ${escapeHtml(item.cert)}</span>
+          </div>
+          <div class="ar-loadout-score">
+            <strong>${fmt(item.total)}</strong>
+            <span>${hasTarget ? "Output" : "Activity"}</span>
+          </div>
+        </div>
+
+        <div class="ar-loadout-meta">
+          <div><span>Target</span><strong>${hasTarget ? `${fmt(currentPct)}%` : "N/A"}</strong></div>
+          <div><span>Peak Hour</span><strong>${escapeHtml(item.bestHour)}</strong></div>
+          <div><span>Status</span><strong>${escapeHtml(status.label)}</strong></div>
+        </div>
+
+        <div class="ar-operator-jph-pill ${perfClass}">${escapeHtml(capacityText)}</div>
+        ${renderARFloaterChips(floaterMap, item.name, item.role)}
+        ${renderAROperatorHourStrip(item, metricsPayload)}
+      </button>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-operator-detail]").forEach(btn => {
+    btn.addEventListener("click", () => openARAssociateDrawer(btn.dataset.operatorDetail));
+  });
+}
+
+function renderARCommandTip(metricsPayload) {
+  const box = $("arCommandTip");
+  if (!box) return;
+
+  const summary = metricsPayload?.summary || {};
+  const stationRows = getARStationMetricRows(metricsPayload);
+  const worstStation = stationRows
+    .filter(row => normalizeARStationFilter(row.role || row.station) !== "Oven")
+    .sort((a, b) => toNumber(a.gap) - toNumber(b.gap))[0];
+
+  let tip = "Monitor station pace and keep floaters ready for the largest capacity gap.";
+
+  if (worstStation) {
+    const station = normalizeARStationFilter(worstStation.role || worstStation.station);
+    const gap = toNumber(worstStation.gap);
+    const pace = toNumber(worstStation.pacePercent);
+    tip = `Focus support on ${station}. Current pace is ${fmt(pace)}% with a gap of ${fmt(gap)} against capacity.`;
+  }
+
+  if (summary.outputVsCapacityPercent >= 100) {
+    tip = "Daily capacity target is currently met. Keep the same station coverage and watch the next peak hour.";
+  }
+
+  box.innerHTML = `<strong>Command Tip</strong><span>${escapeHtml(tip)}</span>`;
+}
+
+
+/* ─────────────────────────────────────────────────────
+   AR FLOATING SUPPORT OVERRIDES
+   Adds AR-IN, AR-OUT Floater, Utility, and General Floater logic.
+   LMS assignment = body/home role. Activity = production credit.
+───────────────────────────────────────────────────── */
+(function initARFloatingSupportOverride(){
+  const floatingRoles = ["AR-IN, AR-OUT Floater", "Utility", "Floater"];
+  if (Array.isArray(AR_ROLE_ORDER)) {
+    floatingRoles.forEach(role => {
+      if (!AR_ROLE_ORDER.some(r => String(r).toUpperCase() === role.toUpperCase())) AR_ROLE_ORDER.push(role);
+    });
+  }
+
+  window.AR_FLOATING_ROLES = floatingRoles;
+})();
+
+function isARFloatingRole(role) {
+  const r = String(role || "").trim().toUpperCase();
+  return r === "AR + AR-OUT FLOATER" || r === "UTILITY" || r === "FLOATER" || r === "GENERAL FLOATER";
+}
+
+function isARProductionStation(role) {
+  const r = normalizeARStationFilter(role);
+  return ["AR-IN", "Basket", "Oven", "Sectoring", "DeRing", "AR-OUT"].some(x => x.toUpperCase() === r.toUpperCase());
+}
+
+function normalizeARStationFilter(value) {
+  const clean = normalizeARText(value, "ALL");
+  if (!clean || clean.toUpperCase() === "ALL") return "ALL";
+
+  const upper = clean.toUpperCase().replace(/\s+/g, " ").trim();
+  if (upper === "AR + AR-OUT FLOATER" || upper === "AR/AR-OUT FLOATER" || upper === "AR-IN, AR-OUT FLOATER") return "AR-IN, AR-OUT Floater";
+  if (upper === "UTILITY" || upper.includes("UTILITY")) return "Utility";
+  if (upper === "FLOATER" || upper === "GENERAL FLOATER") return "Floater";
+
+  if (upper.includes("AR-IN") || upper.includes("AR IN")) return "AR-IN";
+  if (upper.includes("BASKET")) return "Basket";
+  if (upper.includes("OVEN")) return "Oven";
+  if (upper.includes("SECTOR")) return "Sectoring";
+  if (upper.includes("DERING") || upper.includes("DE RING")) return "DeRing";
+  if (upper.includes("AR-OUT") || upper.includes("AR OUT")) return "AR-OUT";
+
+  const match = AR_ROLE_ORDER.find(role => role.toUpperCase() === upper);
+  return match || clean;
+}
+
+function getCurrentARRosterRows(metricsPayload) {
+  const direct = Array.isArray(metricsPayload?.roster) ? metricsPayload.roster : [];
+  const stateMetrics = Array.isArray(AR_METRICS_STATE?.metricsPayload?.roster) ? AR_METRICS_STATE.metricsPayload.roster : [];
+  const stateRoster = Array.isArray(AR_METRICS_STATE?.rosterPayload?.roster) ? AR_METRICS_STATE.rosterPayload.roster : [];
+  const rows = direct.length ? direct : (stateMetrics.length ? stateMetrics : stateRoster);
+  return rows.filter(row => normalizeARText(row.activeStatus || row.ActiveStatus, "Active").toLowerCase() === "active");
+}
+
+function getARActivitySplitForOperator(metricsPayload, operatorName) {
+  const target = String(operatorName || "").trim().toUpperCase();
+  const rows = Array.isArray(metricsPayload?.operatorActivity) ? metricsPayload.operatorActivity : [];
+  const stationTotals = {};
+  rows.forEach(row => {
+    const name = readOperatorNameFromActivity(row).toUpperCase();
+    if (!target || name !== target) return;
+    const station = normalizeARStationFilter(readStationFromActivity(row));
+    if (!isARProductionStation(station)) return;
+    const output = toNumber(row.Total || row.total || row.ActivityToday || row.activityToday);
+    stationTotals[station] = (stationTotals[station] || 0) + output;
+  });
+
+  const total = Object.values(stationTotals).reduce((sum, v) => sum + toNumber(v), 0);
+  const split = {};
+  if (total > 0) {
+    Object.keys(stationTotals).forEach(station => {
+      split[station] = stationTotals[station] / total;
+    });
+  }
+  return split;
+}
+
+function getARFloatingBodyImpact(metricsPayload) {
+  const impact = {
+    "AR-IN": 0,
+    "Basket": 0,
+    "Oven": 0,
+    "Sectoring": 0,
+    "DeRing": 0,
+    "AR-OUT": 0,
+    utilityBodies: 0,
+    floaterBodies: 0,
+    arArOutBodies: 0,
+    totalBodies: 0
+  };
+
+  getCurrentARRosterRows(metricsPayload).forEach(row => {
+    const role = normalizeARStationFilter(getRosterRole(row));
+    const name = getRosterOperatorName(row);
+    impact.totalBodies += 1;
+
+    if (role === "AR-IN, AR-OUT Floater") {
+      impact["AR-IN"] += 0.5;
+      impact["AR-OUT"] += 0.5;
+      impact.arArOutBodies += 1;
+      return;
+    }
+
+    if (role === "Utility") {
+      impact.utilityBodies += 1;
+      return;
+    }
+
+    if (role === "Floater") {
+      impact.floaterBodies += 1;
+      const split = getARActivitySplitForOperator(metricsPayload, name);
+      Object.keys(split).forEach(station => {
+        impact[station] = (impact[station] || 0) + split[station];
+      });
+    }
+  });
+
+  return impact;
+}
+
+function fmtBodyCount(value) {
+  const n = toNumber(value);
+  if (Math.abs(n - Math.round(n)) < 0.01) return fmt(Math.round(n));
+  return n.toFixed(1).replace(/\.0$/, "");
+}
+
+function adjustARAssignedCountForFloaters(metricsPayload, role, baseAssigned) {
+  const station = normalizeARStationFilter(role);
+  if (!isARProductionStation(station)) return toNumber(baseAssigned);
+  const impact = getARFloatingBodyImpact(metricsPayload);
+  return toNumber(baseAssigned) + toNumber(impact[station]);
+}
+
+function getARRoleTargetFromStationMetrics(metricsPayload, role) {
+  const station = normalizeARStationFilter(role);
+  if (!isARProductionStation(station) || station === "Oven") return 0;
+  const row = getARStationMetricRows(metricsPayload).find(r => normalizeARStationFilter(r.role || r.station) === station);
+  if (!row) return 0;
+
+  const direct = toNumber(row.targetJph || row.TargetJPH || row.jph || row.JPH || row.laneJph || row.LaneJPH || row.capacityPerAssociate || row.CapacityPerAssociate);
+  if (direct > 0) return direct;
+
+  const assigned = toNumber(row.assignedCount);
+  const cap = toNumber(row.capacity);
+  return assigned > 0 && cap > 0 ? Math.round(cap / assigned) : 0;
+}
+
+function getAROperatorHourlyTarget(item) {
+  const role = normalizeARStationFilter(item?.role || "");
+  const custom = toNumber(item?.finalJph);
+  if (custom > 0) return custom;
+  if (role === "Oven" || role === "Utility") return 0;
+
+  const metricsPayload = AR_METRICS_STATE?.metricsPayload || LAST_CAPACITY_PAYLOAD || {};
+  if (role === "AR-IN, AR-OUT Floater") {
+    const arInTarget = getARRoleTargetFromStationMetrics(metricsPayload, "AR-IN");
+    const arOutTarget = getARRoleTargetFromStationMetrics(metricsPayload, "AR-OUT");
+    return Math.round(((arInTarget || 0) + (arOutTarget || 0)) / ([arInTarget, arOutTarget].filter(Boolean).length || 1));
+  }
+
+  if (role === "Floater") {
+    const rows = Array.isArray(item?.rows) ? item.rows : [];
+    const stationTotals = {};
+    rows.forEach(row => {
+      const station = normalizeARStationFilter(readStationFromActivity(row));
+      if (!isARProductionStation(station) || station === "Oven") return;
+      stationTotals[station] = (stationTotals[station] || 0) + toNumber(row.Total || row.total || row.ActivityToday || row.activityToday);
+    });
+    const dominant = Object.entries(stationTotals).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return dominant ? getARRoleTargetFromStationMetrics(metricsPayload, dominant) : 0;
+  }
+
+  return getARRoleTargetFromStationMetrics(metricsPayload, role);
+}
+
+function renderARAdvancedProcessFlow(metricsPayload) {
+  const box = $("arAdvancedProcessFlow");
+  if (!box) return;
+
+  const rows = getARStationMetricRows(metricsPayload)
+    .filter(row => isARProductionStation(row.role || row.station))
+    .slice()
+    .sort((a, b) => AR_ROLE_ORDER.indexOf(normalizeARStationFilter(a.role || a.station)) - AR_ROLE_ORDER.indexOf(normalizeARStationFilter(b.role || b.station)));
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="ar-empty-state">No station flow metrics returned yet.</div>`;
+    return;
+  }
+
+  const selectedStation = getSelectedARStation();
+  const allBtn = $("arProcessAllBtn");
+  if (allBtn) {
+    allBtn.classList.toggle("active", selectedStation === "ALL");
+    allBtn.onclick = () => {
+      AR_METRICS_STATE.selectedStation = "ALL";
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    };
+  }
+
+  box.innerHTML = rows.map(row => {
+    const role = normalizeARStationFilter(row.role || row.station || "AR");
+    const activeClass = role.toUpperCase() === selectedStation.toUpperCase() ? "active" : "";
+    const actual = toNumber(row.actualOutput);
+    const capacity = toNumber(row.capacity);
+    const assigned = adjustARAssignedCountForFloaters(metricsPayload, role, row.assignedCount);
+    const pace = role === "Oven" ? 0 : toNumber(row.pacePercent) || (capacity ? Math.round((actual / capacity) * 100) : 0);
+    const gap = toNumber(row.gap) || (capacity ? actual - capacity : 0);
+    const status = arStatusFromPace(role, pace, row.status || row.note);
+    const width = role === "Oven" ? 100 : Math.max(2, Math.min(100, pace || 0));
+
+    return `
+      <article class="ar-flow-node ${status.key} ${activeClass}" role="button" tabindex="0" data-ar-station-card="${escapeHtml(role)}">
+        <div class="ar-flow-node-head">
+          <strong>${escapeHtml(role)}</strong>
+          <span>${escapeHtml(status.label)}</span>
+        </div>
+        <div class="ar-flow-node-main">
+          <div><span>Output</span><strong>${fmt(actual)}</strong></div>
+          <div><span>Capacity</span><strong>${role === "Oven" ? "N/A" : fmt(capacity)}</strong></div>
+        </div>
+        <div class="ar-flow-bar"><i style="width:${width}%"></i></div>
+        <div class="ar-flow-node-foot">
+          <div><span>Pace</span>${role === "Oven" ? "Process" : `${fmt(pace)}%`}</div>
+          <div><span>Gap</span>${role === "Oven" ? "No JPH" : fmt(gap)}</div>
+          <div><span>Assigned</span>${fmtBodyCount(assigned)}</div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-ar-station-card]").forEach(card => {
+    card.addEventListener("click", () => {
+      AR_METRICS_STATE.selectedStation = normalizeARStationFilter(card.dataset.arStationCard || "ALL");
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    });
+    card.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        card.click();
+      }
+    });
+  });
+}
+
+const AR_ROSTER_LANES_FLOATING = [
+  { key: "AR-IN", tag: "Intake", color: "var(--cyan)", glow: "rgba(0,217,255,.10)", constraint: false },
+  { key: "Basket", tag: "Sorting", color: "var(--purple)", glow: "rgba(155,92,255,.10)", constraint: false },
+  { key: "Oven", tag: "Cure", color: "var(--red)", glow: "rgba(255,64,64,.10)", constraint: true },
+  { key: "Sectoring", tag: "Routing", color: "var(--green)", glow: "rgba(86,227,109,.10)", constraint: false },
+  { key: "DeRing", tag: "Finishing", color: "var(--orange)", glow: "rgba(255,153,0,.10)", constraint: false },
+  { key: "AR-OUT", tag: "Dispatch", color: "var(--amber)", glow: "rgba(255,191,63,.10)", constraint: false },
+  { key: "AR-IN, AR-OUT Floater", tag: "0.5 AR-IN / 0.5 AR-OUT", color: "#57d7ff", glow: "rgba(87,215,255,.10)", constraint: false, floating: true },
+  { key: "Utility", tag: "Support Body", color: "#b7c0d8", glow: "rgba(183,192,216,.10)", constraint: false, support: true },
+  { key: "Floater", tag: "Activity-Based Split", color: "#ffbf3f", glow: "rgba(255,191,63,.10)", constraint: false, floating: true }
+];
+
+function getARRosterLaneMeta(role) {
+  const normalized = normalizeARStationFilter(role);
+  return AR_ROSTER_LANES_FLOATING.find(l => l.key === normalized) || { key: normalized, tag: "Custom", color: "var(--orange)", glow: "rgba(255,153,0,.10)", constraint: false };
+}
+
+function renderARRosterCard(row, lane, floaterMap) {
+  floaterMap = floaterMap || {};
+  const name = getRosterOperatorName(row);
+  const role = normalizeARStationFilter(getRosterRole(row));
+  const cert = getRosterCert(row);
+  const week = toNumber(row.trainingWeek || row.TrainingWeek) || 1;
+  const custom = toNumber(row.individualJph || row.IndividualJPH);
+  const finalJph = getRosterFinalJph(row);
+  const training = cert === "Training";
+  const floatingRole = isARFloatingRole(role);
+  const autoFloater = !!(floaterMap[name.toUpperCase()] && floaterMap[name.toUpperCase()].isFloater);
+
+  const pips = training
+    ? `<span class="ar-champ-pips">${[1, 2, 3, 4, 5]
+        .map(i => `<span class="ar-champ-pip ${i <= week ? "on" : ""}"></span>`).join("")}</span>`
+    : "";
+
+  let stat;
+  if (lane.constraint || role === "Oven") {
+    stat = `<span class="ar-champ-jph process">PROCESS · NO JPH</span>`;
+  } else if (role === "Utility") {
+    stat = `<span class="ar-champ-jph process">BODY COUNT · SUPPORT</span>`;
+  } else if (role === "Floater") {
+    stat = `<span class="ar-champ-jph">AUTO<small>JPH</small></span><span class="ar-champ-custom">ACTIVITY SPLIT</span>`;
+  } else if (role === "AR-IN, AR-OUT Floater") {
+    stat = `<span class="ar-champ-jph">0.5 / 0.5<small>BODY</small></span>${custom ? `<span class="ar-champ-custom">CUSTOM</span>` : ""}`;
+  } else {
+    stat = `<span class="ar-champ-jph">${fmt(finalJph)}<small>JPH</small></span>${custom ? `<span class="ar-champ-custom">CUSTOM</span>` : ""}`;
+  }
+
+  return `
+    <div class="ar-champ${floatingRole || autoFloater ? " is-floater" : ""}" role="button" tabindex="0" data-operator="${escapeHtml(name)}">
+      <div class="ar-champ-top">
+        <div class="ar-champ-av">${escapeHtml(arRosterInitials(name))}</div>
+        <div class="ar-champ-id">
+          <div class="nm">${escapeHtml(name)}</div>
+          <div class="rl">${escapeHtml(role)}${floatingRole ? " · home" : ""}</div>
+        </div>
+      </div>
+      <div class="ar-champ-badges">
+        <span class="ar-champ-cert ${training ? "training" : "certified"}">${escapeHtml(cert)}${training ? ` W${week}` : ""}${pips}</span>
+        ${floatingRole ? `<span class="ar-floater-badge">⇄ ${role === "Utility" ? "Utility" : "Floater"}</span>` : ""}
+        ${autoFloater && !floatingRole ? `<span class="ar-floater-badge">⇄ Multi-area</span>` : ""}
+      </div>
+      <div class="ar-champ-stat">${stat}</div>
+      ${renderARFloaterChips(floaterMap, name, role)}
+      <div class="ar-champ-actions">
+        <button type="button" class="ar-mini-btn" data-edit-ar="${escapeHtml(name)}" data-edit-role="${escapeHtml(role)}">Edit</button>
+        <button type="button" class="ar-mini-btn danger" data-clear-ar="${escapeHtml(name)}" data-clear-role="${escapeHtml(role)}">Clear</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderARRosterList(roster) {
+  const box = $("arRosterList");
+  const count = $("arRosterCount");
+  const active = compactARRosterForDisplay(roster);
+  const floaterMap = buildARFloaterMap(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {});
+  const impact = getARFloatingBodyImpact(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {});
+
+  if (count) {
+    const support = impact.utilityBodies + impact.floaterBodies + impact.arArOutBodies;
+    count.textContent = `${active.length} assigned · ${fmtBodyCount(support)} floating/support`;
+  }
+
+  if (!box) return;
+
+  const byRole = new Map(AR_ROSTER_LANES_FLOATING.map(l => [l.key, []]));
+  const overflowRole = [];
+  active.forEach(row => {
+    const role = normalizeARStationFilter(getRosterRole(row));
+    if (byRole.has(role)) byRole.get(role).push(row);
+    else overflowRole.push(row);
+  });
+
+  const laneHtml = AR_ROSTER_LANES_FLOATING.map(lane => {
+    const rows = byRole.get(lane.key) || [];
+    let laneJph = "—";
+    let laneAssigned = rows.length;
+
+    if (lane.key === "AR-IN, AR-OUT Floater") {
+      laneJph = `${fmtBodyCount(rows.length * 0.5)} / ${fmtBodyCount(rows.length * 0.5)}`;
+    } else if (lane.key === "Utility") {
+      laneJph = "Support";
+    } else if (lane.key === "Floater") {
+      laneJph = "Auto";
+    } else if (!lane.constraint) {
+      laneAssigned = rows.length + toNumber(impact[lane.key]);
+      laneJph = fmt(rows.reduce((sum, r) => sum + (getRosterFinalJph(r) || 0), 0));
+    }
+
+    const cards = rows.map(r => renderARRosterCard(r, lane, floaterMap)).join("");
+    const constraintChip = lane.constraint ? `<span class="ar-lane-constraint">⚠ Constraint · 1h Cooldown</span>` : "";
+    const supportChip = lane.floating || lane.support ? `<span class="ar-lane-constraint support">Support Role</span>` : "";
+
+    return `
+      <div class="ar-lane${lane.constraint ? " constraint" : ""}${lane.floating || lane.support ? " floating-lane" : ""}" style="--lane:${lane.color};--lane-glow:${lane.glow}">
+        <div class="ar-lane-head">
+          <div class="ar-lane-title">
+            <span class="ar-lane-dot"></span>
+            <span class="ar-lane-name">${escapeHtml(lane.key)}</span>
+            <span class="ar-lane-tag">${escapeHtml(lane.tag)}</span>
+            ${constraintChip}${supportChip}
+          </div>
+          <div class="ar-lane-stats">
+            <div class="ar-lane-stat"><div class="v">${fmtBodyCount(laneAssigned)}</div><div class="l">Body</div></div>
+            <div class="ar-lane-stat"><div class="v">${laneJph}</div><div class="l">${lane.floating ? "Split" : lane.support ? "Mode" : "Lane JPH"}</div></div>
+          </div>
+        </div>
+        <div class="ar-lane-slots">
+          ${cards || `<button type="button" class="ar-empty-slot" data-assign-role="${escapeHtml(lane.key)}">+ Assign to ${escapeHtml(lane.key)}</button>`}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const overflowHtml = overflowRole.length ? `
+    <div class="ar-lane floating-lane" style="--lane:var(--orange);--lane-glow:rgba(255,153,0,.10)">
+      <div class="ar-lane-head"><div class="ar-lane-title"><span class="ar-lane-dot"></span><span class="ar-lane-name">Other Roles</span><span class="ar-lane-tag">Custom</span></div></div>
+      <div class="ar-lane-slots">${overflowRole.map(r => renderARRosterCard(r, getARRosterLaneMeta(getRosterRole(r)), floaterMap)).join("")}</div>
+    </div>` : "";
+
+  box.innerHTML = `
+    <div class="ar-floating-summary-strip">
+      <div><strong>${fmtBodyCount(impact.totalBodies)}</strong><span>Total bodies</span></div>
+      <div><strong>${fmtBodyCount(impact.arArOutBodies)}</strong><span>AR + AR-OUT floaters</span></div>
+      <div><strong>${fmtBodyCount(impact.utilityBodies)}</strong><span>Utility support</span></div>
+      <div><strong>${fmtBodyCount(impact.floaterBodies)}</strong><span>Activity floaters</span></div>
+      <div><strong>${fmtBodyCount(impact["AR-IN"])}</strong><span>Extra AR-IN body</span></div>
+      <div><strong>${fmtBodyCount(impact["AR-OUT"])}</strong><span>Extra AR-OUT body</span></div>
+    </div>
+    ${laneHtml}${overflowHtml}
+  `;
+
+  box.querySelectorAll("[data-assign-role]").forEach(slot => {
+    slot.addEventListener("click", () => {
+      const roleSelect = $("arAssignRole");
+      const opSelect = $("arAssignOperator");
+      if (roleSelect) roleSelect.value = slot.dataset.assignRole;
+      if (typeof syncARAssignWeekField === "function") syncARAssignWeekField();
+      if (opSelect) opSelect.focus();
+    });
+  });
+
+  box.querySelectorAll("[data-edit-ar]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const rosterRows = getCurrentARRosterRows(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {});
+      fillARRosterForm(btn.dataset.editAr, rosterRows, btn.dataset.editRole);
+      if (typeof syncARAssignWeekField === "function") syncARAssignWeekField();
+    });
+  });
+
+  box.querySelectorAll("[data-clear-ar]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      handleClearARAssignment(btn.dataset.clearAr, btn.dataset.clearRole);
+    });
+  });
+}
+
+function renderARStationMetrics(metricsPayload) {
+  const box = $("arStationMetricGrid");
+  if (!box) return;
+
+  const selectedStation = getSelectedARStation();
+  const rows = getARStationMetricRows(metricsPayload)
+    .filter(row => isARProductionStation(row.role || row.station))
+    .filter(row => isARStationMatch(row.role || row.station, selectedStation));
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="ar-empty-state">No AR capacity metrics returned yet.</div>`;
+    return;
+  }
+
+  const ordered = rows.slice().sort((a, b) => AR_ROLE_ORDER.indexOf(normalizeARStationFilter(a.role || a.station)) - AR_ROLE_ORDER.indexOf(normalizeARStationFilter(b.role || b.station)));
+
+  box.innerHTML = ordered.map(row => {
+    const role = normalizeARStationFilter(row.role || row.station || "AR");
+    const actual = toNumber(row.actualOutput);
+    const capacity = toNumber(row.capacity);
+    const assigned = adjustARAssignedCountForFloaters(metricsPayload, role, row.assignedCount);
+    const pace = role === "Oven" ? 0 : toNumber(row.pacePercent) || (capacity ? Math.round((actual / capacity) * 100) : 0);
+    const gap = toNumber(row.gap) || (capacity ? actual - capacity : 0);
+    const top = row.topOperator || {};
+    const topName = normalizeARText(top.name || top.operatorName, "No operator");
+    const topTotal = toNumber(top.total || top.Total);
+    const status = arStatusFromPace(role, pace, row.status || row.note);
+    const width = role === "Oven" ? 100 : Math.max(2, Math.min(100, pace || 0));
+    const action = role === "Oven" ? "Resolve constraint" : pace >= 100 ? "Maintain pace" : "Add support";
+
+    return `
+      <article class="ar-station-metric ${status.key}" role="button" tabindex="0" data-ar-station-card="${escapeHtml(role)}">
+        <div class="ar-station-metric-head">
+          <strong>${escapeHtml(role)}</strong>
+          <span>${escapeHtml(status.label)}</span>
+        </div>
+        <div class="ar-station-numbers">
+          <div><em>Output</em><b>${fmt(actual)}</b></div>
+          <div><em>Assigned</em><b>${fmtBodyCount(assigned)}</b></div>
+          <div><em>Capacity</em><b>${role === "Oven" ? "N/A" : fmt(capacity)}</b></div>
+        </div>
+        <div class="ar-capacity-bar"><span style="width:${width}%"></span></div>
+        <div class="ar-station-meta">
+          <span>${role === "Oven" ? "Process constraint / No JPH capacity" : `Pace ${fmt(pace)}% · Gap ${fmt(gap)}`}</span>
+          <span>Top: ${escapeHtml(topName)}${topTotal ? ` · ${fmt(topTotal)}` : ""}</span>
+        </div>
+        <div class="ar-station-action">Action: ${escapeHtml(action)}</div>
+      </article>
+    `;
+  }).join("");
+
+  box.querySelectorAll("[data-ar-station-card]").forEach(card => {
+    card.addEventListener("click", () => {
+      AR_METRICS_STATE.selectedStation = normalizeARStationFilter(card.dataset.arStationCard || "ALL");
+      AR_METRICS_STATE.selectedOperator = null;
+      closeARAssociateDrawer();
+      renderARMetricsPanel(AR_METRICS_STATE.metricsPayload || LAST_CAPACITY_PAYLOAD || {}, AR_METRICS_STATE.rosterPayload || {});
+    });
+  });
+}
+
+function renderARRosterControls(metricsPayload, rosterPayload) {
+  const ownerInput = $("arMetricOwner");
+  const shiftSelect = $("arMetricShift");
+
+  if (ownerInput && !ownerInput.value) ownerInput.value = AR_METRICS_STATE.owner || "BLOPEZ";
+  if (shiftSelect) shiftSelect.value = AR_METRICS_STATE.shift || "Weekday";
+
+  const canSeeRosterAdmin = applyARLMSOnlyVisibility();
+  if (!canSeeRosterAdmin) return;
+
+  const operatorSelect = $("arAssignOperator");
+  if (operatorSelect) {
+    const selected = operatorSelect.value;
+    const options = getOperatorMasterRows(rosterPayload, metricsPayload);
+    operatorSelect.innerHTML = `<option value="">Select associate</option>` + options.map(row => `
+      <option value="${escapeHtml(row.operatorName)}" data-role="${escapeHtml(row.defaultRole)}">${escapeHtml(row.operatorName)}</option>
+    `).join("");
+    if (selected) operatorSelect.value = selected;
+  }
+
+  const roleSelect = $("arAssignRole");
+  if (roleSelect && !roleSelect.dataset.floatingRolesReady) {
+    const current = roleSelect.value;
+    roleSelect.innerHTML = ["AR-IN", "Basket", "Oven", "Sectoring", "DeRing", "AR-OUT", "AR-IN, AR-OUT Floater", "Utility", "Floater"]
+      .map(role => `<option value="${escapeHtml(role)}">${escapeHtml(role)}</option>`).join("");
+    if (current) roleSelect.value = current;
+    roleSelect.dataset.floatingRolesReady = "true";
+  }
+
+  renderARRosterList(metricsPayload?.roster || rosterPayload?.roster || []);
+}

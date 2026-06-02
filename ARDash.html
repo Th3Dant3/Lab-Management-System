@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="ARDash.css?v=ar-metrics-drawer-0601-1" />
+  <link rel="stylesheet" href="ARDash.css?v=ar-productivity-command-0602-1" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -505,10 +505,10 @@
 
     <section class="page-section" data-page="summary" hidden>
 
-      <div class="page-head ar-metrics-head">
+      <div class="page-head ar-metrics-head ar-command-head">
         <div>
-          <h2>AR Operator Command Center</h2>
-          <p>Real-time AR operator output, station capacity, and hourly performance by role target.</p>
+          <h2>AR Productivity Command Center</h2>
+          <p>Professional associate productivity, station flow, capacity health, and hourly performance by role target.</p>
         </div>
 
         <div class="ar-metrics-toolbar">
@@ -529,7 +529,7 @@
         </div>
       </div>
 
-      <section class="ar-metrics-kpis">
+      <section class="ar-metrics-kpis ar-command-kpis">
         <article class="ar-metric-kpi">
           <span>Total AR Output</span>
           <strong id="arMetricTotalOutput">0</strong>
@@ -567,46 +567,138 @@
         </article>
       </section>
 
-      <section class="ar-station-filter-card" aria-label="AR station filter">
-        <div class="ar-station-filter-head">
+      <section class="ar-process-flow-card">
+        <div class="ar-section-title-row">
           <div>
-            <h3>Station View</h3>
-            <p>Select one AR process to focus operator hourly performance and capacity. Use All AR to return to full department view.</p>
+            <h3>AR Process Flow</h3>
+            <p>Station health, capacity pressure, and labor status from AR-IN through AR-OUT. Click a station to focus the tab.</p>
           </div>
-          <span id="arSelectedStationLabel">All AR</span>
+          <div class="ar-flow-title-actions">
+            <button type="button" class="ar-mini-action ar-process-all active" id="arProcessAllBtn" data-ar-station-card="ALL">All AR</button>
+            <div class="ar-status-legend">
+            <span class="good">On Track</span>
+            <span class="watch">Watch</span>
+            <span class="bad">Behind</span>
+              <span class="constraint">Constraint</span>
+            </div>
+          </div>
         </div>
 
-        <div class="ar-station-filter-tabs" id="arStationFilterTabs">
-          <button class="active" type="button" data-ar-station-filter="ALL">All AR</button>
+        <div class="ar-process-flow" id="arAdvancedProcessFlow">
+          <div class="ar-empty-state">Waiting for station flow metrics...</div>
         </div>
       </section>
 
-      <section class="ar-metrics-layout">
-
-        <article class="card ar-metrics-wide">
+      <section class="ar-productivity-grid">
+        <article class="card ar-productivity-overview">
           <div class="card-head">
-            <h3>Station Capacity Performance</h3>
-            <span id="arMetricStatus">Live capacity engine</span>
+            <h3>Operator Productivity Overview</h3>
+            <span id="arProductivitySubText">Average target achieved</span>
           </div>
 
-          <div id="arStationMetricGrid" class="ar-station-metric-grid">
-            <div class="ar-empty-state">Waiting for AR capacity metrics...</div>
+          <div class="ar-productivity-body">
+            <div class="ar-productivity-ring" id="arProductivityRing" style="--score:0">
+              <div>
+                <strong id="arProductivityScore">0%</strong>
+                <span>Avg Target</span>
+              </div>
+            </div>
+
+            <div class="ar-productivity-tiers">
+              <div><span>Full Target</span><strong id="arTierFull">0</strong><i class="good"></i></div>
+              <div><span>Near Target</span><strong id="arTierNear">0</strong><i class="watch"></i></div>
+              <div><span>Below Target</span><strong id="arTierBelow">0</strong><i class="amber"></i></div>
+              <div><span>Low</span><strong id="arTierLow">0</strong><i class="bad"></i></div>
+            </div>
+          </div>
+
+          <div class="ar-productivity-winners">
+            <div>
+              <span>Best Performer</span>
+              <strong id="arBestPerformer">--</strong>
+              <em id="arBestPerformerText">Waiting for output</em>
+            </div>
+            <div>
+              <span>Highest Pressure</span>
+              <strong id="arPressureStation">--</strong>
+              <em id="arPressureStationText">Waiting for station data</em>
+            </div>
           </div>
         </article>
 
-        <article class="card ar-metrics-side">
+        <article class="card ar-leaderboard-card">
           <div class="card-head">
-            <h3>Hourly Operator Performance</h3>
-            <span>Click associate for hourly detail</span>
+            <h3>Operator Performance Leaderboard</h3>
+            <button type="button" class="ar-mini-action" id="arViewAllOperatorsBtn">View All</button>
           </div>
 
-          <div id="arOperatorPerformanceList" class="ar-operator-performance-list">
+          <div id="arOperatorLeaderboard" class="ar-operator-leaderboard">
             <div class="ar-empty-state">Waiting for operator activity...</div>
           </div>
+
+          <div class="ar-insight-strip" id="arPerformanceInsights">
+            <div class="ar-empty-state">Performance insights will populate after metrics load.</div>
+          </div>
+        </article>
+      </section>
+
+      <section class="ar-analytics-grid">
+        <article class="card ar-trend-card">
+          <div class="card-head">
+            <h3>Hourly Performance Trend</h3>
+            <select id="arTrendMode" class="ar-small-select">
+              <option value="output">Output</option>
+              <option value="capacity">Capacity Pace</option>
+            </select>
+          </div>
+          <div id="arHourlyTrend" class="ar-hourly-trend">
+            <div class="ar-empty-state">Waiting for hourly trend...</div>
+          </div>
         </article>
 
-        
+        <article class="card ar-capacity-overview-card">
+          <div class="card-head">
+            <h3>Output vs Capacity</h3>
+            <span id="arCapacityStatusText">Live capacity engine</span>
+          </div>
+          <div class="ar-capacity-overview-body">
+            <div class="ar-capacity-gauge" id="arCapacityGauge" style="--score:0">
+              <strong id="arCapacityGaugeValue">0%</strong>
+              <span>Output vs Capacity</span>
+            </div>
+            <div class="ar-capacity-facts">
+              <div><span>Total Output</span><strong id="arCapacityTotalOutput">0</strong></div>
+              <div><span>Total Capacity</span><strong id="arCapacityTotalCap">0</strong></div>
+              <div><span>Gap</span><strong id="arCapacityGapValue">0</strong></div>
+              <div><span>Peak Hour</span><strong id="arCapacityPeakHour">--</strong></div>
+            </div>
+          </div>
+        </article>
       </section>
+
+      <section class="ar-loadout-section open" id="arLoadoutSection">
+        <button type="button" class="ar-loadout-toggle" id="arLoadoutToggle" aria-expanded="true" aria-controls="arLoadoutBody">
+          <span>
+            <strong>Operator Loadout Details</strong>
+            <em>Click to open or close associate productivity cards.</em>
+          </span>
+          <span class="ar-loadout-toggle-right">
+            <small>Sort by <b>JPH</b></small>
+            <i aria-hidden="true">⌄</i>
+          </span>
+        </button>
+
+        <div class="ar-loadout-body" id="arLoadoutBody">
+          <div id="arOperatorPerformanceList" class="ar-operator-performance-list ar-operator-loadout-list">
+            <div class="ar-empty-state">Waiting for operator activity...</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="ar-command-tip" id="arCommandTip">
+        <strong>Command Tip</strong>
+        <span>Waiting for live metrics to recommend the next action.</span>
+      </div>
 
       <aside class="ar-associate-drawer" id="arAssociateDrawer" aria-hidden="true">
         <div class="ar-drawer-shell">
@@ -678,19 +770,34 @@
       <div class="page-head ar-metrics-head">
         <div>
           <h2>LMS Setup</h2>
-          <p>Assign AR associates by profile, shift, role, training status, and custom JPH. LMS only.</p>
+          <p>Assign AR associates by profile, shift, role, floating support, training status, and custom JPH. LMS only.</p>
         </div>
         <div class="page-pill">Roster Control</div>
       </div>
 
-      <div id="arLmsRosterAdminPanel" class="ar-lms-roster-admin-panel ar-lms-setup-grid" data-lms-only="true">
-          <article class="card ar-roster-control">
+      <div id="arLmsRosterAdminPanel" class="ar-lms-roster-admin-panel ar-lms-setup-grid ar-roster-loadout-grid" data-lms-only="true">
+
+          <article class="card ar-roster-list-card ar-lanes-card">
             <div class="card-head">
-              <h3>AR Assignment Control</h3>
-              <span>LMS only · No duplicate assignment key</span>
+              <h3>Station Loadout</h3>
+              <span id="arRosterCount">0 assigned</span>
+            </div>
+
+            <div id="arRosterList" class="ar-roster-list ar-lanes">
+              <div class="ar-empty-state">No assigned associates yet. Select an associate and role to start capacity tracking.</div>
+            </div>
+          </article>
+
+          <article class="card ar-roster-control ar-console-card">
+            <div class="card-head">
+              <h3>Assignment Console</h3>
+              <span>LMS only · No duplicate key</span>
             </div>
 
             <div class="ar-roster-form">
+              <div class="ar-floater-help-note">
+                <strong>Floating logic:</strong> AR-IN, AR-OUT Floater counts as 0.5 body in AR-IN and 0.5 body in AR-OUT. Utility is counted as support only. Floater output follows the station activity performed.
+              </div>
               <label>
                 Associate
                 <select id="arAssignOperator">
@@ -707,6 +814,9 @@
                   <option value="Sectoring">Sectoring</option>
                   <option value="DeRing">DeRing</option>
                   <option value="AR-OUT">AR-OUT</option>
+                  <option value="AR-IN, AR-OUT Floater">AR-IN, AR-OUT Floater</option>
+                  <option value="Utility">Utility</option>
+                  <option value="Floater">Floater</option>
                 </select>
               </label>
 
@@ -718,7 +828,7 @@
                 </select>
               </label>
 
-              <label>
+              <label id="arAssignWeekField">
                 Training Week
                 <select id="arAssignWeek">
                   <option value="1">Week 1</option>
@@ -735,17 +845,6 @@
               </label>
 
               <button id="arAssignBtn" type="button" class="ar-primary-btn">Assign / Update</button>
-            </div>
-          </article>
-
-          <article class="card ar-roster-list-card">
-            <div class="card-head">
-              <h3>My Active AR Associates</h3>
-              <span id="arRosterCount">0 assigned</span>
-            </div>
-
-            <div id="arRosterList" class="ar-roster-list">
-              <div class="ar-empty-state">No assigned associates yet.</div>
             </div>
           </article>
         </div>
