@@ -23,6 +23,9 @@ const FINISH_LOGIN_PROFILE_OVERRIDES = {
   "BRIAN LOPEZ CABRERA": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" },
   "LOPEZ CABRERA": { username: "BLOPEZ", role: "LMS", subRole: "Admin", firstName: "Brian", lastName: "Lopez Cabrera" },
 
+  "JBOOMERSHINE": { username: "JBOOMERSHINE", role: "LMS", subRole: "Admin", firstName: "", lastName: "" },
+  "BOOMERSHINE": { username: "JBOOMERSHINE", role: "LMS", subRole: "Admin", firstName: "", lastName: "Boomershine" },
+
   /* DIRECTOR */
   "RTATE": { username: "RTATE", role: "SR Director", subRole: "Zenni USA Ohio", firstName: "Rob", lastName: "Tate" },
   "ROB TATE": { username: "RTATE", role: "SR Director", subRole: "Zenni USA Ohio", firstName: "Rob", lastName: "Tate" },
@@ -465,40 +468,196 @@ function isCurrentUserLmsOnly() {
   return role === "lms";
 }
 
-function applyLmsControlTabVisibility() {
-  const isLms = isCurrentUserLmsOnly();
+/* =========================================================
+   FINISH TAB VISIBILITY — USERNAME BASED
+   Do NOT use role for these tabs. Role is too broad.
+========================================================= */
+const FINISH_CONFIG_DOWNTIME_VISIBLE_USERS = new Set([
+  "BLOPEZ",
+  "MLITTLE",
+  "JBOOMERSHINE",
+  "BKARR",
+  "RTATE",
+  "KMANACK",
+  "BHECK",
+  "BHONICKER",
+  "NPOSTON",
+  "BDADE"
+]);
 
-  const lmsTabBtn = document.querySelector('.tab-btn[data-tab="lms-control"]');
-  const lmsTabContent = document.querySelector('.tab-content[data-content="lms-control"]');
+const FINISH_LMS_CONTROL_VISIBLE_USERS = new Set([
+  "BLOPEZ",
+  "JBOOMERSHINE"
+]);
 
-  if (!isLms) {
-    if (lmsTabBtn) lmsTabBtn.style.display = "none";
-    if (lmsTabContent) lmsTabContent.style.display = "none";
+/* Morning Set Up is shared globally for the floor.
+   Only these usernames can update positions. Everyone else can view. */
+const FINISH_MORNING_SETUP_EDIT_USERS = new Set([
+  "KMANACK",
+  "BHONICKER",
+  "NPOSTON",
+  "BHECK",
+  "BLOPEZ"
+]);
 
-    const activeTab = document.querySelector(".tab-btn.active");
-    const activeContent = document.querySelector(".tab-content.active");
+const FINISH_SHARED_MORNING_SETUP_OWNER = "FINISH_SHARED";
 
-    if (activeTab?.dataset.tab === "lms-control") {
-      activeTab.classList.remove("active");
-      activeContent?.classList.remove("active");
+function normalizeFinishVisibilityUsername(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
 
-      const morningBtn = document.querySelector('.tab-btn[data-tab="personal"]');
-      const morningContent = document.querySelector('.tab-content[data-content="personal"]');
-      const floorBtn = document.querySelector('.tab-btn[data-tab="floor"]');
-      const floorContent = document.querySelector('.tab-content[data-content="floor"]');
+function getFinishVisibilityUsername() {
+  return normalizeFinishVisibilityUsername(getCurrentUsername());
+}
 
-      if (morningBtn && morningContent) {
-        morningBtn.classList.add("active");
-        morningContent.classList.add("active");
-      } else {
-        floorBtn?.classList.add("active");
-        floorContent?.classList.add("active");
-      }
+function canViewFinishConfigAndDowntimeTabs() {
+  return FINISH_CONFIG_DOWNTIME_VISIBLE_USERS.has(getFinishVisibilityUsername());
+}
+
+function canViewFinishLmsControlTab() {
+  return FINISH_LMS_CONTROL_VISIBLE_USERS.has(getFinishVisibilityUsername());
+}
+
+function canEditFinishMorningSetup() {
+  return FINISH_MORNING_SETUP_EDIT_USERS.has(getFinishVisibilityUsername());
+}
+
+function findFinishTabButtons(tabKeys = [], labelMatches = []) {
+  const keySet = new Set(tabKeys.map(v => String(v || "").toLowerCase()));
+  const labels = labelMatches.map(v => String(v || "").toLowerCase());
+
+  return Array.from(document.querySelectorAll(".tab-btn")).filter(btn => {
+    const tab = String(btn.dataset.tab || "").toLowerCase();
+    const text = String(btn.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+    return keySet.has(tab) || labels.some(label => text === label);
+  });
+}
+
+function findFinishTabContents(tabKeys = [], labelMatches = []) {
+  // IMPORTANT: content matching must be exact by data-content only.
+  // Do not scan textContent here; Morning Set Up contains helper text/buttons
+  // and broad text matching can hide the wrong panel, leaving a blank screen.
+  const keySet = new Set(tabKeys.map(v => String(v || "").toLowerCase()));
+
+  return Array.from(document.querySelectorAll(".tab-content")).filter(content => {
+    const key = String(content.dataset.content || "").toLowerCase();
+    return keySet.has(key);
+  });
+}
+
+function forceMorningSetupTabVisible() {
+  const morningBtn = document.querySelector('.tab-btn[data-tab="personal"]');
+  const morningContent = document.querySelector('.tab-content[data-content="personal"]');
+
+  [morningBtn, morningContent].forEach(el => {
+    if (!el) return;
+    el.hidden = false;
+    el.style.display = "";
+    el.removeAttribute("aria-hidden");
+    el.dataset.restrictedTabHidden = "false";
+  });
+}
+
+function setFinishRestrictedTabVisibility({ tabKeys = [], labelMatches = [], allowed = false }) {
+  const buttons = findFinishTabButtons(tabKeys, labelMatches);
+  const contents = findFinishTabContents(tabKeys, labelMatches);
+
+  buttons.forEach(btn => {
+    btn.style.display = allowed ? "" : "none";
+    btn.hidden = !allowed;
+    btn.setAttribute("aria-hidden", allowed ? "false" : "true");
+    btn.dataset.restrictedTabHidden = allowed ? "false" : "true";
+  });
+
+  contents.forEach(content => {
+    content.style.display = allowed ? "" : "none";
+    content.hidden = !allowed;
+    content.setAttribute("aria-hidden", allowed ? "false" : "true");
+    content.dataset.restrictedTabHidden = allowed ? "false" : "true";
+  });
+}
+
+function activateFinishFallbackTab() {
+  const fallbackOrder = ["personal", "floor", "summary", "flow", "operator", "hourly"];
+
+  for (const tabName of fallbackOrder) {
+    const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    const content = document.querySelector(`.tab-content[data-content="${tabName}"]`);
+    if (!btn || !content || btn.hidden || content.hidden || btn.style.display === "none" || content.style.display === "none") continue;
+
+    document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+    btn.classList.add("active");
+    content.classList.add("active");
+
+    if (tabName === "personal" && typeof renderFinishThreeLineCell === "function") {
+      renderFinishThreeLineCell();
+      if (typeof renderMorningSetupRosterSummary === "function") renderMorningSetupRosterSummary();
     }
-  } else {
-    if (lmsTabBtn) lmsTabBtn.style.display = "";
-    if (lmsTabContent) lmsTabContent.style.display = "";
+    return;
   }
+}
+
+function moveOffHiddenFinishTabIfNeeded() {
+  const activeTab = document.querySelector(".tab-btn.active");
+  const activeContent = document.querySelector(".tab-content.active");
+
+  const activeTabHidden = activeTab && (activeTab.hidden || activeTab.style.display === "none" || activeTab.dataset.restrictedTabHidden === "true");
+  const activeContentHidden = activeContent && (activeContent.hidden || activeContent.style.display === "none" || activeContent.dataset.restrictedTabHidden === "true");
+
+  if (activeTabHidden || activeContentHidden) {
+    activeTab?.classList.remove("active");
+    activeContent?.classList.remove("active");
+    activateFinishFallbackTab();
+  }
+}
+
+function applyFinishRestrictedTabVisibility() {
+  const canViewConfigDowntime = canViewFinishConfigAndDowntimeTabs();
+  const canViewLmsControl = canViewFinishLmsControlTab();
+
+  setFinishRestrictedTabVisibility({
+    tabKeys: ["config", "configuration"],
+    labelMatches: ["configuration"],
+    allowed: canViewConfigDowntime
+  });
+
+  setFinishRestrictedTabVisibility({
+    tabKeys: ["downtime", "associate-downtime", "associate-downtime-log", "scan-downtime", "inactivity", "inactivity-log"],
+    labelMatches: ["associate downtime", "downtime log", "associate downtime log"],
+    allowed: canViewConfigDowntime
+  });
+
+  setFinishRestrictedTabVisibility({
+    tabKeys: ["lms-control", "lms", "lms-control-center"],
+    labelMatches: ["lms control", "lms control center"],
+    allowed: canViewLmsControl
+  });
+
+  // Morning Setup must always be visible. Edit/save is restricted separately.
+  forceMorningSetupTabVisible();
+
+  moveOffHiddenFinishTabIfNeeded();
+
+  const activeTab = document.querySelector(".tab-btn.active");
+  if (activeTab?.dataset?.tab === "personal") {
+    const personalContent = document.querySelector('.tab-content[data-content="personal"]');
+    personalContent?.classList.add("active");
+    if (typeof renderFinishThreeLineCell === "function") {
+      setTimeout(() => {
+        renderFinishThreeLineCell();
+        if (typeof renderMorningSetupRosterSummary === "function") renderMorningSetupRosterSummary();
+      }, 0);
+    }
+  }
+}
+
+// Keep the old function name so existing startup code still works.
+function applyLmsControlTabVisibility() {
+  applyFinishRestrictedTabVisibility();
 }
 
 function getFinishPersonalOperatorRosterKey() {
@@ -668,6 +827,10 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(() => loadDashboard({ showLoader: false }), 5 * 60 * 1000);
   setInterval(loadFinishOperatorActivity, 5 * 60 * 1000);
   setInterval(updateSyncAge, 1000);
+
+  // Re-apply after any late panels/tabs finish rendering.
+  setTimeout(applyFinishRestrictedTabVisibility, 500);
+  setTimeout(applyFinishRestrictedTabVisibility, 2000);
 });
 
 /* ===============================
@@ -2826,6 +2989,13 @@ function initTabs() {
 
   buttons.forEach(button => {
     button.addEventListener("click", () => {
+      applyFinishRestrictedTabVisibility();
+
+      if (button.hidden || button.style.display === "none" || button.dataset.restrictedTabHidden === "true") {
+        moveOffHiddenFinishTabIfNeeded();
+        return;
+      }
+
       const tab = button.dataset.tab;
 
       buttons.forEach(btn => btn.classList.remove("active"));
@@ -4788,7 +4958,7 @@ function openMorningLineSlotAssignment(line, station, slot, currentOperator = ""
   const sub = modal.querySelector("#morningSlotModalSub");
   const body = modal.querySelector("#morningSlotModalBody");
   const rows = sortMorningSlotRowsForTarget(getMorningAssignableRosterRows(station, currentOperator), station, currentOperator);
-  const canEdit = canEditFinishOperatorAssignments();
+  const canEdit = canEditFinishMorningSetup();
   const stationName = normalizeFinishOperatorStation(station);
   const currentRow = currentOperator ? findMorningRosterRow(currentOperator) : null;
 
@@ -4925,8 +5095,8 @@ function refreshMorningSetupUiFast() {
 }
 
 async function assignMorningOperatorToSlot(operatorName, line, station, slot, currentOperatorToReplace = "") {
-  if (!canEditFinishOperatorAssignments()) {
-    showFinishAssignmentToast("View only. Your role cannot change Morning Set Up positions.");
+  if (!canEditFinishMorningSetup()) {
+    showFinishAssignmentToast("View only. You can see Morning Set Up, but only approved users can update it.");
     return;
   }
 
@@ -5022,8 +5192,8 @@ async function assignMorningOperatorToSlot(operatorName, line, station, slot, cu
 }
 
 async function clearMorningOperatorPosition(operatorName, station, line = "", slot = "") {
-  if (!canEditFinishOperatorAssignments()) {
-    showFinishAssignmentToast("View only. Your role cannot clear Morning Set Up positions.");
+  if (!canEditFinishMorningSetup()) {
+    showFinishAssignmentToast("View only. You can see Morning Set Up, but only approved users can update it.");
     return;
   }
 
@@ -5121,7 +5291,7 @@ const finishRosterApiState = {
   shiftType: "Weekday",
 
   // Morning Set Up is intentionally separate from LMS Control Center.
-  // It always belongs to the logged-in profile and selected Morning shift.
+  // It is shared globally by shift so every user sees the same floor setup.
   morningOwnerUsername: "",
   morningShiftType: "Weekday",
   morningRoster: [],
@@ -5194,7 +5364,7 @@ function getRosterShiftType() {
 }
 
 function getMorningSetupOwnerUsername() {
-  return getCurrentUsername();
+  return FINISH_SHARED_MORNING_SETUP_OWNER;
 }
 
 function getMorningSetupShiftType() {
@@ -6996,3 +7166,2288 @@ document.addEventListener("click", event => {
 window.refreshMyActiveAssociatesFromAssignedRoster = function () {
   return renderOperatorAssignmentConfigPanel();
 };
+
+/*******************************************************
+ * FINISH MORNING SET UP — INACTIVITY FRONTEND ADD-ON
+ * Clean version: removes duplicated handlers, uses safe API calls,
+ * never crashes on blank rows, and does not wipe the panel on empty response.
+ *******************************************************/
+
+const finishMorningInactivityState = {
+  rows: [],
+  logRows: [],
+  dailyRows: [],
+  latestRows: [],
+  automationEnabled: false,
+  thresholdSnapshots: 3,
+  loading: false,
+  lastSync: ""
+};
+
+function normalizeFinishInactivityStation(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (text.includes("final")) return "Final Inspection";
+  if (text.includes("drill")) return "Drill";
+  if (text.includes("mount")) return "Mounting";
+  return String(value || "").trim();
+}
+
+function getFinishMorningInactivityThreshold() {
+  const value = Number(document.getElementById("finishInactivityThreshold")?.value || finishMorningInactivityState.thresholdSnapshots || 3) || 3;
+  return Math.max(1, Math.min(12, value));
+}
+
+function getFinishMorningInactivityRows() {
+  return Array.isArray(finishMorningInactivityState.rows) ? finishMorningInactivityState.rows : [];
+}
+
+function getFinishInactivityOwnerUsernameSafe() {
+  if (typeof getMorningSetupOwnerUsername === "function") return getMorningSetupOwnerUsername();
+  if (typeof getCurrentUsername === "function") return getCurrentUsername();
+  return "BLOPEZ";
+}
+
+function getFinishInactivityShiftTypeSafe() {
+  if (typeof getMorningSetupShiftType === "function") return getMorningSetupShiftType();
+  const select = document.getElementById("morningShiftSelect") || document.getElementById("finishMorningShiftSelect");
+  const raw = select?.value || select?.selectedOptions?.[0]?.textContent || "Weekday";
+  return String(raw).toLowerCase().includes("weekend") ? "Weekend" : "Weekday";
+}
+
+async function fetchFinishInactivityApiSafe(action, params = {}) {
+  const url = new URL(FINISH_API_URL);
+  url.searchParams.set("action", String(action || "").toLowerCase());
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value) !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  url.searchParams.set("cacheBust", Date.now());
+
+  const response = await fetch(url.toString(), { cache: "no-store" });
+  if (!response.ok) throw new Error(`Finish inactivity API failed: ${response.status}`);
+
+  const payload = await response.json();
+  if (!payload || payload.success === false || payload.status === "error") {
+    throw new Error(payload?.message || payload?.error || "Finish inactivity API returned an error.");
+  }
+
+  return payload;
+}
+
+function getFinishInactivityValue(row, ...keys) {
+  if (!row || typeof row !== "object") return "";
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "") return row[key];
+  }
+  return "";
+}
+
+function normalizeFinishInactivityStatus(row) {
+  const status = String(getFinishInactivityValue(row, "CurrentStatus", "Status", "status") || "").trim().toUpperCase();
+  if (status === "OPEN" || status === "INACTIVE") return "OPEN";
+  if (status === "WATCH") return "WATCH";
+  if (status === "RESOLVED") return "RESOLVED";
+  if (status === "ACTIVE") return "ACTIVE";
+  return "WATCH";
+}
+
+function finishInactivityExtractLatestRows(payload) {
+  return (
+    Array.isArray(payload?.latestRows) ? payload.latestRows :
+    Array.isArray(payload?.liveRows) ? payload.liveRows :
+    Array.isArray(payload?.currentRows) ? payload.currentRows :
+    []
+  ).filter(row => row && typeof row === "object");
+}
+
+function finishInactivityExtractLogRows(payload) {
+  return (
+    Array.isArray(payload?.logRows) ? payload.logRows :
+    Array.isArray(payload?.rows) ? payload.rows :
+    Array.isArray(payload?.data) ? payload.data :
+    []
+  ).filter(row => row && typeof row === "object");
+}
+
+function finishInactivityExtractDailyRows(payload) {
+  return (
+    Array.isArray(payload?.dailyRows) ? payload.dailyRows :
+    []
+  ).filter(row => row && typeof row === "object");
+}
+
+function finishInactivityBuildRowsFromPayload(payload) {
+  const dailyRows = finishInactivityExtractDailyRows(payload);
+  const logRows = finishInactivityExtractLogRows(payload);
+  const latestRows = finishInactivityExtractLatestRows(payload);
+
+  /*
+    Use latestRows first when the API provides them.
+    latestRows are the live/current associate rows with RAW_ACTIVITY_CURRENT totals and hourly output.
+    logRows remain available for session history, but should not be the primary source for current totals.
+  */
+  const primaryRows = latestRows.length ? latestRows : logRows;
+  const latestByKey = new Map();
+
+  primaryRows.forEach((row, index) => {
+    if (!row || typeof row !== "object") return;
+
+    const key = finishInactivityRowIdentityKey_(row);
+    if (!key) return;
+
+    const currentScore = finishInactivityRowFreshnessScore_(row, index);
+    const existing = latestByKey.get(key);
+
+    if (!existing || currentScore >= existing.__score) {
+      latestByKey.set(key, { ...row, __score: currentScore });
+    }
+  });
+
+  const dailyByKey = new Map();
+  dailyRows.forEach((row, index) => {
+    if (!row || typeof row !== "object") return;
+    const key = finishInactivityRowIdentityKey_(row);
+    if (!key) return;
+    dailyByKey.set(key, { ...row, __score: finishInactivityRowFreshnessScore_(row, index) });
+  });
+
+  dailyByKey.forEach((dailyRow, key) => {
+    const existing = latestByKey.get(key);
+
+    if (existing) {
+      latestByKey.set(key, {
+        ...existing,
+        DailyStatus: dailyRow.CurrentStatus || dailyRow.Status || "",
+        CurrentStatus: dailyRow.CurrentStatus || existing.CurrentStatus || existing.Status || "",
+        TotalInactiveMinutes: dailyRow.TotalInactiveMinutes || existing.TotalInactiveMinutes || existing.InactiveMinutes || "",
+        TotalInactiveHours: dailyRow.TotalInactiveHours || existing.TotalInactiveHours || "",
+        CurrentInactiveMinutes: dailyRow.CurrentInactiveMinutes || existing.CurrentInactiveMinutes || existing.InactiveMinutes || "",
+        InactiveSessions: dailyRow.InactiveSessions || existing.InactiveSessions || "",
+        LongestInactiveMinutes: dailyRow.LongestInactiveMinutes || existing.LongestInactiveMinutes || "",
+        FirstInactiveAt: dailyRow.FirstInactiveAt || existing.FirstInactiveAt || existing.InactiveStartAt || "",
+        LastInactiveAt: dailyRow.LastInactiveAt || existing.LastInactiveAt || "",
+        LastOutputTotal: dailyRow.LastOutputTotal || existing.LastOutputTotal || existing.CurrentTotal || "",
+        LastUpdated: dailyRow.LastUpdated || existing.LastUpdated || "",
+        __score: Math.max(existing.__score || 0, dailyRow.__score || 0)
+      });
+    } else {
+      latestByKey.set(key, { ...dailyRow, __score: dailyRow.__score || 0 });
+    }
+  });
+
+  const rows = Array.from(latestByKey.values()).map(row => {
+    const copy = { ...row };
+    delete copy.__score;
+    return copy;
+  });
+
+  return rows.length ? rows : dailyRows;
+}
+
+function finishInactivityRowIdentityKey_(row) {
+  if (!row || typeof row !== "object") return "";
+
+  const explicitKey = getFinishInactivityValue(row, "SnapshotKey", "snapshotKey");
+  if (explicitKey) return String(explicitKey).trim().toUpperCase();
+
+  const owner = getFinishInactivityValue(row, "OwnerUsername", "ownerUsername");
+  const shift = getFinishInactivityValue(row, "ShiftType", "shiftType");
+  const name = getFinishInactivityValue(row, "OperatorName", "operatorName");
+  const station = getFinishInactivityValue(row, "StationGroup", "stationGroup");
+  const line = getFinishInactivityValue(row, "DefaultLine", "defaultLine");
+  const position = getFinishInactivityValue(row, "DefaultPosition", "defaultPosition");
+
+  return [owner, shift, name, station, line, position]
+    .map(value => String(value || "").trim().toUpperCase())
+    .join("||");
+}
+
+function finishInactivityRowFreshnessScore_(row, fallbackIndex = 0) {
+  if (!row || typeof row !== "object") return fallbackIndex;
+
+  const possibleDates = [
+    getFinishInactivityValue(row, "LastUpdated", "lastUpdated"),
+    getFinishInactivityValue(row, "LastCheckedAt", "lastCheckedAt"),
+    getFinishInactivityValue(row, "SnapshotAt", "snapshotAt"),
+    getFinishInactivityValue(row, "LastOutputAt", "lastOutputAt"),
+    getFinishInactivityValue(row, "InactiveStartAt", "inactiveStartAt")
+  ];
+
+  for (const value of possibleDates) {
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) return date.getTime() + fallbackIndex;
+  }
+
+  return fallbackIndex;
+}
+
+function finishInactivityPayloadHasRows(payload) {
+  return finishInactivityBuildRowsFromPayload(payload).length > 0;
+}
+
+function finishInactivityApplyPayload(payload, options = {}) {
+  const allowClear = !!options.allowClear;
+  const updateLastSyncOnly = !!options.updateLastSyncOnly;
+  const rows = finishInactivityBuildRowsFromPayload(payload);
+  const hasRows = rows.length > 0;
+  const alreadyHasRows = Array.isArray(finishMorningInactivityState.rows) && finishMorningInactivityState.rows.length > 0;
+
+  if (!hasRows && alreadyHasRows && !allowClear) {
+    console.warn("Finish inactivity refresh returned zero rows. Keeping current display.", payload);
+    if (payload?.lastSync) {
+      finishMorningInactivityState.lastSync = payload.lastSync;
+      setText("finishInactivityLastSync", formatFinishInactivityTime(payload.lastSync));
+    }
+    return false;
+  }
+
+  if (updateLastSyncOnly && !hasRows) {
+    if (payload?.lastSync) {
+      finishMorningInactivityState.lastSync = payload.lastSync;
+      setText("finishInactivityLastSync", formatFinishInactivityTime(payload.lastSync));
+    }
+    return false;
+  }
+
+  finishMorningInactivityState.latestRows = finishInactivityExtractLatestRows(payload);
+  finishMorningInactivityState.logRows = finishInactivityExtractLogRows(payload);
+  finishMorningInactivityState.dailyRows = finishInactivityExtractDailyRows(payload);
+  finishMorningInactivityState.rows = rows;
+  finishMorningInactivityState.lastSync = payload?.lastSync || payload?.generatedAt || new Date().toISOString();
+  renderFinishMorningInactivityPanel();
+  return true;
+}
+
+function ensureFinishMorningInactivityPanel() {
+  if (document.getElementById("finishMorningInactivityPanel")) return;
+
+  const anchor = document.getElementById("finishInactivityTabMount");
+  if (!anchor) return;
+
+  const panel = document.createElement("section");
+  panel.id = "finishMorningInactivityPanel";
+  panel.className = "finish-inactivity-panel associate-inactivity-panel";
+  panel.innerHTML = `
+    <header class="finish-inactivity-header associate-inactivity-header">
+      <div>
+        <span class="finish-inactivity-eyebrow">Associate Activity Watch</span>
+        <h3>Inactivity Log</h3>
+        <p>Tracks seated Mounting, Final Inspection, and Drill associates. Click any associate to open their KPI profile.</p>
+      </div>
+      <div class="finish-inactivity-tools finish-inactivity-actions">
+        <label>
+          X Snapshots
+          <input id="finishInactivityThreshold" type="number" min="1" max="12" step="1" value="3" readonly />
+        </label>
+        <button id="finishInactivityAutoToggleBtn" class="finish-inactivity-auto-toggle is-off" type="button">Auto Snapshot: OFF</button>
+        <button id="finishRunInactivitySnapshotBtn" type="button">Run Snapshot Now</button>
+        <button id="finishRefreshInactivityLogBtn" type="button">Refresh Log</button>
+      </div>
+    </header>
+
+    <div class="finish-inactivity-scoreboard associate-inactivity-scoreboard">
+      <article><span>Tracked</span><strong id="finishInactivityTrackedCount">0</strong><small>Seated assignments</small></article>
+      <article class="watch"><span>Idle Watch</span><strong id="finishInactivityWatchCount">0</strong><small>No output below threshold</small></article>
+      <article class="danger"><span>Inactive</span><strong id="finishInactivityInactiveCount">0</strong><small>Threshold reached</small></article>
+      <article><span>Last Sync</span><strong id="finishInactivityLastSync">--</strong><small>Frontend refresh</small></article>
+    </div>
+
+    <div class="associate-inactivity-layout">
+      <div class="associate-inactivity-list-wrap">
+        <div class="associate-inactivity-list-head">
+          <div>
+            <span>Live Associate List</span>
+            <strong>Click a row to open profile KPIs</strong>
+          </div>
+        </div>
+        <div id="finishInactivityList" class="finish-inactivity-list associate-inactivity-list">
+          <article class="finish-inactivity-empty">No inactivity snapshots loaded yet. Run a snapshot to start tracking.</article>
+        </div>
+      </div>
+
+      <aside id="finishInactivityProfilePanel" class="associate-inactivity-profile-panel">
+        <div class="associate-profile-empty">
+          <span>ASSOCIATE PROFILE</span>
+          <h3>Select an associate</h3>
+          <p>Open a profile to review active, idle, and inactive time building through the day.</p>
+        </div>
+      </aside>
+    </div>
+  `;
+
+  anchor.innerHTML = "";
+  anchor.appendChild(panel);
+  wireFinishInactivityButtons();
+}
+
+function wireFinishInactivityButtons() {
+  const autoBtn = document.getElementById("finishInactivityAutoToggleBtn");
+  const runBtn = document.getElementById("finishRunInactivitySnapshotBtn");
+  const refreshBtn = document.getElementById("finishRefreshInactivityLogBtn");
+
+  if (autoBtn && !autoBtn.dataset.wired) {
+    autoBtn.dataset.wired = "true";
+    autoBtn.addEventListener("click", toggleFinishInactivityAutomationFromPage);
+  }
+
+  if (runBtn && !runBtn.dataset.wired) {
+    runBtn.dataset.wired = "true";
+    runBtn.addEventListener("click", runFinishMorningInactivitySnapshot);
+  }
+
+  if (refreshBtn && !refreshBtn.dataset.wired) {
+    refreshBtn.dataset.wired = "true";
+    refreshBtn.addEventListener("click", loadFinishMorningInactivityLog);
+  }
+}
+
+async function refreshFinishInactivityAutomationStatus() {
+  ensureFinishMorningInactivityPanel();
+  const btn = document.getElementById("finishInactivityAutoToggleBtn");
+
+  try {
+    const payload = await fetchFinishInactivityApiSafe("getfinishinactivityautomationstatus", {});
+    finishMorningInactivityState.automationEnabled = !!payload.enabled;
+
+    if (btn) {
+      btn.dataset.enabled = payload.enabled ? "true" : "false";
+      btn.textContent = payload.enabled ? "Auto Snapshot: ON" : "Auto Snapshot: OFF";
+      btn.classList.toggle("is-on", !!payload.enabled);
+      btn.classList.toggle("is-off", !payload.enabled);
+    }
+  } catch (error) {
+    console.warn("Finish inactivity automation status could not load:", error);
+    if (btn) {
+      btn.dataset.enabled = "false";
+      btn.textContent = "Auto Snapshot: UNKNOWN";
+      btn.classList.add("is-off");
+      btn.classList.remove("is-on");
+    }
+  }
+}
+
+async function toggleFinishInactivityAutomationFromPage() {
+  const btn = document.getElementById("finishInactivityAutoToggleBtn");
+  const enabled = btn?.dataset.enabled === "true";
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = enabled ? "Turning Off..." : "Turning On...";
+  }
+
+  try {
+    await fetchFinishInactivityApiSafe(enabled ? "disablefinishinactivityautomation" : "enablefinishinactivityautomation", {});
+    await refreshFinishInactivityAutomationStatus();
+  } catch (error) {
+    console.error("Finish inactivity automation toggle failed:", error);
+    showFinishAssignmentToast?.(error.message || String(error));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function formatFinishInactivityTime(value) {
+  if (!value) return "--";
+  const text = String(value);
+  if (/^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(text)) return text.toUpperCase();
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return text;
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+
+function finishInactivityNumberValue(row, ...keys) {
+  const raw = getFinishInactivityValue(row, ...keys);
+  const num = Number(raw);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function finishInactivityMinutesSince(value) {
+  if (!value) return 0;
+
+  const text = String(value || "").trim();
+
+  // Google Sheets display values sometimes return only "6/4/2026".
+  // A date-only value cannot be used for live minute math without creating huge false totals.
+  const hasTimeSignal = /\d{1,2}:\d{2}/.test(text) || /T\d{2}:\d{2}/.test(text);
+  if (!hasTimeSignal) return 0;
+
+  const date = new Date(text);
+  if (isNaN(date.getTime())) return 0;
+
+  return Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+}
+
+function getFinishInactiveMinutesForRow(row) {
+  const status = normalizeFinishInactivityStatus(row);
+
+  const currentInactive = finishInactivityNumberValue(
+    row,
+    "CurrentInactiveMinutes",
+    "currentInactiveMinutes"
+  );
+
+  const totalInactive = finishInactivityNumberValue(
+    row,
+    "TotalInactiveMinutes",
+    "totalInactiveMinutes"
+  );
+
+  const eventInactive = finishInactivityNumberValue(
+    row,
+    "InactiveMinutes",
+    "inactiveMinutes"
+  );
+
+  const openSessionMinutes = finishInactivityMinutesSince(
+    getFinishInactivityValue(
+      row,
+      "InactiveStartAt",
+      "inactiveStartAt",
+      "FirstInactiveAt",
+      "firstInactiveAt"
+    )
+  );
+
+  // OPEN = current session is still running, so show the largest live/stored value.
+  if (status === "OPEN") {
+    return Math.max(currentInactive, totalInactive, eventInactive, openSessionMinutes, 0);
+  }
+
+  // RESOLVED = current inactive should be 0, but total inactive for the closed session/day must stay visible.
+  if (status === "RESOLVED") {
+    return Math.max(totalInactive, eventInactive, currentInactive, 0);
+  }
+
+  // WATCH = not threshold-inactive yet; keep this as idle/watch time, not inactive time.
+  if (status === "WATCH") {
+    return 0;
+  }
+
+  return Math.max(totalInactive, eventInactive, currentInactive, 0);
+}
+
+function getFinishIdleMinutesForRow(row) {
+  const status = normalizeFinishInactivityStatus(row);
+  if (status !== "WATCH") return 0;
+
+  return Math.max(
+    finishInactivityNumberValue(row, "InactiveMinutes", "inactiveMinutes"),
+    finishInactivityNumberValue(row, "CurrentInactiveMinutes", "currentInactiveMinutes"),
+    0
+  );
+}
+
+function getFinishInactivityElapsedProductiveMinutes() {
+  const shiftType = String(getFinishInactivityShiftTypeSafe() || "Weekday").toLowerCase();
+  const rule = shiftType.includes("weekend") ? SHIFT_RULES.weekend : SHIFT_RULES.weekday;
+  if (!rule) return 0;
+
+  const now = new Date();
+  const startMinutes = timeToMinutes(rule.shiftStart || "7:00 AM");
+  const endMinutes = timeToMinutes(rule.shiftEnd || "5:30 PM");
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const productiveEnd = Math.max(startMinutes, Math.min(currentMinutes, endMinutes));
+  if (productiveEnd <= startMinutes) return 0;
+
+  let elapsed = productiveEnd - startMinutes;
+  (rule.breaks || []).forEach(breakItem => {
+    const breakStart = timeToMinutes(breakItem.start);
+    const breakEnd = timeToMinutes(breakItem.end);
+    const overlapStart = Math.max(startMinutes, breakStart);
+    const overlapEnd = Math.min(productiveEnd, breakEnd);
+    if (overlapEnd > overlapStart) elapsed -= (overlapEnd - overlapStart);
+  });
+
+  return Math.max(0, elapsed);
+}
+
+function buildFinishAssociateTimeKpis(row) {
+  const status = normalizeFinishInactivityStatus(row);
+  const elapsed = getFinishInactivityElapsedProductiveMinutes();
+  // Inactive total must come from the same session history displayed in the profile.
+  // Do NOT use daily summary TotalInactiveMinutes here because it can include merged/older duplicate totals.
+  const inactive = getFinishAssociateInactiveSessionTotalMinutes(row);
+  const idle = getFinishIdleMinutesForRow(row);
+
+  // Do NOT calculate active as elapsed - inactive anymore.
+  // That made associates with strong output look like 0 active once inactive time built up.
+  // Active now means "hours/buckets where work was produced" from RAW_ACTIVITY_CURRENT hourly output.
+  const hourlyOutput = getFinishHourlyOutputForAssociate(row);
+  let activeFromOutput = calculateFinishProducedWindowMinutes(hourlyOutput);
+
+  // Fallback: if API has not returned hourly buckets yet but the associate has output,
+  // show at least one produced window instead of misleading 0m.
+  // This is still labeled Output Hours, not true active minutes.
+  const currentTotal = finishInactivityNumberValue(row, "CurrentTotal", "currentTotal", "LastOutputTotal", "lastOutputTotal");
+  const lastOutputAt = getFinishInactivityValue(row, "LastOutputAt", "lastOutputAt", "LastCheckedAt", "SnapshotAt");
+  if (activeFromOutput <= 0 && currentTotal > 0) {
+    activeFromOutput = lastOutputAt ? 60 : 0;
+  }
+
+  const active = Math.max(0, activeFromOutput);
+
+  const sessionHistoryCount = getFinishAssociateInactiveSessions(row).length;
+
+  return {
+    elapsed,
+    active,
+    idle,
+    inactive,
+    hourlyOutput,
+    // Use the real visible session-history count, not the daily summary counter.
+    // The daily summary can include older/merged rows or duplicate owner/profile totals.
+    sessions: sessionHistoryCount || (inactive > 0 ? 1 : 0),
+    status
+  };
+}
+
+function formatFinishMinutesLabel(minutes) {
+  const value = Math.max(0, Number(minutes || 0) || 0);
+  if (value < 60) return `${Math.round(value)}m`;
+  const h = Math.floor(value / 60);
+  const m = Math.round(value % 60);
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+
+const FINISH_INACTIVITY_HOUR_ORDER = [
+  "6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM",
+  "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM",
+  "4:00 PM", "5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM"
+];
+
+function parseFinishHourlyOutputValue(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(String(value || ""));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function getFinishHourlyOutputForAssociate(row) {
+  const direct = parseFinishHourlyOutputValue(
+    getFinishInactivityValue(row, "HourlyOutput", "LiveHourlyOutput", "hourlyOutput", "liveHourlyOutput", "Hours", "hours")
+  );
+
+  if (Object.keys(direct).length) return direct;
+
+  const targetKey = finishInactivityRowIdentityKey_(row);
+  const sources = [];
+  if (Array.isArray(finishMorningInactivityState.latestRows)) sources.push(...finishMorningInactivityState.latestRows);
+  if (Array.isArray(finishMorningInactivityState.logRows)) sources.push(...finishMorningInactivityState.logRows);
+  if (Array.isArray(finishMorningInactivityState.rows)) sources.push(...finishMorningInactivityState.rows);
+
+  for (let i = sources.length - 1; i >= 0; i--) {
+    const item = sources[i];
+    if (!item || typeof item !== "object") continue;
+    if (finishInactivityRowIdentityKey_(item) !== targetKey) continue;
+    const hours = parseFinishHourlyOutputValue(
+      getFinishInactivityValue(item, "HourlyOutput", "LiveHourlyOutput", "hourlyOutput", "liveHourlyOutput", "Hours", "hours")
+    );
+    if (Object.keys(hours).length) return hours;
+  }
+
+  return {};
+}
+
+function finishHourLabelToStartMinutes(label) {
+  const text = String(label || "").trim().toUpperCase();
+  const match = text.match(/^(\d{1,2})(?::\d{2})?\s*(AM|PM)$/);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const suffix = match[2];
+  if (suffix === "PM" && hour !== 12) hour += 12;
+  if (suffix === "AM" && hour === 12) hour = 0;
+  return hour * 60;
+}
+
+function calculateFinishProducedWindowMinutes(hourlyOutput) {
+  const hours = hourlyOutput || {};
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  let minutes = 0;
+
+  FINISH_INACTIVITY_HOUR_ORDER.forEach(hour => {
+    const output = Number(hours[hour] || 0) || 0;
+    if (output <= 0) return;
+    const start = finishHourLabelToStartMinutes(hour);
+    if (start == null) return;
+    const end = start + 60;
+    if (nowMinutes >= end) minutes += 60;
+    else if (nowMinutes > start) minutes += Math.max(0, nowMinutes - start);
+  });
+
+  return minutes;
+}
+
+function buildFinishHourlyActivityVsInactiveRows(row) {
+  const hourlyOutput = getFinishHourlyOutputForAssociate(row);
+  const sessions = getFinishAssociateInactiveSessions(row);
+  const now = new Date();
+
+  return FINISH_INACTIVITY_HOUR_ORDER.map(hour => {
+    const output = Number(hourlyOutput[hour] || 0) || 0;
+    const hourStartMinutes = finishHourLabelToStartMinutes(hour);
+    if (hourStartMinutes == null) {
+      return { hour, output, inactiveMinutes: 0, status: output > 0 ? "PRODUCTIVE" : "NO DATA" };
+    }
+
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    const hourStart = new Date(base.getTime() + hourStartMinutes * 60000);
+    const hourEnd = new Date(hourStart.getTime() + 60 * 60000);
+
+    let inactiveMinutes = 0;
+    sessions.forEach(session => {
+      const start = finishInactivityParseDateSafe(session.inactiveStart);
+      const end = finishInactivityParseDateSafe(session.inactiveEnd || session.lastChecked) || now;
+      if (!start || !end) return;
+      const overlapStart = Math.max(start.getTime(), hourStart.getTime());
+      const overlapEnd = Math.min(end.getTime(), hourEnd.getTime(), now.getTime());
+      if (overlapEnd > overlapStart) inactiveMinutes += Math.round((overlapEnd - overlapStart) / 60000);
+    });
+
+    let status = "NO OUTPUT";
+    if (output > 0 && inactiveMinutes > 0) status = "MIXED";
+    else if (output > 0) status = "PRODUCED";
+    else if (inactiveMinutes > 0) status = "INACTIVE";
+
+    return { hour, output, inactiveMinutes, status };
+  }).filter(item => item.output > 0 || item.inactiveMinutes > 0);
+}
+
+function renderFinishHourlyActivityVsInactive(row) {
+  const rows = buildFinishHourlyActivityVsInactiveRows(row);
+
+  if (!rows.length) {
+    return `
+      <section class="associate-hourly-activity">
+        <div class="associate-hourly-head">
+          <span>Hourly Output vs Inactive Time</span>
+          <strong>No hourly output or inactive session detail yet</strong>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="associate-hourly-activity">
+      <div class="associate-hourly-head">
+        <span>Hourly Output vs Inactive Time</span>
+        <strong>Produced jobs compared with inactive minutes</strong>
+      </div>
+      <div class="associate-hourly-grid">
+        <div class="associate-hourly-header">Hour</div>
+        <div class="associate-hourly-header">Produced</div>
+        <div class="associate-hourly-header">Inactive</div>
+        <div class="associate-hourly-header">Status</div>
+        ${rows.map(item => `
+          <div>${escapeHtml(item.hour.replace(":00", ""))}</div>
+          <div><strong>${escapeHtml(item.output)}</strong> jobs</div>
+          <div><strong>${escapeHtml(formatFinishMinutesLabel(item.inactiveMinutes))}</strong></div>
+          <div><span class="associate-hourly-status status-${escapeHtml(String(item.status).toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(item.status)}</span></div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+
+function finishInactivityParseDateSafe(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function finishInactivityMinutesBetweenSafe(startValue, endValue) {
+  const start = finishInactivityParseDateSafe(startValue);
+  const end = finishInactivityParseDateSafe(endValue) || new Date();
+  if (!start || !end) return 0;
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+}
+
+function getFinishAssociateInactiveSessions(row) {
+  if (!row || typeof row !== "object") return [];
+
+  const targetKey = finishInactivityRowIdentityKey_(row);
+  if (!targetKey) return [];
+
+  const sourceRows = Array.isArray(finishMorningInactivityState.logRows)
+    ? finishMorningInactivityState.logRows
+    : [];
+
+  const sessionMap = new Map();
+
+  function getSessionEndValue(item) {
+    return getFinishInactivityValue(
+      item,
+      "InactiveEndAt",
+      "ResolvedAt",
+      "inactiveEndAt",
+      "resolvedAt"
+    );
+  }
+
+  function getSessionLastCheckedValue(item) {
+    return getFinishInactivityValue(
+      item,
+      "LastCheckedAt",
+      "LastUpdated",
+      "SnapshotAt",
+      "lastCheckedAt",
+      "lastUpdated",
+      "snapshotAt"
+    );
+  }
+
+  function getSessionDateMs(value) {
+    const d = finishInactivityParseDateSafe(value);
+    return d ? d.getTime() : 0;
+  }
+
+  function isRealSessionRow(item) {
+    if (!item || typeof item !== "object") return false;
+
+    const sessionId = String(getFinishInactivityValue(item, "SessionID", "sessionId") || "").trim();
+    const inactiveStart = getFinishInactivityValue(
+      item,
+      "InactiveStartAt",
+      "inactiveStartAt"
+    );
+
+    /*
+      Strict rule:
+      Session History must only use real inactive-session rows.
+      Normal snapshot rows can be ACTIVE/WATCH/INACTIVE and can carry InactiveStartAt,
+      but they do not represent a completed/open session unless SessionID exists.
+      This prevents mixed/overlapping fake sessions.
+    */
+    return !!sessionId && !!inactiveStart;
+  }
+
+  function buildSessionFromGroup(rows, groupIndex) {
+    const cleanRows = rows.filter(Boolean);
+    if (!cleanRows.length) return null;
+
+    const first = cleanRows[0];
+    const sessionId = String(getFinishInactivityValue(first, "SessionID", "sessionId") || "").trim();
+    if (!sessionId) return null;
+
+    const starts = cleanRows
+      .map(r => getFinishInactivityValue(r, "InactiveStartAt", "inactiveStartAt"))
+      .filter(Boolean)
+      .sort((a, b) => getSessionDateMs(a) - getSessionDateMs(b));
+
+    const inactiveStart = starts[0] || "";
+    if (!inactiveStart) return null;
+
+    const resolvedRows = cleanRows.filter(r => {
+      const st = normalizeFinishInactivityStatus(r);
+      return st === "RESOLVED" || !!getSessionEndValue(r);
+    });
+
+    const status = resolvedRows.length ? "RESOLVED" : normalizeFinishInactivityStatus(cleanRows[cleanRows.length - 1]) || "OPEN";
+
+    const latestRow = cleanRows
+      .slice()
+      .sort((a, b) => finishInactivityRowFreshnessScore_(b, 0) - finishInactivityRowFreshnessScore_(a, 0))[0];
+
+    const bestEndRow = (resolvedRows.length ? resolvedRows : cleanRows)
+      .slice()
+      .sort((a, b) => {
+        const aEnd = getSessionDateMs(getSessionEndValue(a) || getSessionLastCheckedValue(a));
+        const bEnd = getSessionDateMs(getSessionEndValue(b) || getSessionLastCheckedValue(b));
+        return bEnd - aEnd;
+      })[0];
+
+    const inactiveEnd = status === "RESOLVED"
+      ? (getSessionEndValue(bestEndRow) || getSessionLastCheckedValue(bestEndRow) || "")
+      : "";
+
+    const lastChecked = getSessionLastCheckedValue(bestEndRow) || getSessionLastCheckedValue(latestRow) || "";
+    const endForDuration = inactiveEnd || lastChecked || new Date();
+    const timestampDuration = finishInactivityMinutesBetweenSafe(inactiveStart, endForDuration);
+
+    const fallbackDuration = Math.max.apply(null, cleanRows.map(r => {
+      const n = finishInactivityNumberValue(r, "InactiveMinutes", "inactiveMinutes");
+      return Number.isFinite(n) ? n : 0;
+    }).concat([0]));
+
+    const durationMinutes = timestampDuration > 0 ? timestampDuration : fallbackDuration;
+
+    const startTotals = cleanRows
+      .map(r => getFinishInactivityValue(r, "StartTotal", "startTotal", "PreviousTotal", "previousTotal"))
+      .filter(v => v !== "" && v !== null && v !== undefined);
+
+    const endTotals = cleanRows
+      .map(r => getFinishInactivityValue(r, "EndTotal", "endTotal", "CurrentTotal", "currentTotal", "LastOutputTotal", "lastOutputTotal"))
+      .filter(v => v !== "" && v !== null && v !== undefined);
+
+    return {
+      sessionId,
+      status,
+      inactiveStart,
+      inactiveEnd,
+      startTotal: startTotals.length ? startTotals[0] : "--",
+      endTotal: endTotals.length ? endTotals[endTotals.length - 1] : "--",
+      lastChecked,
+      durationMinutes: Math.max(0, Math.round(Number(durationMinutes) || 0)),
+      notes: getFinishInactivityValue(bestEndRow, "Notes", "notes") || getFinishInactivityValue(latestRow, "Notes", "notes") || "",
+      score: finishInactivityRowFreshnessScore_(latestRow, groupIndex)
+    };
+  }
+
+  sourceRows.forEach((item, index) => {
+    if (!isRealSessionRow(item)) return;
+    if (finishInactivityRowIdentityKey_(item) !== targetKey) return;
+
+    const sessionId = String(getFinishInactivityValue(item, "SessionID", "sessionId") || "").trim();
+    if (!sessionMap.has(sessionId)) sessionMap.set(sessionId, []);
+    sessionMap.get(sessionId).push(item);
+  });
+
+  // Include the clicked row only if it is also a real session row.
+  if (isRealSessionRow(row) && finishInactivityRowIdentityKey_(row) === targetKey) {
+    const selectedSessionId = String(getFinishInactivityValue(row, "SessionID", "sessionId") || "").trim();
+    if (!sessionMap.has(selectedSessionId)) sessionMap.set(selectedSessionId, []);
+    sessionMap.get(selectedSessionId).push(row);
+  }
+
+  let sessions = Array.from(sessionMap.values())
+    .map((rows, index) => buildSessionFromGroup(rows, index))
+    .filter(session => session && session.inactiveStart)
+    .sort((a, b) => getSessionDateMs(a.inactiveStart) - getSessionDateMs(b.inactiveStart));
+
+  /*
+    Repair display-only overlap:
+    Old versions left stale OPEN sessions that span across later resolved sessions.
+    Even after backend repair, historical rows can remain. A real associate/station
+    cannot have overlapping inactive sessions, so remove stale spanning records from
+    the visible session history.
+  */
+  sessions = sessions.filter((session, index, all) => {
+    const sStart = getSessionDateMs(session.inactiveStart);
+    const sEnd = getSessionDateMs(session.inactiveEnd || session.lastChecked) || sStart;
+    if (!sStart || !sEnd) return true;
+
+    const containedLaterSessions = all.filter((other, otherIndex) => {
+      if (otherIndex === index) return false;
+      const oStart = getSessionDateMs(other.inactiveStart);
+      const oEnd = getSessionDateMs(other.inactiveEnd || other.lastChecked) || oStart;
+      return oStart > sStart && oEnd <= sEnd;
+    });
+
+    const hasLaterResolvedAfterStart = all.some((other, otherIndex) => {
+      if (otherIndex === index) return false;
+      const oStart = getSessionDateMs(other.inactiveStart);
+      const oEnd = getSessionDateMs(other.inactiveEnd || other.lastChecked) || oStart;
+      return String(other.status).toUpperCase() === "RESOLVED" && oStart > sStart && oEnd > sStart;
+    });
+
+    const isOpenLike = ["OPEN", "INACTIVE", "WATCH"].includes(String(session.status || "").toUpperCase());
+    const duration = Number(session.durationMinutes) || 0;
+
+    // Drop old OPEN rows if later resolved sessions exist after they started.
+    if (isOpenLike && hasLaterResolvedAfterStart) return false;
+
+    // Drop stale long sessions that swallow multiple smaller real sessions.
+    if (containedLaterSessions.length >= 2 && duration > 60) return false;
+
+    return true;
+  });
+
+  // Final chronological order: Session 1 = earliest, Session N = latest.
+  return sessions.sort((a, b) => getSessionDateMs(a.inactiveStart) - getSessionDateMs(b.inactiveStart));
+}
+function getFinishAssociateInactiveSessionTotalMinutes(row) {
+  const sessions = getFinishAssociateInactiveSessions(row);
+  return sessions.reduce((sum, session) => {
+    return sum + (Number(session.durationMinutes) || 0);
+  }, 0);
+}
+
+function renderFinishAssociateSessionHistory(row) {
+  const sessions = getFinishAssociateInactiveSessions(row);
+
+  if (!sessions.length) {
+    return `
+      <section class="associate-session-history">
+        <div class="associate-session-history-head">
+          <span>Session History</span>
+          <strong>No inactive sessions recorded yet</strong>
+        </div>
+        <article class="associate-session-empty">Once this associate goes inactive and returns active, each session will show here.</article>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="associate-session-history">
+      <div class="associate-session-history-head">
+        <span>Session History</span>
+        <strong>${sessions.length} inactive session${sessions.length === 1 ? "" : "s"} today</strong>
+      </div>
+      <div class="associate-session-list">
+        ${sessions.map((session, index) => {
+          const status = String(session.status || "OPEN").toUpperCase();
+          const isOpen = status === "OPEN" || status === "INACTIVE";
+          const start = formatFinishInactivityTime(session.inactiveStart) || "--";
+          const end = isOpen ? "Still Open" : (formatFinishInactivityTime(session.inactiveEnd || session.lastChecked) || "--");
+          const duration = formatFinishMinutesLabel(session.durationMinutes || 0);
+          const output = `${session.startTotal || "--"} → ${session.endTotal || "--"}`;
+
+          return `
+            <article class="associate-session-card status-${escapeHtml(String(status).toLowerCase())}">
+              <div class="associate-session-title">
+                <b>Session ${index + 1}</b>
+                <span>${escapeHtml(status)}</span>
+              </div>
+              <div class="associate-session-grid">
+                <div><small>Start</small><strong>${escapeHtml(start)}</strong></div>
+                <div><small>End</small><strong>${escapeHtml(end)}</strong></div>
+                <div><small>Duration</small><strong>${escapeHtml(duration)}</strong></div>
+                <div><small>Output</small><strong>${escapeHtml(output)}</strong></div>
+              </div>
+              ${session.notes ? `<p>${escapeHtml(session.notes)}</p>` : ""}
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function openFinishInactivityAssociateProfile(row) {
+  const panel = document.getElementById("finishInactivityProfilePanel");
+  if (!panel || !row) return;
+
+  const kpi = buildFinishAssociateTimeKpis(row);
+  const operatorName = getFinishInactivityValue(row, "OperatorName", "operatorName") || "Unknown";
+  const station = normalizeFinishInactivityStation(getFinishInactivityValue(row, "StationGroup", "stationGroup") || getFinishInactivityValue(row, "RoleType", "roleType"));
+  const roleType = getFinishInactivityValue(row, "RoleType", "roleType") || station || "Role";
+  const defaultLine = getFinishInactivityValue(row, "DefaultLine", "defaultLine") || "--";
+  const defaultPosition = getFinishInactivityValue(row, "DefaultPosition", "defaultPosition") || "--";
+  const current = getFinishInactivityValue(row, "CurrentTotal", "currentTotal", "LastOutputTotal", "lastOutputTotal") || "0";
+  const previous = getFinishInactivityValue(row, "PreviousTotal", "previousTotal", "StartTotal", "startTotal") || "--";
+  const noChange = getFinishInactivityValue(row, "NoChangeSnapshots", "noChangeSnapshots") || "--";
+  const firstInactive = getFinishInactivityValue(row, "FirstInactiveAt", "InactiveStartAt", "inactiveStartAt") || "--";
+  const lastInactive = getFinishInactivityValue(row, "LastInactiveAt", "LastCheckedAt", "LastUpdated", "lastUpdated") || "--";
+  const lastOutputAt = getFinishInactivityValue(row, "LastOutputAt", "lastOutputAt") || "--";
+  const minutesSinceLastOutput = getFinishInactivityValue(row, "MinutesSinceLastOutput", "minutesSinceLastOutput") || "--";
+
+  const elapsed = Math.max(1, kpi.elapsed || 1);
+  const activePct = Math.min(100, Math.round((kpi.active / elapsed) * 100));
+  const idlePct = Math.min(100, Math.round((kpi.idle / elapsed) * 100));
+  const inactivePct = Math.min(100, Math.round((kpi.inactive / elapsed) * 100));
+
+  panel.innerHTML = `
+    <div class="associate-profile-card status-${escapeHtml(String(kpi.status).toLowerCase())}">
+      <div class="associate-profile-top">
+        <span>ASSOCIATE PROFILE</span>
+        <h3>${escapeHtml(operatorName)}</h3>
+        <p>${escapeHtml(station)} · ${escapeHtml(defaultLine)} · ${escapeHtml(defaultPosition)} · ${escapeHtml(roleType)}</p>
+        <b>${escapeHtml(kpi.status)}</b>
+      </div>
+
+      <div class="associate-profile-kpis">
+        <article class="active"><span>Output Hours</span><strong>${escapeHtml(formatFinishMinutesLabel(kpi.active))}</strong><small>Hours with production</small></article>
+        <article class="idle"><span>Idle</span><strong>${escapeHtml(formatFinishMinutesLabel(kpi.idle))}</strong><small>No output below threshold</small></article>
+        <article class="inactive"><span>Inactive</span><strong>${escapeHtml(formatFinishMinutesLabel(kpi.inactive))}</strong><small>Threshold reached</small></article>
+      </div>
+
+      <div class="associate-profile-bar" aria-label="Active idle inactive time split">
+        <i class="active" style="width:${activePct}%"></i>
+        <i class="idle" style="width:${idlePct}%"></i>
+        <i class="inactive" style="width:${inactivePct}%"></i>
+      </div>
+
+      <div class="associate-profile-metrics">
+        <div><span>Current Output</span><strong>${escapeHtml(current)}</strong></div>
+        <div><span>Previous Output</span><strong>${escapeHtml(previous)}</strong></div>
+        <div><span>No Change Checks</span><strong>${escapeHtml(noChange)}</strong></div>
+        <div><span>Inactive Sessions</span><strong>${escapeHtml(kpi.sessions)}</strong></div>
+        <div><span>Total Inactive</span><strong>${escapeHtml(formatFinishMinutesLabel(kpi.inactive))}</strong></div>
+        <div><span>Last Output</span><strong>${escapeHtml(formatFinishInactivityTime(lastOutputAt))}</strong></div>
+        <div><span>Minutes Since Output</span><strong>${escapeHtml(minutesSinceLastOutput === "--" ? "--" : formatFinishMinutesLabel(minutesSinceLastOutput))}</strong></div>
+        <div><span>First Inactive</span><strong>${escapeHtml(formatFinishInactivityTime(firstInactive))}</strong></div>
+        <div><span>Last Inactive</span><strong>${escapeHtml(formatFinishInactivityTime(lastInactive))}</strong></div>
+      </div>
+
+      ${renderFinishHourlyActivityVsInactive(row)}
+
+      ${renderFinishAssociateSessionHistory(row)}
+
+      <p class="associate-profile-note">Each session shows when the associate crossed the inactive threshold and when output movement resolved it. Output Hours counts hourly buckets where production exists; inactive total is the sum of the visible session-history durations from the inactivity log. True active minutes require individual scan timestamps.</p>
+    </div>
+  `;
+}
+
+function renderFinishMorningInactivityPanel() {
+  ensureFinishMorningInactivityPanel();
+
+  const rows = getFinishMorningInactivityRows().filter(row => row && typeof row === "object");
+
+  const watchCount = rows.filter(row => normalizeFinishInactivityStatus(row) === "WATCH").length;
+  const inactiveCount = rows.filter(row => normalizeFinishInactivityStatus(row) === "OPEN").length;
+  const trackedCount = rows.length;
+
+  setText("finishInactivityTrackedCount", Math.max(0, trackedCount));
+  setText("finishInactivityWatchCount", Math.max(0, watchCount));
+  setText("finishInactivityInactiveCount", Math.max(0, inactiveCount));
+  setText("finishInactivityLastSync", formatFinishInactivityTime(finishMorningInactivityState.lastSync));
+
+  const list = document.getElementById("finishInactivityList");
+  if (!list) return;
+
+  if (!rows.length) {
+    list.innerHTML = `<article class="finish-inactivity-empty">No inactivity snapshots loaded yet. Click Refresh Log or Run Snapshot Now.</article>`;
+    return;
+  }
+
+  const rowsToShow = rows
+    .slice()
+    .sort((a, b) => {
+      const rank = { OPEN: 1, INACTIVE: 1, WATCH: 2, RESOLVED: 3, ACTIVE: 4 };
+      const aRank = rank[normalizeFinishInactivityStatus(a)] || 9;
+      const bRank = rank[normalizeFinishInactivityStatus(b)] || 9;
+      if (aRank !== bRank) return aRank - bRank;
+      const aMin = getFinishAssociateInactiveSessionTotalMinutes(a) || getFinishIdleMinutesForRow(a);
+      const bMin = getFinishAssociateInactiveSessionTotalMinutes(b) || getFinishIdleMinutesForRow(b);
+      return bMin - aMin;
+    })
+    .slice(0, 80);
+
+  list.innerHTML = rowsToShow.map((row, index) => {
+    const status = normalizeFinishInactivityStatus(row);
+    const operatorName = getFinishInactivityValue(row, "OperatorName", "operatorName") || "Unknown";
+    const station = normalizeFinishInactivityStation(getFinishInactivityValue(row, "StationGroup", "stationGroup") || getFinishInactivityValue(row, "RoleType", "roleType"));
+    const roleType = getFinishInactivityValue(row, "RoleType", "roleType") || station || "Role";
+    const defaultLine = getFinishInactivityValue(row, "DefaultLine", "defaultLine");
+    const defaultPosition = getFinishInactivityValue(row, "DefaultPosition", "defaultPosition");
+    const position = [defaultLine, defaultPosition].filter(Boolean).join(" · ") || "No position";
+    const current = getFinishInactivityValue(row, "CurrentTotal", "currentTotal", "LastOutputTotal", "lastOutputTotal") || "0";
+    const previous = getFinishInactivityValue(row, "PreviousTotal", "previousTotal", "StartTotal", "startTotal") || "--";
+    const noChange = getFinishInactivityValue(row, "NoChangeSnapshots", "noChangeSnapshots") || "--";
+    const kpi = buildFinishAssociateTimeKpis(row);
+    const sessions = getFinishAssociateInactiveSessions(row).length || "--";
+
+    return `
+      <article class="finish-inactivity-row associate-inactivity-row status-${escapeHtml(String(status).toLowerCase())}" data-finish-inactivity-index="${index}">
+        <div class="finish-inactivity-main">
+          <strong>${escapeHtml(operatorName)}</strong>
+          <span>${escapeHtml(station)} · ${escapeHtml(position)} · ${escapeHtml(roleType)}</span>
+        </div>
+        <div class="finish-inactivity-metrics">
+          <div><span>Current</span><strong>${escapeHtml(current)}</strong></div>
+          <div><span>Previous</span><strong>${escapeHtml(previous)}</strong></div>
+          <div><span>No Change</span><strong>${escapeHtml(noChange)}</strong></div>
+          <div><span>Output Hours</span><strong>${escapeHtml(formatFinishMinutesLabel(kpi.active))}</strong></div>
+          <div><span>Idle</span><strong>${escapeHtml(formatFinishMinutesLabel(kpi.idle))}</strong></div>
+          <div><span>Inactive</span><strong>${escapeHtml(formatFinishMinutesLabel(kpi.inactive))}</strong></div>
+          <div><span>Sessions</span><strong>${escapeHtml(sessions)}</strong></div>
+          <b class="finish-inactivity-status">${escapeHtml(status)}</b>
+        </div>
+      </article>`;
+  }).join("");
+
+  list.querySelectorAll("[data-finish-inactivity-index]").forEach(item => {
+    item.addEventListener("click", () => {
+      const row = rowsToShow[Number(item.dataset.finishInactivityIndex || 0)];
+      if (row) openFinishInactivityAssociateProfile(row);
+    });
+  });
+
+  const currentProfile = document.getElementById("finishInactivityProfilePanel");
+  if (currentProfile && currentProfile.querySelector(".associate-profile-empty") && rowsToShow[0]) {
+    openFinishInactivityAssociateProfile(rowsToShow[0]);
+  }
+}
+
+async function loadFinishMorningInactivityLog() {
+  const btn = document.getElementById("finishRefreshInactivityLogBtn");
+  const ownerUsername = getFinishInactivityOwnerUsernameSafe();
+  const shiftType = getFinishInactivityShiftTypeSafe();
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Refreshing...";
+  }
+
+  try {
+    const payload = await fetchFinishInactivityApiSafe("getfinishinactivitylog", {
+      ownerUsername,
+      shiftType,
+      todayOnly: true,
+      limit: 250
+    });
+
+    finishMorningInactivityState.summary = {
+      tracked: Number(payload.tracked || payload.count || 0) || 0,
+      watch: Number(payload.watch || 0) || 0,
+      inactive: Number(payload.inactive || payload.open || 0) || 0,
+      open: Number(payload.open || payload.inactive || 0) || 0
+    };
+
+    finishInactivityApplyPayload(payload, { allowClear: false });
+  } catch (error) {
+    console.warn("Finish inactivity log could not load. Keeping current display.", error);
+    showFinishAssignmentToast?.(error.message || String(error));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Refresh Log";
+    }
+  }
+}
+
+async function runFinishMorningInactivitySnapshot() {
+  if (finishMorningInactivityState.loading) return;
+
+  const btn = document.getElementById("finishRunInactivitySnapshotBtn");
+  const thresholdSnapshots = getFinishMorningInactivityThreshold();
+  const ownerUsername = getFinishInactivityOwnerUsernameSafe();
+  const shiftType = getFinishInactivityShiftTypeSafe();
+
+  finishMorningInactivityState.loading = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Running...";
+  }
+
+  try {
+    await fetchFinishInactivityApiSafe("runfinishinactivitysnapshotnow", {
+      ownerUsername,
+      shiftType,
+      thresholdSnapshots,
+      appendAll: true
+    });
+
+    await loadFinishMorningInactivityLog();
+
+    const inactiveCount = Number(finishMorningInactivityState.summary?.inactive || finishMorningInactivityState.summary?.open || 0) || 0;
+    showFinishAssignmentToast?.(`Inactivity snapshot complete · ${inactiveCount} inactive`);
+  } catch (error) {
+    console.error("Finish inactivity snapshot failed. Refreshing saved log instead.", error);
+    showFinishAssignmentToast?.("Snapshot failed, refreshing saved inactivity log.");
+    await loadFinishMorningInactivityLog();
+  } finally {
+    finishMorningInactivityState.loading = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Run Snapshot Now";
+    }
+  }
+}
+
+function startFinishInactivityFrontendAutoRefresh() {
+  if (window.finishInactivityAutoRefreshTimerFinal) {
+    clearInterval(window.finishInactivityAutoRefreshTimerFinal);
+  }
+
+  loadFinishMorningInactivityLog();
+
+  window.finishInactivityAutoRefreshTimerFinal = setInterval(() => {
+    loadFinishMorningInactivityLog();
+  }, 120000);
+}
+
+function resetFinishInactivityButtons() {
+  const runBtn = document.getElementById("finishRunInactivitySnapshotBtn");
+  const refreshBtn = document.getElementById("finishRefreshInactivityLogBtn");
+
+  if (runBtn) {
+    runBtn.disabled = false;
+    runBtn.textContent = "Run Snapshot Now";
+  }
+
+  if (refreshBtn) {
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = "Refresh Log";
+  }
+}
+
+window.runFinishMorningInactivitySnapshot = runFinishMorningInactivitySnapshot;
+window.loadFinishMorningInactivityLog = loadFinishMorningInactivityLog;
+window.startFinishInactivityFrontendAutoRefresh = startFinishInactivityFrontendAutoRefresh;
+window.addEventListener("error", resetFinishInactivityButtons);
+window.addEventListener("unhandledrejection", resetFinishInactivityButtons);
+
+setTimeout(() => {
+  ensureFinishMorningInactivityPanel();
+  wireFinishInactivityButtons();
+  refreshFinishInactivityAutomationStatus();
+  loadFinishMorningInactivityLog();
+  startFinishInactivityFrontendAutoRefresh();
+}, 1800);
+
+/* =========================================================
+   FINAL OVERRIDE — ASSOCIATE DOWNTIME LOG ADVANCED UI
+   Purpose:
+   - Uses the separate Finish Scan Activity Tracker API.
+   - Keeps current Finish Dashboard HTML; rebuilds only the downtime tab.
+   - Adds cleaner list, filters, selected associate profile, gap history,
+     multi-scan grouping, and a compact mini graph.
+========================================================= */
+(function installFinishScanDowntimeAdvancedUI() {
+  const API_URL = "https://script.google.com/macros/s/AKfycbx7TAoSeBugvJWbYyRMzNpjgktge9NuTF3oqFYisqUt5RWvYJCGPiRaW21w44Ze8jw_/exec";
+
+  const state = window.finishScanDowntimeState = window.finishScanDowntimeState || {};
+  Object.assign(state, {
+    loading: false,
+    activeAccess: state.activeAccess || "Mounting",
+    statusFilter: state.statusFilter || "ALL",
+    sortBy: state.sortBy || "currentGap",
+    search: state.search || "",
+    selectedKey: state.selectedKey || "",
+    selectedDetailTab: state.selectedDetailTab || "overview",
+    payload: state.payload || null,
+    operators: state.operators || [],
+    gapLog: state.gapLog || [],
+    multiScanEvents: state.multiScanEvents || [],
+    downtimeDaily: state.downtimeDaily || [],
+    lastSync: state.lastSync || ""
+  });
+
+  function esc(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function clean(value) {
+    return String(value || "").trim();
+  }
+
+  function cleanKey(value) {
+    return clean(value).toUpperCase().replace(/\s+/g, " ");
+  }
+
+  function cleanAccess(value) {
+    const text = clean(value).toLowerCase();
+
+    // Drill comes in through the Mounting side of the scan report,
+    // but it must still be recognized as its own access point so we can
+    // combine it cleanly with Mounting when needed.
+    if (text.includes("mount") && text.includes("drill")) return "Mounting / Drill";
+    if (text.includes("final")) return "Final Inspection";
+    if (text.includes("drill")) return "Drill";
+    if (text.includes("mount")) return "Mounting";
+
+    return clean(value) || "Unknown";
+  }
+
+  function operatorName(row) {
+    return clean(row.OperatorName || row.operatorName || row.Operator || row.operator || "Unknown Operator");
+  }
+
+  function rowAccess(row) {
+    return cleanAccess(row.AccessPoint || row.accessPoint || row.ScanStage || row.scanStage || "");
+  }
+
+  function rowKey(row) {
+    if (row && row.__rowKey) return String(row.__rowKey);
+    return `${cleanKey(operatorName(row))}||${cleanKey(rowAccess(row))}`;
+  }
+
+  function baseRowKey(row) {
+    return `${cleanKey(operatorName(row))}||${cleanKey(rowAccess(row))}`;
+  }
+
+  function rowSourceKeys(row) {
+    if (row && Array.isArray(row.__sourceKeys) && row.__sourceKeys.length) {
+      return row.__sourceKeys.map(String);
+    }
+    return [baseRowKey(row)];
+  }
+
+  function isMountingFamilyAccess(value) {
+    const access = cleanAccess(value);
+    return access === "Mounting" || access === "Drill" || access === "Mounting / Drill";
+  }
+
+  function rowMatchesAccess(row, access) {
+    const selected = cleanAccess(access);
+    const rowAp = rowAccess(row);
+
+    // The Mounting tab is intentionally Mounting + Drill.
+    // If an associate scans both, they should show once as Mounting / Drill.
+    if (selected === "Mounting" || selected === "Mounting / Drill") {
+      return isMountingFamilyAccess(rowAp);
+    }
+
+    return rowAp === selected;
+  }
+
+  function statusFromGapMinutes(minutes) {
+    const n = Number(minutes) || 0;
+    if (n >= 10) return "INACTIVE";
+    if (n >= 5) return "WATCH";
+    return "ACTIVE";
+  }
+
+  function combineMountingDrillRows(rows) {
+    const groups = new Map();
+
+    (rows || []).forEach(row => {
+      const name = operatorName(row);
+      const key = cleanKey(name);
+      const access = rowAccess(row);
+      const existing = groups.get(key);
+
+      if (!existing) {
+        groups.set(key, {
+          ...row,
+          __rowKey: `${key}||MOUNTING_DRILL`,
+          __sourceKeys: [baseRowKey(row)],
+          __accessList: [access],
+          AccessPoint: access,
+          accessPoint: access
+        });
+        return;
+      }
+
+      const currentKeys = new Set(existing.__sourceKeys || []);
+      currentKeys.add(baseRowKey(row));
+      existing.__sourceKeys = Array.from(currentKeys);
+
+      const accessSet = new Set(existing.__accessList || []);
+      accessSet.add(access);
+      existing.__accessList = Array.from(accessSet);
+
+      existing.AccessPoint = existing.__accessList.length > 1 ? "Mounting / Drill" : existing.__accessList[0];
+      existing.accessPoint = existing.AccessPoint;
+
+      existing.TotalScans = metric(existing, "TotalScans", "totalScans") + metric(row, "TotalScans", "totalScans");
+      existing.totalScans = existing.TotalScans;
+
+      existing.ScansThisHour = metric(existing, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour") + metric(row, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour");
+      existing.scansThisHour = existing.ScansThisHour;
+
+      existing.MultiScanSeconds = metric(existing, "MultiScanSeconds", "multiScanSeconds") + metric(row, "MultiScanSeconds", "multiScanSeconds");
+      existing.multiScanSeconds = existing.MultiScanSeconds;
+
+      existing.LongestGapMinutes = Math.max(metric(existing, "LongestGapMinutes", "longestGapMinutes"), metric(row, "LongestGapMinutes", "longestGapMinutes"));
+      existing.longestGapMinutes = existing.LongestGapMinutes;
+
+      const existingAvg = metric(existing, "AverageGapMinutes", "averageGapMinutes");
+      const rowAvg = metric(row, "AverageGapMinutes", "averageGapMinutes");
+      existing.AverageGapMinutes = Math.round(((existingAvg + rowAvg) / 2) * 100) / 100;
+      existing.averageGapMinutes = existing.AverageGapMinutes;
+
+      // Current status is based on the most recent scan across Mounting + Drill.
+      // This prevents someone from looking inactive on Drill after they moved to Mounting.
+      const existingLast = dateMs(existing.LastScanAt || existing.lastScanAt);
+      const rowLast = dateMs(row.LastScanAt || row.lastScanAt);
+      if (rowLast > existingLast) {
+        existing.LastScanAt = row.LastScanAt || row.lastScanAt;
+        existing.lastScanAt = existing.LastScanAt;
+        existing.CurrentGapMinutes = metric(row, "CurrentGapMinutes", "currentGapMinutes");
+        existing.currentGapMinutes = existing.CurrentGapMinutes;
+        existing.CurrentStatus = normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status);
+        existing.currentStatus = existing.CurrentStatus;
+      }
+    });
+
+    return Array.from(groups.values()).map(row => {
+      if ((row.__accessList || []).length > 1) {
+        row.AccessPoint = "Mounting / Drill";
+        row.accessPoint = "Mounting / Drill";
+      }
+      const gap = metric(row, "CurrentGapMinutes", "currentGapMinutes");
+      row.CurrentStatus = statusFromGapMinutes(gap);
+      row.currentStatus = row.CurrentStatus;
+      return row;
+    });
+  }
+
+  function normalizeStatus(value) {
+    const status = clean(value).toUpperCase();
+    if (status === "INACTIVE" || status === "OPEN") return "INACTIVE";
+    if (status === "WATCH" || status === "IDLE") return "WATCH";
+    if (status === "RESOLVED") return "ACTIVE";
+    return status || "ACTIVE";
+  }
+
+  function dateMs(value) {
+    if (!value) return 0;
+    if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) return value.getTime();
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? 0 : date.getTime();
+  }
+
+  function toDate(value) {
+    const ms = dateMs(value);
+    return ms ? new Date(ms) : null;
+  }
+
+  function formatTime(value) {
+    const date = toDate(value);
+    if (!date) return "--";
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  function formatDateShort(value) {
+    const date = toDate(value);
+    if (!date) return "--";
+    return date.toLocaleDateString([], { month: "numeric", day: "numeric" });
+  }
+
+  function formatDateTime(value) {
+    const date = toDate(value);
+    if (!date) return "--";
+    return `${date.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  }
+
+  function formatMinutes(value) {
+    const total = Math.max(0, Math.round(Number(value) || 0));
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    if (h && m) return `${h}h ${m}m`;
+    if (h) return `${h}h`;
+    return `${m}m`;
+  }
+
+  function numberFmt(value) {
+    return Number(value || 0).toLocaleString();
+  }
+
+  function setTextSafe(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function metric(row, ...keys) {
+    for (const key of keys) {
+      const value = row?.[key];
+      if (value !== undefined && value !== null && value !== "") return Number(value) || 0;
+    }
+    return 0;
+  }
+
+  async function fetchFinishScanActivityApi(action = "getfinishscanactivity", params = {}) {
+    const url = new URL(API_URL);
+    url.searchParams.set("action", action);
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      url.searchParams.set(key, String(value));
+    });
+
+    const response = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+    if (!response.ok) throw new Error(`Finish Scan Tracker API failed: ${response.status}`);
+
+    const payload = await response.json();
+    const status = clean(payload.status || payload.Status).toLowerCase();
+    const success = payload.success === true || payload.Success === true || status === "success" || status === "ok" || (!payload.error && !String(payload.message || "").toLowerCase().includes("error"));
+    if (!success && (payload.message || payload.error)) throw new Error(payload.message || payload.error);
+    return payload;
+  }
+
+  function getPayloadArray(payload, keys) {
+    for (const key of keys) {
+      if (Array.isArray(payload?.[key])) return payload[key];
+      if (Array.isArray(payload?.data?.[key])) return payload.data[key];
+      if (Array.isArray(payload?.payload?.[key])) return payload.payload[key];
+    }
+    return [];
+  }
+
+  function applyPayload(payload) {
+    state.payload = payload || {};
+    state.operators = getPayloadArray(payload, ["operators", "operatorTimeline", "timeline", "rows", "data"]);
+    state.gapLog = getPayloadArray(payload, ["gapLog", "gaps", "gapRows"]);
+    state.multiScanEvents = getPayloadArray(payload, ["multiScanEvents", "multiScan", "multiRows"]);
+    state.downtimeDaily = getPayloadArray(payload, ["downtimeDaily", "daily", "downtimeRows"]);
+    state.lastSync = payload?.generatedAt || payload?.lastUpdated || new Date().toISOString();
+    renderPanel();
+  }
+
+  function dailyForRow(row) {
+    const keys = new Set(rowSourceKeys(row));
+    const matches = (state.downtimeDaily || []).filter(d => keys.has(baseRowKey(d)));
+
+    if (!matches.length) return {};
+    if (matches.length === 1) return matches[0];
+
+    const firstScan = matches
+      .map(d => d.FirstScanAt || d.firstScanAt)
+      .filter(Boolean)
+      .sort((a, b) => dateMs(a) - dateMs(b))[0] || "";
+
+    const lastScan = matches
+      .map(d => d.LastScanAt || d.lastScanAt)
+      .filter(Boolean)
+      .sort((a, b) => dateMs(b) - dateMs(a))[0] || "";
+
+    return {
+      ...matches[0],
+      AccessPoint: "Mounting / Drill",
+      accessPoint: "Mounting / Drill",
+      FirstScanAt: firstScan,
+      LastScanAt: lastScan,
+      TotalScans: matches.reduce((sum, d) => sum + metric(d, "TotalScans", "totalScans"), 0),
+      TotalDowntimeMinutes: matches.reduce((sum, d) => sum + metric(d, "TotalDowntimeMinutes", "totalDowntimeMinutes", "InactiveMinutes", "inactiveMinutes"), 0),
+      InactiveMinutes: matches.reduce((sum, d) => sum + metric(d, "InactiveMinutes", "inactiveMinutes"), 0),
+      WatchMinutes: matches.reduce((sum, d) => sum + metric(d, "WatchMinutes", "watchMinutes"), 0),
+      InactiveSessions: matches.reduce((sum, d) => sum + metric(d, "InactiveSessions", "inactiveSessions"), 0),
+      MultiScanEvents: matches.reduce((sum, d) => sum + metric(d, "MultiScanEvents", "multiScanEvents"), 0),
+      LongestGapMinutes: Math.max(...matches.map(d => metric(d, "LongestGapMinutes", "longestGapMinutes")), 0),
+      CurrentGapMinutes: Math.min(...matches.map(d => metric(d, "CurrentGapMinutes", "currentGapMinutes")).filter(n => n >= 0))
+    };
+  }
+
+  function rowsForAccess(access, options = {}) {
+    const key = cleanAccess(access);
+    let rows = (state.operators || []).filter(row => rowMatchesAccess(row, key));
+
+    if (key === "Mounting" || key === "Mounting / Drill") {
+      rows = combineMountingDrillRows(rows);
+    }
+
+    const status = cleanKey(options.statusFilter ?? state.statusFilter ?? "ALL");
+    if (status && status !== "ALL") {
+      rows = rows.filter(row => normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status) === status);
+    }
+
+    const search = clean(options.search ?? state.search).toLowerCase();
+    if (search) {
+      rows = rows.filter(row => `${operatorName(row)} ${rowAccess(row)}`.toLowerCase().includes(search));
+    }
+
+    const sortBy = options.sortBy || state.sortBy || "currentGap";
+    rows.sort((a, b) => {
+      const statusOrder = { INACTIVE: 0, WATCH: 1, ACTIVE: 2 };
+      if (sortBy === "status") {
+        const sa = statusOrder[normalizeStatus(a.CurrentStatus || a.currentStatus)] ?? 9;
+        const sb = statusOrder[normalizeStatus(b.CurrentStatus || b.currentStatus)] ?? 9;
+        if (sa !== sb) return sa - sb;
+      }
+      if (sortBy === "longestGap") return metric(b, "LongestGapMinutes", "longestGapMinutes") - metric(a, "LongestGapMinutes", "longestGapMinutes");
+      if (sortBy === "multiScan") return metric(b, "MultiScanSeconds", "multiScanSeconds") - metric(a, "MultiScanSeconds", "multiScanSeconds");
+      if (sortBy === "totalScans") return metric(b, "TotalScans", "totalScans") - metric(a, "TotalScans", "totalScans");
+      if (sortBy === "name") return operatorName(a).localeCompare(operatorName(b));
+      const currentGapDiff = metric(b, "CurrentGapMinutes", "currentGapMinutes") - metric(a, "CurrentGapMinutes", "currentGapMinutes");
+      if (currentGapDiff !== 0) return currentGapDiff;
+      const sa = statusOrder[normalizeStatus(a.CurrentStatus || a.currentStatus)] ?? 9;
+      const sb = statusOrder[normalizeStatus(b.CurrentStatus || b.currentStatus)] ?? 9;
+      if (sa !== sb) return sa - sb;
+      return operatorName(a).localeCompare(operatorName(b));
+    });
+
+    return rows;
+  }
+
+  function allRowsForAccess(access) {
+    const key = cleanAccess(access);
+    let rows = (state.operators || []).filter(row => rowMatchesAccess(row, key));
+    if (key === "Mounting" || key === "Mounting / Drill") rows = combineMountingDrillRows(rows);
+    return rows;
+  }
+
+  function accessSummary(access) {
+    const rows = allRowsForAccess(access);
+    return {
+      tracked: rows.length,
+      watch: rows.filter(row => normalizeStatus(row.CurrentStatus || row.currentStatus) === "WATCH").length,
+      inactive: rows.filter(row => normalizeStatus(row.CurrentStatus || row.currentStatus) === "INACTIVE").length,
+      totalScans: rows.reduce((sum, row) => sum + metric(row, "TotalScans", "totalScans"), 0),
+      multiScan: rows.reduce((sum, row) => sum + metric(row, "MultiScanSeconds", "multiScanSeconds"), 0),
+      downtime: rows.reduce((sum, row) => sum + metric(dailyForRow(row), "TotalDowntimeMinutes", "totalDowntimeMinutes", "InactiveMinutes", "inactiveMinutes"), 0)
+    };
+  }
+
+  function isRealDisplayGap(g) {
+    const minutes = metric(g, "GapMinutes", "gapMinutes");
+    const status = normalizeStatus(g.Status || g.status);
+
+    // Do not show 0m / normal ACTIVE rows in the Gap History.
+    // The scan report can create same-minute/duplicate timestamp rows; those are not downtime gaps.
+    if (minutes < 5) return false;
+    if (status === "ACTIVE" && minutes < 5) return false;
+
+    return true;
+  }
+
+  function operatorGapRows(row) {
+    const keys = new Set(rowSourceKeys(row));
+    return (state.gapLog || [])
+      .filter(g => keys.has(baseRowKey(g)))
+      .filter(isRealDisplayGap)
+      .sort((a, b) => dateMs(b.GapStartAt || b.PreviousScanTime) - dateMs(a.GapStartAt || a.PreviousScanTime));
+  }
+
+  function operatorMultiRows(row) {
+    const keys = new Set(rowSourceKeys(row));
+    return (state.multiScanEvents || [])
+      .filter(g => keys.has(baseRowKey(g)))
+      .sort((a, b) => dateMs(b.ScanTime || b.scanTime) - dateMs(a.ScanTime || a.scanTime));
+  }
+
+  function getSelectedRow(rows) {
+    if (!rows.length) return null;
+    if (state.selectedKey) {
+      const found = rows.find(row => rowKey(row) === state.selectedKey);
+      if (found) return found;
+    }
+    state.selectedKey = rowKey(rows[0]);
+    return rows[0];
+  }
+
+  function cleanupFinishDowntimeSnapshotRuleCards() {
+    const mount = document.getElementById("finishInactivityTabMount");
+    if (!mount) return;
+
+    // Remove the old top hero/banner completely. The useful content starts at Associate Downtime Log.
+    mount.querySelectorAll(".scan-advanced-hero").forEach(el => el.remove());
+
+    // The snapshot rule cards belong to the old ME/snapshot tracker, not the scan-gap downtime view.
+    mount.querySelectorAll(".scan-advanced-rule-card").forEach(el => el.remove());
+
+    // Extra protection: remove any remaining top banner/card that says Snapshot Rule / 3 Checks.
+    mount.querySelectorAll("header, section, article, div").forEach(el => {
+      const text = String(el.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
+      if (!text) return;
+      const hasSnapshotRule = text.includes("SNAPSHOT RULE") || text.includes("3 CHECKS");
+      const isSafePanel = el.id === "finishScanDowntimePanel" || el.closest("#finishScanDowntimePanel .scan-advanced-panel");
+      if (hasSnapshotRule && !isSafePanel) el.remove();
+    });
+
+    const advancedPanel = mount.querySelector("#finishScanDowntimePanel");
+
+    // Remove duplicated old downtime hero blocks if the legacy inactivity renderer runs before/after this UI.
+    Array.from(mount.children).forEach(child => {
+      if (child === advancedPanel) return;
+      const text = String(child.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
+      const isOldDowntimeHero = text.includes("ASSOCIATE DOWNTIME TRACKING") && text.includes("SNAPSHOT RULE");
+      const isOldInactivityPanel = child.id === "finishMorningInactivityPanel";
+      if (isOldDowntimeHero || isOldInactivityPanel) child.remove();
+    });
+  }
+
+  function statusClass(status) {
+    return `status-${normalizeStatus(status).toLowerCase()}`;
+  }
+
+  function initials(name) {
+    const parts = clean(name).split(/\s+/).filter(Boolean);
+    return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
+  }
+
+  function ensurePanel() {
+    const mount = document.getElementById("finishInactivityTabMount");
+    if (!mount) return null;
+
+    if (!document.getElementById("finishScanDowntimePanel")) {
+      mount.innerHTML = `
+        <section id="finishScanDowntimePanel" class="scan-advanced-shell">
+          <section class="scan-advanced-panel">
+            <div class="scan-advanced-panel-head">
+              <div>
+                <span class="scan-advanced-eyebrow">Scan Activity Tracker</span>
+                <h3>Associate Downtime Log</h3>                
+              </div>
+              <div class="scan-advanced-actions">
+                <div class="scan-rule-card"><span>Watch / Inactive</span><strong>5m / 10m</strong></div>
+                <button id="finishRunInactivitySnapshotBtn" type="button">Run Scan Refresh</button>
+                <button id="finishRefreshInactivityLogBtn" type="button">Refresh Log</button>
+              </div>
+            </div>
+
+            <div class="scan-advanced-kpis">
+              <article><span>Tracked</span><strong id="finishInactivityTrackedCount">0</strong><small>Operators with scans</small></article>
+              <article class="watch"><span>Watch</span><strong id="finishInactivityWatchCount">0</strong><small>5+ minutes no scan</small></article>
+              <article class="danger"><span>Inactive</span><strong id="finishInactivityInactiveCount">0</strong><small>10+ minutes no scan</small></article>
+              <article><span>Last Sync</span><strong id="finishInactivityLastSync">--</strong><small>Scan tracker API</small></article>
+            </div>
+
+            <div class="scan-filter-bar">
+              <div class="scan-filter-group">
+                <span>Access Point</span>
+                <div class="scan-segmented">
+                  <button class="scan-downtime-tab active" type="button" data-scan-access="Mounting">Mounting / Drill</button>
+                  <button class="scan-downtime-tab" type="button" data-scan-access="Final Inspection">Final Inspection</button>
+                </div>
+              </div>
+              <div class="scan-filter-group">
+                <span>Status Filter</span>
+                <div class="scan-status-filters">
+                  <button type="button" data-scan-status="ALL" class="active">All</button>
+                  <button type="button" data-scan-status="ACTIVE">Active</button>
+                  <button type="button" data-scan-status="WATCH">Watch</button>
+                  <button type="button" data-scan-status="INACTIVE">Inactive</button>
+                </div>
+              </div>
+              <label class="scan-filter-field">
+                <span>Sort By</span>
+                <select id="finishScanSortSelect">
+                  <option value="currentGap">Current Gap</option>
+                  <option value="longestGap">Longest Gap</option>
+                  <option value="multiScan">Most Multi-Scan</option>
+                  <option value="totalScans">Most Scans</option>
+                  <option value="name">Name A-Z</option>
+                  <option value="status">Status</option>
+                </select>
+              </label>
+              <label class="scan-filter-search">
+                <span>Search</span>
+                <input id="finishScanSearchInput" type="search" placeholder="Search associate..." autocomplete="off" />
+              </label>
+            </div>
+
+            <div class="scan-advanced-list-card">
+              <div class="scan-advanced-list-head">
+                <div>
+                  <span>Live Associate List</span>
+                  <strong id="finishScanSourceLabel">Source: Finish Scan Activity Tracker</strong>
+                </div>
+                <small id="finishScanListCount">0 visible</small>
+              </div>
+              <div class="scan-advanced-table-wrap">
+                <div class="scan-advanced-table-head">
+                  <span>Associate</span><span>Access / Last Scan</span><span>Total</span><span>This Hour</span><span>Current Gap</span><span>Longest</span><span>Avg</span><span>Multi</span><span>Status</span><span>Action</span>
+                </div>
+                <div id="finishInactivityList" class="scan-advanced-table-body">
+                  <article class="finish-inactivity-empty">Loading scan tracker data...</article>
+                </div>
+              </div>
+            </div>
+
+            <section id="finishInactivityProfilePanel" class="scan-profile-panel">
+              <div class="associate-profile-empty">Click an associate to open their scan-gap profile.</div>
+            </section>
+          </section>
+        </section>`;
+
+      wirePanel();
+    }
+
+    return mount;
+  }
+
+  function wirePanel() {
+    document.querySelectorAll(".scan-downtime-tab[data-scan-access]").forEach(btn => {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = "true";
+      btn.addEventListener("click", () => {
+        state.activeAccess = btn.dataset.scanAccess || "Mounting";
+        state.selectedKey = "";
+        renderPanel();
+      });
+    });
+
+    document.querySelectorAll("[data-scan-status]").forEach(btn => {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = "true";
+      btn.addEventListener("click", () => {
+        state.statusFilter = cleanKey(btn.dataset.scanStatus || "ALL");
+        renderPanel();
+      });
+    });
+
+    const sortSelect = document.getElementById("finishScanSortSelect");
+    if (sortSelect && !sortSelect.dataset.wired) {
+      sortSelect.dataset.wired = "true";
+      sortSelect.value = state.sortBy || "currentGap";
+      sortSelect.addEventListener("change", () => {
+        state.sortBy = sortSelect.value || "currentGap";
+        renderPanel();
+      });
+    }
+
+    const searchInput = document.getElementById("finishScanSearchInput");
+    if (searchInput && !searchInput.dataset.wired) {
+      searchInput.dataset.wired = "true";
+      searchInput.value = state.search || "";
+      searchInput.addEventListener("input", () => {
+        state.search = searchInput.value || "";
+        renderPanel();
+      });
+    }
+
+    const runBtn = document.getElementById("finishRunInactivitySnapshotBtn");
+    if (runBtn && !runBtn.dataset.scanWired) {
+      runBtn.dataset.scanWired = "true";
+      runBtn.addEventListener("click", runFinishMorningInactivitySnapshot);
+    }
+
+    const refreshBtn = document.getElementById("finishRefreshInactivityLogBtn");
+    if (refreshBtn && !refreshBtn.dataset.scanWired) {
+      refreshBtn.dataset.scanWired = "true";
+      refreshBtn.addEventListener("click", loadFinishMorningInactivityLog);
+    }
+  }
+
+  function renderPanel() {
+    ensurePanel();
+    wirePanel();
+
+    document.querySelectorAll(".scan-downtime-tab[data-scan-access]").forEach(btn => {
+      btn.classList.toggle("active", cleanAccess(btn.dataset.scanAccess) === cleanAccess(state.activeAccess));
+    });
+    document.querySelectorAll("[data-scan-status]").forEach(btn => {
+      btn.classList.toggle("active", cleanKey(btn.dataset.scanStatus) === cleanKey(state.statusFilter || "ALL"));
+    });
+
+    const access = cleanAccess(state.activeAccess || "Mounting");
+    const rows = rowsForAccess(access);
+    const summary = accessSummary(access);
+
+    setTextSafe("finishInactivityTrackedCount", numberFmt(summary.tracked));
+    setTextSafe("finishInactivityWatchCount", numberFmt(summary.watch));
+    setTextSafe("finishInactivityInactiveCount", numberFmt(summary.inactive));
+    setTextSafe("finishInactivityLastSync", formatTime(state.lastSync));
+    setTextSafe("finishScanListCount", `${rows.length} visible`);
+
+    const list = document.getElementById("finishInactivityList");
+    if (!list) return;
+
+    if (!rows.length) {
+      list.innerHTML = `<article class="finish-inactivity-empty">No ${esc(access)} scan rows match the current filters.</article>`;
+      const profile = document.getElementById("finishInactivityProfilePanel");
+      if (profile) profile.innerHTML = `<div class="associate-profile-empty">No selected associate profile.</div>`;
+      return;
+    }
+
+    const selected = getSelectedRow(rows);
+    list.innerHTML = rows.map(row => renderRow(row, rowKey(row) === rowKey(selected))).join("");
+    list.querySelectorAll("[data-scan-key]").forEach(el => {
+      el.addEventListener("click", () => {
+        state.selectedKey = el.dataset.scanKey || "";
+        renderPanel();
+      });
+    });
+
+    openProfile(selected);
+  }
+
+  function renderRow(row, selected) {
+    const name = operatorName(row);
+    const access = rowAccess(row);
+    const status = normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status);
+    const totalScans = metric(row, "TotalScans", "totalScans");
+    const scansThisHour = metric(row, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour");
+    const currentGap = metric(row, "CurrentGapMinutes", "currentGapMinutes");
+    const longestGap = metric(row, "LongestGapMinutes", "longestGapMinutes");
+    const avgGap = metric(row, "AverageGapMinutes", "averageGapMinutes");
+    const multiSeconds = metric(row, "MultiScanSeconds", "multiScanSeconds");
+
+    return `
+      <button class="scan-operator-row ${statusClass(status)} ${selected ? "selected" : ""}" type="button" data-scan-key="${esc(rowKey(row))}">
+        <span class="scan-row-name"><i></i><strong>${esc(name)}</strong></span>
+        <span><b>${esc(access)}</b><small>${esc(formatTime(row.LastScanAt || row.lastScanAt))}</small></span>
+        <span>${esc(numberFmt(totalScans))}</span>
+        <span>${esc(numberFmt(scansThisHour))}</span>
+        <span class="scan-gap-value">${esc(formatMinutes(currentGap))}</span>
+        <span>${esc(formatMinutes(longestGap))}</span>
+        <span>${esc(formatMinutes(avgGap))}</span>
+        <span>${esc(numberFmt(multiSeconds))}</span>
+        <span><em class="scan-status-pill">${esc(status)}</em></span>
+        <span><em class="scan-open-pill">Open</em></span>
+      </button>`;
+  }
+
+  function statusPercent(currentGap) {
+    const n = Math.max(0, Number(currentGap) || 0);
+    return Math.min(100, Math.round((n / 20) * 100));
+  }
+
+  function gapClass(minutes) {
+    const n = Number(minutes) || 0;
+    if (n >= 10) return "inactive";
+    if (n >= 5) return "watch";
+    return "active";
+  }
+
+  function openProfile(row) {
+    const panel = document.getElementById("finishInactivityProfilePanel");
+    if (!panel || !row) return;
+
+    const name = operatorName(row);
+    const access = rowAccess(row);
+    const status = normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status);
+    const daily = dailyForRow(row);
+    const totalScans = metric(row, "TotalScans", "totalScans");
+    const scansThisHour = metric(row, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour");
+    const currentGap = metric(row, "CurrentGapMinutes", "currentGapMinutes");
+    const longestGap = metric(row, "LongestGapMinutes", "longestGapMinutes");
+    const avgGap = metric(row, "AverageGapMinutes", "averageGapMinutes");
+    const multiSeconds = metric(row, "MultiScanSeconds", "multiScanSeconds");
+    const downtime = metric(daily, "TotalDowntimeMinutes", "totalDowntimeMinutes", "InactiveMinutes", "inactiveMinutes");
+    const barPct = statusPercent(currentGap);
+
+    panel.innerHTML = `
+      <article class="scan-profile-card ${statusClass(status)}">
+        <header class="scan-profile-top">
+          <div class="scan-profile-id">
+            <div class="scan-avatar">${esc(initials(name))}</div>
+            <div>
+              <span>Associate Profile</span>
+              <h3>${esc(name)}</h3>
+              <p>Finish Department · ${esc(access)}</p>
+            </div>
+          </div>
+          <em class="scan-status-pill">${esc(status)}</em>
+        </header>
+
+        <div class="scan-profile-metrics-strip">
+          <article><span>Last Scan</span><strong>${esc(formatTime(row.LastScanAt || row.lastScanAt))}</strong></article>
+          <article><span>Total Scans</span><strong>${esc(numberFmt(totalScans))}</strong></article>
+          <article><span>This Hour</span><strong>${esc(numberFmt(scansThisHour))}</strong></article>
+          <article><span>Current Gap</span><strong>${esc(formatMinutes(currentGap))}</strong></article>
+          <article><span>Longest Gap</span><strong>${esc(formatMinutes(longestGap))}</strong></article>
+          <article><span>Downtime Today</span><strong>${esc(formatMinutes(downtime))}</strong></article>
+          <article><span>Multi-Scan</span><strong>${esc(numberFmt(multiSeconds))}</strong></article>
+        </div>
+
+        <div class="scan-gap-meter">
+          <div class="scan-gap-meter-labels"><span>0m</span><span>5m Watch</span><span>10m Inactive</span><span>20m+</span></div>
+          <div class="scan-gap-meter-track"><i style="width:${barPct}%"></i><b style="left:${Math.min(100, barPct)}%"></b></div>
+        </div>
+
+        <nav class="scan-profile-tabs">
+          ${["overview", "gaps", "multi", "hourly"].map(tab => `
+            <button type="button" class="${state.selectedDetailTab === tab ? "active" : ""}" data-profile-tab="${tab}">${tab === "overview" ? "Overview" : tab === "gaps" ? "Gap History" : tab === "multi" ? "Multi-Scan Events" : "Hourly Timeline"}</button>
+          `).join("")}
+        </nav>
+
+        <div class="scan-profile-tab-body">
+          ${renderDetailTab(row, state.selectedDetailTab || "overview", { avgGap, downtime, currentGap, longestGap, multiSeconds })}
+        </div>
+      </article>`;
+
+    panel.querySelectorAll("[data-profile-tab]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.selectedDetailTab = btn.dataset.profileTab || "overview";
+        openProfile(row);
+      });
+    });
+  }
+
+  function renderDetailTab(row, tab, extras) {
+    if (tab === "gaps") return renderGapHistory(row, 12);
+    if (tab === "multi") return renderMultiHistory(row, 18);
+    if (tab === "hourly") return renderHourlyTimeline(row);
+    return renderOverview(row, extras);
+  }
+
+  function renderOverview(row, extras) {
+    const gaps = operatorGapRows(row);
+    const multi = operatorMultiRows(row);
+    const recentGaps = gaps.slice(0, 4);
+    const recentMulti = multi.slice(0, 3);
+    return `
+      <div class="scan-overview-grid">
+        <section class="scan-mini-panel">
+          <div class="scan-mini-head"><span>Gap Snapshot</span><strong>${esc(gaps.length)} 5m+ gaps</strong></div>
+          <div class="scan-mini-bars">
+            <div><span>Average Gap</span><b>${esc(formatMinutes(extras.avgGap))}</b></div>
+            <div><span>Longest Gap</span><b>${esc(formatMinutes(extras.longestGap))}</b></div>
+            <div><span>Downtime Today</span><b>${esc(formatMinutes(extras.downtime))}</b></div>
+          </div>
+        </section>
+        <section class="scan-mini-panel">
+          <div class="scan-mini-head"><span>Recent Gaps</span><strong>${esc(recentGaps.length)}</strong></div>
+          <div class="scan-compact-list">
+            ${recentGaps.length ? recentGaps.map(g => renderCompactGapRow(g)).join("") : `<p>No 5m+ gaps yet.</p>`}
+          </div>
+        </section>
+        <section class="scan-mini-panel">
+          <div class="scan-mini-head"><span>Multi-Scan</span><strong>${esc(multi.length)} events</strong></div>
+          <div class="scan-mini-multi-row">
+            ${recentMulti.length ? recentMulti.map(renderSmallMultiCard).join("") : `<p>No same-second events.</p>`}
+          </div>
+        </section>
+      </div>`;
+  }
+
+  function renderGapHistory(row, limit = 30) {
+    const gaps = operatorGapRows(row).slice(0, limit);
+    if (!gaps.length) {
+      return `<section class="scan-history-panel"><div class="scan-section-head"><span>Gap History</span><strong>No 5+ minute gaps yet</strong></div><article class="associate-session-empty">This associate has no watch/inactive scan gaps in the current tracker data.</article></section>`;
+    }
+
+    return `
+      <section class="scan-history-panel">
+        <div class="scan-section-head"><span>Gap History</span><strong>${esc(gaps.length)} 5m+ records</strong></div>
+        <div class="scan-gap-table">
+          <div class="scan-gap-table-head"><span>Start</span><span>End</span><span>Duration</span><span>Status</span><span>Movement</span></div>
+          ${gaps.map(g => renderGapTableRow(g)).join("")}
+        </div>
+      </section>`;
+  }
+
+  function renderGapTableRow(g) {
+    const status = normalizeStatus(g.Status || g.status);
+    const start = g.GapStartAt || g.gapStartAt || g.PreviousScanTime || g.previousScanTime;
+    const end = g.GapEndAt || g.gapEndAt || g.NextScanTime || g.nextScanTime || "";
+    const minutes = metric(g, "GapMinutes", "gapMinutes");
+    return `
+      <article class="scan-gap-line ${statusClass(status)}">
+        <span>${esc(formatTime(start))}</span>
+        <span>${esc(end ? formatTime(end) : "Open")}</span>
+        <span>${esc(formatMinutes(minutes))}</span>
+        <span><em class="scan-status-pill">${esc(status)}</em></span>
+        <span>${esc(formatTime(g.PreviousScanTime || g.previousScanTime))} → ${esc(g.NextScanTime || g.nextScanTime ? formatTime(g.NextScanTime || g.nextScanTime) : "Open")}</span>
+      </article>`;
+  }
+
+  function renderCompactGapRow(g) {
+    const status = normalizeStatus(g.Status || g.status);
+    const start = g.GapStartAt || g.gapStartAt || g.PreviousScanTime || g.previousScanTime;
+    const end = g.GapEndAt || g.gapEndAt || g.NextScanTime || g.nextScanTime || "";
+    const minutes = metric(g, "GapMinutes", "gapMinutes");
+    return `<div class="scan-compact-row ${statusClass(status)}"><span>${esc(formatTime(start))} → ${esc(end ? formatTime(end) : "Open")}</span><b>${esc(formatMinutes(minutes))}</b><em>${esc(status)}</em></div>`;
+  }
+
+  function renderMultiHistory(row, limit = 30) {
+    const events = operatorMultiRows(row).slice(0, limit);
+    if (!events.length) {
+      return `<section class="scan-history-panel"><div class="scan-section-head"><span>Multi-Scan Events</span><strong>0 same-second events</strong></div><article class="associate-session-empty">No same-second multi-scan events for this associate.</article></section>`;
+    }
+
+    return `
+      <section class="scan-history-panel">
+        <div class="scan-section-head"><span>Multi-Scan Events</span><strong>${esc(events.length)} same-second events</strong></div>
+        <div class="scan-multi-grid advanced">
+          ${events.map(renderSmallMultiCard).join("")}
+        </div>
+      </section>`;
+  }
+
+  function renderSmallMultiCard(ev) {
+    const count = ev.ScanCount || ev.scanCount || 0;
+    return `
+      <article class="scan-small-multi-card">
+        <span>${esc(formatTime(ev.ScanTime || ev.scanTime))}</span>
+        <strong>${esc(count)} jobs</strong>
+        <small>${esc(cleanAccess(ev.AccessPoint || ev.accessPoint))}</small>
+      </article>`;
+  }
+
+  function renderHourlyTimeline(row) {
+    const gaps = operatorGapRows(row);
+    const multi = operatorMultiRows(row);
+    const buckets = new Map();
+
+    function bucketForHour(hour) {
+      if (!buckets.has(hour)) buckets.set(hour, { hour, gaps: [], multi: 0, scansEstimate: 0 });
+      return buckets.get(hour);
+    }
+
+    gaps.forEach(g => {
+      const d = toDate(g.GapStartAt || g.PreviousScanTime);
+      if (!d) return;
+      const hour = d.getHours();
+      const b = bucketForHour(hour);
+      b.gaps.push(metric(g, "GapMinutes", "gapMinutes"));
+    });
+
+    multi.forEach(m => {
+      const d = toDate(m.ScanTime || m.scanTime);
+      if (!d) return;
+      const b = bucketForHour(d.getHours());
+      b.multi += 1;
+    });
+
+    const rows = Array.from(buckets.values()).sort((a, b) => a.hour - b.hour).slice(-8);
+    if (!rows.length) {
+      return `<section class="scan-history-panel"><div class="scan-section-head"><span>Hourly Timeline</span><strong>No hourly gap activity</strong></div><article class="associate-session-empty">Hourly graph will populate as scan gaps and same-second events are detected.</article></section>`;
+    }
+
+    return `
+      <section class="scan-history-panel">
+        <div class="scan-section-head"><span>Hourly Timeline</span><strong>Gap / multi-scan pattern</strong></div>
+        <div class="scan-hourly-graph">
+          ${rows.map(b => {
+            const largest = b.gaps.length ? Math.max(...b.gaps) : 0;
+            const avg = b.gaps.length ? Math.round(b.gaps.reduce((a, c) => a + c, 0) / b.gaps.length) : 0;
+            const width = Math.min(100, Math.max(8, (largest / 20) * 100));
+            return `
+              <div class="scan-hour-row ${gapClass(largest)}">
+                <span>${esc(formatHourLabel(b.hour))}</span>
+                <div class="scan-hour-bar"><i style="width:${width}%"></i></div>
+                <b>${esc(formatMinutes(largest))}</b>
+                <em>${esc(formatMinutes(avg))} avg</em>
+                <strong>${esc(b.multi)} multi</strong>
+              </div>`;
+          }).join("")}
+        </div>
+      </section>`;
+  }
+
+  function formatHourLabel(hour24) {
+    const suffix = hour24 >= 12 ? "PM" : "AM";
+    let hour = hour24 % 12;
+    if (!hour) hour = 12;
+    return `${hour} ${suffix}`;
+  }
+
+  async function loadFinishMorningInactivityLog() {
+    ensurePanel();
+    const btn = document.getElementById("finishRefreshInactivityLogBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Refreshing..."; }
+    try {
+      const payload = await fetchFinishScanActivityApi("getfinishscanactivity", { debug: true, cacheBust: Date.now() });
+      applyPayload(payload);
+    } catch (error) {
+      console.error("Finish Scan Activity Tracker load failed:", error);
+      const list = document.getElementById("finishInactivityList");
+      if (list) list.innerHTML = `<article class="finish-inactivity-empty">Scan Tracker API failed: ${esc(error.message || String(error))}</article>`;
+      if (typeof showFinishAssignmentToast === "function") showFinishAssignmentToast(error.message || String(error));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Refresh Log"; }
+    }
+  }
+
+  async function runFinishMorningInactivitySnapshot() {
+    ensurePanel();
+    if (state.loading) return;
+    const btn = document.getElementById("finishRunInactivitySnapshotBtn");
+    state.loading = true;
+    if (btn) { btn.disabled = true; btn.textContent = "Running..."; }
+    try {
+      await fetchFinishScanActivityApi("runfinishscanactivityautorefresh", { cacheBust: Date.now() });
+      const payload = await fetchFinishScanActivityApi("getfinishscanactivity", { debug: true, cacheBust: Date.now() });
+      applyPayload(payload);
+      if (typeof showFinishAssignmentToast === "function") showFinishAssignmentToast("Scan tracker refreshed.");
+    } catch (error) {
+      console.error("Finish Scan Activity refresh failed:", error);
+      if (typeof showFinishAssignmentToast === "function") showFinishAssignmentToast(error.message || String(error));
+      await loadFinishMorningInactivityLog();
+    } finally {
+      state.loading = false;
+      if (btn) { btn.disabled = false; btn.textContent = "Run Scan Refresh"; }
+    }
+  }
+
+  function refreshFinishInactivityAutomationStatus() {
+    ensurePanel();
+    return Promise.resolve({ success: true, enabled: true, source: "scan-tracker" });
+  }
+
+  function toggleFinishInactivityAutomationFromPage() {
+    if (typeof showFinishAssignmentToast === "function") {
+      showFinishAssignmentToast("Scan tracker uses its own backend refresh. Use Run Scan Refresh here.");
+    }
+    return Promise.resolve({ success: true });
+  }
+
+  function startFinishInactivityFrontendAutoRefresh() {
+    if (window.finishInactivityAutoRefreshTimerFinal) clearInterval(window.finishInactivityAutoRefreshTimerFinal);
+    if (window.finishInactivityAutoRefreshTimer) clearInterval(window.finishInactivityAutoRefreshTimer);
+    loadFinishMorningInactivityLog();
+    window.finishInactivityAutoRefreshTimerFinal = setInterval(loadFinishMorningInactivityLog, 120000);
+  }
+
+  function resetFinishInactivityButtons() {
+    const runBtn = document.getElementById("finishRunInactivitySnapshotBtn");
+    const refreshBtn = document.getElementById("finishRefreshInactivityLogBtn");
+    if (runBtn) { runBtn.disabled = false; runBtn.textContent = "Run Scan Refresh"; }
+    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.textContent = "Refresh Log"; }
+  }
+
+  window.fetchFinishScanActivityApi = fetchFinishScanActivityApi;
+  window.finishScanEscapeHtml = esc;
+  window.finishScanApplyPayload = applyPayload;
+  window.loadFinishMorningInactivityLog = loadFinishMorningInactivityLog;
+  window.runFinishMorningInactivitySnapshot = runFinishMorningInactivitySnapshot;
+  window.refreshFinishInactivityAutomationStatus = refreshFinishInactivityAutomationStatus;
+  window.toggleFinishInactivityAutomationFromPage = toggleFinishInactivityAutomationFromPage;
+  window.startFinishInactivityFrontendAutoRefresh = startFinishInactivityFrontendAutoRefresh;
+  window.resetFinishInactivityButtons = resetFinishInactivityButtons;
+  window.cleanupFinishDowntimeSnapshotRuleCards = cleanupFinishDowntimeSnapshotRuleCards;
+
+  const finishDowntimeCleanupObserver = new MutationObserver(() => cleanupFinishDowntimeSnapshotRuleCards());
+  setTimeout(() => {
+    const mount = document.getElementById("finishInactivityTabMount");
+    if (mount) {
+      finishDowntimeCleanupObserver.observe(mount, { childList: true, subtree: true });
+      cleanupFinishDowntimeSnapshotRuleCards();
+    }
+  }, 500);
+
+  try { eval("loadFinishMorningInactivityLog = window.loadFinishMorningInactivityLog"); } catch (e) {}
+  try { eval("runFinishMorningInactivitySnapshot = window.runFinishMorningInactivitySnapshot"); } catch (e) {}
+  try { eval("refreshFinishInactivityAutomationStatus = window.refreshFinishInactivityAutomationStatus"); } catch (e) {}
+  try { eval("toggleFinishInactivityAutomationFromPage = window.toggleFinishInactivityAutomationFromPage"); } catch (e) {}
+  try { eval("startFinishInactivityFrontendAutoRefresh = window.startFinishInactivityFrontendAutoRefresh"); } catch (e) {}
+
+  window.addEventListener("error", resetFinishInactivityButtons);
+  window.addEventListener("unhandledrejection", resetFinishInactivityButtons);
+
+  setTimeout(() => {
+    ensurePanel();
+    wirePanel();
+    cleanupFinishDowntimeSnapshotRuleCards();
+    startFinishInactivityFrontendAutoRefresh();
+  }, 250);
+})();
+
+
+/* =========================================================
+   HOTFIX — HIDE ME SNAPSHOT RULE FROM FINISH DOWNTIME VIEW
+========================================================= */
+(function installFinishDowntimeSnapshotRuleHideStyle() {
+  if (document.getElementById("finishDowntimeSnapshotRuleHideStyle")) return;
+  const style = document.createElement("style");
+  style.id = "finishDowntimeSnapshotRuleHideStyle";
+  style.textContent = `
+    #finishInactivityTabMount .scan-advanced-rule-card { display: none !important; }
+    #finishInactivityTabMount #finishMorningInactivityPanel { display: none !important; }
+  `;
+  document.head.appendChild(style);
+})();
+
+
+/* =========================================================
+   HOTFIX — REMOVE TOP ASSOCIATE DOWNTIME SNAPSHOT BANNER
+========================================================= */
+(function installFinishDowntimeTopBannerRemoveHotfix() {
+  function removeTopBanner() {
+    const mount = document.getElementById("finishInactivityTabMount");
+    if (!mount) return;
+
+    mount.querySelectorAll(".scan-advanced-hero").forEach(el => el.remove());
+
+    mount.querySelectorAll("header, section, article, div").forEach(el => {
+      const text = String(el.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
+      if (!text) return;
+      const hasOldSnapshot = text.includes("SNAPSHOT RULE") || text.includes("3 CHECKS");
+      const insideMainLog = !!el.closest("#finishScanDowntimePanel .scan-advanced-panel");
+      if (hasOldSnapshot && !insideMainLog) el.remove();
+    });
+  }
+
+  if (!document.getElementById("finishDowntimeTopBannerRemoveStyle")) {
+    const style = document.createElement("style");
+    style.id = "finishDowntimeTopBannerRemoveStyle";
+    style.textContent = `
+      #finishInactivityTabMount .scan-advanced-hero { display: none !important; }
+      #finishInactivityTabMount .scan-advanced-rule-card { display: none !important; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.addEventListener("DOMContentLoaded", removeTopBanner);
+  window.addEventListener("load", removeTopBanner);
+  setTimeout(removeTopBanner, 100);
+  setTimeout(removeTopBanner, 500);
+  setTimeout(removeTopBanner, 1500);
+
+  const observer = new MutationObserver(removeTopBanner);
+  document.addEventListener("DOMContentLoaded", () => {
+    const mount = document.getElementById("finishInactivityTabMount");
+    if (mount) observer.observe(mount, { childList: true, subtree: true });
+  });
+
+  window.removeFinishDowntimeTopBanner = removeTopBanner;
+})();

@@ -255,6 +255,7 @@
   <button class="tab-btn" data-tab="personal">Morning Set Up</button>  
   <button class="tab-btn" data-tab="config">Configuration</button>
   <button class="tab-btn" data-tab="operators">Hourly Operator Performance</button>
+  <button class="tab-btn" data-tab="inactivity">Associate Downtime Log</button>
   <button class="tab-btn" data-tab="hourly">Hourly Production Performance</button>
   <button class="tab-btn" data-tab="summary">Summary</button>
   <button class="tab-btn lms-control-tab" data-tab="lms-control">LMS Control Center</button>
@@ -615,7 +616,7 @@
               <span>View Shift</span>
               <select id="morningSetupShiftSelect">
                 <option value="Weekday">Weekday · 9.5 hrs</option>
-                <option value="Weekend">Weekend · 11 hrs</option>
+                <option value="Weekend">Weekend · 10.5 hrs</option>
               </select>
             </label>
             <div class="three-line-legend">
@@ -641,6 +642,11 @@
       </section>
     </section>
 
+
+
+        <div id="finishInactivityTabMount" class="associate-inactivity-mount"></div>
+      </section>
+    </section>
 
     <!-- LMS CONTROL CENTER TAB - LMS ONLY -->    <section class="tab-content lms-control-content" data-content="lms-control">
       <section id="finishRosterApiPanel" class="finish-roster-api-panel finish-roster-admin-shell">
