@@ -8863,10 +8863,9 @@ setTimeout(() => {
             </div>
 
             <div class="scan-advanced-kpis">
-              <article><span>Tracked</span><strong id="finishInactivityTrackedCount">0</strong><small>Operators with scans</small></article>
+              <article><span>Tracked</span><strong id="finishInactivityTrackedCount">0</strong><small>Operators log on/small></article>
               <article class="watch"><span>Watch</span><strong id="finishInactivityWatchCount">0</strong><small>5+ minutes no scan</small></article>
-              <article class="danger"><span>Inactive</span><strong id="finishInactivityInactiveCount">0</strong><small>10+ minutes no scan</small></article>
-              <article><span>Last Sync</span><strong id="finishInactivityLastSync">--</strong><small>Scan tracker API</small></article>
+              <article class="danger"><span>Inactive</span><strong id="finishInactivityInactiveCount">0</strong><small>10+ minutes no scan</small></article>              
             </div>
 
             <div class="scan-filter-bar">
@@ -8906,8 +8905,7 @@ setTimeout(() => {
             <div class="scan-advanced-list-card">
               <div class="scan-advanced-list-head">
                 <div>
-                  <span>Live Associate List</span>
-                  <strong id="finishScanSourceLabel">Source: Finish Scan Activity Tracker</strong>
+                  <span>Live Associate List</span>                  
                 </div>
                 <small id="finishScanListCount">0 visible</small>
               </div>
@@ -9233,51 +9231,112 @@ setTimeout(() => {
       </article>`;
   }
 
+  function getScanTimelineShiftHours(row, rawRows = []) {
+    const dateSource =
+      row?.LastScanAt ||
+      row?.lastScanAt ||
+      rawRows.find(g => g.GapStartAt || g.PreviousScanTime || g.NextScanTime)?.GapStartAt ||
+      rawRows.find(g => g.GapStartAt || g.PreviousScanTime || g.NextScanTime)?.PreviousScanTime ||
+      rawRows.find(g => g.GapStartAt || g.PreviousScanTime || g.NextScanTime)?.NextScanTime ||
+      new Date();
+
+    const date = toDate(dateSource) || new Date();
+    const day = date.getDay();
+    const isWeekend = day === 0 || day === 6;
+
+    // Weekday Finish = 7 AM start.
+    // Weekend Finish = 6 AM start.
+    return isWeekend
+      ? [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+      : [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+  }
+
+  function getOperatorRawGapRows(row) {
+    const keys = new Set(rowSourceKeys(row));
+
+    // Use raw gapLog here, NOT operatorGapRows().
+    // operatorGapRows() filters out normal ACTIVE gaps under 5 minutes.
+    // The hourly timeline must still show those hours, especially 7 AM.
+    return (state.gapLog || [])
+      .filter(g => keys.has(baseRowKey(g)))
+      .sort((a, b) => dateMs(a.GapStartAt || a.PreviousScanTime) - dateMs(b.GapStartAt || b.PreviousScanTime));
+  }
+
   function renderHourlyTimeline(row) {
-    const gaps = operatorGapRows(row);
+    const rawGaps = getOperatorRawGapRows(row);
     const multi = operatorMultiRows(row);
+    const shiftHours = getScanTimelineShiftHours(row, rawGaps);
     const buckets = new Map();
 
     function bucketForHour(hour) {
-      if (!buckets.has(hour)) buckets.set(hour, { hour, gaps: [], multi: 0, scansEstimate: 0 });
+      if (!buckets.has(hour)) {
+        buckets.set(hour, {
+          hour,
+          gaps: [],
+          watchGaps: [],
+          multi: 0,
+          scansEstimate: 0
+        });
+      }
       return buckets.get(hour);
     }
 
-    gaps.forEach(g => {
-      const d = toDate(g.GapStartAt || g.PreviousScanTime);
+    // Build every shift hour first so 7 AM does not disappear when it only has normal gaps.
+    shiftHours.forEach(hour => bucketForHour(hour));
+
+    rawGaps.forEach(g => {
+      const d = toDate(g.GapStartAt || g.PreviousScanTime || g.NextScanTime);
       if (!d) return;
+
       const hour = d.getHours();
+      if (!shiftHours.includes(hour)) return;
+
+      const gapMinutes = metric(g, "GapMinutes", "gapMinutes");
       const b = bucketForHour(hour);
-      b.gaps.push(metric(g, "GapMinutes", "gapMinutes"));
+
+      b.gaps.push(gapMinutes);
+      b.scansEstimate += 1;
+
+      if (isRealDisplayGap(g)) {
+        b.watchGaps.push(gapMinutes);
+      }
     });
 
     multi.forEach(m => {
       const d = toDate(m.ScanTime || m.scanTime);
       if (!d) return;
-      const b = bucketForHour(d.getHours());
+
+      const hour = d.getHours();
+      if (!shiftHours.includes(hour)) return;
+
+      const b = bucketForHour(hour);
       b.multi += 1;
     });
 
-    const rows = Array.from(buckets.values()).sort((a, b) => a.hour - b.hour).slice(-8);
-    if (!rows.length) {
-      return `<section class="scan-history-panel"><div class="scan-section-head"><span>Hourly Timeline</span><strong>No hourly gap activity</strong></div><article class="associate-session-empty">Hourly graph will populate as scan gaps and same-second events are detected.</article></section>`;
-    }
+    const rows = shiftHours.map(hour => buckets.get(hour));
 
     return `
       <section class="scan-history-panel">
-        <div class="scan-section-head"><span>Hourly Timeline</span><strong>Gap / multi-scan pattern</strong></div>
+        <div class="scan-section-head">
+          <span>Hourly Timeline</span>
+          <strong>Full shift · gap / multi-scan pattern</strong>
+        </div>
         <div class="scan-hourly-graph">
           ${rows.map(b => {
             const largest = b.gaps.length ? Math.max(...b.gaps) : 0;
-            const avg = b.gaps.length ? Math.round(b.gaps.reduce((a, c) => a + c, 0) / b.gaps.length) : 0;
-            const width = Math.min(100, Math.max(8, (largest / 20) * 100));
+            const avg = b.gaps.length ? Math.round((b.gaps.reduce((a, c) => a + c, 0) / b.gaps.length) * 10) / 10 : 0;
+            const watchCount = b.watchGaps.length;
+            const width = b.gaps.length
+              ? Math.min(100, Math.max(8, (largest / 20) * 100))
+              : 4;
+
             return `
               <div class="scan-hour-row ${gapClass(largest)}">
                 <span>${esc(formatHourLabel(b.hour))}</span>
                 <div class="scan-hour-bar"><i style="width:${width}%"></i></div>
                 <b>${esc(formatMinutes(largest))}</b>
-                <em>${esc(formatMinutes(avg))} avg</em>
-                <strong>${esc(b.multi)} multi</strong>
+                <em>${esc(formatMinutes(avg))} avg · ${esc(numberFmt(b.scansEstimate))} scans</em>
+                <strong>${esc(b.multi)} multi${watchCount ? ` · ${esc(watchCount)} watch` : ""}</strong>
               </div>`;
           }).join("")}
         </div>
@@ -9451,3 +9510,513 @@ setTimeout(() => {
 
   window.removeFinishDowntimeTopBanner = removeTopBanner;
 })();
+
+
+/*******************************************************
+ * FINISH DOWNTIME STATUS EVENTS — STOP COUNTING / NOTES
+ *
+ * Adds supervisor/LMS note events to Associate Downtime Log:
+ * - Moved
+ * - Left for day
+ * - No WIP
+ * - Machine issue
+ * - Training / coaching
+ * - Break / lunch
+ * - Support another area
+ * - Other
+ *
+ * This does NOT edit raw scan data.
+ * It adds an exception/status window and shows:
+ * - Raw downtime
+ * - Excluded time
+ * - Adjusted downtime
+ *******************************************************/
+(function installFinishDowntimeStatusEvents() {
+  const EVENT_ACTION_GET = "getfinishassociatestatusevents";
+  const EVENT_ACTION_SAVE = "savefinishassociatestatusevent";
+  const EVENT_ACTION_CLOSE = "closefinishassociatestatusevent";
+
+  const state = window.finishScanDowntimeState = window.finishScanDowntimeState || {};
+  state.statusEvents = Array.isArray(state.statusEvents) ? state.statusEvents : [];
+  state.statusEventsLoadedAt = state.statusEventsLoadedAt || "";
+
+  function esc(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function clean(value) {
+    return String(value || "").trim();
+  }
+
+  function cleanKey(value) {
+    return clean(value).toUpperCase().replace(/\s+/g, " ");
+  }
+
+  function cleanAccess(value) {
+    const text = clean(value).toLowerCase();
+    if (text.includes("mount") && text.includes("drill")) return "Mounting / Drill";
+    if (text.includes("final")) return "Final Inspection";
+    if (text.includes("drill")) return "Drill";
+    if (text.includes("mount")) return "Mounting";
+    return clean(value) || "Unknown";
+  }
+
+  function operatorName(row) {
+    return clean(row?.OperatorName || row?.operatorName || row?.Operator || row?.operator || "Unknown Operator");
+  }
+
+  function rowAccess(row) {
+    return cleanAccess(row?.AccessPoint || row?.accessPoint || row?.ScanStage || row?.scanStage || "");
+  }
+
+  function profileFromDom() {
+    const panel = document.getElementById("finishInactivityProfilePanel");
+    if (!panel) return null;
+
+    const name = clean(panel.querySelector(".scan-profile-id h3")?.textContent || "");
+    const profileText = clean(panel.querySelector(".scan-profile-id p")?.textContent || "");
+    let access = profileText.split("·").pop() || "";
+    access = cleanAccess(access);
+
+    if (!name) return null;
+    return { operatorName: name, accessPoint: access };
+  }
+
+  function todayIso() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function timeValueNow() {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function toMinutes(timeText) {
+    const text = clean(timeText);
+    if (!text || text.toUpperCase() === "EOS") return null;
+
+    // Accept HH:MM, H:MM AM, or Google date strings.
+    const dateTry = new Date(text);
+    if (!Number.isNaN(dateTry.getTime()) && /AM|PM|\/|-/.test(text)) {
+      return dateTry.getHours() * 60 + dateTry.getMinutes();
+    }
+
+    const match = text.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+    if (!match) return null;
+
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const ampm = String(match[3] || "").toUpperCase();
+
+    if (ampm === "PM" && hour < 12) hour += 12;
+    if (ampm === "AM" && hour === 12) hour = 0;
+
+    return hour * 60 + minute;
+  }
+
+  function minutesToLabel(total) {
+    if (total == null || !Number.isFinite(total)) return "";
+    const hour24 = Math.floor(total / 60);
+    const minute = total % 60;
+    const suffix = hour24 >= 12 ? "PM" : "AM";
+    let h = hour24 % 12;
+    if (!h) h = 12;
+    return `${h}:${String(minute).padStart(2, "0")} ${suffix}`;
+  }
+
+  function formatMinutes(value) {
+    const n = Math.max(0, Math.round(Number(value) || 0));
+    if (n >= 60) {
+      const h = Math.floor(n / 60);
+      const m = n % 60;
+      return `${h}h ${m}m`;
+    }
+    return `${n}m`;
+  }
+
+  function eventMatchesProfile(event, profile) {
+    if (!event || !profile) return false;
+    const evName = cleanKey(event.OperatorName || event.operatorName);
+    const evAccess = cleanAccess(event.AccessPoint || event.accessPoint || event.Area || event.area);
+    const profileName = cleanKey(profile.operatorName);
+    const profileAccess = cleanAccess(profile.accessPoint);
+
+    if (evName !== profileName) return false;
+
+    // Mounting view intentionally includes Drill/Mounting.
+    if (profileAccess === "Mounting" || profileAccess === "Mounting / Drill") {
+      return evAccess === "Mounting" || evAccess === "Drill" || evAccess === "Mounting / Drill";
+    }
+
+    return evAccess === profileAccess;
+  }
+
+  function getProfileEvents(profile) {
+    return (state.statusEvents || [])
+      .filter(event => eventMatchesProfile(event, profile))
+      .sort((a, b) => String(b.EnteredAt || b.enteredAt || "").localeCompare(String(a.EnteredAt || a.enteredAt || "")));
+  }
+
+  function isOpenEvent(event) {
+    const status = clean(event.Status || event.status || "Open").toUpperCase();
+    const end = clean(event.EndTime || event.endTime);
+    return status !== "CLOSED" && (!end || end.toUpperCase() === "EOS");
+  }
+
+  function calculateExcludedMinutes(events) {
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+
+    return (events || []).reduce((sum, event) => {
+      const start = toMinutes(event.StartTime || event.startTime);
+      let end = toMinutes(event.EndTime || event.endTime);
+
+      if (start == null) return sum;
+      if (end == null) end = nowMins;
+      if (end < start) return sum;
+
+      return sum + Math.max(0, end - start);
+    }, 0);
+  }
+
+  function readRawDowntimeFromProfile() {
+    const cards = Array.from(document.querySelectorAll("#finishInactivityProfilePanel .scan-profile-metrics-strip article"));
+    for (const card of cards) {
+      const label = clean(card.querySelector("span")?.textContent || "").toLowerCase();
+      if (!label.includes("downtime")) continue;
+
+      const text = clean(card.querySelector("strong")?.textContent || "");
+      let total = 0;
+
+      const h = text.match(/(\d+)\s*h/i);
+      const m = text.match(/(\d+)\s*m/i);
+
+      if (h) total += Number(h[1]) * 60;
+      if (m) total += Number(m[1]);
+      if (!h && !m && /^\d+/.test(text)) total = Number(text.match(/^\d+/)[0]);
+
+      return total;
+    }
+
+    return 0;
+  }
+
+  async function fetchStatusEvents() {
+    if (typeof window.fetchFinishScanActivityApi !== "function") return [];
+
+    try {
+      const payload = await window.fetchFinishScanActivityApi(EVENT_ACTION_GET, {
+        date: todayIso(),
+        cacheBust: Date.now()
+      });
+
+      const rows =
+        payload.statusEvents ||
+        payload.events ||
+        payload.data ||
+        payload.payload?.statusEvents ||
+        [];
+
+      state.statusEvents = Array.isArray(rows) ? rows : [];
+      state.statusEventsLoadedAt = new Date().toISOString();
+
+      renderStatusEventEnhancement();
+      return state.statusEvents;
+    } catch (error) {
+      console.warn("Could not load Finish status events:", error);
+      return state.statusEvents || [];
+    }
+  }
+
+  async function saveStatusEvent(profile, data) {
+    if (typeof window.fetchFinishScanActivityApi !== "function") {
+      throw new Error("Finish Scan Activity API helper is not available.");
+    }
+
+    const enteredBy = typeof getCurrentUsername === "function" ? getCurrentUsername() : "SYSTEM";
+
+    await window.fetchFinishScanActivityApi(EVENT_ACTION_SAVE, {
+      date: todayIso(),
+      operatorName: profile.operatorName,
+      accessPoint: profile.accessPoint,
+      eventType: data.eventType,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      reason: data.reason || data.eventType,
+      notes: data.notes,
+      enteredBy,
+      cacheBust: Date.now()
+    });
+
+    await fetchStatusEvents();
+  }
+
+  async function closeStatusEvent(eventId) {
+    if (typeof window.fetchFinishScanActivityApi !== "function") {
+      throw new Error("Finish Scan Activity API helper is not available.");
+    }
+
+    const enteredBy = typeof getCurrentUsername === "function" ? getCurrentUsername() : "SYSTEM";
+
+    await window.fetchFinishScanActivityApi(EVENT_ACTION_CLOSE, {
+      eventId,
+      endTime: timeValueNow(),
+      updatedBy: enteredBy,
+      cacheBust: Date.now()
+    });
+
+    await fetchStatusEvents();
+  }
+
+  function ensureStatusModal() {
+    let modal = document.getElementById("finishStatusEventModal");
+    if (modal) return modal;
+
+    modal = document.createElement("div");
+    modal.id = "finishStatusEventModal";
+    modal.className = "finish-status-modal";
+    modal.innerHTML = `
+      <div class="finish-status-modal-card">
+        <header>
+          <div>
+            <span>Downtime Exception</span>
+            <h3 id="finishStatusModalTitle">Stop Counting</h3>
+            <p id="finishStatusModalSub">Add a status event. Raw scan data will not be changed.</p>
+          </div>
+          <button type="button" data-status-modal-close>×</button>
+        </header>
+
+        <div class="finish-status-grid">
+          <label>
+            Event Type
+            <select id="finishStatusEventType">
+              <option value="Moved">Moved</option>
+              <option value="Left for day">Left for day</option>
+              <option value="No WIP">No WIP</option>
+              <option value="Machine issue">Machine issue</option>
+              <option value="Training / coaching">Training / coaching</option>
+              <option value="Break / lunch">Break / lunch</option>
+              <option value="Support another area">Support another area</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+
+          <label>
+            Start Time
+            <input id="finishStatusStartTime" type="time" />
+          </label>
+
+          <label>
+            End Time
+            <input id="finishStatusEndTime" type="time" />
+          </label>
+
+          <label class="wide">
+            Reason / Notes
+            <textarea id="finishStatusNotes" rows="4" placeholder="Example: moved to Final Inspection, left early, no WIP, machine issue..."></textarea>
+          </label>
+        </div>
+
+        <footer>
+          <button type="button" class="ghost" data-status-modal-close>Cancel</button>
+          <button type="button" id="finishSaveStatusEventBtn">Save Event</button>
+        </footer>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll("[data-status-modal-close]").forEach(btn => {
+      btn.addEventListener("click", () => modal.classList.remove("open"));
+    });
+
+    modal.addEventListener("click", event => {
+      if (event.target === modal) modal.classList.remove("open");
+    });
+
+    return modal;
+  }
+
+  function openStatusModal(profile) {
+    const modal = ensureStatusModal();
+
+    modal.dataset.operatorName = profile.operatorName;
+    modal.dataset.accessPoint = profile.accessPoint;
+
+    const title = modal.querySelector("#finishStatusModalTitle");
+    const sub = modal.querySelector("#finishStatusModalSub");
+    const start = modal.querySelector("#finishStatusStartTime");
+    const end = modal.querySelector("#finishStatusEndTime");
+    const notes = modal.querySelector("#finishStatusNotes");
+    const eventType = modal.querySelector("#finishStatusEventType");
+    const saveBtn = modal.querySelector("#finishSaveStatusEventBtn");
+
+    if (title) title.textContent = `Stop Counting · ${profile.operatorName}`;
+    if (sub) sub.textContent = `${profile.accessPoint} · Add reason and time window.`;
+    if (start) start.value = timeValueNow();
+    if (end) end.value = "";
+    if (notes) notes.value = "";
+    if (eventType) eventType.value = "Moved";
+
+    if (saveBtn) {
+      saveBtn.onclick = async () => {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving...";
+
+        try {
+          await saveStatusEvent(profile, {
+            eventType: eventType?.value || "Moved",
+            startTime: start?.value || timeValueNow(),
+            endTime: end?.value || "",
+            reason: eventType?.value || "Moved",
+            notes: notes?.value || ""
+          });
+
+          modal.classList.remove("open");
+          if (typeof showFinishAssignmentToast === "function") {
+            showFinishAssignmentToast("Status event saved. Downtime adjusted.");
+          }
+        } catch (error) {
+          console.error(error);
+          if (typeof showFinishAssignmentToast === "function") {
+            showFinishAssignmentToast(error.message || String(error));
+          }
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Save Event";
+        }
+      };
+    }
+
+    modal.classList.add("open");
+  }
+
+  function renderStatusEventEnhancement() {
+    const panel = document.getElementById("finishInactivityProfilePanel");
+    const card = panel?.querySelector(".scan-profile-card");
+    if (!panel || !card) return;
+
+    const profile = profileFromDom();
+    if (!profile) return;
+
+    card.querySelectorAll(".finish-status-event-enhancement, .finish-status-event-actions, .finish-status-event-list").forEach(el => el.remove());
+
+    const events = getProfileEvents(profile);
+    const openEvents = events.filter(isOpenEvent);
+    const excluded = calculateExcludedMinutes(events);
+    const rawDowntime = readRawDowntimeFromProfile();
+    const adjusted = Math.max(0, rawDowntime - excluded);
+
+    const metrics = card.querySelector(".scan-profile-metrics-strip");
+    if (metrics) {
+      metrics.insertAdjacentHTML("beforeend", `
+        <article class="finish-status-event-enhancement"><span>Excluded Time</span><strong>${esc(formatMinutes(excluded))}</strong></article>
+        <article class="finish-status-event-enhancement"><span>Adjusted Downtime</span><strong>${esc(formatMinutes(adjusted))}</strong></article>
+      `);
+    }
+
+    const top = card.querySelector(".scan-profile-top");
+    if (top) {
+      const activeBadge = openEvents.length
+        ? `<em class="finish-status-active-badge">Excluded · ${esc(openEvents[0].EventType || openEvents[0].eventType || "Open")}</em>`
+        : "";
+
+      top.insertAdjacentHTML("beforeend", `
+        <div class="finish-status-event-actions">
+          ${activeBadge}
+          <button type="button" id="finishAddStatusEventBtn">Stop Counting / Add Note</button>
+          ${openEvents.length ? `<button type="button" id="finishCloseStatusEventBtn" data-event-id="${esc(openEvents[0].EventId || openEvents[0].eventId || "")}">Resume Counting</button>` : ""}
+        </div>
+      `);
+
+      card.querySelector("#finishAddStatusEventBtn")?.addEventListener("click", () => openStatusModal(profile));
+      card.querySelector("#finishCloseStatusEventBtn")?.addEventListener("click", async event => {
+        const eventId = event.currentTarget.dataset.eventId || "";
+        if (!eventId) return openStatusModal(profile);
+
+        event.currentTarget.disabled = true;
+        event.currentTarget.textContent = "Closing...";
+
+        try {
+          await closeStatusEvent(eventId);
+          if (typeof showFinishAssignmentToast === "function") {
+            showFinishAssignmentToast("Counting resumed.");
+          }
+        } catch (error) {
+          console.error(error);
+          if (typeof showFinishAssignmentToast === "function") {
+            showFinishAssignmentToast(error.message || String(error));
+          }
+        }
+      });
+    }
+
+    if (events.length) {
+      const body = card.querySelector(".scan-profile-tab-body") || card;
+      body.insertAdjacentHTML("beforebegin", `
+        <section class="finish-status-event-list">
+          <div class="scan-section-head">
+            <span>Status Events</span>
+            <strong>${esc(events.length)} note${events.length === 1 ? "" : "s"}</strong>
+          </div>
+          ${events.slice(0, 4).map(event => {
+            const start = event.StartTime || event.startTime || "";
+            const end = event.EndTime || event.endTime || (isOpenEvent(event) ? "Open" : "");
+            const type = event.EventType || event.eventType || "Event";
+            const notes = event.Notes || event.notes || "";
+            const enteredBy = event.EnteredBy || event.enteredBy || "";
+            return `
+              <article class="finish-status-event-row ${isOpenEvent(event) ? "open" : "closed"}">
+                <b>${esc(type)}</b>
+                <span>${esc(start)}${end ? ` → ${esc(end)}` : ""}</span>
+                <em>${esc(notes || "No notes")}</em>
+                <small>${esc(enteredBy)}</small>
+              </article>`;
+          }).join("")}
+        </section>
+      `);
+    }
+  }
+
+  function installObserver() {
+    const target = document.getElementById("finishInactivityProfilePanel");
+    if (!target || target.dataset.statusObserverReady) return;
+
+    target.dataset.statusObserverReady = "true";
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(installObserver._timer);
+      installObserver._timer = window.setTimeout(renderStatusEventEnhancement, 80);
+    });
+
+    observer.observe(target, { childList: true, subtree: true });
+  }
+
+  function bootStatusEvents() {
+    installObserver();
+    fetchStatusEvents();
+    renderStatusEventEnhancement();
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    window.setTimeout(bootStatusEvents, 1200);
+    window.setInterval(fetchStatusEvents, 120000);
+  });
+
+  document.addEventListener("click", event => {
+    const tab = event.target.closest?.('.tab-btn[data-tab="inactivity"]');
+    if (!tab) return;
+    window.setTimeout(bootStatusEvents, 500);
+  });
+
+  window.refreshFinishDowntimeStatusEvents = fetchStatusEvents;
+})();
+

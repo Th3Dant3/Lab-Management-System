@@ -9615,3 +9615,249 @@ body.operator-drawer-open {
   text-align: center !important;
   justify-self: center !important;
 }
+
+
+/*******************************************************
+ * FINISH DOWNTIME STATUS EVENTS — STOP COUNTING UI
+ *******************************************************/
+.finish-status-event-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.finish-status-event-actions button {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.48);
+  background: rgba(8, 35, 58, 0.76);
+  color: var(--cyan);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.finish-status-event-actions button:hover {
+  background: rgba(0, 217, 255, 0.14);
+  box-shadow: 0 0 18px rgba(0, 217, 255, 0.16);
+}
+
+.finish-status-active-badge {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 245, 160, 0.44);
+  background: rgba(0, 245, 160, 0.09);
+  color: var(--green);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.finish-status-event-enhancement strong {
+  color: var(--green) !important;
+}
+
+.finish-status-event-list {
+  margin: 16px 0 18px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 245, 160, 0.22);
+  background: linear-gradient(180deg, rgba(4, 28, 32, 0.72), rgba(3, 12, 24, 0.88));
+}
+
+.finish-status-event-row {
+  display: grid;
+  grid-template-columns: 160px 170px 1fr 120px;
+  gap: 12px;
+  align-items: center;
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(100, 221, 255, 0.12);
+  background: rgba(2, 12, 24, 0.7);
+}
+
+.finish-status-event-row.open {
+  border-color: rgba(0, 245, 160, 0.34);
+  box-shadow: inset 3px 0 0 rgba(0, 245, 160, 0.55);
+}
+
+.finish-status-event-row.closed {
+  opacity: 0.72;
+}
+
+.finish-status-event-row b {
+  color: var(--green);
+  font-size: 12px;
+}
+
+.finish-status-event-row span,
+.finish-status-event-row em,
+.finish-status-event-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.finish-status-event-row em {
+  font-style: normal;
+}
+
+.finish-status-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  place-items: center;
+  padding: 22px;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(10px);
+}
+
+.finish-status-modal.open {
+  display: grid;
+}
+
+.finish-status-modal-card {
+  width: min(740px, 94vw);
+  border-radius: 24px;
+  border: 1px solid rgba(100, 221, 255, 0.24);
+  background: linear-gradient(180deg, rgba(10, 28, 52, 0.98), rgba(3, 12, 24, 0.98));
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.58), 0 0 42px rgba(0, 217, 255, 0.14);
+  overflow: hidden;
+}
+
+.finish-status-modal-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px;
+  border-bottom: 1px solid rgba(100, 221, 255, 0.14);
+}
+
+.finish-status-modal-card header span {
+  display: block;
+  color: var(--green);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.finish-status-modal-card header h3 {
+  margin: 8px 0 6px;
+  font-size: 24px;
+}
+
+.finish-status-modal-card header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.finish-status-modal-card header button {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 113, 133, 0.42);
+  background: rgba(251, 113, 133, 0.08);
+  color: var(--red);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.finish-status-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.7fr 0.7fr;
+  gap: 14px;
+  padding: 22px 24px;
+}
+
+.finish-status-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.finish-status-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.finish-status-grid select,
+.finish-status-grid input,
+.finish-status-grid textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(100, 221, 255, 0.24);
+  background: rgba(2, 12, 24, 0.78);
+  color: var(--text);
+  padding: 12px 13px;
+  font-family: "Sora", sans-serif;
+  font-size: 14px;
+  outline: none;
+}
+
+.finish-status-grid textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+.finish-status-modal-card footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 18px 24px 22px;
+  border-top: 1px solid rgba(100, 221, 255, 0.12);
+}
+
+.finish-status-modal-card footer button {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 217, 255, 0.38);
+  background: rgba(0, 217, 255, 0.12);
+  color: var(--cyan);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.finish-status-modal-card footer button.ghost {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--soft);
+}
+
+@media (max-width: 900px) {
+  .finish-status-grid,
+  .finish-status-event-row {
+    grid-template-columns: 1fr;
+  }
+
+  .finish-status-event-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
