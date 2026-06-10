@@ -4641,3 +4641,463 @@ releaseProductivityDay = function(dateKey, associateName, finalDepartment) {
     })
     .catch(err => alert(err.message || err));
 };
+
+/************************************************************
+ * FINAL PATCH — USE DASHBOARD LOGIN SESSION, NO USER PICKER
+ *
+ * The Productivity page now follows the main dashboard login:
+ * - sessionStorage.lms_user
+ * - sessionStorage.lms_role
+ * - sessionStorage.lms_subrole
+ * - sessionStorage.lms_features
+ *
+ * This removes the manual user selector so supervisors cannot choose
+ * somebody else's login inside Productivity Hub.
+ ************************************************************/
+
+function getDashboardSessionUser() {
+  const username = normalizeProductivityUsername(sessionStorage.getItem('lms_user') || '');
+  if (!username) return null;
+
+  let features = {};
+  try {
+    features = JSON.parse(sessionStorage.getItem('lms_features') || '{}') || {};
+  } catch (err) {
+    features = {};
+  }
+
+  const base = PRODUCTIVITY_ACCESS_USERS[username] || {
+    username,
+    role: sessionStorage.getItem('lms_role') || 'View Only',
+    canEdit: false,
+    canConfirm: false,
+    canRelease: false
+  };
+
+  const role = sessionStorage.getItem('lms_role') || base.role || '';
+  const subRole = sessionStorage.getItem('lms_subrole') || '';
+  const fullName = sessionStorage.getItem('lms_fullname') || username;
+
+  return {
+    ...base,
+    username,
+    role,
+    subRole,
+    fullName,
+    features,
+    canView: features.Productivity === true || features.Productivity_ViewHub === true || !!PRODUCTIVITY_ACCESS_USERS[username],
+    canEdit: base.canEdit === true && features.Productivity_EditTime === true,
+    canConfirm: base.canConfirm === true && features.Productivity_ConfirmDay === true,
+    canRelease: base.canRelease === true && features.Productivity_ReleaseLock === true,
+    canAdmin: features.Productivity_AdminSettings === true
+  };
+}
+
+getCurrentProductivityUser = function() {
+  const sessionUser = getDashboardSessionUser();
+  STATE.currentUser = sessionUser;
+  return STATE.currentUser;
+};
+
+getCurrentProductivityUsername = function() {
+  const user = getCurrentProductivityUser();
+  return user ? user.username : '';
+};
+
+canEditProductivity = function() {
+  const user = getCurrentProductivityUser();
+  return !!(user && user.canEdit);
+};
+
+canConfirmProductivity = function() {
+  const user = getCurrentProductivityUser();
+  return !!(user && user.canConfirm);
+};
+
+canReleaseProductivityLock = function() {
+  const user = getCurrentProductivityUser();
+  return !!(user && user.canRelease);
+};
+
+showProductivityLoginModal = function(force = false) {
+  const user = getCurrentProductivityUser();
+
+  if (!user) {
+    alert('Your dashboard session is missing. Please log in again.');
+    window.location.href = 'login.html';
+    return;
+  }
+
+  renderProductivityUserBadge();
+};
+
+closeProductivityLoginModal = function() {
+  const modal = document.getElementById('productivityLoginModal');
+  if (modal) modal.remove();
+  renderProductivityUserBadge();
+};
+
+saveProductivityLogin = function() {
+  renderProductivityUserBadge();
+};
+
+switchProductivityLogin = function() {
+  const ok = confirm('This will log you out and return to the Dashboard Login page. Continue?');
+  if (!ok) return;
+
+  sessionStorage.clear();
+  localStorage.removeItem(PRODUCTIVITY_USER_CACHE_KEY);
+  window.location.href = 'login.html';
+};
+
+renderProductivityUserBadge = function() {
+  let badge = document.getElementById('productivityUserBadge');
+
+  if (!badge) {
+    const footer = document.querySelector('.sidebar-footer');
+    badge = document.createElement('div');
+    badge.id = 'productivityUserBadge';
+    badge.className = 'productivity-user-badge';
+
+    if (footer && footer.parentNode) {
+      footer.parentNode.insertBefore(badge, footer);
+    } else {
+      document.body.appendChild(badge);
+    }
+  }
+
+  const user = getCurrentProductivityUser();
+
+  if (!user) {
+    badge.innerHTML = `
+      <span>Access</span>
+      <strong>No Session</strong>
+      <button type="button" onclick="window.location.href='login.html'">Login</button>
+    `;
+    return;
+  }
+
+  const mode = user.canEdit || user.canConfirm || user.canRelease ? 'Authorized' : 'View Only';
+
+  badge.innerHTML = `
+    <span>Logged In</span>
+    <strong>${escapeHtml(user.username)}</strong>
+    <small>${escapeHtml(user.role || '')}${user.subRole ? ' • ' + escapeHtml(user.subRole) : ''}</small>
+    <em class="access-mode-pill">${escapeHtml(mode)}</em>
+    <button type="button" onclick="switchProductivityLogin()">Logout</button>
+  `;
+};
+
+openAssociateDayAdjustment = function(dateKey, associateName) {
+  const associate = String(associateName || STATE.selectedAssociate || '').trim();
+
+  if (!canEditProductivity()) {
+    alert('Your login is view-only for productivity time edits.');
+    return;
+  }
+
+  const dayRows = getWeekRowsForActiveDept().filter(row =>
+    normalizeQualityText(row.OperatorName) === normalizeQualityText(associate) &&
+    formatDateKey(row.WorkDate) === String(dateKey || '').trim()
+  );
+
+  if (!dayRows.length) {
+    alert('No editable record found for this date.');
+    return;
+  }
+
+  const firstRow = dayRows[0];
+  const lock = getProductivityLockForDay(dateKey, firstRow.FinalDepartment, associate);
+  if (lock) {
+    alert(`This day is confirmed and locked by ${lock.LockedBy}. BLOPEZ or JBOOMERSHINE must release it before editing.`);
+    return;
+  }
+
+  if (dayRows.length === 1) {
+    openHoursNoteEditor(getRecordKey(dayRows[0]));
+    return;
+  }
+
+  const existing = document.getElementById('dayAdjustmentPickerModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'dayAdjustmentPickerModal';
+  modal.className = 'modal-backdrop day-adjustment-modal';
+  modal.innerHTML = `
+    <div class="edit-modal day-adjustment-picker">
+      <div class="modal-head">
+        <div>
+          <h3>Select Record to Adjust</h3>
+          <p>${escapeHtml(associate)} • ${formatDatePretty(dateKey)}</p>
+        </div>
+        <button type="button" class="modal-x" onclick="closeAssociateDayAdjustment()">×</button>
+      </div>
+
+      <div class="day-adjustment-list">
+        ${dayRows.map(row => {
+          const recordKey = getRecordKey(row);
+          const status = getStatusFromPercent(row.ProductivityPercent, row.WorkProduced);
+          return `
+            <button type="button" class="day-adjustment-option ${statusCss(status)}" onclick="closeAssociateDayAdjustment(); openHoursNoteEditor('${escapeJs(recordKey)}')">
+              <div>
+                <strong>${escapeHtml(row.StationGroup || row.AccessPoint || row.FinalDepartment)}</strong>
+                <span>${escapeHtml(row.FinalDepartment)} • ${escapeHtml(row.AccessPoint)}</span>
+              </div>
+              <div class="day-adjustment-option-metrics">
+                <span>${formatDecimal(row.SessionTimeHours)} hrs</span>
+                <span>${formatNumber(row.TotalJobScan)} jobs</span>
+                <span>${formatPercent(row.ProductivityPercent)}</span>
+              </div>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const picker = document.getElementById('productivityLoginModal');
+    if (picker) picker.remove();
+
+    const user = getCurrentProductivityUser();
+    if (!user) {
+      alert('Your dashboard session expired. Please log in again.');
+      window.location.href = 'login.html';
+      return;
+    }
+
+    renderProductivityUserBadge();
+    renderEverything();
+  }, 1200);
+});
+
+/************************************************************
+ * FINAL PATCH — MOVE LOGIN BADGE UNDER DASHBOARD BUTTON
+ ************************************************************/
+renderProductivityUserBadge = function() {
+  const mount = document.getElementById('productivityUserBadgeMount');
+  let badge = document.getElementById('productivityUserBadge');
+
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'productivityUserBadge';
+    badge.className = 'productivity-user-badge productivity-user-badge-nav';
+  }
+
+  if (mount && badge.parentNode !== mount) {
+    mount.appendChild(badge);
+  } else if (!mount && !badge.parentNode) {
+    document.body.appendChild(badge);
+  }
+
+  const user = getCurrentProductivityUser();
+
+  if (!user) {
+    badge.innerHTML = `
+      <span>Access</span>
+      <strong>No Session</strong>
+      <button type="button" onclick="window.location.href='login.html'">Login</button>
+    `;
+    return;
+  }
+
+  const mode = user.canEdit || user.canConfirm || user.canRelease ? 'Authorized' : 'View Only';
+
+  badge.innerHTML = `
+    <span>Logged In</span>
+    <strong>${escapeHtml(user.username)}</strong>
+    <small>${escapeHtml(user.role || '')}${user.subRole ? ' • ' + escapeHtml(user.subRole) : ''}</small>
+    <em class="access-mode-pill">${escapeHtml(mode)}</em>
+    <button type="button" onclick="switchProductivityLogin()">Logout</button>
+  `;
+};
+
+/************************************************************
+ * FINAL PATCH — MOVE LOGIN BADGE TO TOP RIGHT HEADER
+ ************************************************************/
+renderProductivityUserBadge = function() {
+  const mount = document.getElementById('productivityUserBadgeMount');
+  let badge = document.getElementById('productivityUserBadge');
+
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'productivityUserBadge';
+    badge.className = 'productivity-user-badge productivity-user-badge-top';
+  }
+
+  badge.className = 'productivity-user-badge productivity-user-badge-top';
+
+  if (mount && badge.parentNode !== mount) {
+    mount.appendChild(badge);
+  } else if (!mount && !badge.parentNode) {
+    document.body.appendChild(badge);
+  }
+
+  const user = getCurrentProductivityUser();
+
+  if (!user) {
+    badge.innerHTML = `
+      <div class="top-user-info">
+        <span>Access</span>
+        <strong>No Session</strong>
+      </div>
+      <button type="button" onclick="window.location.href='login.html'">Login</button>
+    `;
+    return;
+  }
+
+  const mode = user.canEdit || user.canConfirm || user.canRelease ? 'Authorized' : 'View Only';
+
+  badge.innerHTML = `
+    <div class="top-user-avatar">${escapeHtml((user.username || '?').slice(0, 1))}</div>
+    <div class="top-user-info">
+      <span>Logged In</span>
+      <strong>${escapeHtml(user.username)}</strong>
+      <small>${escapeHtml(user.role || '')}${user.subRole ? ' • ' + escapeHtml(user.subRole) : ''}</small>
+    </div>
+    <em class="access-mode-pill">${escapeHtml(mode)}</em>
+    <button type="button" onclick="switchProductivityLogin()">Logout</button>
+  `;
+};
+
+/************************************************************
+ * FINAL PATCH — FAST ADJUSTMENT SAVE, NO FULL RELOAD
+ *
+ * Saves with JSONP to avoid CORS and avoids reloadData() after save.
+ * The card/table update immediately from local state.
+ ************************************************************/
+
+function applyProductivityAdjustmentLocally(recordKey, adjustedHours, reason, note, response) {
+  const rowsToPatch = [
+    ...(STATE.master || []),
+    ...(STATE.dailySnapshot || []),
+    ...(STATE.editSnapshot || [])
+  ];
+
+  rowsToPatch.forEach(row => {
+    if (getRecordKey(row) !== recordKey) return;
+
+    const originalHours = Number(row.OriginalSessionHours || row.SessionTimeHours || 0);
+    const jobs = Number(row.TotalJobScan || 0);
+    const target = Number(row.TargetAvgPerHour || 0);
+    const workProduced = target > 0 ? jobs / target : Number(row.WorkProduced || 0);
+    const avgPerHour = adjustedHours > 0 ? jobs / adjustedHours : 0;
+    const productivity = adjustedHours > 0 ? (workProduced / adjustedHours) * 100 : 0;
+
+    row.OriginalSessionHours = originalHours || Number(row.SessionTimeHours || 0);
+    row.SessionTimeHours = adjustedHours;
+    row.TotalHours = adjustedHours;
+    row.AveragePerHour = avgPerHour;
+    row.WorkProduced = workProduced;
+    row.ProductivityPercent = productivity;
+    row.AdjustmentReason = reason;
+    row.AdjustmentNote = note;
+    row.HasAdjustment = true;
+  });
+
+  const saved = response && response.saved ? response.saved : null;
+  if (saved) {
+    STATE.adjustments = [
+      ...(STATE.adjustments || []).filter(adj => getAdjustmentKeyFromAdjustment(adj) !== getAdjustmentKeyFromAdjustment(saved)),
+      saved
+    ];
+  }
+
+  if (response && response.locks) {
+    STATE.productivityLocks = normalizeProductivityLocks(response.locks || []);
+  }
+
+  if (response && response.activity) {
+    STATE.productivityActivity = response.activity || [];
+    showProductivityActivityToast(response.activity || []);
+  }
+
+  const selectedWeekKey = getSelectedFiscalWeekKey();
+  if (selectedWeekKey && STATE.weekDataCache) {
+    delete STATE.weekDataCache[selectedWeekKey];
+  }
+
+  renderNavBar();
+  renderEverything();
+}
+
+saveHoursNoteAdjustment = function(recordKey) {
+  const row = findRecordByKey(recordKey);
+  if (!row) {
+    alert('Could not find this record. Refresh the page and try again.');
+    return;
+  }
+
+  if (!canEditProductivity()) {
+    alert('Your login is view-only for productivity time edits.');
+    return;
+  }
+
+  const lock = getProductivityLockForDay(formatDateKey(row.WorkDate), row.FinalDepartment, row.OperatorName);
+  if (lock) {
+    alert(`This day is confirmed and locked by ${lock.LockedBy}. BLOPEZ or JBOOMERSHINE must release it before editing.`);
+    return;
+  }
+
+  const hoursEl = document.getElementById('editAdjustedHours');
+  const reasonEl = document.getElementById('editAdjustmentReason');
+  const noteEl = document.getElementById('editAdjustmentNote');
+
+  const adjustedHours = Number(hoursEl ? hoursEl.value : row.SessionTimeHours);
+  let reason = reasonEl ? reasonEl.value : 'Supervisor Adjustment';
+  if (reason === 'Indirect Work') reason = 'Non-Productive Time';
+  const note = noteEl ? noteEl.value : '';
+
+  if (isNaN(adjustedHours) || adjustedHours < 0) {
+    alert('Adjusted hours must be 0 or higher.');
+    return;
+  }
+
+  const saveBtn = document.querySelector('#hoursNoteModal .primary-btn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+
+  showRefreshStatus('Saving productivity adjustment...');
+
+  return productivityJsonpRequest({
+    action: 'saveProductivityAdjustment',
+    workDate: formatDateKey(row.WorkDate),
+    finalDepartment: row.FinalDepartment || '',
+    stationGroup: row.StationGroup || '',
+    department: row.Department || row.FinalDepartment || '',
+    accessPoint: row.AccessPoint || '',
+    operatorName: row.OperatorName || '',
+    originalSessionHours: String(Number(row.OriginalSessionHours || row.SessionTimeHours || 0)),
+    adjustedSessionHours: String(adjustedHours),
+    totalJobScan: String(Number(row.TotalJobScan || 0)),
+    targetAvgPerHour: String(Number(row.TargetAvgPerHour || 0)),
+    reason,
+    note,
+    editedBy: getCurrentProductivityUsername() || 'WEBPAGE'
+  })
+    .then(response => {
+      applyProductivityAdjustmentLocally(recordKey, adjustedHours, reason, note, response);
+      closeHoursNoteEditor();
+      showRefreshStatus('Adjustment saved. View updated.');
+
+      // Refresh locks/activity quietly, but do not block the UI.
+      setTimeout(() => loadProductivityLocksQuietly(false), 800);
+
+      return response;
+    })
+    .catch(err => {
+      const saveBtn = document.querySelector('#hoursNoteModal .primary-btn');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Adjustment';
+      }
+      alert('Could not save adjustment: ' + (err.message || err));
+    });
+};
