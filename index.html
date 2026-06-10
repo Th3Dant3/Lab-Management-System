@@ -283,6 +283,21 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
   </button>
 
+  <button class="nav-item nav-item--anim" data-tab="productivity">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-productivity" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M4 19h16"/>
+          <path d="M7 16V9"/>
+          <path d="M12 16V5"/>
+          <path d="M17 16v-3"/>
+        </svg>
+        <span>Productivity</span>
+      </div>
+    </div>
+  </button>
+
   <button class="nav-item nav-item--anim" data-tab="training">
     <div class="nav-canvas-wrap">
       <canvas class="nav-canvas" id="nav-canvas-training" width="160" height="72"></canvas>
@@ -556,6 +571,51 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 
   </div>
 </section>
+
+
+  <!-- PRODUCTIVITY TAB -->
+  <section id="productivity" class="tab-content">
+    <div class="module-head">
+      <div class="module-label">Productivity Command Center</div>
+    </div>
+
+    <div class="cards-grid">
+
+      <div id="productivity-card" class="card card--productivity card--featured" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#22d3ee"></canvas>
+        <div class="card-accent card-accent--productivity"></div>
+
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Productivity Hub</h3>
+              <span class="badge badge--productivity">Productivity Live</span>
+            </div>
+
+            <p class="card-desc">
+              Associate scorecards, Quality / Breakage Hub, time adjustments, supervisor confirmation, and productivity lock control.
+            </p>
+          </div>
+
+          <div class="card-tags">
+            <span class="tag">Associate Scorecards</span>
+            <span class="tag">Quality / Breakage</span>
+            <span class="tag">Edit Time</span>
+            <span class="tag">Confirm Day</span>
+            <span class="tag">Locks</span>
+          </div>
+
+          <button class="card-btn card-btn--productivity" onclick="openPage('ProductivityDashboard.html')">
+            Open Productivity Hub
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
 
   <!-- SYSTEM TAB -->
   <section id="system" class="tab-content">

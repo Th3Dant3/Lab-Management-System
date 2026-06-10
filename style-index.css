@@ -1235,3 +1235,57 @@ body.lms-loading * { cursor: none !important; }
 .card-btn--ar:hover {
   box-shadow: 0 8px 24px rgba(255,153,0,0.38);
 }
+
+
+/* =====================================================
+   PRODUCTIVITY HUB PAGE / CARD
+===================================================== */
+.card--productivity {
+  border-color: rgba(34, 211, 238, 0.24);
+  background:
+    radial-gradient(circle at 85% 20%, rgba(34, 211, 238, 0.11), transparent 30%),
+    radial-gradient(circle at 15% 80%, rgba(63, 209, 137, 0.08), transparent 30%),
+    var(--card);
+}
+
+.card--productivity:hover {
+  border-color: rgba(34, 211, 238, 0.42);
+  box-shadow:
+    0 20px 50px rgba(0,0,0,0.5),
+    0 0 32px rgba(34, 211, 238, 0.08);
+}
+
+.card-accent--productivity {
+  background: linear-gradient(90deg, #22d3ee, #3fd189);
+}
+
+.badge--productivity {
+  background: rgba(34, 211, 238, 0.13);
+  color: #22d3ee;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+}
+
+.card-btn--productivity {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.20), rgba(63, 209, 137, 0.10));
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  color: #dffbff;
+}
+
+.card-btn--productivity:hover {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.30), rgba(63, 209, 137, 0.15));
+}
+
+.nav-item[data-tab="productivity"].active {
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.07);
+  border-left-color: #22d3ee;
+}
+
+.nav-item[data-tab="productivity"].active .nav-label-row {
+  color: #22d3ee;
+}
+
+.nav-item[data-tab="productivity"].active .nav-icon {
+  stroke: #22d3ee;
+}
+

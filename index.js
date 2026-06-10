@@ -206,8 +206,72 @@ function initNavAnimations() {
   animProd(document.getElementById("nav-canvas-prod"));
   animSys(document.getElementById("nav-canvas-sys"));
   animInv(document.getElementById("nav-canvas-inv"));
+  animProductivity(document.getElementById("nav-canvas-productivity"));
   animTraining(document.getElementById("nav-canvas-training"));
 }
+
+
+/* Productivity nav — rising scorecard bars and confirmation pulse */
+function animProductivity(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const CYAN = "#22d3ee";
+  const GREEN = "#3fd189";
+
+  const bars = [
+    { x: 24, h: 22, target: 36, speed: 0.020, phase: 0.0 },
+    { x: 52, h: 34, target: 48, speed: 0.017, phase: 0.8 },
+    { x: 80, h: 28, target: 42, speed: 0.019, phase: 1.5 },
+    { x: 108, h: 44, target: 55, speed: 0.015, phase: 2.2 },
+  ];
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // faint baseline
+    ctx.strokeStyle = "rgba(34,211,238,0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(14, H - 10);
+    ctx.lineTo(W - 14, H - 10);
+    ctx.stroke();
+
+    bars.forEach((b, i) => {
+      b.phase += 0.025;
+      const dynamicTarget = b.target + Math.sin(b.phase) * 8;
+      b.h += (dynamicTarget - b.h) * b.speed;
+
+      const y = H - 10 - b.h;
+      const alpha = 0.35 + (b.h / 60) * 0.45;
+
+      ctx.fillStyle = `rgba(34,211,238,${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(b.x, y, 14, b.h, 4);
+      ctx.fill();
+
+      // cap glow
+      ctx.fillStyle = i === 3 ? GREEN : CYAN;
+      ctx.globalAlpha = 0.88;
+      ctx.beginPath();
+      ctx.roundRect(b.x, y, 14, 3, 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    // confirmation pulse dot
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 320);
+    ctx.beginPath();
+    ctx.arc(W - 24, 16, 4 + pulse * 2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(63,209,137,${0.35 + pulse * 0.45})`;
+    ctx.fill();
+
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+}
+
 
 /* Training/Quality nav — checklist rows filling in like quality checks passing */
 function animTraining(canvas) {
@@ -1093,6 +1157,7 @@ function applyVisibilityRules() {
   const deptNavMap = {
     "LMS_Command": "operations",
     "Production":  "production",
+    "Productivity": "productivity",
     "System":      "system",
     "Inventory":   "inventory",
     "Training":    "training"
@@ -1130,6 +1195,10 @@ const featureCardMap = {
   "Production_FinishDash":         "#finishdash-card",
    "Production_CoatingBreakage":    "#coating-card",
   "Production_PowerAnalysis":      "#power-card",
+
+  "Productivity_ViewHub":              "#productivity-card",
+  "Productivity_AssociateScorecards":  "#productivity-card",
+  "Productivity_QualityBreakage":      "#productivity-card",
 
   "System_ScannerMap":             "#scanner-card",
 
