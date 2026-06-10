@@ -4503,6 +4503,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /************************************************************
+ * JSONP_LOCKS_CORS_FIX_V2_HEADER_HELPER
+ ************************************************************/
+
+/************************************************************
  * FINAL PATCH — JSONP LOCK ACTIONS FOR GITHUB CORS
  *
  * Fixes GitHub Pages CORS issue for:
