@@ -5101,3 +5101,836 @@ saveHoursNoteAdjustment = function(recordKey) {
       alert('Could not save adjustment: ' + (err.message || err));
     });
 };
+
+/************************************************************
+ * FINAL PATCH — ASSOCIATE BREAKAGE DETAIL FIX
+ *
+ * The Quality Hub opens with breakageSummary rows for speed.
+ * Those summary rows are NOT associate-level records.
+ *
+ * For an Associate Profile, load date details only for the days that
+ * associate worked, then match by OperatorName. This prevents full
+ * facility/date breakage totals from showing on one associate.
+ ************************************************************/
+
+function getAssociateWorkedDateKeys(summary) {
+  const keys = new Set();
+  (summary && summary.rows ? summary.rows : []).forEach(row => {
+    const key = formatDateKey(row.WorkDate);
+    if (key) keys.add(key);
+  });
+  return Array.from(keys).sort();
+}
+
+function getActualBreakageRowsForDate(dateKey) {
+  const detailKey = getBreakageDateDetailsCacheKey(dateKey);
+  const detailRows = STATE.breakageDateDetailsCache && STATE.breakageDateDetailsCache[detailKey]
+    ? STATE.breakageDateDetailsCache[detailKey]
+    : [];
+
+  // Fallback only to rows that are not summary rows.
+  const directRows = (STATE.breakageDailySnapshot || []).filter(row => {
+    const rowType = String(row.RowType || '').toUpperCase();
+    return rowType !== 'SUMMARY' && formatDateKey(row.WorkDate) === dateKey;
+  });
+
+  return dedupeBreakageRows([...(detailRows || []), ...directRows]);
+}
+
+function getAssociateBreakageRows(summary) {
+  const associate = normalizeQualityText(summary && summary.associate);
+  if (!associate) return [];
+
+  const dateKeys = getAssociateWorkedDateKeys(summary);
+  const rows = [];
+
+  dateKeys.forEach(dateKey => {
+    getActualBreakageRowsForDate(dateKey).forEach(row => {
+      if (normalizeQualityText(row.OperatorName) === associate) rows.push(row);
+    });
+  });
+
+  return dedupeBreakageRows(rows);
+}
+
+function ensureAssociateBreakageDetails(summary) {
+  if (!summary || !summary.rows || !summary.rows.length) return;
+
+  const dateKeys = getAssociateWorkedDateKeys(summary);
+  const missing = dateKeys.filter(dateKey => {
+    const detailKey = getBreakageDateDetailsCacheKey(dateKey);
+    return !(STATE.breakageDateDetailsCache && STATE.breakageDateDetailsCache[detailKey]);
+  });
+
+  if (!missing.length) return;
+
+  // Mark to prevent repeated parallel fetches.
+  STATE.associateBreakageLoadingDates = STATE.associateBreakageLoadingDates || {};
+
+  missing.forEach(dateKey => {
+    if (STATE.associateBreakageLoadingDates[dateKey]) return;
+    STATE.associateBreakageLoadingDates[dateKey] = true;
+
+    fetchBreakageDateDetails(dateKey)
+      .finally(() => {
+        STATE.associateBreakageLoadingDates[dateKey] = false;
+      });
+  });
+}
+
+function hasAllAssociateBreakageDetails(summary) {
+  const dateKeys = getAssociateWorkedDateKeys(summary);
+  return dateKeys.every(dateKey => {
+    const detailKey = getBreakageDateDetailsCacheKey(dateKey);
+    return !!(STATE.breakageDateDetailsCache && STATE.breakageDateDetailsCache[detailKey]);
+  });
+}
+
+// Override profile hero to use real associate-level breakage details only.
+renderHero = function(summary) {
+  ensureAssociateBreakageDetails(summary);
+
+  const pct = summary.workProduced > 0 ? Math.min(Math.round(summary.productivityPercent * 100), 180) : 0;
+  const breakageRows = getAssociateBreakageRows(summary);
+  const quality = buildAssociateBreakageSummary(summary, breakageRows);
+  const detailsReady = hasAllAssociateBreakageDetails(summary);
+
+  return `
+    <section class="profile-hero command-card">
+      <div class="identity">
+        <div class="avatar">👤</div>
+        <div>
+          <span class="profile-tag">Associate Profile</span>
+          <h3>${escapeHtml(summary.associate)}</h3>
+          <p>${escapeHtml(summary.departments || STATE.activeDept)} • ${formatScheduleType(summary.scheduleType)} Schedule • ${summary.scheduledDaysWorked} of ${summary.eligibleWorkDays} eligible day${summary.eligibleWorkDays === 1 ? '' : 's'} worked • ${summary.areas.length} area${summary.areas.length === 1 ? '' : 's'}</p>
+          ${statusBadge(summary.status)}
+        </div>
+      </div>
+
+      <div class="ring-wrap">
+        <div class="progress-ring" style="--pct:${pct}">
+          <strong>${summary.workProduced > 0 ? pct + '%' : 'N/A'}</strong>
+        </div>
+        <small>Weekly Productivity</small>
+      </div>
+
+      <div class="hero-metric">
+        <span class="metric-icon">▣</span>
+        <div>
+          <span>Total Jobs</span>
+          <strong data-count="${summary.totalJobs}">${formatNumber(summary.totalJobs)}</strong>
+        </div>
+      </div>
+
+      <div class="hero-metric">
+        <span class="metric-icon">◴</span>
+        <div>
+          <span>Total Hours</span>
+          <strong>${formatDecimal(summary.totalHours)}</strong>
+        </div>
+      </div>
+
+      <div class="hero-metric">
+        <span class="metric-icon">↗</span>
+        <div>
+          <span>Avg JPH</span>
+          <strong>${formatDecimal(summary.avgJph)}</strong>
+        </div>
+      </div>
+
+      <div class="hero-metric">
+        <span class="metric-icon">◎</span>
+        <div>
+          <span>Work Produced</span>
+          <strong>${formatDecimal(summary.workProduced)}</strong>
+        </div>
+      </div>
+
+      <div class="hero-metric quality-hero-card ${statusCss(quality.status)}">
+        <span class="metric-icon">◈</span>
+        <div>
+          <span>Lens Breakage</span>
+          <strong>${detailsReady ? formatNumber(quality.lens) : '...'}</strong>
+          <small>${detailsReady ? formatQualityPercent(quality.lensPercent) : 'Loading actual records'}</small>
+        </div>
+      </div>
+
+      <div class="hero-metric quality-hero-card ${statusCss(quality.status)}">
+        <span class="metric-icon">◇</span>
+        <div>
+          <span>Frame Breakage</span>
+          <strong>${detailsReady ? formatNumber(quality.frame) : '...'}</strong>
+          <small>${detailsReady ? formatQualityPercent(quality.framePercent) : 'Loading actual records'}</small>
+        </div>
+      </div>
+    </section>
+  `;
+};
+
+// Override associate quality section if used anywhere.
+renderAssociateBreakageSection = function(summary) {
+  ensureAssociateBreakageDetails(summary);
+
+  const rows = getAssociateBreakageRows(summary);
+  const q = buildAssociateBreakageSummary(summary, rows);
+  const byReason = buildBreakageDimensionRows(rows, 'BreakageReason', 6);
+  const byAccessPoint = buildBreakageDimensionRows(rows, 'AccessPoint', 6);
+  const detailsReady = hasAllAssociateBreakageDetails(summary);
+
+  return `
+    <section class="associate-quality-panel command-card">
+      <div class="section-head">
+        <div>
+          <h3>Quality / Breakage This Week</h3>
+          <p>Matched to this associate by operator name from selected date details.</p>
+        </div>
+        ${statusBadge(q.status)}
+      </div>
+
+      <div class="quality-kpi-grid compact-quality">
+        <article class="quality-kpi"><span>Operator Scans</span><strong>${formatNumber(q.scans)}</strong><small>From Activity</small></article>
+        <article class="quality-kpi"><span>Lens Breakage</span><strong>${detailsReady ? formatNumber(q.lens) : '...'}</strong><small>${detailsReady ? formatQualityPercent(q.lensPercent) : 'Loading'}</small></article>
+        <article class="quality-kpi"><span>Frame Breakage</span><strong>${detailsReady ? formatNumber(q.frame) : '...'}</strong><small>${detailsReady ? formatQualityPercent(q.framePercent) : 'Loading'}</small></article>
+        <article class="quality-kpi"><span>Total Breakage</span><strong>${detailsReady ? formatNumber(q.total) : '...'}</strong><small>${rows.length} records</small></article>
+      </div>
+
+      <div class="quality-grid-two">
+        ${renderQualityListPanel('Top Reasons', byReason)}
+        ${renderQualityListPanel('Access Points', byAccessPoint)}
+      </div>
+    </section>
+  `;
+};
+
+/************************************************************
+ * FINAL PATCH — CLIENT FISCAL WEEK DROPDOWN WINDOW
+ *
+ * Extra front-end protection:
+ * even if old cache sends FW21, only show:
+ * previous week / current week / next week based on browser today.
+ ************************************************************/
+
+function getSundayStartFromDate(dateValue) {
+  const d = parseLocalDate(dateValue) || new Date();
+  const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  local.setDate(local.getDate() - local.getDay());
+  return local;
+}
+
+function getFiscalWeekNumberFromDate(dateValue) {
+  const d = parseLocalDate(dateValue) || new Date();
+  const weekStart = getSundayStartFromDate(d);
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const firstWeekStart = getSundayStartFromDate(jan1);
+  const diffDays = Math.floor((weekStart - firstWeekStart) / 86400000);
+  return Math.floor(diffDays / 7) + 1;
+}
+
+function buildClientWeekObjectFromStart(startDate, isCurrent) {
+  const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  const fw = 'FW ' + getFiscalWeekNumberFromDate(start);
+
+  const existing = (STATE.fiscalWeeks || []).find(w =>
+    String(w.fiscalWeek || '') === fw &&
+    formatDateKey(w.weekStartDate) === formatDateKey(start)
+  );
+
+  return {
+    key: `${fw}|${formatDateKey(start)}|${formatDateKey(end)}`,
+    fiscalWeek: fw,
+    weekStartDate: formatDateKey(start),
+    weekEndDate: formatDateKey(end),
+    rowCount: existing ? Number(existing.rowCount || 0) : 0,
+    workDateCount: existing ? Number(existing.workDateCount || 0) : 0,
+    workDates: existing && existing.workDates ? existing.workDates : [],
+    isCurrent: isCurrent === true
+  };
+}
+
+getAvailableFiscalWeeks = function() {
+  const currentStart = getSundayStartFromDate(new Date());
+
+  const previousStart = new Date(currentStart);
+  previousStart.setDate(currentStart.getDate() - 7);
+
+  const nextStart = new Date(currentStart);
+  nextStart.setDate(currentStart.getDate() + 7);
+
+  return [
+    buildClientWeekObjectFromStart(previousStart, false),
+    buildClientWeekObjectFromStart(currentStart, true),
+    buildClientWeekObjectFromStart(nextStart, false)
+  ];
+};
+
+renderFiscalWeekDropdown = function() {
+  const select = document.getElementById('fiscalWeekSelect');
+  if (!select) return;
+
+  const weeks = getAvailableFiscalWeeks();
+
+  select.innerHTML = weeks.map(w => `
+    <option value="${escapeHtml(w.key)}">
+      ${escapeHtml(w.fiscalWeek)} — ${formatDatePretty(w.weekStartDate)} to ${formatDatePretty(w.weekEndDate)} • ${formatNumber(w.rowCount || 0)} rows
+    </option>
+  `).join('');
+
+  let selectedKey = getSelectedFiscalWeekKey();
+  if (!weeks.some(w => w.key === selectedKey)) {
+    const currentWeek = weeks.find(w => w.isCurrent) || weeks[1] || weeks[0];
+    if (currentWeek) {
+      STATE.selectedFiscalWeek = currentWeek.fiscalWeek;
+      STATE.selectedWeekStartDate = currentWeek.weekStartDate;
+      STATE.selectedWeekEndDate = currentWeek.weekEndDate;
+      selectedKey = currentWeek.key;
+    }
+  }
+
+  select.value = selectedKey;
+};
+
+/************************************************************
+ * FINAL PATCH — DEFAULT TO CURRENT WEEK + BREAKAGE DETAIL FAILSAFE
+ ************************************************************/
+
+function getCurrentClientFiscalWeekObject() {
+  const weeks = getAvailableFiscalWeeks();
+  return weeks.find(w => w.isCurrent) || weeks[1] || weeks[0] || null;
+}
+
+function forceCurrentWeekIfNeeded() {
+  const current = getCurrentClientFiscalWeekObject();
+  if (!current) return;
+
+  // If the page booted into the previous week, reset to current week.
+  // User can still manually pick FW22 or FW24 afterwards.
+  if (!STATE._userChangedFiscalWeek) {
+    STATE.selectedFiscalWeek = current.fiscalWeek;
+    STATE.selectedWeekStartDate = current.weekStartDate;
+    STATE.selectedWeekEndDate = current.weekEndDate;
+  }
+}
+
+// Mark manual fiscal week changes so the user's selection is respected after the first load.
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const select = document.getElementById('fiscalWeekSelect');
+    if (select && !select._productivityWeekManualBound) {
+      select._productivityWeekManualBound = true;
+      select.addEventListener('change', () => {
+        STATE._userChangedFiscalWeek = true;
+      });
+    }
+  }, 500);
+});
+
+// Override dropdown one more time: show FW22/FW23/FW24 but default to FW23/current.
+renderFiscalWeekDropdown = function() {
+  const select = document.getElementById('fiscalWeekSelect');
+  if (!select) return;
+
+  const weeks = getAvailableFiscalWeeks();
+  const currentWeek = weeks.find(w => w.isCurrent) || weeks[1] || weeks[0];
+
+  if (!STATE._userChangedFiscalWeek && currentWeek) {
+    STATE.selectedFiscalWeek = currentWeek.fiscalWeek;
+    STATE.selectedWeekStartDate = currentWeek.weekStartDate;
+    STATE.selectedWeekEndDate = currentWeek.weekEndDate;
+  }
+
+  select.innerHTML = weeks.map(w => `
+    <option value="${escapeHtml(w.key)}">
+      ${escapeHtml(w.fiscalWeek)} — ${formatDatePretty(w.weekStartDate)} to ${formatDatePretty(w.weekEndDate)} • ${formatNumber(w.rowCount || 0)} rows
+    </option>
+  `).join('');
+
+  select.value = getSelectedFiscalWeekKey();
+};
+
+// Make breakage detail loading fail safe so profile does not stay stuck on "Loading actual records".
+var __fetchBreakageDateDetailsBaseSafe = fetchBreakageDateDetails;
+fetchBreakageDateDetails = function(dateKey) {
+  return __fetchBreakageDateDetailsBaseSafe(dateKey)
+    .catch(err => {
+      console.warn('[Productivity Hub] Breakage date details failed:', err);
+
+      STATE.breakageDateDetailsCache = STATE.breakageDateDetailsCache || {};
+      STATE.breakageDateDetailsCache[getBreakageDateDetailsCacheKey(dateKey)] = [];
+
+      showRefreshStatus('Breakage date details unavailable; showing 0 matched records.');
+      renderEverything();
+
+      return [];
+    });
+};
+
+/************************************************************
+ * FINAL OVERRIDE — WEBPAGE ZENNI FISCAL WEEK LABEL FIX
+ *
+ * Confirmed Zenni calendar:
+ * May 24, 2026 - May 30, 2026 = FW 22
+ * May 31, 2026 - Jun 06, 2026 = FW 23
+ * Jun 07, 2026 - Jun 13, 2026 = FW 24
+ *
+ * This override forces the webpage dropdown labels to match the
+ * corrected API/sheet fiscal week logic.
+ ************************************************************/
+
+function getZenniWebSundayStart(dateValue) {
+  const d = parseLocalDate(dateValue) || new Date();
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  // Sunday = 0. If Sunday, subtract 0.
+  start.setDate(start.getDate() - start.getDay());
+
+  return start;
+}
+
+function getZenniWebFiscalWeekNumber(dateValue) {
+  const d = parseLocalDate(dateValue) || new Date();
+  const weekStart = getZenniWebSundayStart(d);
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const fiscalWeekOneStart = getZenniWebSundayStart(jan1);
+  const diffDays = Math.floor((weekStart - fiscalWeekOneStart) / 86400000);
+  return Math.floor(diffDays / 7) + 1;
+}
+
+function getZenniWebFiscalInfo(dateValue) {
+  const weekStart = getZenniWebSundayStart(dateValue);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  return {
+    fiscalWeek: 'FW ' + getZenniWebFiscalWeekNumber(weekStart),
+    weekStartDate: formatDateKey(weekStart),
+    weekEndDate: formatDateKey(weekEnd)
+  };
+}
+
+function buildClientWeekObjectFromStart(startDate, isCurrent) {
+  const fiscal = getZenniWebFiscalInfo(startDate);
+
+  // Keep row count from API snapshot when the date window matches.
+  const existing = (STATE.fiscalWeeks || []).find(w =>
+    formatDateKey(w.weekStartDate) === fiscal.weekStartDate &&
+    formatDateKey(w.weekEndDate) === fiscal.weekEndDate
+  );
+
+  return {
+    key: `${fiscal.fiscalWeek}|${fiscal.weekStartDate}|${fiscal.weekEndDate}`,
+    fiscalWeek: fiscal.fiscalWeek,
+    weekStartDate: fiscal.weekStartDate,
+    weekEndDate: fiscal.weekEndDate,
+    rowCount: existing ? Number(existing.rowCount || 0) : 0,
+    workDateCount: existing ? Number(existing.workDateCount || 0) : 0,
+    workDates: existing && existing.workDates ? existing.workDates : [],
+    isCurrent: isCurrent === true
+  };
+}
+
+getAvailableFiscalWeeks = function() {
+  const currentStart = getZenniWebSundayStart(new Date());
+
+  const previousStart = new Date(currentStart);
+  previousStart.setDate(currentStart.getDate() - 7);
+
+  const nextStart = new Date(currentStart);
+  nextStart.setDate(currentStart.getDate() + 7);
+
+  return [
+    buildClientWeekObjectFromStart(previousStart, false),
+    buildClientWeekObjectFromStart(currentStart, true),
+    buildClientWeekObjectFromStart(nextStart, false)
+  ];
+};
+
+getSelectedFiscalWeekKey = function() {
+  const weeks = getAvailableFiscalWeeks();
+
+  if (STATE.selectedFiscalWeek && STATE.selectedWeekStartDate && STATE.selectedWeekEndDate) {
+    const selectedStart = formatDateKey(STATE.selectedWeekStartDate);
+    const selectedEnd = formatDateKey(STATE.selectedWeekEndDate);
+    const selected = weeks.find(w => w.weekStartDate === selectedStart && w.weekEndDate === selectedEnd);
+    if (selected) return selected.key;
+  }
+
+  const current = weeks.find(w => w.isCurrent) || weeks[1] || weeks[0];
+  return current ? current.key : '';
+};
+
+renderFiscalWeekDropdown = function() {
+  const select = document.getElementById('fiscalWeekSelect');
+  if (!select) return;
+
+  const weeks = getAvailableFiscalWeeks();
+  const currentWeek = weeks.find(w => w.isCurrent) || weeks[1] || weeks[0];
+
+  if (!STATE._userChangedFiscalWeek && currentWeek) {
+    STATE.selectedFiscalWeek = currentWeek.fiscalWeek;
+    STATE.selectedWeekStartDate = currentWeek.weekStartDate;
+    STATE.selectedWeekEndDate = currentWeek.weekEndDate;
+  }
+
+  select.innerHTML = weeks.map(w => `
+    <option value="${escapeHtml(w.key)}">
+      ${escapeHtml(w.fiscalWeek)} — ${formatDatePretty(w.weekStartDate)} to ${formatDatePretty(w.weekEndDate)} • ${formatNumber(w.rowCount || 0)} rows
+    </option>
+  `).join('');
+
+  select.value = getSelectedFiscalWeekKey();
+
+  const selected = weeks.find(w => w.key === select.value) || currentWeek;
+  if (selected) {
+    STATE.selectedFiscalWeek = selected.fiscalWeek;
+    STATE.selectedWeekStartDate = selected.weekStartDate;
+    STATE.selectedWeekEndDate = selected.weekEndDate;
+    updateWeekLabels();
+  }
+};
+
+function verifyZenniWebFiscalWeeks() {
+  const tests = [
+    ['2026-05-24', 'FW 22'],
+    ['2026-05-31', 'FW 23'],
+    ['2026-06-07', 'FW 24']
+  ];
+
+  const result = tests.map(([dateKey, expected]) => {
+    const actual = getZenniWebFiscalInfo(dateKey).fiscalWeek;
+    return `${dateKey}: ${actual} ${actual === expected ? '✅' : '❌ expected ' + expected}`;
+  }).join('\n');
+
+  console.info('[Productivity Hub] Zenni fiscal week check\n' + result);
+  return result;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    verifyZenniWebFiscalWeeks();
+    renderFiscalWeekDropdown();
+  }, 1000);
+});
+
+/************************************************************
+ * FINAL OVERRIDE — WEBPAGE READS ALL FISCAL WEEKS
+ *
+ * The dropdown now reads every week returned from the API/sheet.
+ * It does NOT limit to previous/current/next.
+ *
+ * It still corrects the fiscal week label from WeekStartDate using
+ * the Zenni rule:
+ * 2026-05-24 = FW 22
+ * 2026-05-31 = FW 23
+ * 2026-06-07 = FW 24
+ ************************************************************/
+
+function normalizeFiscalWeekForWeb(week) {
+  const startKey = formatDateKey(week.weekStartDate || week.WeekStartDate);
+  const endKey = formatDateKey(week.weekEndDate || week.WeekEndDate);
+  const fiscal = getZenniWebFiscalInfo(startKey);
+
+  return {
+    ...week,
+    key: `${fiscal.fiscalWeek}|${fiscal.weekStartDate}|${fiscal.weekEndDate}`,
+    fiscalWeek: fiscal.fiscalWeek,
+    weekStartDate: fiscal.weekStartDate,
+    weekEndDate: fiscal.weekEndDate,
+    rowCount: Number(week.rowCount || week.RowCount || 0),
+    workDateCount: Number(week.workDateCount || week.WorkDateCount || 0),
+    workDates: week.workDates || week.WorkDates || [],
+    isCurrent: isCurrentFiscalWeekWindow(fiscal.weekStartDate, fiscal.weekEndDate)
+  };
+}
+
+function isCurrentFiscalWeekWindow(weekStartDate, weekEndDate) {
+  const today = new Date();
+  const start = parseLocalDate(weekStartDate);
+  const end = parseLocalDate(weekEndDate);
+
+  if (!start || !end) return false;
+
+  return today >= start && today <= end;
+}
+
+getAvailableFiscalWeeks = function() {
+  const map = new Map();
+
+  (STATE.fiscalWeeks || []).forEach(rawWeek => {
+    if (!rawWeek || !rawWeek.weekStartDate) return;
+
+    const week = normalizeFiscalWeekForWeb(rawWeek);
+    map.set(week.key, week);
+  });
+
+  // Include current week even if snapshot has no rows yet.
+  const current = getZenniWebFiscalInfo(new Date());
+  const currentKey = `${current.fiscalWeek}|${current.weekStartDate}|${current.weekEndDate}`;
+
+  if (!map.has(currentKey)) {
+    map.set(currentKey, {
+      key: currentKey,
+      fiscalWeek: current.fiscalWeek,
+      weekStartDate: current.weekStartDate,
+      weekEndDate: current.weekEndDate,
+      rowCount: 0,
+      workDateCount: 0,
+      workDates: [],
+      isCurrent: true
+    });
+  } else {
+    map.get(currentKey).isCurrent = true;
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    const aDate = parseLocalDate(a.weekStartDate);
+    const bDate = parseLocalDate(b.weekStartDate);
+    return bDate - aDate; // newest first
+  });
+};
+
+getSelectedFiscalWeekKey = function() {
+  const weeks = getAvailableFiscalWeeks();
+
+  if (STATE.selectedWeekStartDate && STATE.selectedWeekEndDate) {
+    const selectedStart = formatDateKey(STATE.selectedWeekStartDate);
+    const selectedEnd = formatDateKey(STATE.selectedWeekEndDate);
+    const selected = weeks.find(w => w.weekStartDate === selectedStart && w.weekEndDate === selectedEnd);
+    if (selected) return selected.key;
+  }
+
+  const current = weeks.find(w => w.isCurrent) || weeks[0];
+  return current ? current.key : '';
+};
+
+renderFiscalWeekDropdown = function() {
+  const select = document.getElementById('fiscalWeekSelect');
+  if (!select) return;
+
+  const weeks = getAvailableFiscalWeeks();
+  const currentWeek = weeks.find(w => w.isCurrent) || weeks[0];
+
+  if (!STATE._userChangedFiscalWeek && currentWeek) {
+    STATE.selectedFiscalWeek = currentWeek.fiscalWeek;
+    STATE.selectedWeekStartDate = currentWeek.weekStartDate;
+    STATE.selectedWeekEndDate = currentWeek.weekEndDate;
+  }
+
+  select.innerHTML = weeks.map(w => `
+    <option value="${escapeHtml(w.key)}">
+      ${escapeHtml(w.fiscalWeek)} — ${formatDatePretty(w.weekStartDate)} to ${formatDatePretty(w.weekEndDate)} • ${formatNumber(w.rowCount || 0)} rows
+    </option>
+  `).join('');
+
+  select.value = getSelectedFiscalWeekKey();
+
+  const selected = weeks.find(w => w.key === select.value) || currentWeek;
+  if (selected) {
+    STATE.selectedFiscalWeek = selected.fiscalWeek;
+    STATE.selectedWeekStartDate = selected.weekStartDate;
+    STATE.selectedWeekEndDate = selected.weekEndDate;
+    updateWeekLabels();
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    console.info('[Productivity Hub] Fiscal week dropdown now reads all available FW from DAILY_SNAPSHOT.');
+    renderFiscalWeekDropdown();
+  }, 1200);
+});
+
+/************************************************************
+ * EMERGENCY FINAL OVERRIDE — FIX FW LABEL + updateWeekLabels ERROR
+ *
+ * Fixes:
+ * 1. 2026-05-24 was still showing FW21 on webpage.
+ * 2. updateWeekLabels is not defined error.
+ * 3. Dropdown reads ALL fiscal weeks from API/DAILY_SNAPSHOT.
+ *
+ * Anchor confirmed by Zenni:
+ * 2026-05-24 to 2026-05-30 = FW 22
+ ************************************************************/
+
+function getZenniWebFiscalInfo(dateValue) {
+  const inputDate = parseLocalDate(dateValue) || new Date();
+  const weekStart = new Date(inputDate.getFullYear(), inputDate.getMonth(), inputDate.getDate());
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday start
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  // Confirmed anchor: Sunday 2026-05-24 is FW 22
+  const anchorStart = new Date(2026, 4, 24); // May 24, 2026
+  const anchorFw = 22;
+
+  const diffWeeks = Math.round((weekStart - anchorStart) / (7 * 86400000));
+  const weekNum = anchorFw + diffWeeks;
+
+  return {
+    fiscalWeek: 'FW ' + weekNum,
+    weekStartDate: formatDateKey(weekStart),
+    weekEndDate: formatDateKey(weekEnd)
+  };
+}
+
+function isCurrentFiscalWeekWindow(weekStartDate, weekEndDate) {
+  const today = new Date();
+  const start = parseLocalDate(weekStartDate);
+  const end = parseLocalDate(weekEndDate);
+
+  if (!start || !end) return false;
+
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return t >= start && t <= end;
+}
+
+function safeUpdateWeekLabelsFinal() {
+  if (typeof updateWeekLabels === 'function') {
+    updateWeekLabels();
+    return;
+  }
+
+  // Fallback for older JS that does not have updateWeekLabels().
+  const labels = [
+    document.getElementById('selectedWeekLabel'),
+    document.getElementById('currentWeekLabel'),
+    document.querySelector('[data-selected-week-label]'),
+    document.querySelector('[data-current-week-label]')
+  ].filter(Boolean);
+
+  const text = STATE.selectedFiscalWeek
+    ? `${STATE.selectedFiscalWeek} • ${formatDatePretty(STATE.selectedWeekStartDate)} to ${formatDatePretty(STATE.selectedWeekEndDate)}`
+    : '';
+
+  labels.forEach(el => {
+    el.textContent = text;
+  });
+}
+
+function normalizeFiscalWeekForWeb(week) {
+  const rawStart = week.weekStartDate || week.WeekStartDate || week.weekStart || week.WeekStart;
+  const rawEnd = week.weekEndDate || week.WeekEndDate || week.weekEnd || week.WeekEnd;
+
+  const fiscal = getZenniWebFiscalInfo(rawStart || new Date());
+
+  return {
+    ...week,
+    key: `${fiscal.fiscalWeek}|${fiscal.weekStartDate}|${fiscal.weekEndDate}`,
+    fiscalWeek: fiscal.fiscalWeek,
+    weekStartDate: fiscal.weekStartDate,
+    weekEndDate: fiscal.weekEndDate,
+    rowCount: Number(week.rowCount || week.RowCount || 0),
+    workDateCount: Number(week.workDateCount || week.WorkDateCount || 0),
+    workDates: week.workDates || week.WorkDates || [],
+    isCurrent: isCurrentFiscalWeekWindow(fiscal.weekStartDate, fiscal.weekEndDate)
+  };
+}
+
+getAvailableFiscalWeeks = function() {
+  const map = new Map();
+
+  (STATE.fiscalWeeks || []).forEach(rawWeek => {
+    if (!rawWeek) return;
+
+    const start = rawWeek.weekStartDate || rawWeek.WeekStartDate || rawWeek.weekStart || rawWeek.WeekStart;
+    if (!start) return;
+
+    const week = normalizeFiscalWeekForWeb(rawWeek);
+    map.set(week.key, week);
+  });
+
+  // Always include current week even if no snapshot rows exist yet.
+  const current = getZenniWebFiscalInfo(new Date());
+  const currentKey = `${current.fiscalWeek}|${current.weekStartDate}|${current.weekEndDate}`;
+
+  if (!map.has(currentKey)) {
+    map.set(currentKey, {
+      key: currentKey,
+      fiscalWeek: current.fiscalWeek,
+      weekStartDate: current.weekStartDate,
+      weekEndDate: current.weekEndDate,
+      rowCount: 0,
+      workDateCount: 0,
+      workDates: [],
+      isCurrent: true
+    });
+  } else {
+    map.get(currentKey).isCurrent = true;
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    const aDate = parseLocalDate(a.weekStartDate);
+    const bDate = parseLocalDate(b.weekStartDate);
+    return bDate - aDate;
+  });
+};
+
+getSelectedFiscalWeekKey = function() {
+  const weeks = getAvailableFiscalWeeks();
+
+  if (STATE.selectedWeekStartDate && STATE.selectedWeekEndDate) {
+    const selectedStart = formatDateKey(STATE.selectedWeekStartDate);
+    const selectedEnd = formatDateKey(STATE.selectedWeekEndDate);
+    const selected = weeks.find(w => w.weekStartDate === selectedStart && w.weekEndDate === selectedEnd);
+    if (selected) return selected.key;
+  }
+
+  const current = weeks.find(w => w.isCurrent) || weeks[0];
+  return current ? current.key : '';
+};
+
+renderFiscalWeekDropdown = function() {
+  const select = document.getElementById('fiscalWeekSelect');
+  if (!select) return;
+
+  const weeks = getAvailableFiscalWeeks();
+  const currentWeek = weeks.find(w => w.isCurrent) || weeks[0];
+
+  if (!STATE._userChangedFiscalWeek && currentWeek) {
+    STATE.selectedFiscalWeek = currentWeek.fiscalWeek;
+    STATE.selectedWeekStartDate = currentWeek.weekStartDate;
+    STATE.selectedWeekEndDate = currentWeek.weekEndDate;
+  }
+
+  select.innerHTML = weeks.map(w => `
+    <option value="${escapeHtml(w.key)}">
+      ${escapeHtml(w.fiscalWeek)} — ${formatDatePretty(w.weekStartDate)} to ${formatDatePretty(w.weekEndDate)} • ${formatNumber(w.rowCount || 0)} rows
+    </option>
+  `).join('');
+
+  select.value = getSelectedFiscalWeekKey();
+
+  const selected = weeks.find(w => w.key === select.value) || currentWeek;
+  if (selected) {
+    STATE.selectedFiscalWeek = selected.fiscalWeek;
+    STATE.selectedWeekStartDate = selected.weekStartDate;
+    STATE.selectedWeekEndDate = selected.weekEndDate;
+    safeUpdateWeekLabelsFinal();
+  }
+};
+
+function verifyZenniWebFiscalWeeks_FINAL() {
+  const tests = [
+    ['2026-05-24', 'FW 22'],
+    ['2026-05-31', 'FW 23'],
+    ['2026-06-07', 'FW 24']
+  ];
+
+  const result = tests.map(([dateKey, expected]) => {
+    const actual = getZenniWebFiscalInfo(dateKey).fiscalWeek;
+    return `${dateKey}: ${actual} ${actual === expected ? '✅' : '❌ expected ' + expected}`;
+  }).join('\n');
+
+  console.info('[Productivity Hub] FINAL Zenni fiscal week check\n' + result);
+  return result;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    verifyZenniWebFiscalWeeks_FINAL();
+    renderFiscalWeekDropdown();
+  }, 1500);
+});
