@@ -4501,3 +4501,139 @@ document.addEventListener('DOMContentLoaded', () => {
   updateProductivityTopClock();
   setInterval(updateProductivityTopClock, 1000);
 });
+
+/************************************************************
+ * FINAL PATCH — JSONP LOCK ACTIONS FOR GITHUB CORS
+ *
+ * Fixes GitHub Pages CORS issue for:
+ * - productivityLocks
+ * - confirmProductivityDay
+ * - releaseProductivityDay
+ ************************************************************/
+
+function productivityJsonpRequest(params) {
+  return new Promise((resolve, reject) => {
+    const callbackName = '__prodHubJsonp_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+    const qs = new URLSearchParams(params || {});
+    qs.set('callback', callbackName);
+    qs.set('ts', String(Date.now()));
+
+    const script = document.createElement('script');
+    const cleanup = () => {
+      try { delete window[callbackName]; } catch (err) { window[callbackName] = undefined; }
+      if (script && script.parentNode) script.parentNode.removeChild(script);
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Request timed out.'));
+    }, 25000);
+
+    window[callbackName] = data => {
+      clearTimeout(timer);
+      cleanup();
+      if (!data || data.ok === false) {
+        reject(new Error(data && data.message ? data.message : 'Invalid API response.'));
+        return;
+      }
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(new Error('Could not load Apps Script JSONP endpoint.'));
+    };
+
+    script.src = `${API_URL}?${qs.toString()}`;
+    document.head.appendChild(script);
+  });
+}
+
+// Override lock loader to avoid CORS fetch.
+loadProductivityLocksQuietly = function(renderAfter = false) {
+  return productivityJsonpRequest({
+    action: 'productivityLocks'
+  })
+    .then(data => {
+      STATE.productivityLocks = normalizeProductivityLocks(data.locks || []);
+      STATE.productivityActivity = data.activity || [];
+
+      renderProductivityUserBadge();
+      showProductivityActivityToast(data.activity || []);
+
+      if (renderAfter) renderEverything();
+
+      return data;
+    })
+    .catch(err => console.warn('[Productivity Hub] Could not load locks:', err));
+};
+
+// Override confirm to avoid CORS fetch.
+confirmProductivityDay = function(dateKey, associateName, finalDepartment) {
+  const user = getCurrentProductivityUser();
+
+  if (!user || !user.canConfirm) {
+    alert('You are not authorized to confirm productivity days.');
+    showProductivityLoginModal(true);
+    return;
+  }
+
+  const associate = String(associateName || STATE.selectedAssociate || '').trim();
+  const dept = String(finalDepartment || STATE.activeDept || '').trim().toUpperCase();
+
+  if (!associate || !dateKey || !dept) {
+    alert('Missing associate, date, or department for confirmation.');
+    return;
+  }
+
+  const ok = confirm(`Confirm and lock productivity for ${associate} on ${formatDatePretty(dateKey)}?`);
+  if (!ok) return;
+
+  showRefreshStatus(`Confirming ${associate} • ${formatDatePretty(dateKey)}...`);
+
+  return productivityJsonpRequest({
+    action: 'confirmProductivityDay',
+    workDate: dateKey,
+    finalDepartment: dept,
+    operatorName: associate,
+    username: user.username
+  })
+    .then(data => {
+      showRefreshStatus(`Confirmed ${associate} • ${formatDatePretty(dateKey)}`);
+      return loadProductivityLocksQuietly(true);
+    })
+    .catch(err => alert(err.message || err));
+};
+
+// Override release to avoid CORS fetch.
+releaseProductivityDay = function(dateKey, associateName, finalDepartment) {
+  const user = getCurrentProductivityUser();
+
+  if (!user || !user.canRelease) {
+    alert('Only BLOPEZ and JBOOMERSHINE can release confirmed productivity days.');
+    return;
+  }
+
+  const associate = String(associateName || STATE.selectedAssociate || '').trim();
+  const dept = String(finalDepartment || STATE.activeDept || '').trim().toUpperCase();
+  const reason = prompt(`Release productivity lock for ${associate} on ${formatDatePretty(dateKey)}? Enter release reason:`, 'Correction required');
+
+  if (reason === null) return;
+
+  showRefreshStatus(`Releasing lock for ${associate} • ${formatDatePretty(dateKey)}...`);
+
+  return productivityJsonpRequest({
+    action: 'releaseProductivityDay',
+    workDate: dateKey,
+    finalDepartment: dept,
+    operatorName: associate,
+    username: user.username,
+    releaseReason: reason || 'Released by LMS'
+  })
+    .then(data => {
+      showRefreshStatus(`Released lock for ${associate} • ${formatDatePretty(dateKey)}`);
+      return loadProductivityLocksQuietly(true);
+    })
+    .catch(err => alert(err.message || err));
+};
