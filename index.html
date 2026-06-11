@@ -593,13 +593,12 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
             </div>
 
             <p class="card-desc">
-              Associate scorecards, Quality / Breakage Hub, time adjustments, supervisor confirmation, and productivity lock control.
+              Associate scorecards, time adjustments, supervisor confirmation, and productivity lock control.
             </p>
           </div>
 
           <div class="card-tags">
             <span class="tag">Associate Scorecards</span>
-            <span class="tag">Quality / Breakage</span>
             <span class="tag">Edit Time</span>
             <span class="tag">Confirm Day</span>
             <span class="tag">Locks</span>
@@ -613,6 +612,40 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
           </button>
         </div>
       </div>
+
+      <div id="breakage-quality-card" class="card card--quality card--breakage-quality" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#fb7185"></canvas>
+        <div class="card-accent card-accent--quality"></div>
+
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Breakage / Quality Hub</h3>
+              <span class="badge badge--quality">Quality Live</span>
+            </div>
+
+            <p class="card-desc">
+              Separate breakage command center for associate lens/frame breakage, reason, access point, and weekly quality view.
+            </p>
+          </div>
+
+          <div class="card-tags">
+            <span class="tag">Lens Breakage</span>
+            <span class="tag">Frame Breakage</span>
+            <span class="tag">Reason</span>
+            <span class="tag">Access Point</span>
+            <span class="tag">Associate Count</span>
+          </div>
+
+          <button class="card-btn card-btn--quality" onclick="openPage('BreakageDashboard.html')">
+            Open Breakage Hub
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
 
     </div>
   </section>

@@ -1198,7 +1198,17 @@ const featureCardMap = {
 
   "Productivity_ViewHub":              "#productivity-card",
   "Productivity_AssociateScorecards":  "#productivity-card",
-  "Productivity_QualityBreakage":      "#productivity-card",
+
+  // Quality / Breakage is its own card.
+  // These keys match the LMS_Visibility sheet columns shown in Google Sheets.
+  "Productivity_QualityBreakage":      "#breakage-quality-card",
+  "BreakageHub_AssociateBreaka":       "#breakage-quality-card",
+  "BreakageHub_AssociateBreakage":     "#breakage-quality-card",
+  "BreakageHub_ReasonBreakdown":       "#breakage-quality-card",
+  "BreakageHub_AccessPointBreakdo":    "#breakage-quality-card",
+  "BreakageHub_AccessPointBreakdown":  "#breakage-quality-card",
+  "BreakageHub_AdminS":                "#breakage-quality-card",
+  "BreakageHub_AdminSetup":            "#breakage-quality-card",
 
   "System_ScannerMap":             "#scanner-card",
 

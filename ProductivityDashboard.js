@@ -1476,34 +1476,422 @@ function selectAssociateFromScoreboard(associate) {
   if (stage) stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+
+function getInsightRows() {
+  return getWeekRowsForActiveDept();
+}
+
+function summarizeInsightRows(rows, groupGetter) {
+  const map = new Map();
+
+  (rows || []).forEach(row => {
+    const key = String(groupGetter(row) || 'Unmapped').trim() || 'Unmapped';
+    if (!map.has(key)) {
+      map.set(key, {
+        label: key,
+        associates: new Set(),
+        hours: 0,
+        jobs: 0,
+        workProduced: 0,
+        green: 0,
+        amber: 0,
+        red: 0,
+        noTarget: 0
+      });
+    }
+
+    const item = map.get(key);
+    const name = String(row.OperatorName || '').trim();
+    if (name && !isMachineRow(row)) item.associates.add(name);
+    item.hours += Number(row.SessionTimeHours || 0);
+    item.jobs += Number(row.TotalJobScan || 0);
+    item.workProduced += Number(row.WorkProduced || 0);
+  });
+
+  return Array.from(map.values()).map(item => {
+    item.associateCount = item.associates.size;
+    item.productivityPercent = item.hours > 0 && item.workProduced > 0 ? item.workProduced / item.hours : 0;
+    item.status = getStatusFromPercent(item.productivityPercent, item.workProduced);
+    return item;
+  }).sort((a, b) => b.jobs - a.jobs);
+}
+
+function getInsightTotals(rows, summaries) {
+  const safeRows = rows || [];
+  const safeSummaries = summaries || [];
+  const hours = safeRows.reduce((sum, r) => sum + Number(r.SessionTimeHours || 0), 0);
+  const jobs = safeRows.reduce((sum, r) => sum + Number(r.TotalJobScan || 0), 0);
+  const workProduced = safeRows.reduce((sum, r) => sum + Number(r.WorkProduced || 0), 0);
+  const productivityPercent = hours > 0 && workProduced > 0 ? workProduced / hours : 0;
+
+  return {
+    associates: safeSummaries.length,
+    hours,
+    jobs,
+    workProduced,
+    productivityPercent,
+    green: safeSummaries.filter(s => s.status === 'GREEN').length,
+    amber: safeSummaries.filter(s => s.status === 'AMBER').length,
+    red: safeSummaries.filter(s => s.status === 'RED').length,
+    noTarget: safeSummaries.filter(s => s.status === 'NO_TARGET').length
+  };
+}
+
 function renderDailySummaryHub() {
   const page = document.getElementById('pageContent');
   if (!page) return;
-  const summaries = buildAssociateSummaries();
-  const totals = summaries.reduce((acc, s) => {
-    acc.hours += Number(s.totalHours || 0);
-    acc.jobs += Number(s.totalJobs || 0);
-    acc.produced += Number(s.workProduced || 0);
-    return acc;
-  }, { hours: 0, jobs: 0, produced: 0 });
-  const pct = totals.hours > 0 ? totals.produced / totals.hours : 0;
+
+  const rows = getInsightRows();
+  const associateSummaries = buildAssociateSummariesFromRows(rows);
+  const totals = getInsightTotals(rows, associateSummaries);
+
+  const dayRows = summarizeInsightRows(rows, r => formatDateKey(r.WorkDate))
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+
+  const deptRows = summarizeInsightRows(rows, r => getDeptLabel(r.FinalDepartment));
+  const stationRows = summarizeInsightRows(rows, r => r.StationGroup || r.AccessPoint || 'Unmapped Station');
+
+  const topAssociates = associateSummaries
+    .filter(s => Number(s.workProduced || 0) > 0)
+    .sort((a, b) => Number(b.workProduced || 0) - Number(a.workProduced || 0))
+    .slice(0, 8);
+
+  const riskAssociates = associateSummaries
+    .filter(s => s.status === 'AMBER' || s.status === 'RED')
+    .sort((a, b) => Number(a.productivityPercent || 0) - Number(b.productivityPercent || 0))
+    .slice(0, 6);
+
   page.innerHTML = `
-    <section class="hub-panel command-card placeholder-panel">
-      <span class="profile-tag">Daily Summary</span>
-      <h2>Daily Production Snapshot</h2>
-      <p>This page is ready for the next build. Current selected week totals are shown below.</p>
-      <div class="placeholder-kpis">
-        <div><span>Total Hours</span><strong>${formatDecimal(totals.hours)}</strong></div>
-        <div><span>Total Jobs</span><strong>${formatNumber(totals.jobs)}</strong></div>
-        <div><span>Work Produced</span><strong>${formatDecimal(totals.produced)}</strong></div>
-        <div><span>Productivity</span><strong>${formatPercent(pct)}</strong></div>
+    <section class="insight-shell">
+      <article class="insight-hero">
+        <div>
+          <span class="profile-tag">Daily Summary</span>
+          <h2>Summary</h2>
+          <p>${escapeHtml(getDeptLabel(STATE.activeDept))} · ${escapeHtml(STATE.activeShift)} · ${escapeHtml(STATE.activeStationGroup || 'ALL')} · ${escapeHtml(STATE.selectedFiscalWeek || STATE.meta.fiscalWeek || '')}</p>
+        </div>
+        <div class="insight-hero-score ${totals.productivityPercent >= 1 ? 'GREEN' : totals.productivityPercent >= .9 ? 'AMBER' : 'RED'}">
+          <span>Productivity</span>
+          <strong>${formatPercent(totals.productivityPercent)}</strong>
+        </div>
+      </article>
+
+      <div class="insight-kpi-grid">
+        <div class="insight-kpi"><span>Associates</span><strong>${formatNumber(totals.associates)}</strong><small>Active people only</small></div>
+        <div class="insight-kpi"><span>Total Jobs</span><strong>${formatNumber(totals.jobs)}</strong><small>Filtered week output</small></div>
+        <div class="insight-kpi"><span>Total Hours</span><strong>${formatDecimal(totals.hours)}</strong><small>Login/session hours</small></div>
+        <div class="insight-kpi"><span>Work Produced</span><strong>${formatDecimal(totals.workProduced)}</strong><small>Target-equivalent hours</small></div>
+        <div class="insight-kpi green"><span>On Target</span><strong>${formatNumber(totals.green)}</strong><small>100%+</small></div>
+        <div class="insight-kpi amber"><span>Watch</span><strong>${formatNumber(totals.amber)}</strong><small>90% - 99%</small></div>
+        <div class="insight-kpi red"><span>Warning</span><strong>${formatNumber(totals.red)}</strong><small>Below 90%</small></div>
+        <div class="insight-kpi"><span>No Target</span><strong>${formatNumber(totals.noTarget)}</strong><small>Missing JPH setup</small></div>
       </div>
+
+      <section class="insight-grid two-col">
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Daily Output by Date</h3>              
+            </div>
+          </div>
+          <div class="daily-summary-list">
+            ${dayRows.length ? dayRows.map(d => `
+              <div class="daily-summary-row ${d.status}">
+                <div>
+                  <strong>${escapeHtml(formatDatePretty(d.label))}</strong>
+                  <span>${formatNumber(d.associateCount)} associates · ${formatDecimal(d.hours)} hrs</span>
+                </div>
+                <div class="daily-summary-metrics">
+                  <b>${formatNumber(d.jobs)}</b>
+                  <small>jobs</small>
+                </div>
+                <div class="daily-summary-metrics">
+                  <b>${formatPercent(d.productivityPercent)}</b>
+                  <small>prod</small>
+                </div>
+              </div>
+            `).join('') : `<div class="empty-card">No daily rows found for this filter.</div>`}
+          </div>
+        </article>
+
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Top Associate Peformace</h3>              
+            </div>
+          </div>
+          <div class="impact-list">
+            ${topAssociates.length ? topAssociates.map((s, idx) => `
+              <button class="impact-row ${s.status}" type="button" onclick="selectAssociateFromScoreboard('${escapeJs(s.associate)}')">
+                <span class="rank-pill">#${idx + 1}</span>
+                <div>
+                  <strong>${escapeHtml(s.associate)}</strong>
+                  <small>${escapeHtml(s.departments || getDeptLabel(STATE.activeDept))}</small>
+                </div>
+                <b>${formatPercent(s.productivityPercent)}</b>
+              </button>
+            `).join('') : `<div class="empty-card">No associate output found.</div>`}
+          </div>
+        </article>
+      </section>
+
+      <section class="insight-grid two-col">
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Department Breakdown</h3>              
+            </div>
+          </div>
+          ${renderInsightTable(deptRows, 'Department')}
+        </article>
+
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Station Group Breakdown</h3>              
+            </div>
+          </div>
+          ${renderInsightTable(stationRows.slice(0, 12), 'Station')}
+        </article>
+      </section>
+
+      ${riskAssociates.length ? `
+        <section class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Watch List</h3>
+              <p>These associates need coaching, note review, or target validation.</p>
+            </div>
+          </div>
+          <div class="watch-grid">
+            ${riskAssociates.map(s => `
+              <button class="watch-card ${s.status}" type="button" onclick="selectAssociateFromScoreboard('${escapeJs(s.associate)}')">
+                <strong>${escapeHtml(s.associate)}</strong>
+                <span>${formatPercent(s.productivityPercent)} · ${formatDecimal(s.totalHours)} hrs · ${formatNumber(s.totalJobs)} jobs</span>
+              </button>
+            `).join('')}
+          </div>
+        </section>
+      ` : ''}
     </section>
   `;
 }
 
 function renderTrendsHub() {
-  renderPlaceholderPage('Weekly Trends', 'Trend charts will go here after we lock the scorecard view.');
+  const page = document.getElementById('pageContent');
+  if (!page) return;
+
+  const rows = getInsightRows();
+  const associateSummaries = buildAssociateSummariesFromRows(rows);
+  const totals = getInsightTotals(rows, associateSummaries);
+
+  const dayRows = summarizeInsightRows(rows, r => formatDateKey(r.WorkDate))
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+
+  const maxDayJobs = Math.max(1, ...dayRows.map(d => Number(d.jobs || 0)));
+  const bestDay = dayRows.slice().sort((a, b) => b.productivityPercent - a.productivityPercent)[0];
+  const weakDay = dayRows.slice().filter(d => d.workProduced > 0).sort((a, b) => a.productivityPercent - b.productivityPercent)[0];
+
+  const stationRows = summarizeInsightRows(rows, r => r.StationGroup || r.AccessPoint || 'Unmapped Station');
+  const strongestStations = stationRows
+    .filter(s => s.workProduced > 0)
+    .sort((a, b) => b.productivityPercent - a.productivityPercent)
+    .slice(0, 6);
+  const weakestStations = stationRows
+    .filter(s => s.workProduced > 0)
+    .sort((a, b) => a.productivityPercent - b.productivityPercent)
+    .slice(0, 6);
+
+  const topAssociates = associateSummaries
+    .filter(s => Number(s.workProduced || 0) > 0)
+    .sort((a, b) => Number(b.productivityPercent || 0) - Number(a.productivityPercent || 0))
+    .slice(0, 8);
+
+  const watchAssociates = associateSummaries
+    .filter(s => s.status === 'AMBER' || s.status === 'RED')
+    .sort((a, b) => Number(a.productivityPercent || 0) - Number(b.productivityPercent || 0))
+    .slice(0, 8);
+
+  page.innerHTML = `
+    <section class="insight-shell">
+      <article class="insight-hero trend">
+        <div>
+          <span class="profile-tag">Weekly Trends</span>
+          <h2>Weekly Performance </h2>
+          <p>${escapeHtml(getDeptLabel(STATE.activeDept))} · ${escapeHtml(STATE.activeShift)} · ${escapeHtml(STATE.selectedFiscalWeek || STATE.meta.fiscalWeek || '')}</p>
+        </div>
+        <div class="insight-hero-score ${totals.productivityPercent >= 1 ? 'GREEN' : totals.productivityPercent >= .9 ? 'AMBER' : 'RED'}">
+          <span>Week Avg</span>
+          <strong>${formatPercent(totals.productivityPercent)}</strong>
+        </div>
+      </article>
+
+      <div class="trend-callout-grid">
+        <div class="trend-callout">
+          <span>Best Day</span>
+          <strong>${bestDay ? escapeHtml(formatDatePretty(bestDay.label)) : '--'}</strong>
+          <small>${bestDay ? formatPercent(bestDay.productivityPercent) : 'No data'}</small>
+        </div>
+        <div class="trend-callout">
+          <span>Weak Day</span>
+          <strong>${weakDay ? escapeHtml(formatDatePretty(weakDay.label)) : '--'}</strong>
+          <small>${weakDay ? formatPercent(weakDay.productivityPercent) : 'No data'}</small>
+        </div>
+        <div class="trend-callout">
+          <span>Strongest Station</span>
+          <strong>${strongestStations[0] ? escapeHtml(strongestStations[0].label) : '--'}</strong>
+          <small>${strongestStations[0] ? formatPercent(strongestStations[0].productivityPercent) : 'No data'}</small>
+        </div>
+        <div class="trend-callout danger">
+          <span>Underperformance Associates</span>
+          <strong>${formatNumber(watchAssociates.length)}</strong>
+          <small>Amber / red only</small>
+        </div>
+      </div>
+
+      <section class="insight-panel">
+        <div class="section-head">
+          <div>
+            <h3>Daily Trend</h3>            
+          </div>
+        </div>
+        <div class="trend-bars">
+          ${dayRows.length ? dayRows.map(d => {
+            const width = Math.max(4, Math.round((Number(d.jobs || 0) / maxDayJobs) * 100));
+            return `
+              <div class="trend-bar-row ${d.status}">
+                <div class="trend-bar-label">
+                  <strong>${escapeHtml(formatDatePretty(d.label))}</strong>
+                  <span>${formatNumber(d.jobs)} jobs · ${formatDecimal(d.hours)} hrs</span>
+                </div>
+                <div class="trend-track">
+                  <div class="trend-fill" style="width:${width}%"></div>
+                </div>
+                <b>${formatPercent(d.productivityPercent)}</b>
+              </div>
+            `;
+          }).join('') : `<div class="empty-card">No daily trend rows found.</div>`}
+        </div>
+      </section>
+
+      <section class="insight-grid two-col">
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Strongest Stations</h3>              
+            </div>
+          </div>
+          <div class="rank-list">
+            ${strongestStations.length ? strongestStations.map((s, idx) => renderRankRow(s, idx)).join('') : `<div class="empty-card">No station productivity data.</div>`}
+          </div>
+        </article>
+
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Low Stations</h3>              
+            </div>
+          </div>
+          <div class="rank-list">
+            ${weakestStations.length ? weakestStations.map((s, idx) => renderRankRow(s, idx)).join('') : `<div class="empty-card">No station risk data.</div>`}
+          </div>
+        </article>
+      </section>
+
+      <section class="insight-grid two-col">
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Top Associate </h3>              
+            </div>
+          </div>
+          <div class="impact-list">
+            ${topAssociates.length ? topAssociates.map((s, idx) => `
+              <button class="impact-row ${s.status}" type="button" onclick="selectAssociateFromScoreboard('${escapeJs(s.associate)}')">
+                <span class="rank-pill">#${idx + 1}</span>
+                <div>
+                  <strong>${escapeHtml(s.associate)}</strong>
+                  <small>${formatDecimal(s.totalHours)} hrs · ${formatNumber(s.totalJobs)} jobs</small>
+                </div>
+                <b>${formatPercent(s.productivityPercent)}</b>
+              </button>
+            `).join('') : `<div class="empty-card">No associate trend data.</div>`}
+          </div>
+        </article>
+
+        <article class="insight-panel">
+          <div class="section-head">
+            <div>
+              <h3>Associate Watch</h3>              
+            </div>
+          </div>
+          <div class="impact-list">
+            ${watchAssociates.length ? watchAssociates.map((s, idx) => `
+              <button class="impact-row ${s.status}" type="button" onclick="selectAssociateFromScoreboard('${escapeJs(s.associate)}')">
+                <span class="rank-pill">#${idx + 1}</span>
+                <div>
+                  <strong>${escapeHtml(s.associate)}</strong>
+                  <small>${formatDecimal(s.totalHours)} hrs · ${formatNumber(s.totalJobs)} jobs</small>
+                </div>
+                <b>${formatPercent(s.productivityPercent)}</b>
+              </button>
+            `).join('') : `<div class="empty-card">No amber/red associates for this filter.</div>`}
+          </div>
+        </article>
+      </section>
+    </section>
+  `;
+}
+
+function renderInsightTable(rows, labelName) {
+  if (!rows || !rows.length) {
+    return `<div class="empty-card">No rows found.</div>`;
+  }
+
+  return `
+    <div class="insight-table-wrap">
+      <table class="insight-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(labelName || 'Group')}</th>
+            <th>Associates</th>
+            <th>Hours</th>
+            <th>Jobs</th>
+            <th>Work Produced</th>
+            <th>Prod %</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr class="${r.status}">
+              <td><strong>${escapeHtml(r.label)}</strong></td>
+              <td>${formatNumber(r.associateCount || 0)}</td>
+              <td>${formatDecimal(r.hours || 0)}</td>
+              <td>${formatNumber(r.jobs || 0)}</td>
+              <td>${formatDecimal(r.workProduced || 0)}</td>
+              <td><b>${formatPercent(r.productivityPercent || 0)}</b></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderRankRow(item, idx) {
+  return `
+    <div class="rank-row ${item.status}">
+      <span class="rank-pill">#${idx + 1}</span>
+      <div>
+        <strong>${escapeHtml(item.label)}</strong>
+        <small>${formatNumber(item.jobs)} jobs · ${formatDecimal(item.hours)} hrs · ${formatNumber(item.associateCount || 0)} associates</small>
+      </div>
+      <b>${formatPercent(item.productivityPercent)}</b>
+    </div>
+  `;
+}
+
+function escapeJs(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
 }
 
 function renderTargetsHub() {
@@ -5186,14 +5574,33 @@ function hasAllAssociateBreakageDetails(summary) {
   });
 }
 
-// Override profile hero to use real associate-level breakage details only.
+// Override profile hero — shows breakage tiles immediately from any cached dates,
+// updates live as each remaining date loads in parallel.
 renderHero = function(summary) {
-  ensureAssociateBreakageDetails(summary);
+  // Fire parallel fetches for all worked dates immediately.
+  ensureAssociateBreakageDetailsFast(summary);
 
   const pct = summary.workProduced > 0 ? Math.min(Math.round(summary.productivityPercent * 100), 180) : 0;
+
+  // Use whatever breakage rows are cached right now — accurate partial counts.
   const breakageRows = getAssociateBreakageRows(summary);
   const quality = buildAssociateBreakageSummary(summary, breakageRows);
-  const detailsReady = hasAllAssociateBreakageDetails(summary);
+
+  // Build per-tile loading indicator: shows "2/5 days" until complete.
+  const dateKeys = getAssociateWorkedDateKeys(summary);
+  const loadedCount = dateKeys.filter(dk => {
+    const ck = getBreakageDateDetailsCacheKey(dk);
+    return !!(STATE.breakageDateDetailsCache && STATE.breakageDateDetailsCache[ck]);
+  }).length;
+  const totalDates = dateKeys.length;
+  const allLoaded = loadedCount >= totalDates && totalDates > 0;
+
+  const lensSmall = allLoaded
+    ? formatQualityPercent(quality.lensPercent)
+    : (loadedCount > 0 ? `${loadedCount}/${totalDates} days ↻` : '↻ loading');
+  const frameSmall = allLoaded
+    ? formatQualityPercent(quality.framePercent)
+    : (loadedCount > 0 ? `${loadedCount}/${totalDates} days ↻` : '↻ loading');
 
   return `
     <section class="profile-hero command-card">
@@ -5250,8 +5657,8 @@ renderHero = function(summary) {
         <span class="metric-icon">◈</span>
         <div>
           <span>Lens Breakage</span>
-          <strong>${detailsReady ? formatNumber(quality.lens) : '...'}</strong>
-          <small>${detailsReady ? formatQualityPercent(quality.lensPercent) : 'Loading actual records'}</small>
+          <strong>${formatNumber(quality.lens)}</strong>
+          <small>${lensSmall}</small>
         </div>
       </div>
 
@@ -5259,39 +5666,46 @@ renderHero = function(summary) {
         <span class="metric-icon">◇</span>
         <div>
           <span>Frame Breakage</span>
-          <strong>${detailsReady ? formatNumber(quality.frame) : '...'}</strong>
-          <small>${detailsReady ? formatQualityPercent(quality.framePercent) : 'Loading actual records'}</small>
+          <strong>${formatNumber(quality.frame)}</strong>
+          <small>${frameSmall}</small>
         </div>
       </div>
     </section>
   `;
 };
 
-// Override associate quality section if used anywhere.
+// Override associate quality section — shows partial counts live as dates load.
 renderAssociateBreakageSection = function(summary) {
-  ensureAssociateBreakageDetails(summary);
+  ensureAssociateBreakageDetailsFast(summary);
 
   const rows = getAssociateBreakageRows(summary);
   const q = buildAssociateBreakageSummary(summary, rows);
   const byReason = buildBreakageDimensionRows(rows, 'BreakageReason', 6);
   const byAccessPoint = buildBreakageDimensionRows(rows, 'AccessPoint', 6);
-  const detailsReady = hasAllAssociateBreakageDetails(summary);
+
+  const dateKeys = getAssociateWorkedDateKeys(summary);
+  const loadedCount = dateKeys.filter(dk => {
+    const ck = getBreakageDateDetailsCacheKey(dk);
+    return !!(STATE.breakageDateDetailsCache && STATE.breakageDateDetailsCache[ck]);
+  }).length;
+  const allLoaded = loadedCount >= dateKeys.length && dateKeys.length > 0;
+  const loadNote = allLoaded ? '' : ` • ${loadedCount}/${dateKeys.length} days ↻`;
 
   return `
     <section class="associate-quality-panel command-card">
       <div class="section-head">
         <div>
           <h3>Quality / Breakage This Week</h3>
-          <p>Matched to this associate by operator name from selected date details.</p>
+          <p>Matched to this associate by operator name from selected date details.${loadNote}</p>
         </div>
         ${statusBadge(q.status)}
       </div>
 
       <div class="quality-kpi-grid compact-quality">
         <article class="quality-kpi"><span>Operator Scans</span><strong>${formatNumber(q.scans)}</strong><small>From Activity</small></article>
-        <article class="quality-kpi"><span>Lens Breakage</span><strong>${detailsReady ? formatNumber(q.lens) : '...'}</strong><small>${detailsReady ? formatQualityPercent(q.lensPercent) : 'Loading'}</small></article>
-        <article class="quality-kpi"><span>Frame Breakage</span><strong>${detailsReady ? formatNumber(q.frame) : '...'}</strong><small>${detailsReady ? formatQualityPercent(q.framePercent) : 'Loading'}</small></article>
-        <article class="quality-kpi"><span>Total Breakage</span><strong>${detailsReady ? formatNumber(q.total) : '...'}</strong><small>${rows.length} records</small></article>
+        <article class="quality-kpi"><span>Lens Breakage</span><strong>${formatNumber(q.lens)}</strong><small>${formatQualityPercent(q.lensPercent)}</small></article>
+        <article class="quality-kpi"><span>Frame Breakage</span><strong>${formatNumber(q.frame)}</strong><small>${formatQualityPercent(q.framePercent)}</small></article>
+        <article class="quality-kpi"><span>Total Breakage</span><strong>${formatNumber(q.total)}</strong><small>${rows.length} records</small></article>
       </div>
 
       <div class="quality-grid-two">
@@ -5450,22 +5864,102 @@ renderFiscalWeekDropdown = function() {
   select.value = getSelectedFiscalWeekKey();
 };
 
-// Make breakage detail loading fail safe so profile does not stay stuck on "Loading actual records".
+// Failsafe: if a date detail fetch fails, write empty array so profile never stays stuck.
 var __fetchBreakageDateDetailsBaseSafe = fetchBreakageDateDetails;
 fetchBreakageDateDetails = function(dateKey) {
   return __fetchBreakageDateDetailsBaseSafe(dateKey)
     .catch(err => {
       console.warn('[Productivity Hub] Breakage date details failed:', err);
-
       STATE.breakageDateDetailsCache = STATE.breakageDateDetailsCache || {};
       STATE.breakageDateDetailsCache[getBreakageDateDetailsCacheKey(dateKey)] = [];
-
       showRefreshStatus('Breakage date details unavailable; showing 0 matched records.');
       renderEverything();
-
       return [];
     });
 };
+
+/************************************************************
+ * PARALLEL BREAKAGE DATE PREFETCH
+ *
+ * ensureAssociateBreakageDetailsFast fires ALL missing date
+ * fetches simultaneously instead of waiting for each one.
+ * Tiles show partial real counts immediately and update as
+ * each date resolves. No more 70s wait on "...".
+ ************************************************************/
+
+function ensureAssociateBreakageDetailsFast(summary) {
+  if (!summary || !summary.rows || !summary.rows.length) return;
+
+  const dateKeys = getAssociateWorkedDateKeys(summary);
+  if (!dateKeys.length) return;
+
+  STATE.associateBreakageLoadingDates = STATE.associateBreakageLoadingDates || {};
+
+  dateKeys.forEach(dateKey => {
+    const cacheKey = getBreakageDateDetailsCacheKey(dateKey);
+    const alreadyCached = !!(STATE.breakageDateDetailsCache && STATE.breakageDateDetailsCache[cacheKey]);
+    const alreadyLoading = !!STATE.associateBreakageLoadingDates[dateKey];
+    if (alreadyCached || alreadyLoading) return;
+
+    STATE.associateBreakageLoadingDates[dateKey] = true;
+
+    fetchBreakageDateDetails(dateKey)
+      .finally(() => {
+        STATE.associateBreakageLoadingDates[dateKey] = false;
+      });
+  });
+}
+
+/************************************************************
+ * BACKGROUND WEEK PREFETCH
+ *
+ * When the user switches fiscal weeks, silently prefetch all
+ * breakage date details for that week in the background with
+ * a small stagger so they are ready before any profile opens.
+ ************************************************************/
+
+(function patchWeekChangeBreakagePrefetch() {
+  const _orig = loadFiscalWeekData;
+  loadFiscalWeekData = function(week) {
+    const result = _orig(week);
+
+    const workDates = (week && week.workDates) ? week.workDates.slice() : [];
+    workDates.forEach((dateKey, idx) => {
+      if (!dateKey) return;
+      setTimeout(() => {
+        const cacheKey = getBreakageDateDetailsCacheKey(dateKey);
+        if (STATE.breakageDateDetailsCache && STATE.breakageDateDetailsCache[cacheKey]) return;
+
+        const qs = new URLSearchParams({
+          action: 'breakageDateDetails',
+          workDate: dateKey,
+          ts: String(Date.now())
+        });
+
+        fetch(`${API_URL}?${qs.toString()}`)
+          .then(r => r.text())
+          .then(text => {
+            let data;
+            try { data = JSON.parse(text); } catch(e) { return; }
+            if (!data || data.ok === false) return;
+
+            const rows = normalizeBreakageRows(
+              data.breakageDateDetails || data.breakageDailySnapshot || []
+            );
+            STATE.breakageDateDetailsCache = STATE.breakageDateDetailsCache || {};
+            STATE.breakageDateDetailsCache[cacheKey] = rows;
+
+            if (STATE.activePage === 'profile') renderEverything();
+          })
+          .catch(() => {});
+      }, idx * 600);
+    });
+
+    return result;
+  };
+})();
+
+console.info('[Productivity Hub] Parallel breakage prefetch active. Tiles show real counts immediately.');
 
 /************************************************************
  * FINAL OVERRIDE — WEBPAGE ZENNI FISCAL WEEK LABEL FIX
@@ -5934,3 +6428,76 @@ document.addEventListener('DOMContentLoaded', () => {
     renderFiscalWeekDropdown();
   }, 1500);
 });
+
+/************************************************************
+ * FINAL OVERRIDE — PRODUCTIVITY ONLY + BREAKAGE COUNTS ONLY
+ *
+ * Productivity Hub should NOT open/load the old Quality / Breakage Hub tab.
+ * Full breakage detail now belongs on BreakageDashboard.html.
+ *
+ * This page keeps only the lightweight associate scorecard breakage counts:
+ * - Lens Breakage
+ * - Frame Breakage
+ ************************************************************/
+
+function renderEverything() {
+  renderTopSummary();
+  renderAssociateDropdown();
+
+  if (STATE.activePage === 'breakage') {
+    STATE.activePage = 'scorecards';
+  }
+
+  if (STATE.activePage === 'dashboard') {
+    renderDashboardHub();
+    return;
+  }
+
+  if (STATE.activePage === 'scorecards') {
+    renderScorecardsPage();
+    return;
+  }
+
+  if (STATE.activePage === 'profile') {
+    renderProfile();
+    return;
+  }
+
+  if (STATE.activePage === 'daily') {
+    renderDailySummaryHub();
+    return;
+  }
+
+  if (STATE.activePage === 'trends') {
+    renderTrendsHub();
+    return;
+  }
+
+  if (STATE.activePage === 'targets') {
+    renderTargetsHub();
+    return;
+  }
+
+  renderPlaceholderPage(STATE.activePage);
+}
+
+function setActivePage(page) {
+  const requestedPage = page || 'dashboard';
+
+  // Old Quality / Breakage Hub tab removed from Productivity.
+  // Full details are now on the separate BreakageDashboard.html page.
+  STATE.activePage = requestedPage === 'breakage' ? 'scorecards' : requestedPage;
+
+  if (STATE.activePage !== 'profile') {
+    STATE.selectedAssociate = STATE.selectedAssociate || '';
+  }
+
+  setActiveSideNav(STATE.activePage === 'profile' ? 'scorecards' : STATE.activePage);
+  renderEverything();
+}
+
+function openSeparateBreakageHub() {
+  window.location.href = 'BreakageDashboard.html';
+}
+
+console.info('[Productivity Hub] Old Breakage Hub tab disabled. Associate scorecard still shows lens/frame breakage counts only.');

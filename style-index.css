@@ -1289,3 +1289,30 @@ body.lms-loading * { cursor: none !important; }
   stroke: #22d3ee;
 }
 
+/* =====================================================
+   BREAKAGE / QUALITY HUB CARD
+===================================================== */
+.card--breakage-quality,
+.card--quality {
+  border-color: rgba(251, 113, 133, 0.20);
+}
+
+.card-accent--quality {
+  background: linear-gradient(90deg, rgba(251, 113, 133, 0.58), transparent);
+}
+
+.badge--quality {
+  background: rgba(251, 113, 133, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(251, 113, 133, 0.28);
+}
+
+.card-btn--quality {
+  background: linear-gradient(135deg, rgba(251, 113, 133, 0.20), rgba(251, 113, 133, 0.10));
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  color: #fecdd3;
+}
+
+.card-btn--quality:hover {
+  background: linear-gradient(135deg, rgba(251, 113, 133, 0.30), rgba(251, 113, 133, 0.15));
+}
