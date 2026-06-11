@@ -1,4 +1,5 @@
 /* Picking WIP — Command Center Logic
+   Patch: prevents empty dailyActivityCounts from overwriting Breakage/Replenishment counts
    Updated for bulletproof backend:
    - Live WIP from payload.data
    - Movement check from payload.movement
@@ -868,23 +869,47 @@ function normalizeDailyStats(stats, dailyActivityCounts = {}, manualCounts = {})
    */
   const dailyBreakage = getNullableNumber_(safeDailyCounts.breakageCountToday);
   const dailyReplenishment = getNullableNumber_(safeDailyCounts.replenishmentCountToday);
+  const statsBreakage = getNullableNumber_(
+    safeStats.breakageCountToday ??
+    safeStats.breakageRecordCountToday ??
+    safeStats.breakageToPickingCountToday
+  );
+  const statsReplenishment = getNullableNumber_(
+    safeStats.replenishmentCountToday ??
+    safeStats.replenishmentRecordCountToday ??
+    safeStats.replenishmentDropCountToday
+  );
   const manualRecordCounts = getManualRecordCounts_(safeManual);
 
-  const breakage = dailyBreakage !== null
+  /*
+   * Do NOT let an empty dailyActivityCounts payload overwrite good API stats.
+   * This is what was forcing Breakage Count and Replenishment Count to 0
+   * after the Picking dashboard loaded.
+   * Priority:
+   *   1) daily activity count when it is greater than 0
+   *   2) pickingDashboard dailyStats value
+   *   3) manual fallback
+   *   4) true zero only when every source is empty/zero
+   */
+  const breakage = dailyBreakage !== null && dailyBreakage > 0
     ? dailyBreakage
-    : getNullableNumber_(safeStats.breakageCountToday) !== null
-      ? num(safeStats.breakageCountToday)
+    : statsBreakage !== null
+      ? statsBreakage
       : manualRecordCounts.breakageCountToday !== null
         ? manualRecordCounts.breakageCountToday
-        : 0;
+        : dailyBreakage !== null
+          ? dailyBreakage
+          : 0;
 
-  const replenishment = dailyReplenishment !== null
+  const replenishment = dailyReplenishment !== null && dailyReplenishment > 0
     ? dailyReplenishment
-    : getNullableNumber_(safeStats.replenishmentCountToday) !== null
-      ? num(safeStats.replenishmentCountToday)
+    : statsReplenishment !== null
+      ? statsReplenishment
       : manualRecordCounts.replenishmentCountToday !== null
         ? manualRecordCounts.replenishmentCountToday
-        : 0;
+        : dailyReplenishment !== null
+          ? dailyReplenishment
+          : 0;
 
   const totalProductivity = num(
     safeStats.totalProductivityToday ||

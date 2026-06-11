@@ -13,6 +13,7 @@ const INCOMING_API_URL = "https://script.google.com/macros/s/AKfycbyI2YqO9wXZ4-v
 const FINISH_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Finish";
 const SURFACE_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Surface";
 const AR_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=productionFlow&area=AR&debug=true";
+const PICKING_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=pickingDashboard&debug=true";
 
 
 const GOALS = {
@@ -1302,8 +1303,8 @@ function renderDashboardMap(summary) {
   const cards = document.getElementById('fccDashboardCards');
   if (!cards) return;
 
-  const finishWip = Number(window.FINISH_WIP_TOTAL || 0);
-  const shipped   = Number(summary?.labTotal?.orderCount || 0);
+  const finishWip  = Number(window.FINISH_WIP_TOTAL || 0);
+  const pickingWip = Number(window.PICKING_TOTAL_WIP || 0);
 
   cards.innerHTML = `
   <div class="fcc-dept-card dashboard-card"
@@ -1401,28 +1402,30 @@ function renderDashboardMap(summary) {
     </div>
 
     <div class="fcc-dept-card dashboard-card"
-         onclick="App.switchTab('mailroom')"
+         onclick="window.location.href='PickWip.html'"
          data-type="dashboard"
-         data-key="Mailroom"
+         data-key="Picking"
          style="cursor:pointer">
 
       <div class="fcc-card-head">
-        <div class="fcc-card-name">Mailroom Dashboard</div>
-        <div class="fcc-card-risk shipped">SHIPPED</div>
+        <div class="fcc-card-name">Picking Dashboard</div>
+        <div class="fcc-card-risk good">LIVE</div>
       </div>
 
-      <div class="fcc-metric-pct" style="color:#facc15">
-        ${shipped.toLocaleString()}
+      <div class="fcc-metric-pct"
+           id="pickingTotalWipValue"
+           style="color:#19c8ff">
+        ${pickingWip.toLocaleString()}
       </div>
 
       <div style="font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-bottom:6px">
-        Orders Shipped
+        Total Picking WIP
       </div>
 
       <div class="fcc-mini-bar">
         <div class="fcc-mini-fill"
-             style="background:#facc15"
-             data-fill="92"></div>
+             style="background:#19c8ff"
+             data-fill="84"></div>
       </div>
     </div>
   `;
@@ -1440,6 +1443,7 @@ function renderDashboardMap(summary) {
   loadFinishWipForFlowMap();
   loadSurfaceWipForFlowMap();
   loadArWipForFlowMap();
+  loadPickingWipForFlowMap();
 }
 
 /* ── BOTTOM MAP — BREAKAGE CARDS ────────────────────────── */
@@ -1475,6 +1479,13 @@ function renderFlowMap(summary) {
     color: '#0feb9a',
     goal: 1.70,
     type: 'production'
+  },
+  {
+    key: '_shipped',
+    label: 'Mailroom Dashboard',
+    color: '#facc15',
+    goal: 0,
+    type: 'dashboard'
   }
 ];
 
@@ -3714,6 +3725,91 @@ function animateMailNumber(id, value) {
   }
 
   requestAnimationFrame(frame);
+}
+
+
+function getFacilityPickingQueueName_(row) {
+  return String(
+    row?.picking ??
+    row?.Picking ??
+    row?.subDepartment ??
+    row?.SubDepartment ??
+    row?.flowStep ??
+    row?.FlowStep ??
+    row?.DisplayName ??
+    row?.displayName ??
+    ''
+  ).trim();
+}
+
+function getFacilityPickingQueueTotal_(row) {
+  return Number(
+    row?.total ??
+    row?.Total ??
+    row?.CurrentWIP ??
+    row?.currentWip ??
+    row?.CurrentJobTotal ??
+    row?.wip ??
+    0
+  ) || 0;
+}
+
+function isFacilityPickingTrackingOnlyQueue_(name) {
+  const key = String(name || '')
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]/g, '');
+
+  return (
+    key === 'SFSCANANDVERIFY' ||
+    key === 'FSVSCANANDVERIFY' ||
+    key === 'FRAMEONLYSCANANDVERIFY'
+  );
+}
+
+async function loadPickingWipForFlowMap() {
+  try {
+    const res = await fetch(`${PICKING_DASH_API_URL}&t=${Date.now()}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const payload = await res.json();
+
+    if (payload.status && payload.status !== "success") {
+      throw new Error(payload.message || "Picking API returned an error");
+    }
+
+    const rows = Array.isArray(payload.wip)
+      ? payload.wip
+      : Array.isArray(payload.data)
+        ? payload.data
+        : [];
+
+    const rowBasedTotal = rows
+      .filter(row => !isFacilityPickingTrackingOnlyQueue_(getFacilityPickingQueueName_(row)))
+      .reduce((total, row) => total + getFacilityPickingQueueTotal_(row), 0);
+
+    const pickingWip = Number(
+      payload.totalPickingWip ??
+      payload.totalWip ??
+      rowBasedTotal ??
+      0
+    ) || 0;
+
+    window.PICKING_TOTAL_WIP = pickingWip;
+
+    const el = document.getElementById("pickingTotalWipValue");
+    if (el) el.textContent = pickingWip.toLocaleString();
+
+    console.log("Picking Map:", {
+      pickingWip,
+      rows
+    });
+
+  } catch (err) {
+    console.error("Picking WIP load failed:", err);
+  }
 }
 
 async function loadFinishWipForFlowMap() {
