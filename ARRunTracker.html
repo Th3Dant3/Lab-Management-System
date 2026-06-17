@@ -80,7 +80,7 @@ input[type=time]:focus{border-color:var(--orange);}
 .panel-title{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;}
 .panel-body{padding:13px 16px;display:flex;flex-direction:column;gap:7px;}
 
-/* ── 3-COL GRID ── */
+/* ── GRIDS ── */
 .three-col{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
 .snapshot-two{grid-template-columns:repeat(2,1fr);}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
@@ -96,11 +96,9 @@ input[type=time]:focus{border-color:var(--orange);}
 .st-inp.b:focus{border-color:var(--blue);}
 .st-inp.p:focus{border-color:var(--purple);}
 .st-inp[readonly]{opacity:.55;cursor:default;}
-/* excluded stations — dimmed border to signal no-WIP-count */
 .st-inp.no-wip{border-style:dashed;opacity:.75;}
 .st-calc{font-family:var(--mono);font-size:9px;color:var(--dim);text-align:right;}
 .st-need{font-family:var(--mono);font-size:9px;text-align:right;}
-/* badge shown next to excluded station names */
 .wip-excl-badge{font-family:var(--mono);font-size:7px;color:var(--dim2);letter-spacing:.06em;border:1px solid var(--border);border-radius:2px;padding:1px 4px;margin-left:4px;vertical-align:middle;}
 
 /* ── CALC BAR ── */
@@ -109,20 +107,98 @@ input[type=time]:focus{border-color:var(--orange);}
 .calc-val{font-family:var(--mono);font-size:16px;font-weight:600;display:block;}
 .calc-lbl{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;display:block;margin-top:2px;}
 
-/* ── HOURLY ── */
+/* ── HOURLY ENTRY ── */
 .hr-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
 .hr-btn{font-family:var(--mono);font-size:9px;padding:4px 9px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;transition:all .15s;}
 .hr-btn:hover{border-color:var(--orange);color:var(--orange);}
 .hr-btn.active{background:var(--odim);border-color:var(--orange);color:var(--orange);}
 .hr-btn.saved{border-color:var(--border2);color:var(--white);}
 .hr-btn.saved.active{background:var(--odim);border-color:var(--orange);color:var(--orange);}
-.btn-add{font-family:var(--mono);font-size:9px;padding:4px 10px;border:1px dashed var(--border2);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;transition:all .15s;}
-.btn-add:hover{border-color:var(--green);color:var(--green);}
 .hr-btn.current{box-shadow:0 0 0 1px var(--orange) inset;}
 .hr-btn.maint::after{content:' +50';color:var(--orange);font-size:7px;margin-left:4px;}
-.hour-fast-card{background:linear-gradient(135deg,rgba(255,153,0,.08),rgba(176,127,255,.05));border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:grid;grid-template-columns:1.2fr 1fr auto;gap:12px;align-items:center;}
-.hour-fast-title{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px;}
-.hour-fast-value{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--orange);}
+.btn-add{font-family:var(--mono);font-size:9px;padding:4px 10px;border:1px dashed var(--border2);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;transition:all .15s;}
+.btn-add:hover{border-color:var(--green);color:var(--green);}
+
+/* ── HOUR ENTRY CARD — redesigned for AR-IN/AR-OUT only ── */
+.hour-meta-card{background:linear-gradient(135deg,rgba(255,153,0,.08),rgba(176,127,255,.05));border:1px solid var(--border2);border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.hour-meta-left{display:flex;flex-direction:column;gap:3px;}
+.hour-meta-title{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;}
+.hour-meta-value{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--orange);}
+.hour-meta-sub{font-family:var(--mono);font-size:8px;color:var(--dim2);}
+
+/* ── MAIN ENTRY GRID ── */
+.ar-entry-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+.ar-entry-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.ar-entry-hd{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);}
+.ar-entry-body{padding:14px;}
+.ar-dual{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ar-field{display:flex;flex-direction:column;gap:5px;}
+.ar-field-lbl{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;}
+.ar-inp{background:var(--s2);border:1px solid var(--border);border-radius:6px;color:var(--white);font-family:var(--mono);font-size:22px;font-weight:600;padding:9px 12px;width:100%;outline:none;transition:border-color .15s;}
+.ar-inp:focus{border-color:var(--orange);}
+.ar-inp.g:focus{border-color:var(--green);}
+.ar-inp.b:focus{border-color:var(--blue);}
+.ar-inp-sub{font-family:var(--mono);font-size:8px;color:var(--dim2);margin-top:2px;text-align:center;}
+
+/* Divider label between IN and OUT */
+.ar-divider{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 0;}
+.ar-div-lbl{font-family:var(--mono);font-size:8px;color:var(--dim2);letter-spacing:.1em;}
+.ar-div-line{flex:1;height:1px;background:var(--border);}
+
+/* ── PIPELINE TIME FLOW ── */
+.pipeline-mini{display:flex;align-items:center;gap:0;overflow-x:auto;padding:10px 0;margin-bottom:10px;}
+.pm-node{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;}
+.pm-box{width:72px;background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:6px 4px;text-align:center;transition:all .2s;}
+.pm-box.active{border-color:var(--orange);background:var(--odim);}
+.pm-box.done{border-color:var(--green);background:var(--gdim);}
+.pm-box.future{opacity:.45;}
+.pm-name{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.05em;text-transform:uppercase;}
+.pm-min{font-family:var(--mono);font-size:10px;font-weight:600;}
+.pm-arr{color:var(--dim2);font-size:12px;padding:0 2px;margin-top:-8px;flex-shrink:0;}
+
+/* ── SHIFT ACCUMULATOR ── */
+.accum-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;}
+.accum-cell{background:var(--s2);padding:10px 12px;text-align:center;}
+.accum-val{font-family:var(--mono);font-size:18px;font-weight:600;display:block;}
+.accum-lbl{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;display:block;margin-top:2px;}
+
+/* ── HOURLY PIPELINE TIMELINE ── */
+.hr-pipe-tbl{width:100%;border-collapse:collapse;}
+.hr-pipe-tbl th{font-family:var(--mono);font-size:8px;font-weight:600;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);background:var(--s2);}
+.hr-pipe-tbl td{font-family:var(--mono);font-size:11px;padding:7px 10px;border-bottom:1px solid rgba(37,42,69,.4);}
+.hr-pipe-tbl tr:last-child td{border-bottom:none;}
+.hr-pipe-tbl tr:hover td{background:rgba(255,153,0,.02);}
+
+/* hour row accent */
+.hr-row-g{border-left:3px solid var(--green);}
+.hr-row-b{border-left:3px solid var(--blue);}
+
+/* progress inline */
+.prog-wrap{height:4px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:3px;}
+.prog{height:100%;border-radius:3px;}
+.prog.g{background:var(--green);}.prog.b{background:var(--blue);}
+
+/* station progress track */
+.station-track{display:flex;align-items:center;gap:3px;}
+.st-seg{width:20px;height:4px;border-radius:2px;background:var(--border);transition:background .3s;}
+.st-seg.done{background:var(--green);}
+.st-seg.active{background:var(--orange);animation:pulse-seg 1.5s infinite;}
+.st-seg.b-done{background:var(--blue);}
+.st-seg.b-active{background:var(--blue);animation:pulse-seg 1.5s infinite;}
+@keyframes pulse-seg{0%,100%{opacity:1;}50%{opacity:.5;}}
+
+/* status pills */
+.status-pill{font-family:var(--mono);font-size:8px;font-weight:600;padding:3px 8px;border-radius:3px;text-align:center;white-space:nowrap;}
+.status-pill.in-pipe{background:var(--odim);color:var(--orange);border:1px solid var(--orange);}
+.status-pill.complete{background:var(--gdim);color:var(--green);border:1px solid var(--green);}
+.status-pill.partial{background:var(--rdim);color:var(--red);border:1px solid var(--red);}
+.status-pill.future{background:rgba(255,255,255,.05);color:var(--dim);border:1px solid var(--border);}
+
+/* ── NOTES ── */
+.note-inp{background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--white);font-family:var(--font);font-size:11px;padding:7px 10px;width:100%;outline:none;resize:none;}
+.note-inp:focus{border-color:var(--orange);}
+
+/* ── MAINTENANCE ── */
 .maint-toggle{display:flex;align-items:center;gap:9px;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;}
 .maint-toggle input{accent-color:var(--orange);width:16px;height:16px;}
 .maint-toggle span{font-family:var(--mono);font-size:10px;color:var(--white);letter-spacing:.08em;text-transform:uppercase;}
@@ -130,20 +206,8 @@ input[type=time]:focus{border-color:var(--orange);}
 .maint-banner{display:none;background:rgba(255,153,0,.11);border:1px solid rgba(255,153,0,.45);border-radius:8px;padding:9px 12px;font-family:var(--mono);font-size:10px;color:var(--orange);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
 .maint-banner.show{display:block;}
 .maint-pill{font-family:var(--mono);font-size:8px;color:var(--orange);border:1px solid var(--orange);background:rgba(255,153,0,.1);border-radius:3px;padding:2px 5px;font-weight:700;}
-@media(max-width:900px){.hour-fast-card{grid-template-columns:1fr;}}
 
-/* ── ARO ── */
-.aro-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
-.aro-blk{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:9px 11px;}
-.aro-lbl{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;}
-.aro-inp{background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--white);font-family:var(--mono);font-size:18px;padding:3px 0;width:100%;outline:none;}
-.aro-inp:focus{border-color:var(--orange);}
-
-/* ── NOTES ── */
-.note-inp{background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--white);font-family:var(--font);font-size:11px;padding:7px 10px;width:100%;outline:none;resize:none;}
-.note-inp:focus{border-color:var(--orange);}
-
-/* ── PIPELINE ── */
+/* ── BOS/EOS SNAPSHOT ── */
 .pipe-flow{display:flex;align-items:flex-start;overflow-x:auto;padding:4px 0;gap:0;}
 .pipe-node{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;cursor:pointer;}
 .pipe-box{width:78px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 4px;text-align:center;transition:all .2s;}
@@ -161,7 +225,7 @@ input[type=time]:focus{border-color:var(--orange);}
 .proj-clbl{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;}
 .proj-cval{font-family:var(--mono);font-size:14px;font-weight:600;}
 
-/* ── TIMELINE ── */
+/* ── TIMELINE (BOS) ── */
 .tl-hdr-row{display:grid;grid-template-columns:70px 70px 1fr 110px 110px 100px;gap:10px;font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;padding:0 10px;margin-bottom:6px;}
 .tl-row{display:grid;grid-template-columns:70px 70px 1fr 110px 110px 100px;gap:10px;align-items:center;padding:8px 10px;border-radius:6px;background:var(--s2);border:1px solid var(--border);margin-bottom:6px;}
 .tl-row.gr{border-left:3px solid var(--green);}.tl-row.bl{border-left:3px solid var(--blue);}.tl-row.cb{border-left:3px solid var(--purple);}
@@ -170,12 +234,12 @@ input[type=time]:focus{border-color:var(--orange);}
 .run-badge.b{background:var(--bdim);color:var(--blue);border:1px solid var(--blue);}
 .run-badge.p{background:var(--pdim);color:var(--purple);border:1px solid var(--purple);}
 .tl-val{font-family:var(--mono);font-size:11px;}
-.prog-wrap{height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
-.prog{height:100%;border-radius:3px;}
-.prog.g{background:var(--green);}.prog.b{background:var(--blue);}.prog.p{background:var(--purple);}
-.status-pill{font-family:var(--mono);font-size:8px;font-weight:600;padding:3px 8px;border-radius:3px;text-align:center;}
-.status-pill.ready{background:var(--gdim);color:var(--green);border:1px solid var(--green);}
-.status-pill.partial{background:var(--rdim);color:var(--red);border:1px solid var(--red);}
+.prog-wrap2{height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.prog2{height:100%;border-radius:3px;}
+.prog2.g{background:var(--green);}.prog2.b{background:var(--blue);}.prog2.p{background:var(--purple);}
+.status-pill2{font-family:var(--mono);font-size:8px;font-weight:600;padding:3px 8px;border-radius:3px;text-align:center;}
+.status-pill2.ready{background:var(--gdim);color:var(--green);border:1px solid var(--green);}
+.status-pill2.partial{background:var(--rdim);color:var(--red);border:1px solid var(--red);}
 
 /* ── HISTORY TABLE ── */
 .hist-wrap{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
@@ -199,22 +263,16 @@ input[type=time]:focus{border-color:var(--orange);}
 .toast.show{transform:translateY(0);opacity:1;}
 .toast.err{background:var(--red);color:#fff;}
 
-/* ── SPINNER ── */
-.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin .6s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-
 .empty-state{text-align:center;padding:28px;font-family:var(--mono);font-size:10px;color:var(--dim);border:1px dashed var(--border2);border-radius:8px;}
 .gap{margin-bottom:14px;}
 
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
-/* stylelint-disable-next-line property-no-vendor-prefix */
 input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 </style>
 </head>
 <body>
 
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <!-- HEADER -->
@@ -241,7 +299,7 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
   </div>
 </div>
 
-<!-- KPI STRIP (always visible) -->
+<!-- KPI STRIP -->
 <div class="kpi-row">
   <div class="kpi g"><div class="kpi-lbl">GREEN Runs Ready</div><div class="kpi-val" id="k_gr">0</div><div class="kpi-sub">full runs of 84</div></div>
   <div class="kpi g"><div class="kpi-lbl">GREEN to Next Run</div><div class="kpi-val" id="k_gn">—</div><div class="kpi-sub">jobs needed</div></div>
@@ -264,9 +322,8 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 <div class="tab-content active" id="tab-bos">
   <div style="height:14px;"></div>
   <div class="sec-hd"><span>Beginning of Shift — WIP Snapshot per Station</span></div>
-  <div class="three-col" id="bosGrid"></div>
+  <div class="three-col snapshot-two" id="bosGrid"></div>
 
-  <!-- Pipeline -->
   <div class="sec-hd"><span>Process Pipeline — Click Station to Project Time</span></div>
   <div class="panel gap">
     <div class="panel-body">
@@ -279,7 +336,6 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
     </div>
   </div>
 
-  <!-- Run Projection -->
   <div class="sec-hd"><span>Run Build Projection</span></div>
   <div class="panel gap">
     <div class="panel-body">
@@ -297,7 +353,9 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 <!-- ══════════ TAB: HOURLY ══════════ -->
 <div class="tab-content" id="tab-hourly">
   <div style="height:14px;"></div>
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+
+  <!-- Hour selector -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
     <div class="hr-nav">
       <span class="lbl-sm">HOUR</span>
       <div id="hrBtns" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
@@ -312,72 +370,114 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
     </div>
   </div>
 
-  <div class="hour-fast-card">
-    <div>
-      <div class="hour-fast-title">Selected Hour</div>
-      <div class="hour-fast-value" id="hrFastWindow">—</div>
-      <div class="kpi-sub">Page suggests the current hour. It will not auto-jump while someone is typing.</div>
+  <!-- Hour meta + maintenance -->
+  <div class="hour-meta-card">
+    <div class="hour-meta-left">
+      <div class="hour-meta-title">Selected Hour</div>
+      <div class="hour-meta-value" id="hrFastWindow">—</div>
+      <div class="hour-meta-sub">Jobs entering AR-IN this hour → tracked through full 340m pipeline to AR-OUT</div>
     </div>
     <label class="maint-toggle">
-      <input type="checkbox" id="hrMaintenance" onchange="calcHrAll(); updateMaintenanceBanner();">
+      <input type="checkbox" id="hrMaintenance" onchange="onHrChange(); updateMaintenanceBanner();">
       <span>Maintenance this hour</span>
       <strong>+50m</strong>
     </label>
-    <div class="calc-cell" style="border-radius:8px;">
+    <div class="calc-cell" style="border-radius:8px;min-width:90px;">
       <span class="calc-val" id="hrDelayLabel" style="color:var(--orange)">0m</span>
       <span class="calc-lbl">Projection Delay</span>
     </div>
   </div>
-  <div class="maint-banner" id="maintBanner">Maintenance active for this hour — run projection delayed by 50 minutes.</div>
+  <div class="maint-banner" id="maintBanner">Maintenance active — pipeline projection delayed +50 minutes for this hour's batch.</div>
 
-  <div class="three-col" id="hrGrid"></div>
-
-  <!-- Hourly Run Projection -->
-  <div class="sec-hd"><span>Hourly Run Build Projection</span></div>
-  <div class="panel gap">
-    <div class="panel-body">
-      <div class="tl-hdr-row"><span>Color</span><span>Run #</span><span>Progress</span><span>Bottleneck</span><span>Est. Chamber</span><span>Status</span></div>
-      <div id="hrTlBody"><div class="empty-state">Enter hourly WIP data above to see run projections</div></div>
+  <!-- AR-IN / AR-OUT entry — COMBINED, color unknown on floor mid-shift -->
+  <div class="ar-entry-card" style="margin-bottom:14px;">
+    <div class="ar-entry-hd">
+      <div class="panel-dot p"></div>
+      <span class="panel-title" style="color:var(--purple)">COMBINED AR — Green + Blue pooled</span>
+      <span style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-left:auto;">Color breakdown estimated from BOS ratio</span>
+    </div>
+    <div class="ar-entry-body">
+      <div class="ar-dual">
+        <div class="ar-field">
+          <div class="ar-field-lbl">AR-IN — total jobs loaded in</div>
+          <input type="number" class="ar-inp" style="border-color:var(--purple);" id="c_ari" placeholder="0" oninput="onHrChange()">
+          <div class="ar-inp-sub">all jobs entering pipeline this hour</div>
+        </div>
+        <div class="ar-field">
+          <div class="ar-field-lbl">AR-OUT — total jobs confirmed out</div>
+          <input type="number" class="ar-inp" style="border-color:var(--purple);" id="c_aro" placeholder="0" oninput="onHrChange()">
+          <div class="ar-inp-sub">all jobs physically exited this hour</div>
+        </div>
+      </div>
+      <!-- BOS ratio breakdown hint -->
+      <div id="bosRatioHint" style="margin-top:10px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <span style="font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;">BOS Ratio Est.</span>
+        <span style="font-family:var(--mono);font-size:9px;">
+          <span style="color:var(--green)">Green</span>
+          <span style="color:var(--dim);margin:0 4px;">/</span>
+          <span style="color:var(--blue)">Blue</span>
+          <span style="color:var(--dim);margin-left:8px;" id="bosRatioLbl">— load BOS to see split</span>
+        </span>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:auto;">
+          Est. this hr: <span style="color:var(--green)" id="hr_est_g">—</span> G
+          <span style="color:var(--dim);margin:0 4px;">/</span>
+          <span style="color:var(--blue)" id="hr_est_b">—</span> B
+        </span>
+      </div>
+      <!-- Shift accumulator mini -->
+      <div style="margin-top:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-radius:6px;overflow:hidden;">
+        <div class="calc-cell"><span class="calc-val" id="chr_total" style="color:var(--purple);font-size:13px;">0</span><span class="calc-lbl">Shift AR-IN</span></div>
+        <div class="calc-cell"><span class="calc-val" id="chr_runs" style="color:var(--purple);font-size:13px;">0</span><span class="calc-lbl">Projected Runs</span></div>
+        <div class="calc-cell"><span class="calc-val" id="chr_out" style="color:var(--purple);font-size:13px;">0</span><span class="calc-lbl">Shift AR-OUT</span></div>
+        <div class="calc-cell"><span class="calc-val" id="chr_need" style="color:var(--orange);font-size:13px;">84</span><span class="calc-lbl">To Next Run</span></div>
+      </div>
     </div>
   </div>
 
-  <div class="two-col">
-    <div class="panel">
-      <div class="panel-hd"><div class="panel-dot g"></div><span class="panel-title" style="color:var(--green)">Green AR-OUT / AR-IN</span></div>
-      <div class="panel-body">
-        <div class="aro-row">
-          <div class="aro-blk"><div class="aro-lbl">GREEN AR-OUT</div><input type="number" class="aro-inp" id="g_aro" placeholder="0" oninput="calcHrAll()"></div>
-          <div class="aro-blk"><div class="aro-lbl">GREEN AR-IN</div><input type="number" class="aro-inp" id="g_ari" placeholder="0" oninput="calcHrAll()"></div>
-        </div>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-hd"><div class="panel-dot b"></div><span class="panel-title" style="color:var(--blue)">Blue AR-OUT / AR-IN</span></div>
-      <div class="panel-body">
-        <div class="aro-row">
-          <div class="aro-blk"><div class="aro-lbl">BLUE AR-OUT</div><input type="number" class="aro-inp" id="b_aro" placeholder="0" oninput="calcHrAll()"></div>
-          <div class="aro-blk"><div class="aro-lbl">BLUE AR-IN</div><input type="number" class="aro-inp" id="b_ari" placeholder="0" oninput="calcHrAll()"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  <!-- Notes -->
   <div class="gap">
     <div class="lbl-sm" style="margin-bottom:5px;">HOUR NOTES — oven waits, downtime, issues</div>
     <textarea class="note-inp" id="hrNote" rows="2" placeholder="e.g. Blue oven wait 47 min, Chamber 5 down 45 min..."></textarea>
   </div>
 
+  <!-- Pipeline time legend -->
+  <div class="sec-hd"><span>Pipeline Time Reference — AR-IN to AR-OUT = 340 min total</span></div>
+  <div class="panel gap">
+    <div class="panel-body" style="padding:10px 14px;">
+      <div class="pipeline-mini" id="pipelineMini"></div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim2);text-align:center;margin-top:4px;">Once jobs enter AR-IN, the system tracks them through all stations using fixed processing times. AR-OUT entries confirm actual output vs projection.</div>
+    </div>
+  </div>
+
+  <!-- Hourly batch projection table -->
+  <div class="sec-hd"><span>Shift AR-IN Batch Tracker — Hourly Pipeline Progress</span></div>
+  <div class="panel gap">
+    <div class="panel-body" style="padding:0;">
+      <div id="hrPipeTable"><div class="empty-state" style="margin:12px;">Enter AR-IN values for each hour to see pipeline tracking</div></div>
+    </div>
+  </div>
+
+  <!-- Shift totals accumulator -->
+  <div class="sec-hd"><span>Shift Accumulator</span></div>
+  <div class="accum-grid" id="accumGrid" style="grid-template-columns:repeat(5,1fr);">
+    <div class="accum-cell"><span class="accum-val" id="acc_cin" style="color:var(--purple)">0</span><span class="accum-lbl">Total AR-IN</span></div>
+    <div class="accum-cell"><span class="accum-val" id="acc_cout" style="color:var(--purple)">0</span><span class="accum-lbl">Total AR-OUT</span></div>
+    <div class="accum-cell"><span class="accum-val" id="acc_gin_est" style="color:var(--green)">0</span><span class="accum-lbl">Est. Green AR-IN</span></div>
+    <div class="accum-cell"><span class="accum-val" id="acc_bin_est" style="color:var(--blue)">0</span><span class="accum-lbl">Est. Blue AR-IN</span></div>
+    <div class="accum-cell"><span class="accum-val" id="acc_runs" style="color:var(--orange)">0</span><span class="accum-lbl">Projected Runs</span></div>
+  </div>
+
+  <!-- History -->
   <div class="sec-hd"><span>Hourly History Log</span></div>
   <div class="hist-wrap">
     <table class="hist-tbl">
       <thead><tr>
         <th>Hour</th><th>Window</th>
-        <th class="p-text">Combined WIP</th><th class="p-text">Combined Runs</th>
-        <th>Maintenance</th><th>Delay</th>
-        <th>Notes</th>
+        <th class="p-text">AR-IN</th><th class="p-text">AR-OUT</th>
+        <th class="g-text">Est. G AR-IN</th><th class="b-text">Est. B AR-IN</th>
+        <th>Maint</th><th>Notes</th>
       </tr></thead>
       <tbody id="histBody"></tbody>
-      <tfoot id="histFoot"></tfoot>
     </table>
   </div>
 </div>
@@ -386,15 +486,14 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 <div class="tab-content" id="tab-eos">
   <div style="height:14px;"></div>
   <div class="sec-hd"><span>End of Shift — WIP Snapshot per Station</span></div>
-  <div class="three-col" id="eosGrid"></div>
+  <div class="three-col snapshot-two" id="eosGrid"></div>
 
-  <!-- BOS vs EOS delta summary -->
   <div class="sec-hd"><span>Shift Delta — BOS vs EOS</span></div>
   <div class="panel gap" id="deltaPanel">
     <div class="panel-body">
       <div class="empty-state" id="deltaEmpty">Save both BOS and EOS snapshots to see shift delta</div>
       <div id="deltaContent" style="display:none;">
-        <div class="three-col" id="deltaGrid"></div>
+        <div class="two-col" id="deltaGrid"></div>
       </div>
     </div>
   </div>
@@ -407,7 +506,7 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 
 <script>
 // ══════════════════════════════════════════════
-// CONFIG — paste your GAS Web App URL here
+// CONFIG
 // ══════════════════════════════════════════════
 const API_URL = 'https://script.google.com/macros/s/AKfycbxg9aZL2_-gJbPSYRL_1QWdfDEVaTFHbdrDX8BUuoUcCOVFYuWS5gfAd2CUfhpqghE/exec';
 
@@ -415,6 +514,8 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxg9aZL2_-gJbPSYRL_1QWd
 // CONSTANTS
 // ══════════════════════════════════════════════
 const CAP = 84;
+
+// Full 9-station pipeline — used for BOS/EOS snapshots and pipeline clickable
 const STATIONS = [
   {key:'surface', name:'SURFACE INS', min:40},
   {key:'arin',    name:'AR-IN',       min:40},
@@ -427,29 +528,25 @@ const STATIONS = [
   {key:'arout',   name:'AR-OUT',      min:30},
 ];
 
-// WIP exclusion is context-dependent:
-//
-// BOS / EOS snapshots — operators can physically count every station at shift start/end
-//   arout   — excluded (output number, never WIP)
-//   t40     — COUNTS as WIP (physically countable at BOS/EOS)
-//   chamber — COUNTS as WIP (physically countable at BOS/EOS)
-//
-// Hourly breakdown — too fast-moving to track mid-hour
-//   arout   — excluded (output, tracked separately below the grid)
-//   t40     — excluded (can't reliably count during the hour)
-//   chamber — excluded (can't reliably count during the hour)
-const WIP_EXCLUDE_SNAP = new Set(['arout']);                    // BOS / EOS
-const WIP_EXCLUDE_HR   = new Set(['t40', 'chamber', 'arout']); // Hourly
+// Pipeline from AR-IN through to AR-OUT (for hourly projection math)
+// Total = 40+60+45+60+40+45+20+30 = 340 minutes
+const PIPELINE_FROM_ARIN = [
+  {key:'arin',    name:'AR-IN',    min:40},
+  {key:'basket',  name:'BASKET',   min:60},
+  {key:'t40',     name:'T40',      min:45},
+  {key:'oven',    name:'OVEN',     min:60},
+  {key:'sector',  name:'SECTOR',   min:40},
+  {key:'chamber', name:'CHAMBER',  min:45},
+  {key:'dering',  name:'DeRING',   min:20},
+  {key:'arout',   name:'AR-OUT',   min:30},
+];
+const PIPELINE_TOTAL_MIN = PIPELINE_FROM_ARIN.reduce((a,s)=>a+s.min,0); // 340
 
-// Stations that COUNT toward WIP total but should NOT show per-row Runs/Need+1
-// because they're paired/dependent stations (not independently buildable runs).
-// t40 pairs with basket, chamber pairs with sector — showing runs for them is misleading.
-// arout is excluded from WIP entirely so it never hits this path.
-const WIP_NOROW = new Set(['t40', 'chamber']);
+// BOS/EOS exclusions
+const WIP_EXCLUDE_SNAP = new Set(['arout']);
+const WIP_NOROW = new Set(['t40','chamber']);
 
-const PIPELINE_FULL = STATIONS;
-const CHAMBER_TO_AROUT = 50; // DeRing(20) + AR-OUT(30) — time from chamber exit to AR-OUT complete
-const MAINT_DELAY_MIN = 50; // Bobby request: maintenance hour delays projection by 50 minutes
+const MAINT_DELAY_MIN = 50;
 const COLOR_META = {
   g:{label:'GREEN AR', var:'var(--green)', cls:'g'},
   b:{label:'BLUE AR',  var:'var(--blue)',  cls:'b'},
@@ -459,13 +556,12 @@ const COLOR_META = {
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
-let activeDay   = todayStr();
-let activeTab   = 'bos';
-let activeHour  = 0;
-let totalHours  = 1;
-let selectedSt  = null;
-let dayCache    = {};
-let refreshTimer = null;
+let activeDay    = todayStr();
+let activeTab    = 'bos';
+let activeHour   = 0;
+let totalHours   = 1;
+let selectedSt   = null;
+let dayCache     = {};
 let isDirtyEditing = false;
 
 // ══════════════════════════════════════════════
@@ -474,55 +570,29 @@ let isDirtyEditing = false;
 function init() {
   setInterval(updateClock, 1000);
   updateClock();
-  buildStaticPanels();
-  buildPipeline();
+  buildSnapshotGrid('bosGrid', 'bos');
+  buildSnapshotGrid('eosGrid', 'eos');
+  buildPipelineClick();
+  buildPipelineMini();
   setupDirtyInputGuard();
   setActiveDay(todayStr());
-
-  // IMPORTANT:
-  // This tracker is a manual-entry tool. Do NOT auto-refresh while leadership is typing.
-  // The old 60-second refresh was overwriting inputs and looked like the page was reloading.
-  // Refresh now happens only on page load, day change, and after save.
-  // If you ever want live refresh again, use startSafeAutoRefresh() below.
-  // startSafeAutoRefresh();
 }
 
 function setupDirtyInputGuard() {
-  document.addEventListener('input', function(e) {
-    if (!e.target) return;
-    const tag = String(e.target.tagName || '').toUpperCase();
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-      isDirtyEditing = true;
-    }
+  document.addEventListener('input', e => {
+    const tag = String(e.target?.tagName||'').toUpperCase();
+    if (tag==='INPUT'||tag==='TEXTAREA') isDirtyEditing=true;
   });
 }
 
-function markCleanAfterSave() {
-  isDirtyEditing = false;
-}
-
-function isUserTypingOrEditing() {
-  const el = document.activeElement;
-  if (!el) return false;
-  const tag = String(el.tagName || '').toUpperCase();
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-}
-
-function startSafeAutoRefresh() {
-  if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => {
-    if (isDirtyEditing || isUserTypingOrEditing()) return;
-    loadDayFromAPI(activeDay, true);
-  }, 60000);
-}
+function markCleanAfterSave() { isDirtyEditing=false; }
 
 function updateClock() {
-  const n = new Date();
-  document.getElementById('clk').textContent = n.toLocaleTimeString('en-US',{hour12:false});
+  document.getElementById('clk').textContent = new Date().toLocaleTimeString('en-US',{hour12:false});
 }
 
 // ══════════════════════════════════════════════
-// TAB SWITCHING
+// TAB
 // ══════════════════════════════════════════════
 function switchTab(id, btn) {
   activeTab = id;
@@ -530,18 +600,16 @@ function switchTab(id, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   btn.classList.add('active');
-
-  updateKPIs();
-  if (id === 'hourly') updateTimeline('hourly');
-  if (id === 'bos')    updateTimeline('bos');
+  if (id==='hourly') { renderHourlyPipeTable(); updateShiftAccumulator(); updateHourlyKPIs(); }
+  if (id==='bos')    updateTimeline('bos');
 }
 
 // ══════════════════════════════════════════════
 // DAY NAV
 // ══════════════════════════════════════════════
 function navDay(delta) {
-  const d = new Date(activeDay + 'T12:00:00');
-  d.setDate(d.getDate() + delta);
+  const d = new Date(activeDay+'T12:00:00');
+  d.setDate(d.getDate()+delta);
   setActiveDay(d.toISOString().split('T')[0]);
 }
 
@@ -549,153 +617,99 @@ function setActiveDay(d) {
   activeDay = d;
   const [y,m,day] = d.split('-');
   document.getElementById('dayLabel').textContent = `${parseInt(m)}/${parseInt(day)}/${y}`;
-  activeHour = d === todayStr() ? getCurrentHourIndex() : 0;
-  totalHours = Math.max(activeHour + 1, 1);
-  loadDayFromAPI(d, false);
+  activeHour = d===todayStr()?getCurrentHourIndex():0;
+  totalHours = Math.max(activeHour+1,1);
+  loadDayFromAPI(d,false);
 }
 
-function todayStr() {
-  const d = new Date();
-  return d.toISOString().split('T')[0];
-}
+function todayStr() { return new Date().toISOString().split('T')[0]; }
 
 // ══════════════════════════════════════════════
-// API CALLS
+// API
 // ══════════════════════════════════════════════
-function setApiStatus(state, text) {
-  const el = document.getElementById('apiStatus');
-  el.className = 'api-status ' + state;
-  el.textContent = text;
+function setApiStatus(state,text) {
+  const el=document.getElementById('apiStatus');
+  el.className='api-status '+state;
+  el.textContent=text;
 }
 
 async function apiGet(params) {
-  const url = API_URL + '?' + new URLSearchParams(params).toString();
-  const res = await fetch(url, {redirect:'follow'});
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const url=API_URL+'?'+new URLSearchParams(params).toString();
+  const res=await fetch(url,{redirect:'follow'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
   return res.json();
 }
 
 async function apiPost(body) {
-  const params = new URLSearchParams({
-    action: body.action,
-    date:   body.date || '',
-    hour:   body.hour !== undefined ? body.hour : '',
-    payload: JSON.stringify(body),
-  });
-  const res = await fetch(API_URL + '?' + params.toString(), {redirect:'follow'});
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const params=new URLSearchParams({action:body.action,date:body.date||'',hour:body.hour!==undefined?body.hour:'',payload:JSON.stringify(body)});
+  const res=await fetch(API_URL+'?'+params.toString(),{redirect:'follow'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
   return res.json();
 }
 
-async function loadDayFromAPI(date, silent) {
-  if (!silent) setApiStatus('loading','LOADING…');
+async function loadDayFromAPI(date,silent) {
+  if(!silent) setApiStatus('loading','LOADING…');
   try {
-    const data = await apiGet({action:'getAll', date});
-    if (data.error) throw new Error(data.error);
-    dayCache[date] = data;
+    const data=await apiGet({action:'getAll',date});
+    if(data.error) throw new Error(data.error);
+    dayCache[date]=data;
     applyDayData(data);
     setApiStatus('ok','API ✓');
   } catch(e) {
     setApiStatus('err','API ✗');
-    if (!silent) showToast('Could not reach API. Check URL in code.', true);
+    if(!silent) showToast('Could not reach API.',true);
   }
 }
 
 function applyDayData(data) {
-  // Guard: only load sections if data actually has content
-  // Prevents a failed/empty API response from wiping inputs the user already entered
-  if (data.bos && Object.keys(data.bos).length > 0) loadSectionInputs('bos', data.bos);
-  if (data.eos && Object.keys(data.eos).length > 0) loadSectionInputs('eos', data.eos);
-  const hours = data.hourly || {};
-  const maxHr = Object.keys(hours).length > 0
-    ? Math.max(...Object.keys(hours).map(Number)) + 1
-    : 1;
-  totalHours = Math.max(totalHours, maxHr, activeHour + 1);
+  if(data.bos&&Object.keys(data.bos).length>0) loadSectionInputs('bos',data.bos);
+  if(data.eos&&Object.keys(data.eos).length>0) loadSectionInputs('eos',data.eos);
+  const hours=data.hourly||{};
+  const maxHr=Object.keys(hours).length>0?Math.max(...Object.keys(hours).map(Number))+1:1;
+  totalHours=Math.max(totalHours,maxHr,activeHour+1);
   buildHourBtns(hours);
-  switchHour(activeHour, hours);
-  renderHistory(hours);
-  calcBosAll(); calcHrAll(); calcEosAll();
-  updateKPIs(hours);
-  updateTimeline(activeTab === 'hourly' ? 'hourly' : 'bos');
-  updateDelta(data.bos, data.eos);
+  switchHour(activeHour,hours);
+  renderHistory();
+  calcBosAll();
+  updateKPIs();
+  updateTimeline('bos');
+  updateDelta(data.bos,data.eos);
 }
 
 // ══════════════════════════════════════════════
-// BUILD STATIC PANELS (BOS / EOS / HR grids)
+// BOS / EOS GRID BUILD
 // ══════════════════════════════════════════════
-function buildStaticPanels() {
-  buildSnapshotGrid('bosGrid', 'bos');
-  buildSnapshotGrid('eosGrid', 'eos');
-  buildSnapshotGrid('hrGrid',  'hr');
-}
-
 function buildSnapshotGrid(containerId, prefix) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = '';
-
-  // BOS / EOS are strict Green + Blue only.
-  // COMBINED is only useful in Hourly Breakdown because hourly WIP can be pooled for run readiness.
-  // BOS / EOS: Green + Blue only.
-  // Hourly: Combined only, because mid-hour floor count is pooled and Green/Blue is unknown.
-  const colorList = (prefix === 'hr') ? ['p'] : ['g','b'];
-  container.classList.toggle('snapshot-two', prefix !== 'hr');
-
-  colorList.forEach(c => {
-    const cm = COLOR_META[c];
-    const panel = document.createElement('div');
-    panel.className = 'panel';
-
-    const excludeSet = (prefix === 'hr') ? WIP_EXCLUDE_HR : WIP_EXCLUDE_SNAP;
-    const isCombined = (c === 'p');
-    // Combined is editable in Hourly because the floor may only know pooled WIP.
-    // BOS / EOS do not render Combined at all.
-    const lockCombinedInput = false;
-    let rows = STATIONS.map(s => {
-      const excluded = excludeSet.has(s.key);
-      // noRow: station counts as WIP but doesn't show per-row Runs/Need+1
-      // (t40 pairs with basket, chamber pairs with sector — runs would be misleading)
-      const noRow = WIP_NOROW.has(s.key) && !excluded;
-
-      const badgeHtml = excluded
-        ? `<span class="wip-excl-badge">${s.key==='arout'?'OUTPUT':'TIME'}</span>`
-        : noRow
-          ? `<span class="wip-excl-badge">PAIRED</span>`
-          : '';
-      const inpClass = `st-inp ${c}${excluded?' no-wip':''}`;
-      // Runs cell: hidden for excluded AND noRow stations
-      const calcCell = (excluded||noRow) ? `<span class="st-calc" style="color:var(--dim2)">—</span>` : `<span class="st-calc" id="${prefix}_${c}_${s.key}_r">—</span>`;
-      // Need+1 cell: hidden for excluded AND noRow stations
-      const needCell = (excluded||noRow) ? `<span class="st-need" style="color:var(--dim2)">—</span>` : `<span class="st-need" id="${prefix}_${c}_${s.key}_n">—</span>`;
-      return `
-      <div class="st-row">
+  const container=document.getElementById(containerId);
+  container.innerHTML='';
+  ['g','b'].forEach(c=>{
+    const cm=COLOR_META[c];
+    const panel=document.createElement('div');
+    panel.className='panel';
+    let rows=STATIONS.map(s=>{
+      const excluded=WIP_EXCLUDE_SNAP.has(s.key);
+      const noRow=WIP_NOROW.has(s.key)&&!excluded;
+      const badgeHtml=excluded?`<span class="wip-excl-badge">OUTPUT</span>`:noRow?`<span class="wip-excl-badge">PAIRED</span>`:'';
+      const inpClass=`st-inp ${c}${excluded?' no-wip':''}`;
+      const calcCell=(excluded||noRow)?`<span class="st-calc" style="color:var(--dim2)">—</span>`:`<span class="st-calc" id="${prefix}_${c}_${s.key}_r">—</span>`;
+      const needCell=(excluded||noRow)?`<span class="st-need" style="color:var(--dim2)">—</span>`:`<span class="st-need" id="${prefix}_${c}_${s.key}_n">—</span>`;
+      return `<div class="st-row">
         <span class="st-lbl">${s.name}${badgeHtml}</span>
         <span class="st-time">${s.min}m</span>
-        <input type="number" class="${inpClass}" id="${prefix}_${c}_${s.key}" placeholder="0"
-          ${lockCombinedInput?'readonly tabindex="-1"':''}
-          oninput="calcPrefixColor('${prefix}','${c}')">
-        ${calcCell}
-        ${needCell}
+        <input type="number" class="${inpClass}" id="${prefix}_${c}_${s.key}" placeholder="0" oninput="calcSnapshotColor('${prefix}','${c}')">
+        ${calcCell}${needCell}
       </div>`;
     }).join('');
-
-    panel.innerHTML = `
-      <div class="panel-hd">
-        <div class="panel-dot ${c}"></div>
-        <span class="panel-title" style="color:${cm.var}">${cm.label}</span>
-      </div>
+    panel.innerHTML=`
+      <div class="panel-hd"><div class="panel-dot ${c}"></div><span class="panel-title" style="color:${cm.var}">${cm.label}</span></div>
       <div class="panel-body">
-        <div class="st-hdr">
-          <span class="st-lbl">Station</span><span class="st-lbl">Time</span>
-          <span class="st-lbl">WIP</span>
-          <span class="st-lbl" style="text-align:right">Runs</span>
-          <span class="st-lbl" style="text-align:right">Need +1</span>
-        </div>
+        <div class="st-hdr"><span class="st-lbl">Station</span><span class="st-lbl">Time</span><span class="st-lbl">WIP</span><span class="st-lbl" style="text-align:right">Runs</span><span class="st-lbl" style="text-align:right">Need +1</span></div>
         ${rows}
         <div class="calc-bar">
           <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_total" style="color:${cm.var}">0</span><span class="calc-lbl">Total WIP</span></div>
-          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_runs"  style="color:${cm.var}">0</span><span class="calc-lbl">Full Runs</span></div>
-          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_left"  style="color:var(--dim)">0</span><span class="calc-lbl">Leftover</span></div>
-          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_need"  style="color:var(--orange)">84</span><span class="calc-lbl">To Next Run</span></div>
+          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_runs" style="color:${cm.var}">0</span><span class="calc-lbl">Full Runs</span></div>
+          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_left" style="color:var(--dim)">0</span><span class="calc-lbl">Leftover</span></div>
+          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_need" style="color:var(--orange)">84</span><span class="calc-lbl">To Next Run</span></div>
         </div>
       </div>`;
     container.appendChild(panel);
@@ -703,639 +717,575 @@ function buildSnapshotGrid(containerId, prefix) {
 }
 
 // ══════════════════════════════════════════════
-// CALC — core snapshot calculator
-// BOS/EOS: only arout excluded from WIP. Hourly: t40, chamber, arout excluded.
-// WIP_NOROW stations count toward WIP total but don't show per-row runs/need.
-// Hourly COMBINED (p) is manual/editable because Green vs Blue may be unknown mid-shift.
+// SNAPSHOT CALC (BOS/EOS)
 // ══════════════════════════════════════════════
-
-function calcManualColor(prefix, c, excludeSet) {
-  let total = 0;
-  STATIONS.forEach(s => {
-    const v = getN(`${prefix}_${c}_${s.key}`);
-    const excluded = excludeSet.has(s.key);
-    const noRow    = WIP_NOROW.has(s.key) && !excluded;
-
-    if (!excluded) total += v;
-
-    if (!excluded && !noRow) {
-      setEl(`${prefix}_${c}_${s.key}_r`, v>0 ? `${Math.floor(v/CAP)}r+${v%CAP}` : '—');
-      const need = v%CAP===0 ? (v>0?0:CAP) : CAP-(v%CAP);
-      const nEl = document.getElementById(`${prefix}_${c}_${s.key}_n`);
-      if (nEl) nEl.innerHTML = v>0&&need<CAP
-        ? `<span style="color:var(--orange)">${need}</span>`
-        : `<span style="color:var(--dim2)">—</span>`;
+function calcSnapshotColor(prefix, c) {
+  let total=0;
+  STATIONS.forEach(s=>{
+    const excluded=WIP_EXCLUDE_SNAP.has(s.key);
+    const noRow=WIP_NOROW.has(s.key)&&!excluded;
+    const v=getN(`${prefix}_${c}_${s.key}`);
+    if(!excluded) total+=v;
+    if(!excluded&&!noRow) {
+      setEl(`${prefix}_${c}_${s.key}_r`, v>0?`${Math.floor(v/CAP)}r+${v%CAP}`:'—');
+      const need=v%CAP===0?(v>0?0:CAP):CAP-(v%CAP);
+      const nEl=document.getElementById(`${prefix}_${c}_${s.key}_n`);
+      if(nEl) nEl.innerHTML=v>0&&need<CAP?`<span style="color:var(--orange)">${need}</span>`:`<span style="color:var(--dim2)">—</span>`;
     }
   });
-
-  const runs=Math.floor(total/CAP), left=total%CAP, need=left===0?(total>0?0:CAP):CAP-left;
-  setEl(`${prefix}_${c}_total`, total);
-  setEl(`${prefix}_${c}_runs`, runs);
-  setEl(`${prefix}_${c}_left`, left);
-  const nEl = document.getElementById(`${prefix}_${c}_need`);
-  if (nEl) { nEl.textContent=need; nEl.style.color=need===0?'var(--green)':need<20?'var(--red)':'var(--orange)'; }
+  const runs=Math.floor(total/CAP),left=total%CAP,need=left===0?(total>0?0:CAP):CAP-left;
+  setEl(`${prefix}_${c}_total`,total);
+  setEl(`${prefix}_${c}_runs`,runs);
+  setEl(`${prefix}_${c}_left`,left);
+  const nEl=document.getElementById(`${prefix}_${c}_need`);
+  if(nEl){nEl.textContent=need;nEl.style.color=need===0?'var(--green)':need<20?'var(--red)':'var(--orange)';}
   return {total,runs,left,toNext:need};
 }
 
-function calcSnapshotColor(prefix, c) {
-  const excludeSet = (prefix === 'hr') ? WIP_EXCLUDE_HR : WIP_EXCLUDE_SNAP;
+function calcBosAll(){['g','b'].forEach(c=>calcSnapshotColor('bos',c));updateTimeline('bos');updateKPIs();}
+function calcEosAll(){['g','b'].forEach(c=>calcSnapshotColor('eos',c));}
 
-  // Hourly COMBINED is manual. Do not auto-sum Green + Blue.
-  // Leadership may only know pooled WIP during the hour.
-  if (prefix === 'hr' && c === 'p') {
-    return calcManualColor(prefix, c, excludeSet);
-  }
-
-  // Non-hourly combined is not rendered, but keep this safe fallback.
-  if (c === 'p') {
-    return calcManualColor(prefix, c, excludeSet);
-  }
-
-  // GREEN / BLUE: standard calc
-  const result = calcManualColor(prefix, c, excludeSet);
-
-  // Only auto-recalc Combined outside Hourly.
-  // In Hourly, Combined is manual pooled WIP and must not be overwritten by G+B.
-  if (prefix !== 'hr') calcCombined(prefix, excludeSet);
-  return result;
-}
-
-// Recalculate the combined (p) panel from current G+B values
-function calcCombined(prefix, excludeSet) {
-  let total = 0;
-  STATIONS.forEach(s => {
-    const excluded = excludeSet.has(s.key);
-    const pEl = document.getElementById(`${prefix}_p_${s.key}`);
-    if (!excluded) {
-      const combined = getN(`${prefix}_g_${s.key}`) + getN(`${prefix}_b_${s.key}`);
-      if (pEl) pEl.value = combined > 0 ? combined : '';
-      total += combined;
-    } else {
-      if (pEl) pEl.value = '';
-    }
-  });
-  const runs=Math.floor(total/CAP), left=total%CAP, need=left===0?(total>0?0:CAP):CAP-left;
-  setEl(`${prefix}_p_total`, total);
-  setEl(`${prefix}_p_runs`, runs);
-  setEl(`${prefix}_p_left`, left);
-  const nEl = document.getElementById(`${prefix}_p_need`);
-  if (nEl) { nEl.textContent=need; nEl.style.color=need===0?'var(--green)':need<20?'var(--red)':'var(--orange)'; }
-}
-
-function calcPrefixColor(prefix, c) {
-  calcSnapshotColor(prefix, c);
-  if (prefix === 'bos') { updateTimeline('bos'); updateKPIs(null); }
-  if (prefix === 'eos') { updateDeltaFromInputs(); }
-  if (prefix === 'hr')  { updateKPIs(null); updateTimeline('hourly'); }
-}
-function calcBosColor(c) { calcPrefixColor('bos', c); }
-function calcEosColor(c) { calcPrefixColor('eos', c); }
-function calcHrColor(c)  { calcPrefixColor('hr',  c); }
-// BOS/EOS calculate Green + Blue. Hourly calculates manual Combined only.
-function calcBosAll()    { ['g','b'].forEach(c=>calcSnapshotColor('bos',c)); updateTimeline('bos'); }
-function calcEosAll()    { ['g','b'].forEach(c=>calcSnapshotColor('eos',c)); }
-function calcHrAll()     { ['p'].forEach(c=>calcSnapshotColor('hr', c)); updateKPIs(null); updateTimeline('hourly'); }
-
-function loadSectionInputs(prefix, data) {
-  if (!data) return;
-  ['g','b','p'].forEach(c => {
-    // Guard: data[c] must be an object with station keys, not a primitive
-    if (!data[c] || typeof data[c] !== 'object') return;
-    STATIONS.forEach(s => {
-      const el = document.getElementById(`${prefix}_${c}_${s.key}`);
-      if (el) el.value = data[c][s.key] || '';
-    });
-    calcSnapshotColor(prefix, c);
-  });
-}
-
-function getSectionData(prefix) {
-  const r = {};
-  ['g','b','p'].forEach(c => {
-    r[c] = {};
-    STATIONS.forEach(s => { r[c][s.key] = getN(`${prefix}_${c}_${s.key}`); });
-  });
-  return r;
-}
-
-function clearBOS() { clearSection('bos'); }
-function clearEOS() { clearSection('eos'); }
-function clearSection(prefix) {
-  ['g','b','p'].forEach(c => {
-    STATIONS.forEach(s => { const el=document.getElementById(`${prefix}_${c}_${s.key}`); if(el)el.value=''; });
+function loadSectionInputs(prefix,data){
+  if(!data) return;
+  ['g','b'].forEach(c=>{
+    if(!data[c]||typeof data[c]!=='object') return;
+    STATIONS.forEach(s=>{const el=document.getElementById(`${prefix}_${c}_${s.key}`);if(el)el.value=data[c][s.key]||'';});
     calcSnapshotColor(prefix,c);
   });
 }
 
+function getSectionData(prefix){
+  const r={};
+  ['g','b'].forEach(c=>{r[c]={};STATIONS.forEach(s=>{r[c][s.key]=getN(`${prefix}_${c}_${s.key}`);});});
+  return r;
+}
+
+function clearSection(prefix){['g','b'].forEach(c=>{STATIONS.forEach(s=>{const el=document.getElementById(`${prefix}_${c}_${s.key}`);if(el)el.value='';});calcSnapshotColor(prefix,c);});}
+function clearBOS(){clearSection('bos');}
+function clearEOS(){clearSection('eos');}
+
 // ══════════════════════════════════════════════
 // SAVE BOS / EOS
 // ══════════════════════════════════════════════
-async function saveBOS() {
+async function saveBOS(){
   setApiStatus('loading','SAVING…');
-  try {
-    const data = getSectionData('bos');
-    const res = await apiPost({action:'saveBOS', date:activeDay, data});
-    if (res.error) throw new Error(res.error);
-    showToast('BOS Snapshot saved ✓');
-    markCleanAfterSave();
-    setApiStatus('ok','API ✓');
-    if (!dayCache[activeDay]) dayCache[activeDay] = {};
-    dayCache[activeDay].bos = data;
-    updateDelta(data, dayCache[activeDay]?.eos);
-  } catch(e) { setApiStatus('err','API ✗'); showToast('Save failed: ' + e.message, true); }
+  try{
+    const data=getSectionData('bos');
+    const res=await apiPost({action:'saveBOS',date:activeDay,data});
+    if(res.error) throw new Error(res.error);
+    showToast('BOS Snapshot saved ✓');markCleanAfterSave();setApiStatus('ok','API ✓');
+    if(!dayCache[activeDay]) dayCache[activeDay]={};
+    dayCache[activeDay].bos=data;
+    updateDelta(data,dayCache[activeDay]?.eos);
+  }catch(e){setApiStatus('err','API ✗');showToast('Save failed: '+e.message,true);}
 }
 
-async function saveEOS() {
+async function saveEOS(){
   setApiStatus('loading','SAVING…');
-  try {
-    const data = getSectionData('eos');
-    const res = await apiPost({action:'saveEOS', date:activeDay, data});
-    if (res.error) throw new Error(res.error);
-    showToast('EOS Snapshot saved ✓');
-    markCleanAfterSave();
-    setApiStatus('ok','API ✓');
-    if (!dayCache[activeDay]) dayCache[activeDay] = {};
-    dayCache[activeDay].eos = data;
-    updateDelta(dayCache[activeDay]?.bos, data);
-  } catch(e) { setApiStatus('err','API ✗'); showToast('Save failed: ' + e.message, true); }
+  try{
+    const data=getSectionData('eos');
+    const res=await apiPost({action:'saveEOS',date:activeDay,data});
+    if(res.error) throw new Error(res.error);
+    showToast('EOS Snapshot saved ✓');markCleanAfterSave();setApiStatus('ok','API ✓');
+    if(!dayCache[activeDay]) dayCache[activeDay]={};
+    dayCache[activeDay].eos=data;
+    updateDelta(dayCache[activeDay]?.bos,data);
+  }catch(e){setApiStatus('err','API ✗');showToast('Save failed: '+e.message,true);}
 }
 
 // ══════════════════════════════════════════════
-// HOURLY
+// HOURLY — simplified AR-IN / AR-OUT only
 // ══════════════════════════════════════════════
-function buildHourBtns(savedHours) {
-  const sh = shiftStartMin();
-  const container = document.getElementById('hrBtns');
-  container.innerHTML = '';
-  for (let i=0; i<totalHours; i++) {
-    const btn = document.createElement('button');
-    const hasSave = savedHours && savedHours[i];
-    const hasMaint = hasSave && (savedHours[i].maintenance || Number(savedHours[i].delayMin) > 0);
-    const isCurrent = i === getCurrentHourIndex() && activeDay === todayStr();
-    btn.className = 'hr-btn' + (i===activeHour?' active':'') + (hasSave?' saved':'') + (hasMaint?' maint':'') + (isCurrent?' current':'');
-    btn.textContent = `${fmt12(sh + i*60).replace(':00','')}`;
-    btn.onclick = (()=>{const idx=i;return ()=>{ autoSaveHourLocally(); switchHour(idx, savedHours||{}); };})();
+function buildHourBtns(savedHours){
+  const sh=shiftStartMin();
+  const container=document.getElementById('hrBtns');
+  container.innerHTML='';
+  for(let i=0;i<totalHours;i++){
+    const btn=document.createElement('button');
+    const hasSave=savedHours&&savedHours[i];
+    const hasMaint=hasSave&&(savedHours[i].maintenance||Number(savedHours[i].delayMin)>0);
+    const isCurrent=i===getCurrentHourIndex()&&activeDay===todayStr();
+    btn.className='hr-btn'+(i===activeHour?' active':'')+(hasSave?' saved':'')+(hasMaint?' maint':'')+(isCurrent?' current':'');
+    btn.textContent=`${fmt12(sh+i*60).replace(':00','')}`;
+    btn.onclick=(()=>{const idx=i;return()=>{autoSaveHourLocally();switchHour(idx,savedHours||{});};})();
     container.appendChild(btn);
   }
   updateHrLabel();
 }
 
-function updateHrLabel() {
-  const sh = shiftStartMin();
-  const startMin = sh + activeHour*60;
-  const label = `${fmt12(startMin)} – ${fmt12(startMin+60)}`;
-  document.getElementById('hrWindowLabel').textContent = label;
-  const fast = document.getElementById('hrFastWindow');
-  if (fast) fast.textContent = `HR${activeHour+1} • ${label}`;
+function updateHrLabel(){
+  const sh=shiftStartMin();
+  const startMin=sh+activeHour*60;
+  const label=`${fmt12(startMin)} – ${fmt12(startMin+60)}`;
+  document.getElementById('hrWindowLabel').textContent=label;
+  const fast=document.getElementById('hrFastWindow');
+  if(fast) fast.textContent=`HR${activeHour+1} • ${label}`;
 }
 
-function getCurrentHourIndex() {
-  const now = new Date();
-  const nowMin = now.getHours()*60 + now.getMinutes();
-  const idx = Math.floor((nowMin - shiftStartMin()) / 60);
-  return Math.max(0, Math.min(23, idx));
+function getCurrentHourIndex(){
+  const now=new Date();
+  const nowMin=now.getHours()*60+now.getMinutes();
+  return Math.max(0,Math.min(23,Math.floor((nowMin-shiftStartMin())/60)));
 }
 
-function goCurrentHour() {
+function goCurrentHour(){
   autoSaveHourLocally();
-  const idx = getCurrentHourIndex();
-  totalHours = Math.max(totalHours, idx + 1);
-  const saved = dayCache[activeDay]?.hourly || {};
+  const idx=getCurrentHourIndex();
+  totalHours=Math.max(totalHours,idx+1);
+  const saved=dayCache[activeDay]?.hourly||{};
   buildHourBtns(saved);
-  switchHour(idx, saved);
+  switchHour(idx,saved);
 }
 
-function addHour() {
+function addHour(){
   autoSaveHourLocally();
   totalHours++;
-  const saved = dayCache[activeDay]?.hourly || {};
+  const saved=dayCache[activeDay]?.hourly||{};
   buildHourBtns(saved);
-  switchHour(totalHours-1, saved);
+  switchHour(totalHours-1,saved);
 }
 
-function switchHour(i, savedHours) {
-  activeHour = i;
-  const snap = savedHours ? savedHours[i] : null;
-  ['g','b','p'].forEach(c => {
-    STATIONS.forEach(s => {
-      const el = document.getElementById(`hr_${c}_${s.key}`);
-      if (el) el.value = (snap&&snap[c]) ? (snap[c][s.key]||'') : '';
-    });
-  });
-  ['g_aro','g_ari','b_aro','b_ari'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = snap ? (snap[id.replace('_','')] || snap[id] || '') : '';
-  });
-  document.getElementById('hrNote').value = snap ? (snap.note||'') : '';
-  const maint = document.getElementById('hrMaintenance');
-  if (maint) maint.checked = !!(snap && (snap.maintenance || Number(snap.delayMin) > 0));
+function switchHour(i,savedHours){
+  activeHour=i;
+  const snap=savedHours?savedHours[i]:null;
+  // Combined AR-IN/AR-OUT — back-compat all schema versions
+  const cAri = snap ? getHourAri(snap) || '' : '';
+  const cAro = snap ? getHourAro(snap) || '' : '';
+  setInpVal('c_ari', cAri);
+  setInpVal('c_aro', cAro);
+  document.getElementById('hrNote').value=snap?(snap.note||''):'';
+  const maint=document.getElementById('hrMaintenance');
+  if(maint) maint.checked=!!(snap&&(snap.maintenance||Number(snap.delayMin)>0));
   buildHourBtns(savedHours||{});
   updateMaintenanceBanner();
-  calcHrAll();
+  onHrChange();
 }
 
-function buildHourSnap() {
-  const snap = {g:{},b:{},p:{},g_aro:0,g_ari:0,b_aro:0,b_ari:0,note:'',maintenance:false,delayMin:0};
-  ['g','b','p'].forEach(c => { STATIONS.forEach(s => { snap[c][s.key]=getN(`hr_${c}_${s.key}`); }); });
-  snap.g_aro=getN('g_aro'); snap.g_ari=getN('g_ari');
-  snap.b_aro=getN('b_aro'); snap.b_ari=getN('b_ari');
-  snap.maintenance = !!document.getElementById('hrMaintenance')?.checked;
-  snap.delayMin = snap.maintenance ? MAINT_DELAY_MIN : 0;
-  snap.note=document.getElementById('hrNote').value.trim();
-  return snap;
+function setInpVal(id,val){
+  const el=document.getElementById(id);
+  if(el) el.value=(val!==undefined&&val!==null&&val!=='')?val:'';
 }
 
-function updateMaintenanceBanner() {
-  const active = !!document.getElementById('hrMaintenance')?.checked;
-  const banner = document.getElementById('maintBanner');
-  const delay = document.getElementById('hrDelayLabel');
-  if (banner) banner.classList.toggle('show', active);
-  if (delay) delay.textContent = active ? `+${MAINT_DELAY_MIN}m` : '0m';
+function buildHourSnap(){
+  return {
+    c_ari: getN('c_ari'),
+    c_aro: getN('c_aro'),
+    maintenance: !!document.getElementById('hrMaintenance')?.checked,
+    delayMin: document.getElementById('hrMaintenance')?.checked?MAINT_DELAY_MIN:0,
+    note: document.getElementById('hrNote').value.trim(),
+  };
 }
 
-function autoSaveHourLocally() {
-  const snap = buildHourSnap();
-  const hasData = ['g','b','p'].some(c=>STATIONS.some(s=>snap[c][s.key]>0))||snap.g_aro||snap.b_aro;
-  if (!hasData) return;
-  if (!dayCache[activeDay]) dayCache[activeDay]={};
-  if (!dayCache[activeDay].hourly) dayCache[activeDay].hourly={};
-  dayCache[activeDay].hourly[activeHour] = snap;
+function updateMaintenanceBanner(){
+  const active=!!document.getElementById('hrMaintenance')?.checked;
+  document.getElementById('maintBanner')?.classList.toggle('show',active);
+  const delay=document.getElementById('hrDelayLabel');
+  if(delay) delay.textContent=active?`+${MAINT_DELAY_MIN}m`:'0m';
 }
 
-async function saveHour(goNext) {
-  const snap = buildHourSnap();
+function autoSaveHourLocally(){
+  const snap=buildHourSnap();
+  if(!snap.c_ari&&!snap.c_aro) return;
+  if(!dayCache[activeDay]) dayCache[activeDay]={};
+  if(!dayCache[activeDay].hourly) dayCache[activeDay].hourly={};
+  dayCache[activeDay].hourly[activeHour]=snap;
+}
+
+// Called on every AR-IN/AR-OUT input change
+function onHrChange(){
+  autoSaveHourLocally();
+  updateHourlyKPIs();
+  renderHourlyPipeTable();
+  updateShiftAccumulator();
+  renderHistory();
+}
+
+async function saveHour(goNext){
+  const snap=buildHourSnap();
   setApiStatus('loading','SAVING…');
-  try {
-    const res = await apiPost({action:'saveHour', date:activeDay, hour:activeHour, data:snap});
-    if (res.error) throw new Error(res.error);
-    if (!dayCache[activeDay]) dayCache[activeDay]={};
-    if (!dayCache[activeDay].hourly) dayCache[activeDay].hourly={};
-    dayCache[activeDay].hourly[activeHour] = snap;
-    const saved = dayCache[activeDay].hourly;
+  try{
+    const res=await apiPost({action:'saveHour',date:activeDay,hour:activeHour,data:snap});
+    if(res.error) throw new Error(res.error);
+    if(!dayCache[activeDay]) dayCache[activeDay]={};
+    if(!dayCache[activeDay].hourly) dayCache[activeDay].hourly={};
+    dayCache[activeDay].hourly[activeHour]=snap;
+    const saved=dayCache[activeDay].hourly;
     buildHourBtns(saved);
-    renderHistory(saved);
-    updateKPIs(saved);
-    showToast(`Hour ${activeHour+1} saved ✓${snap.maintenance ? ' • Maintenance +50m' : ''}`);
-    markCleanAfterSave();
-    setApiStatus('ok','API ✓');
-    if (goNext) {
-      if (activeHour >= totalHours-1) totalHours++;
+    renderHistory();
+    updateHourlyKPIs();
+    showToast(`Hour ${activeHour+1} saved ✓${snap.maintenance?' • Maint +50m':''}`);
+    markCleanAfterSave();setApiStatus('ok','API ✓');
+    if(goNext){
+      if(activeHour>=totalHours-1) totalHours++;
       buildHourBtns(saved);
-      switchHour(activeHour+1, saved);
+      switchHour(activeHour+1,saved);
     }
-  } catch(e) { setApiStatus('err','API ✗'); showToast('Save failed: '+e.message, true); }
+  }catch(e){setApiStatus('err','API ✗');showToast('Save failed: '+e.message,true);}
 }
 
-function clearHour() {
-  ['g','b','p'].forEach(c=>STATIONS.forEach(s=>{const el=document.getElementById(`hr_${c}_${s.key}`);if(el)el.value='';}));
-  ['g_aro','g_ari','b_aro','b_ari'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+function clearHour(){
+  ['c_ari','c_aro'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('hrNote').value='';
-  const maint = document.getElementById('hrMaintenance');
-  if (maint) maint.checked = false;
+  const m=document.getElementById('hrMaintenance');if(m)m.checked=false;
   updateMaintenanceBanner();
-  calcHrAll();
+  onHrChange();
 }
 
 // ══════════════════════════════════════════════
-// READ HELPERS — respect WIP_EXCLUDE
+// PIPELINE MINI (read-only reference)
 // ══════════════════════════════════════════════
-function readHrColor(c) {
-  let total=0,bottleneck=null,bottleneckTime=0;
-  STATIONS.forEach(s=>{
-    const v=getN(`hr_${c}_${s.key}`);
-    if(!WIP_EXCLUDE_HR.has(s.key)){
-      total+=v;
-      if(v>0&&s.min>bottleneckTime){bottleneckTime=s.min;bottleneck=s;}
-    }
+function buildPipelineMini(){
+  const wrap=document.getElementById('pipelineMini');
+  if(!wrap) return;
+  wrap.innerHTML='';
+  let cum=0;
+  PIPELINE_FROM_ARIN.forEach((s,i)=>{
+    cum+=s.min;
+    const node=document.createElement('div');
+    node.className='pm-node';
+    node.innerHTML=`<div class="pm-box"><div class="pm-name">${s.name}</div><div class="pm-min" style="color:var(--orange)">${s.min}m</div></div><div style="font-family:var(--mono);font-size:7px;color:var(--dim2);margin-top:2px;">+${cum}m</div>`;
+    wrap.appendChild(node);
+    if(i<PIPELINE_FROM_ARIN.length-1){const arr=document.createElement('div');arr.className='pm-arr';arr.textContent='→';arr.style.marginTop='10px';wrap.appendChild(arr);}
   });
-  return {total,fullRuns:Math.floor(total/CAP),leftover:total%CAP,toNext:total%CAP===0?(total>0?0:CAP):CAP-(total%CAP),bottleneck};
 }
 
-function readBosColor(c) {
-  let total=0,bottleneck=null,bottleneckTime=0;
+// ══════════════════════════════════════════════
+// BOS RATIO — derive G/B split from BOS snapshot
+// ══════════════════════════════════════════════
+function getBosRatio(){
+  let gTotal=0,bTotal=0;
   STATIONS.forEach(s=>{
-    const v=getN(`bos_${c}_${s.key}`);
     if(!WIP_EXCLUDE_SNAP.has(s.key)){
-      total+=v;
-      if(v>0&&s.min>bottleneckTime){bottleneckTime=s.min;bottleneck=s;}
+      gTotal+=getN(`bos_g_${s.key}`);
+      bTotal+=getN(`bos_b_${s.key}`);
     }
   });
-  return {total,fullRuns:Math.floor(total/CAP),leftover:total%CAP,toNext:total%CAP===0?(total>0?0:CAP):CAP-(total%CAP),bottleneck};
+  const total=gTotal+bTotal;
+  if(total===0) return {gRatio:0.5,bRatio:0.5,hasBos:false,gTotal:0,bTotal:0};
+  return {gRatio:gTotal/total,bRatio:bTotal/total,hasBos:true,gTotal,bTotal};
 }
 
-function readEosColor(c) {
-  let total=0,bottleneck=null,bottleneckTime=0;
-  STATIONS.forEach(s=>{
-    const v=getN(`eos_${c}_${s.key}`);
-    if(!WIP_EXCLUDE_SNAP.has(s.key)){
-      total+=v;
-      if(v>0&&s.min>bottleneckTime){bottleneckTime=s.min;bottleneck=s;}
+function updateBosRatioHint(cAri){
+  const {gRatio,bRatio,hasBos,gTotal,bTotal}=getBosRatio();
+  const lbl=document.getElementById('bosRatioLbl');
+  const estG=document.getElementById('hr_est_g');
+  const estB=document.getElementById('hr_est_b');
+  if(!lbl||!estG||!estB) return;
+  if(!hasBos){lbl.textContent='— load BOS to see split';estG.textContent='—';estB.textContent='—';return;}
+  const gPct=Math.round(gRatio*100),bPct=Math.round(bRatio*100);
+  lbl.textContent=`${gPct}% / ${bPct}% (BOS: ${gTotal} G / ${bTotal} B)`;
+  if(cAri>0){estG.textContent=Math.round(cAri*gRatio);estB.textContent=Math.round(cAri*bRatio);}
+  else{estG.textContent='—';estB.textContent='—';}
+}
+
+// Normalize snap fields: support all schema versions
+// v3: c_ari/c_aro  v2: g_ari+b_ari  v1: p_arin/p_arout (original sheet)
+function getHourAri(h){
+  if(!h) return 0;
+  if(h.c_ari!==undefined && h.c_ari!==null) return Number(h.c_ari)||0;
+  if(h.p_arin!==undefined && h.p_arin!==null && Number(h.p_arin)>0) return Number(h.p_arin)||0;
+  return (Number(h.g_ari)||0)+(Number(h.b_ari)||0);
+}
+function getHourAro(h){
+  if(!h) return 0;
+  if(h.c_aro!==undefined && h.c_aro!==null) return Number(h.c_aro)||0;
+  if(h.p_arout!==undefined && h.p_arout!==null && Number(h.p_arout)>0) return Number(h.p_arout)||0;
+  return (Number(h.g_aro)||0)+(Number(h.b_aro)||0);
+}
+
+// Merge saved hours with live current-hour inputs
+function getAllHourSnaps(){
+  const saved=JSON.parse(JSON.stringify(dayCache[activeDay]?.hourly||{}));
+  const curSnap=buildHourSnap();
+  if(curSnap.c_ari||curSnap.c_aro||curSnap.maintenance) saved[activeHour]=curSnap;
+  return saved;
+}
+
+// ══════════════════════════════════════════════
+// HOURLY PIPELINE BATCH TRACKER — one combined row per hour
+// ══════════════════════════════════════════════
+function renderHourlyPipeTable(){
+  const container=document.getElementById('hrPipeTable');
+  if(!container) return;
+  const allHours=getAllHourSnaps();
+  const nowMin=new Date().getHours()*60+new Date().getMinutes();
+  const sh=shiftStartMin();
+  const {gRatio,bRatio,hasBos}=getBosRatio();
+
+  const batches=[];
+  Object.keys(allHours).sort((a,b)=>+a-+b).forEach(i=>{
+    const h=allHours[i];
+    const cAri=getHourAri(h),cAro=getHourAro(h);
+    if(cAri>0||cAro>0){
+      const hrIdx=parseInt(i);
+      batches.push({hrIdx,hrStartMin:sh+hrIdx*60,ari:cAri,aro:cAro,delayMin:h.maintenance?MAINT_DELAY_MIN:0});
     }
   });
-  return {total,fullRuns:Math.floor(total/CAP),leftover:total%CAP,toNext:total%CAP===0?(total>0?0:CAP):CAP-(total%CAP),bottleneck};
-}
 
-// ══════════════════════════════════════════════
-// KPIs
-// ══════════════════════════════════════════════
-function updateKPIs(savedHours) {
-  // KPI source follows the active tab.
-  // BOS was showing 0 before because this was always reading hourly inputs.
-  const readFn = activeTab === 'hourly' ? readHrColor
-               : activeTab === 'eos'    ? readEosColor
-               : readBosColor;
+  if(batches.length===0){container.innerHTML='<div class="empty-state" style="margin:12px;">Enter AR-IN values for each hour to see pipeline tracking</div>';return;}
 
-  const g = readFn('g');
-  const b = readFn('b');
-  const p = readFn('p');
+  const ratioTag=hasBos
+    ?`<span style="color:var(--green)">${Math.round(gRatio*100)}% G</span> / <span style="color:var(--blue)">${Math.round(bRatio*100)}% B</span> (from BOS)`
+    :`<span style="color:var(--dim)">50/50 split — load BOS for accurate ratio</span>`;
 
-  setEl('k_gr', g.fullRuns);
-  setEl('k_br', b.fullRuns);
-  setEl('k_cr', p.fullRuns);
-  setEl('k_gn', g.toNext < CAP ? g.toNext : '—');
-  setEl('k_bn', b.toNext < CAP ? b.toNext : '—');
+  let html=`<div style="font-family:var(--mono);font-size:8px;color:var(--dim);padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
+    <span style="letter-spacing:.1em;text-transform:uppercase;">Color Split:</span> ${ratioTag}
+  </div>
+  <table class="hr-pipe-tbl"><thead><tr>
+    <th>Hour</th><th>Window</th>
+    <th class="p-text">AR-IN</th>
+    <th class="g-text">Est. Green</th><th class="b-text">Est. Blue</th>
+    <th>Runs</th><th>Station Now</th><th>Est. AR-OUT</th>
+    <th class="p-text">AR-OUT Actual</th><th>Status</th>
+  </tr></thead><tbody>`;
 
-  // AR-OUT is shift output, so keep it based on saved/current hourly AR-OUT.
-  const hours = savedHours || dayCache[activeDay]?.hourly || {};
-  let totGaro = 0, totBaro = 0;
-
-  Object.entries(hours).forEach(([idx, h]) => {
-    if (!h || Number(idx) === Number(activeHour)) return;
-    totGaro += Number(h.g_aro) || 0;
-    totBaro += Number(h.b_aro) || 0;
+  batches.forEach(b=>{
+    const arOutEst=b.hrStartMin+PIPELINE_TOTAL_MIN+b.delayMin;
+    const elapsed=nowMin-b.hrStartMin;
+    let stationIdx=-1,cumMin=0;
+    for(let s=0;s<PIPELINE_FROM_ARIN.length;s++){cumMin+=PIPELINE_FROM_ARIN[s].min;if(elapsed<cumMin){stationIdx=s;break;}}
+    const isDone=elapsed>=PIPELINE_TOTAL_MIN+b.delayMin;
+    const isFuture=b.hrStartMin>nowMin;
+    const fullRuns=Math.floor(b.ari/CAP),leftover=b.ari%CAP;
+    const estG=Math.round(b.ari*gRatio),estB=Math.round(b.ari*bRatio);
+    const segs=PIPELINE_FROM_ARIN.map((s,i)=>{
+      if(isDone) return `<div class="st-seg g-done" title="${s.name}"></div>`;
+      if(isFuture) return `<div class="st-seg" title="${s.name}"></div>`;
+      if(i<stationIdx) return `<div class="st-seg g-done" title="${s.name}"></div>`;
+      if(i===stationIdx) return `<div class="st-seg g-active" title="${s.name}"></div>`;
+      return `<div class="st-seg" title="${s.name}"></div>`;
+    }).join('');
+    const curStation=isDone?'COMPLETE':isFuture?'QUEUED':PIPELINE_FROM_ARIN[stationIdx]?.name||'—';
+    const stColor=isDone?'var(--green)':isFuture?'var(--dim)':'var(--orange)';
+    const statusHtml=isDone?`<div class="status-pill complete">COMPLETE</div>`:isFuture?`<div class="status-pill future">QUEUED</div>`:`<div class="status-pill in-pipe">IN PIPELINE</div>`;
+    const maintTag=b.delayMin>0?`<span class="maint-pill" style="margin-left:4px;">+${b.delayMin}m</span>`:'';
+    html+=`<tr>
+      <td style="color:var(--orange);font-weight:700">HR${b.hrIdx+1}</td>
+      <td style="color:var(--dim)">${fmt12(b.hrStartMin)}–${fmt12(b.hrStartMin+60)}</td>
+      <td style="color:var(--purple);font-weight:700">${b.ari}${maintTag}</td>
+      <td style="color:var(--green)">${estG}</td><td style="color:var(--blue)">${estB}</td>
+      <td>${fullRuns}${leftover>0?`<span style="color:var(--dim);font-size:9px;"> +${leftover}</span>`:''}</td>
+      <td><div style="font-family:var(--mono);font-size:9px;color:${stColor};margin-bottom:3px;">${curStation}</div><div class="station-track">${segs}</div></td>
+      <td style="color:var(--orange);font-weight:600">${fmt12(arOutEst)}</td>
+      <td style="color:${b.aro>0?'var(--purple)':'var(--dim2)'}">${b.aro>0?b.aro:'—'}</td>
+      <td>${statusHtml}</td>
+    </tr>`;
   });
-
-  totGaro += getN('g_aro');
-  totBaro += getN('b_aro');
-
-  setEl('k_go', totGaro);
-  setEl('k_bo', totBaro);
-  setEl('k_to', totGaro + totBaro);
+  html+=`</tbody></table>`;
+  container.innerHTML=html;
 }
 
 // ══════════════════════════════════════════════
-// TIMELINE
+// SHIFT ACCUMULATOR
 // ══════════════════════════════════════════════
-function getBaselineMin() {
-  const sh = shiftStartMin();
-  const hourStartMin = sh + activeHour * 60;
-  const nowMin = new Date().getHours()*60 + new Date().getMinutes();
-  const isCurrentOrFuture = hourStartMin >= nowMin;
-  return isCurrentOrFuture ? nowMin : hourStartMin;
+function updateShiftAccumulator(){
+  const allHours=getAllHourSnaps();
+  const {gRatio,bRatio}=getBosRatio();
+  let cIn=0,cOut=0;
+  Object.values(allHours).forEach(h=>{cIn+=getHourAri(h);cOut+=getHourAro(h);});
+  const runs=Math.floor(cIn/CAP),left=cIn%CAP,need=left===0?(cIn>0?0:CAP):CAP-left;
+  setEl('acc_cin',cIn);setEl('acc_cout',cOut);
+  setEl('acc_gin_est',Math.round(cIn*gRatio));setEl('acc_bin_est',Math.round(cIn*bRatio));
+  setEl('acc_runs',runs);
+  setEl('chr_total',cIn);setEl('chr_runs',runs);setEl('chr_out',cOut);
+  const nEl=document.getElementById('chr_need');
+  if(nEl){nEl.textContent=need;nEl.style.color=need===0?'var(--green)':need<20?'var(--red)':'var(--orange)';}
+  updateBosRatioHint(getN('c_ari'));
 }
 
-function updateTimeline(source) {
-  const bodyId = source === 'hourly' ? 'hrTlBody' : 'tlBody';
-  const body = document.getElementById(bodyId);
-  if (!body) return;
+// ══════════════════════════════════════════════
+// KPIS
+// ══════════════════════════════════════════════
+function updateHourlyKPIs(){
+  const allHours=getAllHourSnaps();
+  const {gRatio,bRatio}=getBosRatio();
+  let cIn=0,cOut=0;
+  Object.values(allHours).forEach(h=>{cIn+=getHourAri(h);cOut+=getHourAro(h);});
+  const gIn=Math.round(cIn*gRatio),bIn=Math.round(cIn*bRatio);
+  const gRuns=Math.floor(gIn/CAP),bRuns=Math.floor(bIn/CAP);
+  const gLeft=gIn%CAP,bLeft=bIn%CAP;
+  const gNeed=gLeft===0?(gIn>0?0:CAP):CAP-gLeft;
+  const bNeed=bLeft===0?(bIn>0?0:CAP):CAP-bLeft;
+  const gOut=Math.round(cOut*gRatio),bOut=Math.round(cOut*bRatio);
+  setEl('k_gr',gRuns);setEl('k_br',bRuns);setEl('k_cr',gRuns+bRuns);
+  setEl('k_gn',gNeed<CAP?gNeed:'—');setEl('k_bn',bNeed<CAP?bNeed:'—');
+  setEl('k_go',gOut);setEl('k_bo',bOut);setEl('k_to',cOut);
+}
+
+function updateKPIs(){
+  if(activeTab==='hourly'){updateHourlyKPIs();return;}
+  const prefix=activeTab==='eos'?'eos':'bos';
+  const g=calcSnapshotRead(prefix,'g');const b=calcSnapshotRead(prefix,'b');
+  setEl('k_gr',g.runs);setEl('k_br',b.runs);setEl('k_cr',g.runs+b.runs);
+  setEl('k_gn',g.toNext<CAP?g.toNext:'—');setEl('k_bn',b.toNext<CAP?b.toNext:'—');
+  const hours=dayCache[activeDay]?.hourly||{};
+  let cOut=0;Object.values(hours).forEach(h=>{cOut+=getHourAro(h);});
+  const {gRatio,bRatio}=getBosRatio();
+  setEl('k_go',Math.round(cOut*gRatio));setEl('k_bo',Math.round(cOut*bRatio));setEl('k_to',cOut);
+}
+
+// ══════════════════════════════════════════════
+// HISTORY TABLE
+// ══════════════════════════════════════════════
+function renderHistory(){
+  const sh=shiftStartMin();
+  const body=document.getElementById('histBody');
+  if(!body) return;
   body.innerHTML='';
-  const baseMin = getBaselineMin();
-  const nowMin  = new Date().getHours()*60+new Date().getMinutes();
-  const activeSnap = source === 'hourly' ? buildHourSnap() : null;
-  const delayMin = source === 'hourly' && activeSnap && activeSnap.maintenance ? MAINT_DELAY_MIN : 0;
+  const allHours=getAllHourSnaps();
+  const {gRatio,bRatio}=getBosRatio();
+  Object.keys(allHours).sort((a,b)=>+a-+b).forEach(i=>{
+    const h=allHours[i];if(!h)return;
+    const startMin=sh+parseInt(i)*60;
+    const delay=Number(h.delayMin)||(h.maintenance?MAINT_DELAY_MIN:0);
+    const cAri=getHourAri(h),cAro=getHourAro(h);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:var(--orange);font-weight:600">HR${parseInt(i)+1}</td>
+      <td style="color:var(--dim)">${fmt12(startMin)}–${fmt12(startMin+60)}</td>
+      <td class="p-text">${cAri}</td><td class="p-text">${cAro}</td>
+      <td class="g-text">${cAri>0?Math.round(cAri*gRatio):'—'}</td>
+      <td class="b-text">${cAri>0?Math.round(cAri*bRatio):'—'}</td>
+      <td>${delay>0?`<span class="maint-pill">YES +${delay}m</span>`:'—'}</td>
+      <td style="color:var(--dim);font-size:10px">${h.note||''}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function calcSnapshotRead(prefix,c){
+  let total=0;
+  STATIONS.forEach(s=>{if(!WIP_EXCLUDE_SNAP.has(s.key)) total+=getN(`${prefix}_${c}_${s.key}`);});
+  const runs=Math.floor(total/CAP),left=total%CAP;
+  return {total,runs,left,toNext:left===0?(total>0?0:CAP):CAP-left};
+}
+
+// ══════════════════════════════════════════════
+// BOS TIMELINE (run projection from snapshot)
+// ══════════════════════════════════════════════
+function updateTimeline(source){
+  if(source!=='bos') return;
+  const body=document.getElementById('tlBody');
+  if(!body) return;
+  body.innerHTML='';
+  const nowMin=new Date().getHours()*60+new Date().getMinutes();
   const rows=[];
-  const readFn = source === 'hourly' ? readHrColor : readBosColor;
 
-  function addRows(data,colorClass,badgeClass,label){
-    if(data.total===0)return;
-    for(let i=0;i<data.fullRuns;i++){
-      const estCh=baseMin+(data.bottleneck?data.bottleneck.min:0)+i*105+delayMin;
-      const estOut=estCh+CHAMBER_TO_AROUT;
-      const isPast=estOut<nowMin;
-      rows.push({colorClass,badgeClass,label,runNum:i+1,filled:CAP,total:CAP,estCh,estOut,status:'ready',bn:data.bottleneck,isPast});
+  ['g','b'].forEach(c=>{
+    const cm=COLOR_META[c];
+    let total=0,bottleneck=null,bottleneckTime=0;
+    STATIONS.forEach(s=>{
+      const v=getN(`bos_${c}_${s.key}`);
+      if(!WIP_EXCLUDE_SNAP.has(s.key)){
+        total+=v;
+        if(v>0&&s.min>bottleneckTime){bottleneckTime=s.min;bottleneck=s;}
+      }
+    });
+    if(total===0) return;
+    const fullRuns=Math.floor(total/CAP),leftover=total%CAP;
+    for(let i=0;i<fullRuns;i++){
+      const estCh=nowMin+(bottleneck?bottleneck.min:0)+i*105;
+      const estOut=estCh+70;// dering+arout
+      rows.push({c,cm,run:i+1,filled:CAP,total:CAP,estCh,estOut,status:'ready',bn:bottleneck,isPast:estOut<nowMin});
     }
-    if(data.leftover>0){
-      const estCh=baseMin+(data.bottleneck?data.bottleneck.min:0)+data.fullRuns*105+delayMin;
-      const estOut=estCh+CHAMBER_TO_AROUT;
-      rows.push({colorClass,badgeClass,label,runNum:data.fullRuns+1,filled:data.leftover,total:CAP,estCh,estOut,status:'partial',bn:data.bottleneck,need:data.toNext,isPast:false});
+    if(leftover>0){
+      const estCh=nowMin+(bottleneck?bottleneck.min:0)+fullRuns*105;
+      const estOut=estCh+70;
+      rows.push({c,cm,run:fullRuns+1,filled:leftover,total:CAP,estCh,estOut,status:'partial',bn:bottleneck,need:CAP-leftover});
     }
-  }
+  });
 
-  if (source === 'hourly') {
-    addRows(readFn('p'),'cb','p','COMB');
-  } else {
-    addRows(readFn('g'),'gr','g','GREEN');
-    addRows(readFn('b'),'bl','b','BLUE');
-    addRows(readFn('p'),'cb','p','COMB');
-  }
-
-  if(rows.length===0){body.innerHTML='<div class="empty-state">Enter station WIP data to see run projections</div>';return;}
-
-  const isLive = getBaselineMin() === nowMin;
-  const baseLabel = isLive
-    ? `<span style="color:var(--green)">● LIVE CLOCK</span>`
-    : `<span style="color:var(--orange)">⏱ HR${activeHour+1} START — ${fmt12(shiftStartMin()+activeHour*60)}</span>`;
-  const anchor = document.createElement('div');
-  anchor.style.cssText='font-family:var(--mono);font-size:9px;margin-bottom:8px;display:flex;align-items:center;gap:6px;';
-  anchor.innerHTML=`<span style="color:var(--dim)">PROJECTION ANCHORED TO</span> ${baseLabel}`;
-  if (source === 'hourly' && delayMin > 0) anchor.innerHTML += ` <span class="maint-pill">MAINT +${delayMin}m</span>`;
-  body.appendChild(anchor);
-
+  if(rows.length===0){body.innerHTML='<div class="empty-state">Enter BOS station WIP data above to see run projections</div>';return;}
   rows.forEach(r=>{
-    const pct=Math.round((r.filled/r.total)*100);
+    const pct=Math.round(r.filled/r.total*100);
     const div=document.createElement('div');
-    div.className=`tl-row ${r.colorClass}`;
-    const chamberTime = r.status==='ready' ? fmt12(r.estCh) : '—';
-    const arOutTime   = r.status==='ready' ? fmt12(r.estOut) : 'Waiting for WIP';
-    const arOutColor  = r.isPast ? 'var(--dim)' : 'var(--orange)';
-    const statusHtml  = r.status==='partial'
-      ? `<div class="status-pill partial">NEED ${r.need} MORE</div>`
-      : r.isPast
-        ? `<div class="status-pill" style="background:rgba(255,255,255,0.05);color:var(--dim);border:1px solid var(--border)">PAST</div>`
-        : `<div class="status-pill ready">READY TO LOAD</div>`;
+    div.className=`tl-row ${r.c==='g'?'gr':'bl'}`;
+    const statusHtml=r.status==='partial'
+      ?`<div class="status-pill2 partial">NEED ${r.need} MORE</div>`
+      :r.isPast?`<div class="status-pill2" style="background:rgba(255,255,255,0.05);color:var(--dim);border:1px solid var(--border)">PAST</div>`
+      :`<div class="status-pill2 ready">READY TO LOAD</div>`;
     div.innerHTML=`
-      <div class="run-badge ${r.badgeClass}">${r.label}</div>
-      <div class="tl-val">RUN ${r.runNum}</div>
-      <div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-          <span style="font-family:var(--mono);font-size:8px;color:var(--dim)">${r.filled}/${r.total}</span>
-          <span style="font-family:var(--mono);font-size:8px;color:var(--dim)">${pct}%</span>
-        </div>
-        <div class="prog-wrap"><div class="prog ${r.badgeClass}" style="width:${pct}%"></div></div>
-      </div>
+      <div class="run-badge ${r.c}">${r.cm.label.replace(' AR','')}</div>
+      <div class="tl-val">RUN ${r.run}</div>
+      <div><div style="display:flex;justify-content:space-between;margin-bottom:3px;"><span style="font-family:var(--mono);font-size:8px;color:var(--dim)">${r.filled}/${r.total}</span><span style="font-family:var(--mono);font-size:8px;color:var(--dim)">${pct}%</span></div><div class="prog-wrap2"><div class="prog2 ${r.c}" style="width:${pct}%"></div></div></div>
       <div class="tl-val" style="color:var(--dim)">${r.bn?r.bn.name:'—'}</div>
-      <div>
-        <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:1px;">CH: ${chamberTime}</div>
-        <div style="font-family:var(--mono);font-size:11px;color:${arOutColor};">OUT: ${arOutTime}</div>
-      </div>
+      <div><div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:1px;">CH: ${fmt12(r.estCh)}</div><div style="font-family:var(--mono);font-size:11px;color:var(--orange);">OUT: ${r.status==='ready'?fmt12(r.estOut):'Waiting'}</div></div>
       ${statusHtml}`;
     body.appendChild(div);
   });
 }
 
 // ══════════════════════════════════════════════
-// PIPELINE — CLICKABLE
+// PIPELINE CLICK (BOS tab)
 // ══════════════════════════════════════════════
-function buildPipeline() {
-  const wrap = document.getElementById('pipeFlow');
+function buildPipelineClick(){
+  const wrap=document.getElementById('pipeFlow');
+  if(!wrap) return;
   wrap.innerHTML='';
   let cum=0;
-  PIPELINE_FULL.forEach((s,i)=>{
+  STATIONS.forEach((s,i)=>{
     cum+=s.min;
-    const node=document.createElement('div');
-    node.className='pipe-node';
-    node.innerHTML=`
-      <div class="pipe-box" id="pipe_${s.key}" onclick="selectStation(${i},${cum},'${s.name}','${s.key}')">
-        <div class="pipe-name">${s.name}</div>
-        <div class="pipe-min">${s.min}m</div>
-      </div>
-      <div class="pipe-cum">+${cum}m</div>`;
+    const node=document.createElement('div');node.className='pipe-node';
+    node.innerHTML=`<div class="pipe-box" id="pipe_${s.key}" onclick="selectStation(${i},${cum},'${s.name}','${s.key}')"><div class="pipe-name">${s.name}</div><div class="pipe-min">${s.min}m</div></div><div class="pipe-cum">+${cum}m</div>`;
     wrap.appendChild(node);
-    if(i<PIPELINE_FULL.length-1){const arr=document.createElement('div');arr.className='pipe-arr';arr.textContent='→';wrap.appendChild(arr);}
+    if(i<STATIONS.length-1){const arr=document.createElement('div');arr.className='pipe-arr';arr.textContent='→';wrap.appendChild(arr);}
   });
 }
 
-function selectStation(idx,cum,name,key) {
+function selectStation(idx,cum,name,key){
   selectedSt={idx,cum,name,key};
-  PIPELINE_FULL.forEach((s,i)=>{
-    const box=document.getElementById(`pipe_${s.key}`);
-    if(!box)return;
-    box.className='pipe-box'+(i<idx?' past-node':i===idx?' active-node':'');
-  });
+  STATIONS.forEach((s,i)=>{const box=document.getElementById(`pipe_${s.key}`);if(!box)return;box.className='pipe-box'+(i<idx?' past-node':i===idx?' active-node':'');});
   document.getElementById('projHint').style.display='none';
-  updatePipelineProj();
-}
-
-function updatePipelineProj() {
-  if(!selectedSt)return;
-  const {idx,name,key}=selectedSt;
+  const nowMin=new Date().getHours()*60+new Date().getMinutes();
   let remaining=0;
-  for(let i=idx;i<PIPELINE_FULL.length;i++) remaining+=PIPELINE_FULL[i].min;
-  const baseMin  = getBaselineMin();
-  const arOutEst = baseMin + remaining;
-  const isLive   = baseMin === new Date().getHours()*60+new Date().getMinutes();
-  const stIdx=STATIONS.findIndex(s=>s.key===key);
-  const gJ=stIdx>=0?getN(`bos_g_${key}`):0;
-  const bJ=stIdx>=0?getN(`bos_b_${key}`):0;
-  const pJ=stIdx>=0?getN(`bos_p_${key}`):0;
-
-  document.getElementById('projTitle').innerHTML=
-    `<span style="color:var(--orange)">◉ ${name}</span> → AR-OUT in <span style="color:var(--white)">${remaining} min</span> — Est. <span style="color:var(--orange)">${fmt12(arOutEst)}</span>`
-    + ` <span style="color:var(--dim);font-size:8px;">[${isLive?'LIVE':'HR'+( activeHour+1)+' START'}]</span>`;
+  for(let i=idx;i<STATIONS.length;i++) remaining+=STATIONS[i].min;
+  const arOutEst=nowMin+remaining;
+  const gJ=getN(`bos_g_${key}`),bJ=getN(`bos_b_${key}`),pJ=gJ+bJ;
+  document.getElementById('projTitle').innerHTML=`<span style="color:var(--orange)">◉ ${name}</span> → AR-OUT in <span style="color:var(--white)">${remaining} min</span> — Est. <span style="color:var(--orange)">${fmt12(arOutEst)}</span>`;
   document.getElementById('projGrid').innerHTML=`
-    <div class="proj-cell">
-      <div class="proj-clbl">Est. AR-OUT Time</div>
-      <div class="proj-cval" style="color:var(--orange)">${fmt12(arOutEst)}</div>
-    </div>
-    <div class="proj-cell">
-      <div class="proj-clbl">Min Remaining</div>
-      <div class="proj-cval" style="color:var(--white)">${remaining} min</div>
-    </div>
-    <div class="proj-cell">
-      <div class="proj-clbl">Jobs at Station (G / B / Comb)</div>
-      <div class="proj-cval">
-        <span style="color:var(--green)">${gJ}</span>
-        <span style="color:var(--dim)"> / </span>
-        <span style="color:var(--blue)">${bJ}</span>
-        <span style="color:var(--dim)"> / </span>
-        <span style="color:var(--purple)">${pJ}</span>
-      </div>
-    </div>
-    <div class="proj-cell">
-      <div class="proj-clbl">GREEN Runs from here</div>
-      <div class="proj-cval" style="color:var(--green)">${Math.floor(gJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${gJ%CAP}</span></div>
-    </div>
-    <div class="proj-cell">
-      <div class="proj-clbl">BLUE Runs from here</div>
-      <div class="proj-cval" style="color:var(--blue)">${Math.floor(bJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${bJ%CAP}</span></div>
-    </div>
-    <div class="proj-cell">
-      <div class="proj-clbl">Combined Runs from here</div>
-      <div class="proj-cval" style="color:var(--purple)">${Math.floor(pJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${pJ%CAP}</span></div>
-    </div>`;
+    <div class="proj-cell"><div class="proj-clbl">Est. AR-OUT Time</div><div class="proj-cval" style="color:var(--orange)">${fmt12(arOutEst)}</div></div>
+    <div class="proj-cell"><div class="proj-clbl">Min Remaining</div><div class="proj-cval" style="color:var(--white)">${remaining} min</div></div>
+    <div class="proj-cell"><div class="proj-clbl">Jobs (G / B)</div><div class="proj-cval"><span style="color:var(--green)">${gJ}</span><span style="color:var(--dim)"> / </span><span style="color:var(--blue)">${bJ}</span></div></div>
+    <div class="proj-cell"><div class="proj-clbl">GREEN Runs from here</div><div class="proj-cval" style="color:var(--green)">${Math.floor(gJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${gJ%CAP}</span></div></div>
+    <div class="proj-cell"><div class="proj-clbl">BLUE Runs from here</div><div class="proj-cval" style="color:var(--blue)">${Math.floor(bJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${bJ%CAP}</span></div></div>
+    <div class="proj-cell"><div class="proj-clbl">Combined from here</div><div class="proj-cval" style="color:var(--purple)">${Math.floor(pJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${pJ%CAP}</span></div></div>`;
   document.getElementById('projCard').style.display='block';
 }
 
 // ══════════════════════════════════════════════
 // DELTA (BOS vs EOS)
 // ══════════════════════════════════════════════
-function updateDeltaFromInputs() {
-  const bos = getSectionData('bos');
-  const eos = getSectionData('eos');
-  updateDelta(bos, eos);
-}
-
-function updateDelta(bos, eos) {
+function updateDelta(bos,eos){
   const empty=document.getElementById('deltaEmpty');
   const content=document.getElementById('deltaContent');
   const grid=document.getElementById('deltaGrid');
   if(!bos||!eos){empty.style.display='block';content.style.display='none';return;}
-  empty.style.display='none';content.style.display='block';
-  grid.innerHTML='';
+  empty.style.display='none';content.style.display='block';grid.innerHTML='';
   ['g','b'].forEach(c=>{
     const cm=COLOR_META[c];
-    // Delta is BOS vs EOS — uses snapshot exclusion (arout only)
     const bosTotal=STATIONS.reduce((a,s)=>WIP_EXCLUDE_SNAP.has(s.key)?a:a+(bos[c]?bos[c][s.key]||0:0),0);
     const eosTotal=STATIONS.reduce((a,s)=>WIP_EXCLUDE_SNAP.has(s.key)?a:a+(eos[c]?eos[c][s.key]||0:0),0);
     const delta=eosTotal-bosTotal;
-    const cell=document.createElement('div');
-    cell.className='panel';
-    cell.innerHTML=`
-      <div class="panel-hd"><div class="panel-dot ${c}"></div><span class="panel-title" style="color:${cm.var}">${cm.label}</span></div>
-      <div class="panel-body">
-        <div class="calc-bar">
-          <div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${bosTotal}</span><span class="calc-lbl">BOS WIP</span></div>
-          <div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${eosTotal}</span><span class="calc-lbl">EOS WIP</span></div>
-          <div class="calc-cell"><span class="calc-val" style="color:${delta>0?'var(--green)':delta<0?'var(--red)':'var(--dim)'}">${delta>0?'+':''}${delta}</span><span class="calc-lbl">Delta</span></div>
-          <div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${Math.floor(eosTotal/CAP)}</span><span class="calc-lbl">EOS Runs</span></div>
-        </div>
-      </div>`;
+    const cell=document.createElement('div');cell.className='panel';
+    cell.innerHTML=`<div class="panel-hd"><div class="panel-dot ${c}"></div><span class="panel-title" style="color:${cm.var}">${cm.label}</span></div><div class="panel-body"><div class="calc-bar"><div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${bosTotal}</span><span class="calc-lbl">BOS WIP</span></div><div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${eosTotal}</span><span class="calc-lbl">EOS WIP</span></div><div class="calc-cell"><span class="calc-val" style="color:${delta>0?'var(--green)':delta<0?'var(--red)':'var(--dim)'}">${delta>0?'+':''}${delta}</span><span class="calc-lbl">Delta</span></div><div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${Math.floor(eosTotal/CAP)}</span><span class="calc-lbl">EOS Runs</span></div></div></div>`;
     grid.appendChild(cell);
   });
 }
 
-// ══════════════════════════════════════════════
-// HISTORY TABLE
-// ══════════════════════════════════════════════
-function renderHistory(savedHours) {
-  const sh = shiftStartMin();
-  const body=document.getElementById('histBody');
-  body.innerHTML='';
-  Object.keys(savedHours).sort((a,b)=>+a-+b).forEach(i=>{
-    const h=savedHours[i]; if(!h)return;
-    const startMin=sh+parseInt(i)*60;
-    const pT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.p?h.p[s.key]||0:0),0);
-    const delay = Number(h.delayMin) || (h.maintenance ? MAINT_DELAY_MIN : 0);
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td style="color:var(--orange);font-weight:600">HR ${parseInt(i)+1}</td>
-      <td style="color:var(--dim)">${fmt12(startMin)}–${fmt12(startMin+60)}</td>
-      <td class="p-text">${pT}</td>
-      <td class="p-text">${Math.floor(pT/CAP)}</td>
-      <td>${delay>0?'<span class="maint-pill">YES</span>':'—'}</td>
-      <td style="color:${delay>0?'var(--orange)':'var(--dim2)'}">${delay>0?'+'+delay+'m':'—'}</td>
-      <td style="color:var(--dim);font-size:10px">${h.note||''}</td>`;
-    body.appendChild(tr);
-  });
-  const foot=document.getElementById('histFoot');
-  foot.innerHTML=`<tr style="background:var(--s2);">
-    <td colspan="2" style="font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.1em;padding:8px 10px;">SHIFT TOTALS</td>
-    <td></td><td></td><td></td><td></td><td></td>
-  </tr>`;
-}
+
 
 // ══════════════════════════════════════════════
 // EXPORT
 // ══════════════════════════════════════════════
-function exportCSV() {
-  const data = dayCache[activeDay] || {};
-  const sh = shiftStartMin();
-  let csv = `AR RUN TRACKER — ${activeDay}\n\n`;
-  if (data.bos) {
-    csv+=`BOS\n`;
-    ['g','b'].forEach(c=>{csv+=`${COLOR_META[c].label},`;STATIONS.forEach(s=>csv+=`${s.name}:${data.bos[c]?data.bos[c][s.key]||0:0} `);csv+='\n';});
-    csv+='\n';
-  }
-  csv+=`HOURLY,WINDOW,COMB_WIP,COMB_RUNS,MAINTENANCE,DELAY_MIN,NOTES\n`;
+function exportCSV(){
+  const data=dayCache[activeDay]||{};
+  const sh=shiftStartMin();
+  let csv=`AR RUN TRACKER — ${activeDay}\n\nHOUR,WINDOW,G_AR-IN,G_AR-OUT,B_AR-IN,B_AR-OUT,MAINTENANCE,DELAY_MIN,NOTES\n`;
   Object.keys(data.hourly||{}).sort((a,b)=>+a-+b).forEach(i=>{
     const h=data.hourly[i];if(!h)return;
     const startMin=sh+parseInt(i)*60;
-    const gT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.g?h.g[s.key]||0:0),0);
-    const bT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.b?h.b[s.key]||0:0),0);
-    const pT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.p?h.p[s.key]||0:0),0);
-    csv+=`HR${parseInt(i)+1},${fmt12(startMin)}-${fmt12(startMin+60)},${gT},${Math.floor(gT/CAP)},${h.g_aro||0},${bT},${Math.floor(bT/CAP)},${h.b_aro||0},${pT},${Math.floor(pT/CAP)},${(h.g_aro||0)+(h.b_aro||0)},"${h.note||''}"\n`;
+    const delay=Number(h.delayMin)||(h.maintenance?MAINT_DELAY_MIN:0);
+    csv+=`HR${parseInt(i)+1},${fmt12(startMin)}-${fmt12(startMin+60)},${h.g_ari||0},${h.g_aro||0},${h.b_ari||0},${h.b_aro||0},${h.maintenance?'YES':'NO'},${delay},"${h.note||''}"\n`;
   });
-  if(data.eos){csv+=`\nEOS\n`;['g','b'].forEach(c=>{csv+=`${COLOR_META[c].label},`;STATIONS.forEach(s=>csv+=`${s.name}:${data.eos[c]?data.eos[c][s.key]||0:0} `);csv+='\n';});}
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`AR_RunTracker_${activeDay}.csv`;a.click();
 }
@@ -1347,14 +1297,7 @@ function getN(id){return parseInt(document.getElementById(id)?.value)||0;}
 function setEl(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
 function shiftStartMin(){const v=document.getElementById('shiftStart').value||'06:00';const[h,m]=v.split(':').map(Number);return h*60+m;}
 function fmt12(totalMin){const h=Math.floor(totalMin/60)%24,m=totalMin%60,ap=h>=12?'PM':'AM',h12=h%12||12;return `${h12}:${m.toString().padStart(2,'0')} ${ap}`;}
-
-function showToast(msg, isErr=false) {
-  const t=document.getElementById('toast');
-  t.textContent=msg;
-  t.className='toast'+(isErr?' err':'');
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2800);
-}
+function showToast(msg,isErr=false){const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(isErr?' err':'');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 
 init();
 </script>
