@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AR RUN TRACKER</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#05060a; --s1:#10131f; --s2:#171b2e; --s3:#1e2340;
+  --border:#252a45; --border2:#2e3355;
+  --green:#56e36d; --gdim:rgba(86,227,109,0.12);
+  --blue:#00d9ff;  --bdim:rgba(0,217,255,0.12);
+  --orange:#ff9900; --odim:rgba(255,153,0,0.12);
+  --purple:#b07fff; --pdim:rgba(176,127,255,0.12);
+  --red:#ff4040; --rdim:rgba(255,64,64,0.12);
+  --white:#fff; --dim:rgba(255,255,255,0.45); --dim2:rgba(255,255,255,0.22);
+  --font:'Sora',sans-serif; --mono:'IBM Plex Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--white);font-family:var(--font);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,217,255,0.01) 3px,rgba(0,217,255,0.01) 4px);pointer-events:none;z-index:0;}
+
+/* ── HEADER ── */
+.hdr{position:sticky;top:0;z-index:200;background:rgba(5,6,10,0.97);border-bottom:1px solid var(--border);backdrop-filter:blur(16px);display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;}
+.hdr-l{display:flex;align-items:center;gap:12px;}
+.hdr-tag{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--orange);letter-spacing:.18em;}
+.hdr-title{font-size:13px;font-weight:600;letter-spacing:.06em;}
+.hdr-r{display:flex;align-items:center;gap:12px;}
+.live-pill{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.1em;}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+.clock{font-family:var(--mono);font-size:11px;color:var(--dim);}
+.lbl-sm{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;}
+input[type=time]{background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--white);font-family:var(--mono);font-size:11px;padding:4px 8px;outline:none;}
+input[type=time]:focus{border-color:var(--orange);}
+
+/* ── DAY NAV ── */
+.day-nav{display:flex;align-items:center;gap:6px;}
+.day-arrow{background:transparent;border:1px solid var(--border);color:var(--dim);font-family:var(--mono);font-size:13px;padding:2px 9px;border-radius:4px;cursor:pointer;transition:all .15s;}
+.day-arrow:hover{border-color:var(--orange);color:var(--orange);}
+.day-label{font-family:var(--mono);font-size:11px;color:var(--white);min-width:88px;text-align:center;}
+
+/* ── API STATUS ── */
+.api-status{font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:4px;border:1px solid var(--border);color:var(--dim);}
+.api-status.ok{border-color:var(--green);color:var(--green);background:var(--gdim);}
+.api-status.err{border-color:var(--red);color:var(--red);background:var(--rdim);}
+.api-status.loading{border-color:var(--orange);color:var(--orange);background:var(--odim);}
+
+/* ── KPI STRIP ── */
+.kpi-row{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:14px 20px 0;}
+.kpi{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:11px 13px;position:relative;overflow:hidden;}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi.g::after{background:var(--green);}.kpi.b::after{background:var(--blue);}.kpi.o::after{background:var(--orange);}.kpi.p::after{background:var(--purple);}
+.kpi-lbl{font-family:var(--mono);font-size:8px;font-weight:600;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin-bottom:5px;}
+.kpi-val{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1;}
+.kpi.g .kpi-val{color:var(--green);}.kpi.b .kpi-val{color:var(--blue);}.kpi.o .kpi-val{color:var(--orange);}.kpi.p .kpi-val{color:var(--purple);}
+.kpi-sub{font-family:var(--mono);font-size:8px;color:var(--dim2);margin-top:2px;}
+
+/* ── TAB NAV ── */
+.tab-bar{display:flex;align-items:center;gap:2px;padding:12px 20px 0;border-bottom:1px solid var(--border);}
+.tab-btn{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:10px 22px;border:none;background:transparent;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;position:relative;top:1px;}
+.tab-btn:hover{color:var(--white);}
+.tab-btn.active{color:var(--orange);border-bottom-color:var(--orange);}
+.tab-btn .tab-icon{margin-right:6px;}
+
+/* ── TAB CONTENT ── */
+.tab-content{display:none;padding:16px 20px;max-width:1700px;margin:0 auto;}
+.tab-content.active{display:block;}
+
+/* ── SECTION HEAD ── */
+.sec-hd{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.sec-hd::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ── PANEL ── */
+.panel{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.panel-hd{display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--border);}
+.panel-dot{width:8px;height:8px;border-radius:50%;}
+.panel-dot.g{background:var(--green);}.panel-dot.b{background:var(--blue);}.panel-dot.p{background:var(--purple);}
+.panel-title{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;}
+.panel-body{padding:13px 16px;display:flex;flex-direction:column;gap:7px;}
+
+/* ── 3-COL GRID ── */
+.three-col{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
+.snapshot-two{grid-template-columns:repeat(2,1fr);}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+
+/* ── STATION ROWS ── */
+.st-hdr{display:grid;grid-template-columns:96px 50px 1fr 72px 72px;gap:8px;margin-bottom:4px;}
+.st-row{display:grid;grid-template-columns:96px 50px 1fr 72px 72px;align-items:center;gap:8px;}
+.st-lbl{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;}
+.st-time{font-family:var(--mono);font-size:9px;color:var(--dim2);}
+.st-inp{background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--white);font-family:var(--mono);font-size:13px;padding:5px 9px;width:100%;outline:none;transition:border-color .15s;}
+.st-inp:focus{border-color:var(--orange);}
+.st-inp.g:focus{border-color:var(--green);}
+.st-inp.b:focus{border-color:var(--blue);}
+.st-inp.p:focus{border-color:var(--purple);}
+.st-inp[readonly]{opacity:.55;cursor:default;}
+/* excluded stations — dimmed border to signal no-WIP-count */
+.st-inp.no-wip{border-style:dashed;opacity:.75;}
+.st-calc{font-family:var(--mono);font-size:9px;color:var(--dim);text-align:right;}
+.st-need{font-family:var(--mono);font-size:9px;text-align:right;}
+/* badge shown next to excluded station names */
+.wip-excl-badge{font-family:var(--mono);font-size:7px;color:var(--dim2);letter-spacing:.06em;border:1px solid var(--border);border-radius:2px;padding:1px 4px;margin-left:4px;vertical-align:middle;}
+
+/* ── CALC BAR ── */
+.calc-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-radius:6px;overflow:hidden;margin-top:10px;}
+.calc-cell{background:var(--s2);padding:8px 10px;text-align:center;}
+.calc-val{font-family:var(--mono);font-size:16px;font-weight:600;display:block;}
+.calc-lbl{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;display:block;margin-top:2px;}
+
+/* ── HOURLY ── */
+.hr-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.hr-btn{font-family:var(--mono);font-size:9px;padding:4px 9px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;transition:all .15s;}
+.hr-btn:hover{border-color:var(--orange);color:var(--orange);}
+.hr-btn.active{background:var(--odim);border-color:var(--orange);color:var(--orange);}
+.hr-btn.saved{border-color:var(--border2);color:var(--white);}
+.hr-btn.saved.active{background:var(--odim);border-color:var(--orange);color:var(--orange);}
+.btn-add{font-family:var(--mono);font-size:9px;padding:4px 10px;border:1px dashed var(--border2);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;transition:all .15s;}
+.btn-add:hover{border-color:var(--green);color:var(--green);}
+.hr-btn.current{box-shadow:0 0 0 1px var(--orange) inset;}
+.hr-btn.maint::after{content:' +50';color:var(--orange);font-size:7px;margin-left:4px;}
+.hour-fast-card{background:linear-gradient(135deg,rgba(255,153,0,.08),rgba(176,127,255,.05));border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:grid;grid-template-columns:1.2fr 1fr auto;gap:12px;align-items:center;}
+.hour-fast-title{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px;}
+.hour-fast-value{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--orange);}
+.maint-toggle{display:flex;align-items:center;gap:9px;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;}
+.maint-toggle input{accent-color:var(--orange);width:16px;height:16px;}
+.maint-toggle span{font-family:var(--mono);font-size:10px;color:var(--white);letter-spacing:.08em;text-transform:uppercase;}
+.maint-toggle strong{font-family:var(--mono);font-size:10px;color:var(--orange);margin-left:auto;}
+.maint-banner{display:none;background:rgba(255,153,0,.11);border:1px solid rgba(255,153,0,.45);border-radius:8px;padding:9px 12px;font-family:var(--mono);font-size:10px;color:var(--orange);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
+.maint-banner.show{display:block;}
+.maint-pill{font-family:var(--mono);font-size:8px;color:var(--orange);border:1px solid var(--orange);background:rgba(255,153,0,.1);border-radius:3px;padding:2px 5px;font-weight:700;}
+@media(max-width:900px){.hour-fast-card{grid-template-columns:1fr;}}
+
+/* ── ARO ── */
+.aro-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;}
+.aro-blk{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:9px 11px;}
+.aro-lbl{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;}
+.aro-inp{background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--white);font-family:var(--mono);font-size:18px;padding:3px 0;width:100%;outline:none;}
+.aro-inp:focus{border-color:var(--orange);}
+
+/* ── NOTES ── */
+.note-inp{background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--white);font-family:var(--font);font-size:11px;padding:7px 10px;width:100%;outline:none;resize:none;}
+.note-inp:focus{border-color:var(--orange);}
+
+/* ── PIPELINE ── */
+.pipe-flow{display:flex;align-items:flex-start;overflow-x:auto;padding:4px 0;gap:0;}
+.pipe-node{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;cursor:pointer;}
+.pipe-box{width:78px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 4px;text-align:center;transition:all .2s;}
+.pipe-box:hover{border-color:var(--orange);}
+.pipe-box.active-node{border-color:var(--orange);background:var(--odim);box-shadow:0 0 12px rgba(255,153,0,.2);}
+.pipe-box.past-node{border-color:var(--green);background:var(--gdim);}
+.pipe-name{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;}
+.pipe-min{font-family:var(--mono);font-size:11px;color:var(--orange);font-weight:600;margin-top:2px;}
+.pipe-cum{font-family:var(--mono);font-size:7px;color:var(--dim2);margin-top:2px;}
+.pipe-arr{color:var(--dim2);font-size:14px;padding:0 2px;margin-top:20px;flex-shrink:0;}
+.proj-card{background:var(--s2);border:1px solid var(--border2);border-radius:8px;padding:14px 16px;margin-top:12px;}
+.proj-title{font-family:var(--mono);font-size:9px;color:var(--orange);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px;}
+.proj-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.proj-cell{background:var(--s1);border:1px solid var(--border);border-radius:6px;padding:10px 12px;}
+.proj-clbl{font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;}
+.proj-cval{font-family:var(--mono);font-size:14px;font-weight:600;}
+
+/* ── TIMELINE ── */
+.tl-hdr-row{display:grid;grid-template-columns:70px 70px 1fr 110px 110px 100px;gap:10px;font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;padding:0 10px;margin-bottom:6px;}
+.tl-row{display:grid;grid-template-columns:70px 70px 1fr 110px 110px 100px;gap:10px;align-items:center;padding:8px 10px;border-radius:6px;background:var(--s2);border:1px solid var(--border);margin-bottom:6px;}
+.tl-row.gr{border-left:3px solid var(--green);}.tl-row.bl{border-left:3px solid var(--blue);}.tl-row.cb{border-left:3px solid var(--purple);}
+.run-badge{font-family:var(--mono);font-size:9px;font-weight:600;padding:3px 7px;border-radius:3px;text-align:center;}
+.run-badge.g{background:var(--gdim);color:var(--green);border:1px solid var(--green);}
+.run-badge.b{background:var(--bdim);color:var(--blue);border:1px solid var(--blue);}
+.run-badge.p{background:var(--pdim);color:var(--purple);border:1px solid var(--purple);}
+.tl-val{font-family:var(--mono);font-size:11px;}
+.prog-wrap{height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.prog{height:100%;border-radius:3px;}
+.prog.g{background:var(--green);}.prog.b{background:var(--blue);}.prog.p{background:var(--purple);}
+.status-pill{font-family:var(--mono);font-size:8px;font-weight:600;padding:3px 8px;border-radius:3px;text-align:center;}
+.status-pill.ready{background:var(--gdim);color:var(--green);border:1px solid var(--green);}
+.status-pill.partial{background:var(--rdim);color:var(--red);border:1px solid var(--red);}
+
+/* ── HISTORY TABLE ── */
+.hist-wrap{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.hist-tbl{width:100%;border-collapse:collapse;}
+.hist-tbl th{font-family:var(--mono);font-size:8px;font-weight:600;letter-spacing:.1em;color:var(--dim);text-transform:uppercase;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);background:var(--s2);}
+.hist-tbl td{font-family:var(--mono);font-size:11px;padding:7px 10px;border-bottom:1px solid rgba(37,42,69,.4);}
+.hist-tbl tr:last-child td{border-bottom:none;}
+.hist-tbl tr:hover td{background:rgba(255,153,0,.02);}
+.g-text{color:var(--green);}.b-text{color:var(--blue);}.o-text{color:var(--orange);}.p-text{color:var(--purple);}
+
+/* ── BUTTONS ── */
+.btn{padding:7px 16px;border:none;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;letter-spacing:.04em;cursor:pointer;transition:all .15s;}
+.btn-primary{background:var(--orange);color:#000;}.btn-primary:hover{opacity:.85;}
+.btn-green{background:var(--green);color:#000;}.btn-green:hover{opacity:.85;}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--dim);}.btn-ghost:hover{border-color:var(--orange);color:var(--orange);}
+.btn-save{background:var(--orange);color:#000;padding:8px 22px;font-size:12px;font-weight:700;letter-spacing:.06em;}
+.btn-row{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;z-index:999;font-family:var(--mono);font-size:11px;padding:10px 18px;border-radius:6px;background:var(--green);color:#000;font-weight:700;transform:translateY(60px);opacity:0;transition:all .3s;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.err{background:var(--red);color:#fff;}
+
+/* ── SPINNER ── */
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.empty-state{text-align:center;padding:28px;font-family:var(--mono);font-size:10px;color:var(--dim);border:1px dashed var(--border2);border-radius:8px;}
+.gap{margin-bottom:14px;}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+/* stylelint-disable-next-line property-no-vendor-prefix */
+input[type=number]{-moz-appearance:textfield;appearance:textfield;}
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-l">
+    <span class="hdr-tag">AR DEPT</span>
+    <span style="color:var(--border2)">|</span>
+    <span class="hdr-title">RUN TRACKER</span>
+  </div>
+  <div class="hdr-r">
+    <div class="day-nav">
+      <button class="day-arrow" onclick="navDay(-1)">‹</button>
+      <div class="day-label" id="dayLabel">—</div>
+      <button class="day-arrow" onclick="navDay(1)">›</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span class="lbl-sm">SHIFT</span>
+      <input type="time" id="shiftStart" value="06:00" onchange="buildHourBtns()">
+    </div>
+    <div class="api-status" id="apiStatus">API —</div>
+    <div class="live-pill"><div class="live-dot"></div>LIVE</div>
+    <div class="clock" id="clk">--:--:--</div>
+    <button class="btn btn-ghost" onclick="exportCSV()" style="font-size:10px;padding:5px 11px;">↓ EXPORT</button>
+  </div>
+</div>
+
+<!-- KPI STRIP (always visible) -->
+<div class="kpi-row">
+  <div class="kpi g"><div class="kpi-lbl">GREEN Runs Ready</div><div class="kpi-val" id="k_gr">0</div><div class="kpi-sub">full runs of 84</div></div>
+  <div class="kpi g"><div class="kpi-lbl">GREEN to Next Run</div><div class="kpi-val" id="k_gn">—</div><div class="kpi-sub">jobs needed</div></div>
+  <div class="kpi g"><div class="kpi-lbl">GREEN AR-OUT</div><div class="kpi-val" id="k_go">0</div><div class="kpi-sub">shift total</div></div>
+  <div class="kpi b"><div class="kpi-lbl">BLUE Runs Ready</div><div class="kpi-val" id="k_br">0</div><div class="kpi-sub">full runs of 84</div></div>
+  <div class="kpi b"><div class="kpi-lbl">BLUE to Next Run</div><div class="kpi-val" id="k_bn">—</div><div class="kpi-sub">jobs needed</div></div>
+  <div class="kpi b"><div class="kpi-lbl">BLUE AR-OUT</div><div class="kpi-val" id="k_bo">0</div><div class="kpi-sub">shift total</div></div>
+  <div class="kpi p"><div class="kpi-lbl">Combined Runs</div><div class="kpi-val" id="k_cr">0</div><div class="kpi-sub">G+B pooled</div></div>
+  <div class="kpi o"><div class="kpi-lbl">Total AR-OUT</div><div class="kpi-val" id="k_to">0</div><div class="kpi-sub">shift total</div></div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('bos',this)"><span class="tab-icon">▸</span>BOS</button>
+  <button class="tab-btn" onclick="switchTab('hourly',this)"><span class="tab-icon">▸</span>Hourly Breakdown</button>
+  <button class="tab-btn" onclick="switchTab('eos',this)"><span class="tab-icon">▸</span>EOS</button>
+</div>
+
+<!-- ══════════ TAB: BOS ══════════ -->
+<div class="tab-content active" id="tab-bos">
+  <div style="height:14px;"></div>
+  <div class="sec-hd"><span>Beginning of Shift — WIP Snapshot per Station</span></div>
+  <div class="three-col" id="bosGrid"></div>
+
+  <!-- Pipeline -->
+  <div class="sec-hd"><span>Process Pipeline — Click Station to Project Time</span></div>
+  <div class="panel gap">
+    <div class="panel-body">
+      <div class="pipe-flow" id="pipeFlow"></div>
+      <div class="proj-card" id="projCard" style="display:none;">
+        <div class="proj-title" id="projTitle"></div>
+        <div class="proj-grid" id="projGrid"></div>
+      </div>
+      <div id="projHint" style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:10px;text-align:center;">↑ Click any station to see projected completion time from that point</div>
+    </div>
+  </div>
+
+  <!-- Run Projection -->
+  <div class="sec-hd"><span>Run Build Projection</span></div>
+  <div class="panel gap">
+    <div class="panel-body">
+      <div class="tl-hdr-row"><span>Color</span><span>Run #</span><span>Progress</span><span>Bottleneck</span><span>Est. Chamber</span><span>Status</span></div>
+      <div id="tlBody"><div class="empty-state">Enter BOS station WIP data above to see run projections</div></div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-ghost" onclick="clearBOS()">CLEAR BOS</button>
+    <button class="btn btn-green" onclick="saveBOS()">SAVE BOS SNAPSHOT</button>
+  </div>
+</div>
+
+<!-- ══════════ TAB: HOURLY ══════════ -->
+<div class="tab-content" id="tab-hourly">
+  <div style="height:14px;"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+    <div class="hr-nav">
+      <span class="lbl-sm">HOUR</span>
+      <div id="hrBtns" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+      <button class="btn-add" onclick="addHour()">+ HOUR</button>
+      <button class="btn-add" onclick="goCurrentHour()">CURRENT HOUR</button>
+    </div>
+    <div style="display:flex;gap:7px;align-items:center;">
+      <span id="hrWindowLabel" style="font-family:var(--mono);font-size:10px;color:var(--dim);"></span>
+      <button class="btn btn-ghost" onclick="clearHour()" style="font-size:10px;padding:4px 10px;">CLEAR</button>
+      <button class="btn btn-ghost" onclick="saveHour(false)" style="font-size:10px;padding:7px 13px;">SAVE ONLY</button>
+      <button class="btn btn-save" onclick="saveHour(true)">SAVE & NEXT →</button>
+    </div>
+  </div>
+
+  <div class="hour-fast-card">
+    <div>
+      <div class="hour-fast-title">Selected Hour</div>
+      <div class="hour-fast-value" id="hrFastWindow">—</div>
+      <div class="kpi-sub">Page suggests the current hour. It will not auto-jump while someone is typing.</div>
+    </div>
+    <label class="maint-toggle">
+      <input type="checkbox" id="hrMaintenance" onchange="calcHrAll(); updateMaintenanceBanner();">
+      <span>Maintenance this hour</span>
+      <strong>+50m</strong>
+    </label>
+    <div class="calc-cell" style="border-radius:8px;">
+      <span class="calc-val" id="hrDelayLabel" style="color:var(--orange)">0m</span>
+      <span class="calc-lbl">Projection Delay</span>
+    </div>
+  </div>
+  <div class="maint-banner" id="maintBanner">Maintenance active for this hour — run projection delayed by 50 minutes.</div>
+
+  <div class="three-col" id="hrGrid"></div>
+
+  <!-- Hourly Run Projection -->
+  <div class="sec-hd"><span>Hourly Run Build Projection</span></div>
+  <div class="panel gap">
+    <div class="panel-body">
+      <div class="tl-hdr-row"><span>Color</span><span>Run #</span><span>Progress</span><span>Bottleneck</span><span>Est. Chamber</span><span>Status</span></div>
+      <div id="hrTlBody"><div class="empty-state">Enter hourly WIP data above to see run projections</div></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-hd"><div class="panel-dot g"></div><span class="panel-title" style="color:var(--green)">Green AR-OUT / AR-IN</span></div>
+      <div class="panel-body">
+        <div class="aro-row">
+          <div class="aro-blk"><div class="aro-lbl">GREEN AR-OUT</div><input type="number" class="aro-inp" id="g_aro" placeholder="0" oninput="calcHrAll()"></div>
+          <div class="aro-blk"><div class="aro-lbl">GREEN AR-IN</div><input type="number" class="aro-inp" id="g_ari" placeholder="0" oninput="calcHrAll()"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-hd"><div class="panel-dot b"></div><span class="panel-title" style="color:var(--blue)">Blue AR-OUT / AR-IN</span></div>
+      <div class="panel-body">
+        <div class="aro-row">
+          <div class="aro-blk"><div class="aro-lbl">BLUE AR-OUT</div><input type="number" class="aro-inp" id="b_aro" placeholder="0" oninput="calcHrAll()"></div>
+          <div class="aro-blk"><div class="aro-lbl">BLUE AR-IN</div><input type="number" class="aro-inp" id="b_ari" placeholder="0" oninput="calcHrAll()"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gap">
+    <div class="lbl-sm" style="margin-bottom:5px;">HOUR NOTES — oven waits, downtime, issues</div>
+    <textarea class="note-inp" id="hrNote" rows="2" placeholder="e.g. Blue oven wait 47 min, Chamber 5 down 45 min..."></textarea>
+  </div>
+
+  <div class="sec-hd"><span>Hourly History Log</span></div>
+  <div class="hist-wrap">
+    <table class="hist-tbl">
+      <thead><tr>
+        <th>Hour</th><th>Window</th>
+        <th class="p-text">Combined WIP</th><th class="p-text">Combined Runs</th>
+        <th>Maintenance</th><th>Delay</th>
+        <th>Notes</th>
+      </tr></thead>
+      <tbody id="histBody"></tbody>
+      <tfoot id="histFoot"></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════ TAB: EOS ══════════ -->
+<div class="tab-content" id="tab-eos">
+  <div style="height:14px;"></div>
+  <div class="sec-hd"><span>End of Shift — WIP Snapshot per Station</span></div>
+  <div class="three-col" id="eosGrid"></div>
+
+  <!-- BOS vs EOS delta summary -->
+  <div class="sec-hd"><span>Shift Delta — BOS vs EOS</span></div>
+  <div class="panel gap" id="deltaPanel">
+    <div class="panel-body">
+      <div class="empty-state" id="deltaEmpty">Save both BOS and EOS snapshots to see shift delta</div>
+      <div id="deltaContent" style="display:none;">
+        <div class="three-col" id="deltaGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-ghost" onclick="clearEOS()">CLEAR EOS</button>
+    <button class="btn btn-green" onclick="saveEOS()">SAVE EOS SNAPSHOT</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG — paste your GAS Web App URL here
+// ══════════════════════════════════════════════
+const API_URL = 'https://script.google.com/macros/s/AKfycbxg9aZL2_-gJbPSYRL_1QWdfDEVaTFHbdrDX8BUuoUcCOVFYuWS5gfAd2CUfhpqghE/exec';
+
+// ══════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════
+const CAP = 84;
+const STATIONS = [
+  {key:'surface', name:'SURFACE INS', min:40},
+  {key:'arin',    name:'AR-IN',       min:40},
+  {key:'basket',  name:'BASKET',      min:60},
+  {key:'t40',     name:'T40',         min:45},
+  {key:'oven',    name:'OVEN',        min:60},
+  {key:'sector',  name:'SECTOR',      min:40},
+  {key:'chamber', name:'CHAMBER',     min:45},
+  {key:'dering',  name:'DeRING',      min:20},
+  {key:'arout',   name:'AR-OUT',      min:30},
+];
+
+// WIP exclusion is context-dependent:
+//
+// BOS / EOS snapshots — operators can physically count every station at shift start/end
+//   arout   — excluded (output number, never WIP)
+//   t40     — COUNTS as WIP (physically countable at BOS/EOS)
+//   chamber — COUNTS as WIP (physically countable at BOS/EOS)
+//
+// Hourly breakdown — too fast-moving to track mid-hour
+//   arout   — excluded (output, tracked separately below the grid)
+//   t40     — excluded (can't reliably count during the hour)
+//   chamber — excluded (can't reliably count during the hour)
+const WIP_EXCLUDE_SNAP = new Set(['arout']);                    // BOS / EOS
+const WIP_EXCLUDE_HR   = new Set(['t40', 'chamber', 'arout']); // Hourly
+
+// Stations that COUNT toward WIP total but should NOT show per-row Runs/Need+1
+// because they're paired/dependent stations (not independently buildable runs).
+// t40 pairs with basket, chamber pairs with sector — showing runs for them is misleading.
+// arout is excluded from WIP entirely so it never hits this path.
+const WIP_NOROW = new Set(['t40', 'chamber']);
+
+const PIPELINE_FULL = STATIONS;
+const CHAMBER_TO_AROUT = 50; // DeRing(20) + AR-OUT(30) — time from chamber exit to AR-OUT complete
+const MAINT_DELAY_MIN = 50; // Bobby request: maintenance hour delays projection by 50 minutes
+const COLOR_META = {
+  g:{label:'GREEN AR', var:'var(--green)', cls:'g'},
+  b:{label:'BLUE AR',  var:'var(--blue)',  cls:'b'},
+  p:{label:'COMBINED', var:'var(--purple)',cls:'p'},
+};
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let activeDay   = todayStr();
+let activeTab   = 'bos';
+let activeHour  = 0;
+let totalHours  = 1;
+let selectedSt  = null;
+let dayCache    = {};
+let refreshTimer = null;
+let isDirtyEditing = false;
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+function init() {
+  setInterval(updateClock, 1000);
+  updateClock();
+  buildStaticPanels();
+  buildPipeline();
+  setupDirtyInputGuard();
+  setActiveDay(todayStr());
+
+  // IMPORTANT:
+  // This tracker is a manual-entry tool. Do NOT auto-refresh while leadership is typing.
+  // The old 60-second refresh was overwriting inputs and looked like the page was reloading.
+  // Refresh now happens only on page load, day change, and after save.
+  // If you ever want live refresh again, use startSafeAutoRefresh() below.
+  // startSafeAutoRefresh();
+}
+
+function setupDirtyInputGuard() {
+  document.addEventListener('input', function(e) {
+    if (!e.target) return;
+    const tag = String(e.target.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      isDirtyEditing = true;
+    }
+  });
+}
+
+function markCleanAfterSave() {
+  isDirtyEditing = false;
+}
+
+function isUserTypingOrEditing() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = String(el.tagName || '').toUpperCase();
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+function startSafeAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    if (isDirtyEditing || isUserTypingOrEditing()) return;
+    loadDayFromAPI(activeDay, true);
+  }, 60000);
+}
+
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clk').textContent = n.toLocaleTimeString('en-US',{hour12:false});
+}
+
+// ══════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════
+function switchTab(id, btn) {
+  activeTab = id;
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+
+  updateKPIs();
+  if (id === 'hourly') updateTimeline('hourly');
+  if (id === 'bos')    updateTimeline('bos');
+}
+
+// ══════════════════════════════════════════════
+// DAY NAV
+// ══════════════════════════════════════════════
+function navDay(delta) {
+  const d = new Date(activeDay + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  setActiveDay(d.toISOString().split('T')[0]);
+}
+
+function setActiveDay(d) {
+  activeDay = d;
+  const [y,m,day] = d.split('-');
+  document.getElementById('dayLabel').textContent = `${parseInt(m)}/${parseInt(day)}/${y}`;
+  activeHour = d === todayStr() ? getCurrentHourIndex() : 0;
+  totalHours = Math.max(activeHour + 1, 1);
+  loadDayFromAPI(d, false);
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.toISOString().split('T')[0];
+}
+
+// ══════════════════════════════════════════════
+// API CALLS
+// ══════════════════════════════════════════════
+function setApiStatus(state, text) {
+  const el = document.getElementById('apiStatus');
+  el.className = 'api-status ' + state;
+  el.textContent = text;
+}
+
+async function apiGet(params) {
+  const url = API_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, {redirect:'follow'});
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+async function apiPost(body) {
+  const params = new URLSearchParams({
+    action: body.action,
+    date:   body.date || '',
+    hour:   body.hour !== undefined ? body.hour : '',
+    payload: JSON.stringify(body),
+  });
+  const res = await fetch(API_URL + '?' + params.toString(), {redirect:'follow'});
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+async function loadDayFromAPI(date, silent) {
+  if (!silent) setApiStatus('loading','LOADING…');
+  try {
+    const data = await apiGet({action:'getAll', date});
+    if (data.error) throw new Error(data.error);
+    dayCache[date] = data;
+    applyDayData(data);
+    setApiStatus('ok','API ✓');
+  } catch(e) {
+    setApiStatus('err','API ✗');
+    if (!silent) showToast('Could not reach API. Check URL in code.', true);
+  }
+}
+
+function applyDayData(data) {
+  // Guard: only load sections if data actually has content
+  // Prevents a failed/empty API response from wiping inputs the user already entered
+  if (data.bos && Object.keys(data.bos).length > 0) loadSectionInputs('bos', data.bos);
+  if (data.eos && Object.keys(data.eos).length > 0) loadSectionInputs('eos', data.eos);
+  const hours = data.hourly || {};
+  const maxHr = Object.keys(hours).length > 0
+    ? Math.max(...Object.keys(hours).map(Number)) + 1
+    : 1;
+  totalHours = Math.max(totalHours, maxHr, activeHour + 1);
+  buildHourBtns(hours);
+  switchHour(activeHour, hours);
+  renderHistory(hours);
+  calcBosAll(); calcHrAll(); calcEosAll();
+  updateKPIs(hours);
+  updateTimeline(activeTab === 'hourly' ? 'hourly' : 'bos');
+  updateDelta(data.bos, data.eos);
+}
+
+// ══════════════════════════════════════════════
+// BUILD STATIC PANELS (BOS / EOS / HR grids)
+// ══════════════════════════════════════════════
+function buildStaticPanels() {
+  buildSnapshotGrid('bosGrid', 'bos');
+  buildSnapshotGrid('eosGrid', 'eos');
+  buildSnapshotGrid('hrGrid',  'hr');
+}
+
+function buildSnapshotGrid(containerId, prefix) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  // BOS / EOS are strict Green + Blue only.
+  // COMBINED is only useful in Hourly Breakdown because hourly WIP can be pooled for run readiness.
+  // BOS / EOS: Green + Blue only.
+  // Hourly: Combined only, because mid-hour floor count is pooled and Green/Blue is unknown.
+  const colorList = (prefix === 'hr') ? ['p'] : ['g','b'];
+  container.classList.toggle('snapshot-two', prefix !== 'hr');
+
+  colorList.forEach(c => {
+    const cm = COLOR_META[c];
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+
+    const excludeSet = (prefix === 'hr') ? WIP_EXCLUDE_HR : WIP_EXCLUDE_SNAP;
+    const isCombined = (c === 'p');
+    // Combined is editable in Hourly because the floor may only know pooled WIP.
+    // BOS / EOS do not render Combined at all.
+    const lockCombinedInput = false;
+    let rows = STATIONS.map(s => {
+      const excluded = excludeSet.has(s.key);
+      // noRow: station counts as WIP but doesn't show per-row Runs/Need+1
+      // (t40 pairs with basket, chamber pairs with sector — runs would be misleading)
+      const noRow = WIP_NOROW.has(s.key) && !excluded;
+
+      const badgeHtml = excluded
+        ? `<span class="wip-excl-badge">${s.key==='arout'?'OUTPUT':'TIME'}</span>`
+        : noRow
+          ? `<span class="wip-excl-badge">PAIRED</span>`
+          : '';
+      const inpClass = `st-inp ${c}${excluded?' no-wip':''}`;
+      // Runs cell: hidden for excluded AND noRow stations
+      const calcCell = (excluded||noRow) ? `<span class="st-calc" style="color:var(--dim2)">—</span>` : `<span class="st-calc" id="${prefix}_${c}_${s.key}_r">—</span>`;
+      // Need+1 cell: hidden for excluded AND noRow stations
+      const needCell = (excluded||noRow) ? `<span class="st-need" style="color:var(--dim2)">—</span>` : `<span class="st-need" id="${prefix}_${c}_${s.key}_n">—</span>`;
+      return `
+      <div class="st-row">
+        <span class="st-lbl">${s.name}${badgeHtml}</span>
+        <span class="st-time">${s.min}m</span>
+        <input type="number" class="${inpClass}" id="${prefix}_${c}_${s.key}" placeholder="0"
+          ${lockCombinedInput?'readonly tabindex="-1"':''}
+          oninput="calcPrefixColor('${prefix}','${c}')">
+        ${calcCell}
+        ${needCell}
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="panel-hd">
+        <div class="panel-dot ${c}"></div>
+        <span class="panel-title" style="color:${cm.var}">${cm.label}</span>
+      </div>
+      <div class="panel-body">
+        <div class="st-hdr">
+          <span class="st-lbl">Station</span><span class="st-lbl">Time</span>
+          <span class="st-lbl">WIP</span>
+          <span class="st-lbl" style="text-align:right">Runs</span>
+          <span class="st-lbl" style="text-align:right">Need +1</span>
+        </div>
+        ${rows}
+        <div class="calc-bar">
+          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_total" style="color:${cm.var}">0</span><span class="calc-lbl">Total WIP</span></div>
+          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_runs"  style="color:${cm.var}">0</span><span class="calc-lbl">Full Runs</span></div>
+          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_left"  style="color:var(--dim)">0</span><span class="calc-lbl">Leftover</span></div>
+          <div class="calc-cell"><span class="calc-val" id="${prefix}_${c}_need"  style="color:var(--orange)">84</span><span class="calc-lbl">To Next Run</span></div>
+        </div>
+      </div>`;
+    container.appendChild(panel);
+  });
+}
+
+// ══════════════════════════════════════════════
+// CALC — core snapshot calculator
+// BOS/EOS: only arout excluded from WIP. Hourly: t40, chamber, arout excluded.
+// WIP_NOROW stations count toward WIP total but don't show per-row runs/need.
+// Hourly COMBINED (p) is manual/editable because Green vs Blue may be unknown mid-shift.
+// ══════════════════════════════════════════════
+
+function calcManualColor(prefix, c, excludeSet) {
+  let total = 0;
+  STATIONS.forEach(s => {
+    const v = getN(`${prefix}_${c}_${s.key}`);
+    const excluded = excludeSet.has(s.key);
+    const noRow    = WIP_NOROW.has(s.key) && !excluded;
+
+    if (!excluded) total += v;
+
+    if (!excluded && !noRow) {
+      setEl(`${prefix}_${c}_${s.key}_r`, v>0 ? `${Math.floor(v/CAP)}r+${v%CAP}` : '—');
+      const need = v%CAP===0 ? (v>0?0:CAP) : CAP-(v%CAP);
+      const nEl = document.getElementById(`${prefix}_${c}_${s.key}_n`);
+      if (nEl) nEl.innerHTML = v>0&&need<CAP
+        ? `<span style="color:var(--orange)">${need}</span>`
+        : `<span style="color:var(--dim2)">—</span>`;
+    }
+  });
+
+  const runs=Math.floor(total/CAP), left=total%CAP, need=left===0?(total>0?0:CAP):CAP-left;
+  setEl(`${prefix}_${c}_total`, total);
+  setEl(`${prefix}_${c}_runs`, runs);
+  setEl(`${prefix}_${c}_left`, left);
+  const nEl = document.getElementById(`${prefix}_${c}_need`);
+  if (nEl) { nEl.textContent=need; nEl.style.color=need===0?'var(--green)':need<20?'var(--red)':'var(--orange)'; }
+  return {total,runs,left,toNext:need};
+}
+
+function calcSnapshotColor(prefix, c) {
+  const excludeSet = (prefix === 'hr') ? WIP_EXCLUDE_HR : WIP_EXCLUDE_SNAP;
+
+  // Hourly COMBINED is manual. Do not auto-sum Green + Blue.
+  // Leadership may only know pooled WIP during the hour.
+  if (prefix === 'hr' && c === 'p') {
+    return calcManualColor(prefix, c, excludeSet);
+  }
+
+  // Non-hourly combined is not rendered, but keep this safe fallback.
+  if (c === 'p') {
+    return calcManualColor(prefix, c, excludeSet);
+  }
+
+  // GREEN / BLUE: standard calc
+  const result = calcManualColor(prefix, c, excludeSet);
+
+  // Only auto-recalc Combined outside Hourly.
+  // In Hourly, Combined is manual pooled WIP and must not be overwritten by G+B.
+  if (prefix !== 'hr') calcCombined(prefix, excludeSet);
+  return result;
+}
+
+// Recalculate the combined (p) panel from current G+B values
+function calcCombined(prefix, excludeSet) {
+  let total = 0;
+  STATIONS.forEach(s => {
+    const excluded = excludeSet.has(s.key);
+    const pEl = document.getElementById(`${prefix}_p_${s.key}`);
+    if (!excluded) {
+      const combined = getN(`${prefix}_g_${s.key}`) + getN(`${prefix}_b_${s.key}`);
+      if (pEl) pEl.value = combined > 0 ? combined : '';
+      total += combined;
+    } else {
+      if (pEl) pEl.value = '';
+    }
+  });
+  const runs=Math.floor(total/CAP), left=total%CAP, need=left===0?(total>0?0:CAP):CAP-left;
+  setEl(`${prefix}_p_total`, total);
+  setEl(`${prefix}_p_runs`, runs);
+  setEl(`${prefix}_p_left`, left);
+  const nEl = document.getElementById(`${prefix}_p_need`);
+  if (nEl) { nEl.textContent=need; nEl.style.color=need===0?'var(--green)':need<20?'var(--red)':'var(--orange)'; }
+}
+
+function calcPrefixColor(prefix, c) {
+  calcSnapshotColor(prefix, c);
+  if (prefix === 'bos') { updateTimeline('bos'); updateKPIs(null); }
+  if (prefix === 'eos') { updateDeltaFromInputs(); }
+  if (prefix === 'hr')  { updateKPIs(null); updateTimeline('hourly'); }
+}
+function calcBosColor(c) { calcPrefixColor('bos', c); }
+function calcEosColor(c) { calcPrefixColor('eos', c); }
+function calcHrColor(c)  { calcPrefixColor('hr',  c); }
+// BOS/EOS calculate Green + Blue. Hourly calculates manual Combined only.
+function calcBosAll()    { ['g','b'].forEach(c=>calcSnapshotColor('bos',c)); updateTimeline('bos'); }
+function calcEosAll()    { ['g','b'].forEach(c=>calcSnapshotColor('eos',c)); }
+function calcHrAll()     { ['p'].forEach(c=>calcSnapshotColor('hr', c)); updateKPIs(null); updateTimeline('hourly'); }
+
+function loadSectionInputs(prefix, data) {
+  if (!data) return;
+  ['g','b','p'].forEach(c => {
+    // Guard: data[c] must be an object with station keys, not a primitive
+    if (!data[c] || typeof data[c] !== 'object') return;
+    STATIONS.forEach(s => {
+      const el = document.getElementById(`${prefix}_${c}_${s.key}`);
+      if (el) el.value = data[c][s.key] || '';
+    });
+    calcSnapshotColor(prefix, c);
+  });
+}
+
+function getSectionData(prefix) {
+  const r = {};
+  ['g','b','p'].forEach(c => {
+    r[c] = {};
+    STATIONS.forEach(s => { r[c][s.key] = getN(`${prefix}_${c}_${s.key}`); });
+  });
+  return r;
+}
+
+function clearBOS() { clearSection('bos'); }
+function clearEOS() { clearSection('eos'); }
+function clearSection(prefix) {
+  ['g','b','p'].forEach(c => {
+    STATIONS.forEach(s => { const el=document.getElementById(`${prefix}_${c}_${s.key}`); if(el)el.value=''; });
+    calcSnapshotColor(prefix,c);
+  });
+}
+
+// ══════════════════════════════════════════════
+// SAVE BOS / EOS
+// ══════════════════════════════════════════════
+async function saveBOS() {
+  setApiStatus('loading','SAVING…');
+  try {
+    const data = getSectionData('bos');
+    const res = await apiPost({action:'saveBOS', date:activeDay, data});
+    if (res.error) throw new Error(res.error);
+    showToast('BOS Snapshot saved ✓');
+    markCleanAfterSave();
+    setApiStatus('ok','API ✓');
+    if (!dayCache[activeDay]) dayCache[activeDay] = {};
+    dayCache[activeDay].bos = data;
+    updateDelta(data, dayCache[activeDay]?.eos);
+  } catch(e) { setApiStatus('err','API ✗'); showToast('Save failed: ' + e.message, true); }
+}
+
+async function saveEOS() {
+  setApiStatus('loading','SAVING…');
+  try {
+    const data = getSectionData('eos');
+    const res = await apiPost({action:'saveEOS', date:activeDay, data});
+    if (res.error) throw new Error(res.error);
+    showToast('EOS Snapshot saved ✓');
+    markCleanAfterSave();
+    setApiStatus('ok','API ✓');
+    if (!dayCache[activeDay]) dayCache[activeDay] = {};
+    dayCache[activeDay].eos = data;
+    updateDelta(dayCache[activeDay]?.bos, data);
+  } catch(e) { setApiStatus('err','API ✗'); showToast('Save failed: ' + e.message, true); }
+}
+
+// ══════════════════════════════════════════════
+// HOURLY
+// ══════════════════════════════════════════════
+function buildHourBtns(savedHours) {
+  const sh = shiftStartMin();
+  const container = document.getElementById('hrBtns');
+  container.innerHTML = '';
+  for (let i=0; i<totalHours; i++) {
+    const btn = document.createElement('button');
+    const hasSave = savedHours && savedHours[i];
+    const hasMaint = hasSave && (savedHours[i].maintenance || Number(savedHours[i].delayMin) > 0);
+    const isCurrent = i === getCurrentHourIndex() && activeDay === todayStr();
+    btn.className = 'hr-btn' + (i===activeHour?' active':'') + (hasSave?' saved':'') + (hasMaint?' maint':'') + (isCurrent?' current':'');
+    btn.textContent = `${fmt12(sh + i*60).replace(':00','')}`;
+    btn.onclick = (()=>{const idx=i;return ()=>{ autoSaveHourLocally(); switchHour(idx, savedHours||{}); };})();
+    container.appendChild(btn);
+  }
+  updateHrLabel();
+}
+
+function updateHrLabel() {
+  const sh = shiftStartMin();
+  const startMin = sh + activeHour*60;
+  const label = `${fmt12(startMin)} – ${fmt12(startMin+60)}`;
+  document.getElementById('hrWindowLabel').textContent = label;
+  const fast = document.getElementById('hrFastWindow');
+  if (fast) fast.textContent = `HR${activeHour+1} • ${label}`;
+}
+
+function getCurrentHourIndex() {
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  const idx = Math.floor((nowMin - shiftStartMin()) / 60);
+  return Math.max(0, Math.min(23, idx));
+}
+
+function goCurrentHour() {
+  autoSaveHourLocally();
+  const idx = getCurrentHourIndex();
+  totalHours = Math.max(totalHours, idx + 1);
+  const saved = dayCache[activeDay]?.hourly || {};
+  buildHourBtns(saved);
+  switchHour(idx, saved);
+}
+
+function addHour() {
+  autoSaveHourLocally();
+  totalHours++;
+  const saved = dayCache[activeDay]?.hourly || {};
+  buildHourBtns(saved);
+  switchHour(totalHours-1, saved);
+}
+
+function switchHour(i, savedHours) {
+  activeHour = i;
+  const snap = savedHours ? savedHours[i] : null;
+  ['g','b','p'].forEach(c => {
+    STATIONS.forEach(s => {
+      const el = document.getElementById(`hr_${c}_${s.key}`);
+      if (el) el.value = (snap&&snap[c]) ? (snap[c][s.key]||'') : '';
+    });
+  });
+  ['g_aro','g_ari','b_aro','b_ari'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = snap ? (snap[id.replace('_','')] || snap[id] || '') : '';
+  });
+  document.getElementById('hrNote').value = snap ? (snap.note||'') : '';
+  const maint = document.getElementById('hrMaintenance');
+  if (maint) maint.checked = !!(snap && (snap.maintenance || Number(snap.delayMin) > 0));
+  buildHourBtns(savedHours||{});
+  updateMaintenanceBanner();
+  calcHrAll();
+}
+
+function buildHourSnap() {
+  const snap = {g:{},b:{},p:{},g_aro:0,g_ari:0,b_aro:0,b_ari:0,note:'',maintenance:false,delayMin:0};
+  ['g','b','p'].forEach(c => { STATIONS.forEach(s => { snap[c][s.key]=getN(`hr_${c}_${s.key}`); }); });
+  snap.g_aro=getN('g_aro'); snap.g_ari=getN('g_ari');
+  snap.b_aro=getN('b_aro'); snap.b_ari=getN('b_ari');
+  snap.maintenance = !!document.getElementById('hrMaintenance')?.checked;
+  snap.delayMin = snap.maintenance ? MAINT_DELAY_MIN : 0;
+  snap.note=document.getElementById('hrNote').value.trim();
+  return snap;
+}
+
+function updateMaintenanceBanner() {
+  const active = !!document.getElementById('hrMaintenance')?.checked;
+  const banner = document.getElementById('maintBanner');
+  const delay = document.getElementById('hrDelayLabel');
+  if (banner) banner.classList.toggle('show', active);
+  if (delay) delay.textContent = active ? `+${MAINT_DELAY_MIN}m` : '0m';
+}
+
+function autoSaveHourLocally() {
+  const snap = buildHourSnap();
+  const hasData = ['g','b','p'].some(c=>STATIONS.some(s=>snap[c][s.key]>0))||snap.g_aro||snap.b_aro;
+  if (!hasData) return;
+  if (!dayCache[activeDay]) dayCache[activeDay]={};
+  if (!dayCache[activeDay].hourly) dayCache[activeDay].hourly={};
+  dayCache[activeDay].hourly[activeHour] = snap;
+}
+
+async function saveHour(goNext) {
+  const snap = buildHourSnap();
+  setApiStatus('loading','SAVING…');
+  try {
+    const res = await apiPost({action:'saveHour', date:activeDay, hour:activeHour, data:snap});
+    if (res.error) throw new Error(res.error);
+    if (!dayCache[activeDay]) dayCache[activeDay]={};
+    if (!dayCache[activeDay].hourly) dayCache[activeDay].hourly={};
+    dayCache[activeDay].hourly[activeHour] = snap;
+    const saved = dayCache[activeDay].hourly;
+    buildHourBtns(saved);
+    renderHistory(saved);
+    updateKPIs(saved);
+    showToast(`Hour ${activeHour+1} saved ✓${snap.maintenance ? ' • Maintenance +50m' : ''}`);
+    markCleanAfterSave();
+    setApiStatus('ok','API ✓');
+    if (goNext) {
+      if (activeHour >= totalHours-1) totalHours++;
+      buildHourBtns(saved);
+      switchHour(activeHour+1, saved);
+    }
+  } catch(e) { setApiStatus('err','API ✗'); showToast('Save failed: '+e.message, true); }
+}
+
+function clearHour() {
+  ['g','b','p'].forEach(c=>STATIONS.forEach(s=>{const el=document.getElementById(`hr_${c}_${s.key}`);if(el)el.value='';}));
+  ['g_aro','g_ari','b_aro','b_ari'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('hrNote').value='';
+  const maint = document.getElementById('hrMaintenance');
+  if (maint) maint.checked = false;
+  updateMaintenanceBanner();
+  calcHrAll();
+}
+
+// ══════════════════════════════════════════════
+// READ HELPERS — respect WIP_EXCLUDE
+// ══════════════════════════════════════════════
+function readHrColor(c) {
+  let total=0,bottleneck=null,bottleneckTime=0;
+  STATIONS.forEach(s=>{
+    const v=getN(`hr_${c}_${s.key}`);
+    if(!WIP_EXCLUDE_HR.has(s.key)){
+      total+=v;
+      if(v>0&&s.min>bottleneckTime){bottleneckTime=s.min;bottleneck=s;}
+    }
+  });
+  return {total,fullRuns:Math.floor(total/CAP),leftover:total%CAP,toNext:total%CAP===0?(total>0?0:CAP):CAP-(total%CAP),bottleneck};
+}
+
+function readBosColor(c) {
+  let total=0,bottleneck=null,bottleneckTime=0;
+  STATIONS.forEach(s=>{
+    const v=getN(`bos_${c}_${s.key}`);
+    if(!WIP_EXCLUDE_SNAP.has(s.key)){
+      total+=v;
+      if(v>0&&s.min>bottleneckTime){bottleneckTime=s.min;bottleneck=s;}
+    }
+  });
+  return {total,fullRuns:Math.floor(total/CAP),leftover:total%CAP,toNext:total%CAP===0?(total>0?0:CAP):CAP-(total%CAP),bottleneck};
+}
+
+function readEosColor(c) {
+  let total=0,bottleneck=null,bottleneckTime=0;
+  STATIONS.forEach(s=>{
+    const v=getN(`eos_${c}_${s.key}`);
+    if(!WIP_EXCLUDE_SNAP.has(s.key)){
+      total+=v;
+      if(v>0&&s.min>bottleneckTime){bottleneckTime=s.min;bottleneck=s;}
+    }
+  });
+  return {total,fullRuns:Math.floor(total/CAP),leftover:total%CAP,toNext:total%CAP===0?(total>0?0:CAP):CAP-(total%CAP),bottleneck};
+}
+
+// ══════════════════════════════════════════════
+// KPIs
+// ══════════════════════════════════════════════
+function updateKPIs(savedHours) {
+  // KPI source follows the active tab.
+  // BOS was showing 0 before because this was always reading hourly inputs.
+  const readFn = activeTab === 'hourly' ? readHrColor
+               : activeTab === 'eos'    ? readEosColor
+               : readBosColor;
+
+  const g = readFn('g');
+  const b = readFn('b');
+  const p = readFn('p');
+
+  setEl('k_gr', g.fullRuns);
+  setEl('k_br', b.fullRuns);
+  setEl('k_cr', p.fullRuns);
+  setEl('k_gn', g.toNext < CAP ? g.toNext : '—');
+  setEl('k_bn', b.toNext < CAP ? b.toNext : '—');
+
+  // AR-OUT is shift output, so keep it based on saved/current hourly AR-OUT.
+  const hours = savedHours || dayCache[activeDay]?.hourly || {};
+  let totGaro = 0, totBaro = 0;
+
+  Object.entries(hours).forEach(([idx, h]) => {
+    if (!h || Number(idx) === Number(activeHour)) return;
+    totGaro += Number(h.g_aro) || 0;
+    totBaro += Number(h.b_aro) || 0;
+  });
+
+  totGaro += getN('g_aro');
+  totBaro += getN('b_aro');
+
+  setEl('k_go', totGaro);
+  setEl('k_bo', totBaro);
+  setEl('k_to', totGaro + totBaro);
+}
+
+// ══════════════════════════════════════════════
+// TIMELINE
+// ══════════════════════════════════════════════
+function getBaselineMin() {
+  const sh = shiftStartMin();
+  const hourStartMin = sh + activeHour * 60;
+  const nowMin = new Date().getHours()*60 + new Date().getMinutes();
+  const isCurrentOrFuture = hourStartMin >= nowMin;
+  return isCurrentOrFuture ? nowMin : hourStartMin;
+}
+
+function updateTimeline(source) {
+  const bodyId = source === 'hourly' ? 'hrTlBody' : 'tlBody';
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  body.innerHTML='';
+  const baseMin = getBaselineMin();
+  const nowMin  = new Date().getHours()*60+new Date().getMinutes();
+  const activeSnap = source === 'hourly' ? buildHourSnap() : null;
+  const delayMin = source === 'hourly' && activeSnap && activeSnap.maintenance ? MAINT_DELAY_MIN : 0;
+  const rows=[];
+  const readFn = source === 'hourly' ? readHrColor : readBosColor;
+
+  function addRows(data,colorClass,badgeClass,label){
+    if(data.total===0)return;
+    for(let i=0;i<data.fullRuns;i++){
+      const estCh=baseMin+(data.bottleneck?data.bottleneck.min:0)+i*105+delayMin;
+      const estOut=estCh+CHAMBER_TO_AROUT;
+      const isPast=estOut<nowMin;
+      rows.push({colorClass,badgeClass,label,runNum:i+1,filled:CAP,total:CAP,estCh,estOut,status:'ready',bn:data.bottleneck,isPast});
+    }
+    if(data.leftover>0){
+      const estCh=baseMin+(data.bottleneck?data.bottleneck.min:0)+data.fullRuns*105+delayMin;
+      const estOut=estCh+CHAMBER_TO_AROUT;
+      rows.push({colorClass,badgeClass,label,runNum:data.fullRuns+1,filled:data.leftover,total:CAP,estCh,estOut,status:'partial',bn:data.bottleneck,need:data.toNext,isPast:false});
+    }
+  }
+
+  if (source === 'hourly') {
+    addRows(readFn('p'),'cb','p','COMB');
+  } else {
+    addRows(readFn('g'),'gr','g','GREEN');
+    addRows(readFn('b'),'bl','b','BLUE');
+    addRows(readFn('p'),'cb','p','COMB');
+  }
+
+  if(rows.length===0){body.innerHTML='<div class="empty-state">Enter station WIP data to see run projections</div>';return;}
+
+  const isLive = getBaselineMin() === nowMin;
+  const baseLabel = isLive
+    ? `<span style="color:var(--green)">● LIVE CLOCK</span>`
+    : `<span style="color:var(--orange)">⏱ HR${activeHour+1} START — ${fmt12(shiftStartMin()+activeHour*60)}</span>`;
+  const anchor = document.createElement('div');
+  anchor.style.cssText='font-family:var(--mono);font-size:9px;margin-bottom:8px;display:flex;align-items:center;gap:6px;';
+  anchor.innerHTML=`<span style="color:var(--dim)">PROJECTION ANCHORED TO</span> ${baseLabel}`;
+  if (source === 'hourly' && delayMin > 0) anchor.innerHTML += ` <span class="maint-pill">MAINT +${delayMin}m</span>`;
+  body.appendChild(anchor);
+
+  rows.forEach(r=>{
+    const pct=Math.round((r.filled/r.total)*100);
+    const div=document.createElement('div');
+    div.className=`tl-row ${r.colorClass}`;
+    const chamberTime = r.status==='ready' ? fmt12(r.estCh) : '—';
+    const arOutTime   = r.status==='ready' ? fmt12(r.estOut) : 'Waiting for WIP';
+    const arOutColor  = r.isPast ? 'var(--dim)' : 'var(--orange)';
+    const statusHtml  = r.status==='partial'
+      ? `<div class="status-pill partial">NEED ${r.need} MORE</div>`
+      : r.isPast
+        ? `<div class="status-pill" style="background:rgba(255,255,255,0.05);color:var(--dim);border:1px solid var(--border)">PAST</div>`
+        : `<div class="status-pill ready">READY TO LOAD</div>`;
+    div.innerHTML=`
+      <div class="run-badge ${r.badgeClass}">${r.label}</div>
+      <div class="tl-val">RUN ${r.runNum}</div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+          <span style="font-family:var(--mono);font-size:8px;color:var(--dim)">${r.filled}/${r.total}</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--dim)">${pct}%</span>
+        </div>
+        <div class="prog-wrap"><div class="prog ${r.badgeClass}" style="width:${pct}%"></div></div>
+      </div>
+      <div class="tl-val" style="color:var(--dim)">${r.bn?r.bn.name:'—'}</div>
+      <div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:1px;">CH: ${chamberTime}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:${arOutColor};">OUT: ${arOutTime}</div>
+      </div>
+      ${statusHtml}`;
+    body.appendChild(div);
+  });
+}
+
+// ══════════════════════════════════════════════
+// PIPELINE — CLICKABLE
+// ══════════════════════════════════════════════
+function buildPipeline() {
+  const wrap = document.getElementById('pipeFlow');
+  wrap.innerHTML='';
+  let cum=0;
+  PIPELINE_FULL.forEach((s,i)=>{
+    cum+=s.min;
+    const node=document.createElement('div');
+    node.className='pipe-node';
+    node.innerHTML=`
+      <div class="pipe-box" id="pipe_${s.key}" onclick="selectStation(${i},${cum},'${s.name}','${s.key}')">
+        <div class="pipe-name">${s.name}</div>
+        <div class="pipe-min">${s.min}m</div>
+      </div>
+      <div class="pipe-cum">+${cum}m</div>`;
+    wrap.appendChild(node);
+    if(i<PIPELINE_FULL.length-1){const arr=document.createElement('div');arr.className='pipe-arr';arr.textContent='→';wrap.appendChild(arr);}
+  });
+}
+
+function selectStation(idx,cum,name,key) {
+  selectedSt={idx,cum,name,key};
+  PIPELINE_FULL.forEach((s,i)=>{
+    const box=document.getElementById(`pipe_${s.key}`);
+    if(!box)return;
+    box.className='pipe-box'+(i<idx?' past-node':i===idx?' active-node':'');
+  });
+  document.getElementById('projHint').style.display='none';
+  updatePipelineProj();
+}
+
+function updatePipelineProj() {
+  if(!selectedSt)return;
+  const {idx,name,key}=selectedSt;
+  let remaining=0;
+  for(let i=idx;i<PIPELINE_FULL.length;i++) remaining+=PIPELINE_FULL[i].min;
+  const baseMin  = getBaselineMin();
+  const arOutEst = baseMin + remaining;
+  const isLive   = baseMin === new Date().getHours()*60+new Date().getMinutes();
+  const stIdx=STATIONS.findIndex(s=>s.key===key);
+  const gJ=stIdx>=0?getN(`bos_g_${key}`):0;
+  const bJ=stIdx>=0?getN(`bos_b_${key}`):0;
+  const pJ=stIdx>=0?getN(`bos_p_${key}`):0;
+
+  document.getElementById('projTitle').innerHTML=
+    `<span style="color:var(--orange)">◉ ${name}</span> → AR-OUT in <span style="color:var(--white)">${remaining} min</span> — Est. <span style="color:var(--orange)">${fmt12(arOutEst)}</span>`
+    + ` <span style="color:var(--dim);font-size:8px;">[${isLive?'LIVE':'HR'+( activeHour+1)+' START'}]</span>`;
+  document.getElementById('projGrid').innerHTML=`
+    <div class="proj-cell">
+      <div class="proj-clbl">Est. AR-OUT Time</div>
+      <div class="proj-cval" style="color:var(--orange)">${fmt12(arOutEst)}</div>
+    </div>
+    <div class="proj-cell">
+      <div class="proj-clbl">Min Remaining</div>
+      <div class="proj-cval" style="color:var(--white)">${remaining} min</div>
+    </div>
+    <div class="proj-cell">
+      <div class="proj-clbl">Jobs at Station (G / B / Comb)</div>
+      <div class="proj-cval">
+        <span style="color:var(--green)">${gJ}</span>
+        <span style="color:var(--dim)"> / </span>
+        <span style="color:var(--blue)">${bJ}</span>
+        <span style="color:var(--dim)"> / </span>
+        <span style="color:var(--purple)">${pJ}</span>
+      </div>
+    </div>
+    <div class="proj-cell">
+      <div class="proj-clbl">GREEN Runs from here</div>
+      <div class="proj-cval" style="color:var(--green)">${Math.floor(gJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${gJ%CAP}</span></div>
+    </div>
+    <div class="proj-cell">
+      <div class="proj-clbl">BLUE Runs from here</div>
+      <div class="proj-cval" style="color:var(--blue)">${Math.floor(bJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${bJ%CAP}</span></div>
+    </div>
+    <div class="proj-cell">
+      <div class="proj-clbl">Combined Runs from here</div>
+      <div class="proj-cval" style="color:var(--purple)">${Math.floor(pJ/CAP)}<span style="font-size:10px;color:var(--dim)"> +${pJ%CAP}</span></div>
+    </div>`;
+  document.getElementById('projCard').style.display='block';
+}
+
+// ══════════════════════════════════════════════
+// DELTA (BOS vs EOS)
+// ══════════════════════════════════════════════
+function updateDeltaFromInputs() {
+  const bos = getSectionData('bos');
+  const eos = getSectionData('eos');
+  updateDelta(bos, eos);
+}
+
+function updateDelta(bos, eos) {
+  const empty=document.getElementById('deltaEmpty');
+  const content=document.getElementById('deltaContent');
+  const grid=document.getElementById('deltaGrid');
+  if(!bos||!eos){empty.style.display='block';content.style.display='none';return;}
+  empty.style.display='none';content.style.display='block';
+  grid.innerHTML='';
+  ['g','b'].forEach(c=>{
+    const cm=COLOR_META[c];
+    // Delta is BOS vs EOS — uses snapshot exclusion (arout only)
+    const bosTotal=STATIONS.reduce((a,s)=>WIP_EXCLUDE_SNAP.has(s.key)?a:a+(bos[c]?bos[c][s.key]||0:0),0);
+    const eosTotal=STATIONS.reduce((a,s)=>WIP_EXCLUDE_SNAP.has(s.key)?a:a+(eos[c]?eos[c][s.key]||0:0),0);
+    const delta=eosTotal-bosTotal;
+    const cell=document.createElement('div');
+    cell.className='panel';
+    cell.innerHTML=`
+      <div class="panel-hd"><div class="panel-dot ${c}"></div><span class="panel-title" style="color:${cm.var}">${cm.label}</span></div>
+      <div class="panel-body">
+        <div class="calc-bar">
+          <div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${bosTotal}</span><span class="calc-lbl">BOS WIP</span></div>
+          <div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${eosTotal}</span><span class="calc-lbl">EOS WIP</span></div>
+          <div class="calc-cell"><span class="calc-val" style="color:${delta>0?'var(--green)':delta<0?'var(--red)':'var(--dim)'}">${delta>0?'+':''}${delta}</span><span class="calc-lbl">Delta</span></div>
+          <div class="calc-cell"><span class="calc-val" style="color:${cm.var}">${Math.floor(eosTotal/CAP)}</span><span class="calc-lbl">EOS Runs</span></div>
+        </div>
+      </div>`;
+    grid.appendChild(cell);
+  });
+}
+
+// ══════════════════════════════════════════════
+// HISTORY TABLE
+// ══════════════════════════════════════════════
+function renderHistory(savedHours) {
+  const sh = shiftStartMin();
+  const body=document.getElementById('histBody');
+  body.innerHTML='';
+  Object.keys(savedHours).sort((a,b)=>+a-+b).forEach(i=>{
+    const h=savedHours[i]; if(!h)return;
+    const startMin=sh+parseInt(i)*60;
+    const pT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.p?h.p[s.key]||0:0),0);
+    const delay = Number(h.delayMin) || (h.maintenance ? MAINT_DELAY_MIN : 0);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:var(--orange);font-weight:600">HR ${parseInt(i)+1}</td>
+      <td style="color:var(--dim)">${fmt12(startMin)}–${fmt12(startMin+60)}</td>
+      <td class="p-text">${pT}</td>
+      <td class="p-text">${Math.floor(pT/CAP)}</td>
+      <td>${delay>0?'<span class="maint-pill">YES</span>':'—'}</td>
+      <td style="color:${delay>0?'var(--orange)':'var(--dim2)'}">${delay>0?'+'+delay+'m':'—'}</td>
+      <td style="color:var(--dim);font-size:10px">${h.note||''}</td>`;
+    body.appendChild(tr);
+  });
+  const foot=document.getElementById('histFoot');
+  foot.innerHTML=`<tr style="background:var(--s2);">
+    <td colspan="2" style="font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.1em;padding:8px 10px;">SHIFT TOTALS</td>
+    <td></td><td></td><td></td><td></td><td></td>
+  </tr>`;
+}
+
+// ══════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════
+function exportCSV() {
+  const data = dayCache[activeDay] || {};
+  const sh = shiftStartMin();
+  let csv = `AR RUN TRACKER — ${activeDay}\n\n`;
+  if (data.bos) {
+    csv+=`BOS\n`;
+    ['g','b'].forEach(c=>{csv+=`${COLOR_META[c].label},`;STATIONS.forEach(s=>csv+=`${s.name}:${data.bos[c]?data.bos[c][s.key]||0:0} `);csv+='\n';});
+    csv+='\n';
+  }
+  csv+=`HOURLY,WINDOW,COMB_WIP,COMB_RUNS,MAINTENANCE,DELAY_MIN,NOTES\n`;
+  Object.keys(data.hourly||{}).sort((a,b)=>+a-+b).forEach(i=>{
+    const h=data.hourly[i];if(!h)return;
+    const startMin=sh+parseInt(i)*60;
+    const gT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.g?h.g[s.key]||0:0),0);
+    const bT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.b?h.b[s.key]||0:0),0);
+    const pT=STATIONS.reduce((a,s)=>WIP_EXCLUDE_HR.has(s.key)?a:a+(h.p?h.p[s.key]||0:0),0);
+    csv+=`HR${parseInt(i)+1},${fmt12(startMin)}-${fmt12(startMin+60)},${gT},${Math.floor(gT/CAP)},${h.g_aro||0},${bT},${Math.floor(bT/CAP)},${h.b_aro||0},${pT},${Math.floor(pT/CAP)},${(h.g_aro||0)+(h.b_aro||0)},"${h.note||''}"\n`;
+  });
+  if(data.eos){csv+=`\nEOS\n`;['g','b'].forEach(c=>{csv+=`${COLOR_META[c].label},`;STATIONS.forEach(s=>csv+=`${s.name}:${data.eos[c]?data.eos[c][s.key]||0:0} `);csv+='\n';});}
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`AR_RunTracker_${activeDay}.csv`;a.click();
+}
+
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function getN(id){return parseInt(document.getElementById(id)?.value)||0;}
+function setEl(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+function shiftStartMin(){const v=document.getElementById('shiftStart').value||'06:00';const[h,m]=v.split(':').map(Number);return h*60+m;}
+function fmt12(totalMin){const h=Math.floor(totalMin/60)%24,m=totalMin%60,ap=h>=12?'PM':'AM',h12=h%12||12;return `${h12}:${m.toString().padStart(2,'0')} ${ap}`;}
+
+function showToast(msg, isErr=false) {
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast'+(isErr?' err':'');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+init();
+</script>
+</body>
+</html>
