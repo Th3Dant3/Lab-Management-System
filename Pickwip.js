@@ -65,6 +65,18 @@ let STATE = {
   demo: false
 };
 
+/*
+ * Sticky guard for cumulative daily record counts.
+ * Breakage/Replenishment are daily totals. During the same day they should not
+ * randomly fall from a positive value to 0 just because an auto-refresh got a
+ * partial API payload. Reset automatically on a new local date.
+ */
+let LAST_GOOD_PICKING_RECORD_COUNTS = {
+  dateKey: '',
+  breakageCountToday: null,
+  replenishmentCountToday: null
+};
+
 let OP_STATION_VIEW = 'all';
 let OP_DETAIL_STATION = '';
 let OP_SELECTED_OPERATOR_KEY = '';
@@ -645,10 +657,15 @@ async function fetchAll(showToast = false) {
      * Do not replace STATE until payload is confirmed good.
      */
     const nextWip = normalizeWip(payload.wip || payload.data || []);
-    const nextDailyStats = normalizeDailyStats(
+    const normalizedDailyStats = normalizeDailyStats(
       payload.dailyStats || {},
       payload.dailyActivityCounts || payload.snapshotRecordCounts || payload.recordCounts || {},
       payload.manualCounts || {}
+    );
+
+    const nextDailyStats = protectPickingRecordCountsAgainstRefreshZero_(
+      normalizedDailyStats,
+      payload
     );
 
     console.log('Picking daily stats loaded:', nextDailyStats, 'dailyActivityCounts:', payload.dailyActivityCounts || {}, 'manualCounts:', payload.manualCounts || {});
@@ -953,6 +970,84 @@ function normalizeDailyStats(stats, dailyActivityCounts = {}, manualCounts = {})
     ),
     manualOverrideNotes: safeStats.manualOverrideNotes || manualRecordCounts.manualOverrideNotes || []
   };
+}
+
+
+function protectPickingRecordCountsAgainstRefreshZero_(dailyStats, payload = {}) {
+  const stats = Object.assign({}, dailyStats || {});
+  const todayKey = getPickingLocalDateKey_();
+
+  if (LAST_GOOD_PICKING_RECORD_COUNTS.dateKey && LAST_GOOD_PICKING_RECORD_COUNTS.dateKey !== todayKey) {
+    LAST_GOOD_PICKING_RECORD_COUNTS = {
+      dateKey: todayKey,
+      breakageCountToday: null,
+      replenishmentCountToday: null
+    };
+  }
+
+  const currentBreakage = getNullableNumber_(stats.breakageCountToday);
+  const currentReplenishment = getNullableNumber_(stats.replenishmentCountToday);
+  const previousBreakage = getNullableNumber_(STATE?.dailyStats?.breakageCountToday);
+  const previousReplenishment = getNullableNumber_(STATE?.dailyStats?.replenishmentCountToday);
+  const stickyBreakage = getNullableNumber_(LAST_GOOD_PICKING_RECORD_COUNTS.breakageCountToday);
+  const stickyReplenishment = getNullableNumber_(LAST_GOOD_PICKING_RECORD_COUNTS.replenishmentCountToday);
+
+  const bestBreakage = Math.max(
+    stickyBreakage || 0,
+    previousBreakage || 0
+  );
+
+  const bestReplenishment = Math.max(
+    stickyReplenishment || 0,
+    previousReplenishment || 0
+  );
+
+  const hasLivePayload = Array.isArray(payload.wip || payload.data)
+    ? (payload.wip || payload.data).length > 0
+    : true;
+
+  if (hasLivePayload && bestBreakage > 0 && currentBreakage === 0) {
+    stats.breakageCountToday = bestBreakage;
+    stats.recordCountSource = stats.recordCountSource || 'frontend-refresh-zero-guard';
+    stats.calculationNote = appendPickingNote_(stats.calculationNote, 'Kept last good Breakage Count because refresh returned a transient zero.');
+  }
+
+  if (hasLivePayload && bestReplenishment > 0 && currentReplenishment === 0) {
+    stats.replenishmentCountToday = bestReplenishment;
+    stats.recordCountSource = stats.recordCountSource || 'frontend-refresh-zero-guard';
+    stats.calculationNote = appendPickingNote_(stats.calculationNote, 'Kept last good Replenishment Count because refresh returned a transient zero.');
+  }
+
+  const finalBreakage = getNullableNumber_(stats.breakageCountToday);
+  const finalReplenishment = getNullableNumber_(stats.replenishmentCountToday);
+
+  if ((finalBreakage || 0) > 0 || (finalReplenishment || 0) > 0) {
+    LAST_GOOD_PICKING_RECORD_COUNTS = {
+      dateKey: todayKey,
+      breakageCountToday: finalBreakage,
+      replenishmentCountToday: finalReplenishment
+    };
+  }
+
+  stats.recordCountToday = num(
+    stats.recordCountToday ||
+    ((finalBreakage || 0) + (finalReplenishment || 0))
+  );
+
+  return stats;
+}
+
+function getPickingLocalDateKey_() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function appendPickingNote_(existing, note) {
+  const text = String(existing || '').trim();
+  return text ? `${text} ${note}` : note;
 }
 
 function getNullableNumber_(value) {
