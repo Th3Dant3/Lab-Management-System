@@ -477,6 +477,41 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
   </div>
 </div>
 
+
+<!-- ── AR Run Tracker ── -->
+<div id="arruntracker-card" class="card card--arruntracker" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#f97316"></canvas>
+  <div class="card-accent card-accent--arruntracker"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">AR Run Tracker</h3>
+        <span class="badge badge--arruntracker">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        AR run planning, BOS/EOS WIP input, hourly Combine AR tracking, maintenance delay notes, and run build projection.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">BOS / EOS</span>
+      <span class="tag">Combine AR</span>
+      <span class="tag">Hourly Runs</span>
+      <span class="tag">Maintenance</span>
+      <span class="tag">Projection</span>
+    </div>
+
+    <button class="card-btn card-btn--arruntracker" onclick="openPage('ARRunTracker.html')">
+      Open AR Run Tracker
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
 <!-- ── Finish Dashboard ── -->
 <div id="finishdash-card" class="card card--featured" data-gated>
   <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#00d9ff"></canvas>
@@ -722,7 +757,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
         <div class="card-inner">
           <div class="card-top">
             <div class="card-title-row">
-              <h3 class="card-title">Picking WIP</h3>
+              <h3 class="card-title">Picking Dashboard</h3>
               <span class="badge badge--inventory">Picking</span>
             </div>
             <p class="card-desc">Live WIP tracking for SF, FSV &amp; Breakage.</p>

@@ -1316,3 +1316,51 @@ body.lms-loading * { cursor: none !important; }
 .card-btn--quality:hover {
   background: linear-gradient(135deg, rgba(251, 113, 133, 0.30), rgba(251, 113, 133, 0.15));
 }
+
+
+/* =====================================================
+   AR RUN TRACKER PRODUCTION CARD
+===================================================== */
+.card--arruntracker {
+  border-color: rgba(249, 115, 22, 0.24);
+}
+
+.card--arruntracker:hover {
+  border-color: rgba(249, 115, 22, 0.58);
+  box-shadow:
+    0 20px 50px rgba(0,0,0,0.5),
+    0 0 34px rgba(249,115,22,0.14);
+}
+
+.card-accent--arruntracker {
+  background: linear-gradient(90deg, #f97316, #fbbf24, #22d3ee);
+}
+
+.badge--arruntracker {
+  background: rgba(249,115,22,0.13);
+  color: #fed7aa;
+  border: 1px solid rgba(249,115,22,0.30);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge--arruntracker::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #f97316;
+  box-shadow: 0 0 10px rgba(249,115,22,0.85);
+}
+
+.card-btn--arruntracker {
+  background: linear-gradient(135deg, rgba(249,115,22,0.20), rgba(34,211,238,0.10));
+  border: 1px solid rgba(249,115,22,0.32);
+  color: #fed7aa;
+}
+
+.card-btn--arruntracker:hover {
+  background: linear-gradient(135deg, rgba(249,115,22,0.30), rgba(34,211,238,0.15));
+  border-color: rgba(249,115,22,0.52);
+}
