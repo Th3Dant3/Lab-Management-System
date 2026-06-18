@@ -754,7 +754,8 @@ function countUp(id, target, duration, suffix) {
 }
 
 /* =====================================================
-   PAGE LOAD
+   PAGE LOAD — FAST NON-BLOCKING VERSION
+   The page becomes usable first. KPI/API data fills in after.
 ===================================================== */
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -764,32 +765,39 @@ document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   initUserDisplay();
   updateScannerFromStorage();
-  initNavAnimations();
-  initBrandCanvas();
-  initSparklines();
-  initCardCanvases();
-  animateScannerHealth("Online", "cb-m-val--green");
 
-  // Show the UI immediately — don't wait for API
+  // Show the UI immediately. Do not make users wait on Apps Script.
   unlockPage();
 
-  // Apply visibility from sessionStorage immediately (no extra API call needed)
+  // Apply access rules from sessionStorage immediately.
   applyVisibilityRules();
 
-  // Data loads in background and fills in when ready
-  fetchDashboard()
-  .then(dashboardData => {
-    renderDashboard(dashboardData);
-    if (window.dismissLoader) window.dismissLoader();
-  })
-  .catch(err => {
-    console.error("Dashboard load error", err);
-    showErrorState();
-    if (window.dismissLoader) window.dismissLoader();
-  })
-  .finally(() => {
-    console.timeEnd("TOTAL_DASHBOARD_LOAD");
+  // Start visual effects after the browser paints the page shell.
+  requestAnimationFrame(() => {
+    initNavAnimations();
+    initBrandCanvas();
+    initSparklines();
+    initCardCanvases();
+    animateScannerHealth("Online", "cb-m-val--green");
   });
+
+  // Remove loader fast. KPI numbers can load in the background.
+  setTimeout(() => {
+    if (window.dismissLoader) window.dismissLoader();
+  }, 900);
+
+  // Data loads in the background and fills in when ready.
+  fetchDashboard()
+    .then(dashboardData => {
+      renderDashboard(dashboardData);
+    })
+    .catch(err => {
+      console.error("Dashboard load error", err);
+      showErrorState();
+    })
+    .finally(() => {
+      console.timeEnd("TOTAL_DASHBOARD_LOAD");
+    });
 
 });
 
@@ -1042,35 +1050,68 @@ function initTabs() {
 }
 
 /* =====================================================
-   FETCH DASHBOARD
+   FETCH DASHBOARD — FASTER PARALLEL VERSION
+   Main dashboard API and Production Flow API run at the same time.
 ===================================================== */
 async function fetchDashboard() {
-  console.time("DASHBOARD_API");
+  console.time("DASHBOARD_API_TOTAL");
+
+  const cacheBust = Date.now();
+  const mainUrl = API_URL + "?t=" + cacheBust;
+  const flowUrl = PRODUCTION_FLOW_API + "?action=productionFlow&area=All&t=" + cacheBust;
 
   try {
-    const res = await fetch(API_URL + "?t=" + Date.now());
-    const data = await res.json();
+    const [mainResult, flowResult] = await Promise.allSettled([
+      timedFetchJson(mainUrl, "MAIN_DASHBOARD_API"),
+      timedFetchJson(flowUrl, "PRODUCTION_FLOW_API")
+    ]);
 
-    // Add Facility WIP from Production Flow API without replacing old dashboard data
-    try {
-      const prodRes = await fetch(
-        PRODUCTION_FLOW_API + "?action=productionFlow&area=All&debug=true&t=" + Date.now()
-      );
+    const data =
+      mainResult.status === "fulfilled" && mainResult.value
+        ? mainResult.value
+        : {};
 
-      const prodData = await prodRes.json();
+    if (mainResult.status === "rejected") {
+      console.error("Main Dashboard API failed", mainResult.reason);
+    }
 
-      data.facilityWip = Number(prodData.facilityWip || 0);
-    } catch (prodErr) {
-      console.error("Production Flow API failed", prodErr);
+    if (flowResult.status === "fulfilled" && flowResult.value) {
+      data.facilityWip = Number(flowResult.value.facilityWip || 0);
+    } else {
+      console.error("Production Flow API failed", flowResult.reason);
       data.facilityWip = 0;
     }
 
-    console.timeEnd("DASHBOARD_API");
+    console.timeEnd("DASHBOARD_API_TOTAL");
     return data || {};
 
   } catch (err) {
     console.error("Dashboard API failed", err);
+    console.timeEnd("DASHBOARD_API_TOTAL");
     return {};
+  }
+}
+
+async function timedFetchJson(url, label) {
+  console.time(label);
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    if (!res.ok) {
+      throw new Error(label + " failed with HTTP " + res.status);
+    }
+
+    const json = await res.json();
+    console.timeEnd(label);
+    return json;
+
+  } catch (err) {
+    console.timeEnd(label);
+    throw err;
   }
 }
 
@@ -1150,8 +1191,8 @@ function applyVisibilityRules() {
     features    = visibility.features    || {};
   }
 
-  console.log("DEPARTMENTS:", departments);
-  console.log("FEATURES:", features);
+  console.log("DEPARTMENTS count:", Object.keys(departments || {}).length);
+  console.log("FEATURES count:", Object.keys(features || {}).length);
 
   // ── 1. Sidebar nav tabs — hide entire sections ──
   const deptNavMap = {
