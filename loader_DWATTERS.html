@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#020509;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── Coastal sunset — deep teal/ocean/dusk ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 100% 45% at 50% 0%,   rgba(20,80,120,.28)  0%,transparent 60%),
+    radial-gradient(ellipse 80%  50% at 50% 40%,  rgba(0,60,100,.18)   0%,transparent 65%),
+    radial-gradient(ellipse 60%  35% at 20% 70%,  rgba(0,40,80,.12)    0%,transparent 55%),
+    radial-gradient(ellipse 60%  35% at 80% 70%,  rgba(0,40,80,.12)    0%,transparent 55%),
+    radial-gradient(ellipse 100% 30% at 50% 100%, rgba(180,100,0,.1)   0%,transparent 55%),
+    linear-gradient(180deg,#020509 0%,#030710 45%,#040608 100%);
+  animation:bgp 6s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.9}50%{opacity:1}}
+
+/* ── Ocean horizon glow ── */
+.ocean-horizon{
+  position:fixed;bottom:0;left:0;right:0;height:280px;
+  background:linear-gradient(180deg,
+    transparent,
+    rgba(0,80,140,.06) 40%,
+    rgba(0,100,160,.12) 70%,
+    rgba(180,100,0,.08) 100%);
+  pointer-events:none;z-index:1;
+}
+/* Horizon line — where ocean meets sky */
+.horizon-line{
+  position:fixed;left:0;right:0;
+  height:1.5px;bottom:110px;
+  background:linear-gradient(90deg,transparent,rgba(0,160,220,.3),rgba(255,180,60,.2),rgba(0,160,220,.3),transparent);
+  box-shadow:0 0 12px rgba(0,140,200,.2);
+  pointer-events:none;z-index:2;
+}
+/* Sun glow on horizon */
+.sun-glow{
+  position:fixed;bottom:100px;left:50%;
+  transform:translateX(-50%);
+  width:300px;height:80px;
+  background:radial-gradient(ellipse 50% 100% at 50% 100%,rgba(255,160,40,.12),transparent 70%);
+  pointer-events:none;z-index:2;
+  animation:sunBreath 4s ease-in-out infinite;
+}
+@keyframes sunBreath{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* ── Ocean waves ── */
+.wave{
+  position:fixed;left:0;right:0;
+  height:3px;border-radius:50%;
+  background:linear-gradient(90deg,transparent,rgba(0,180,220,.25),rgba(0,220,255,.35),rgba(0,180,220,.25),transparent);
+  pointer-events:none;z-index:2;
+  animation:waveRoll 3s ease-in-out infinite;
+}
+@keyframes waveRoll{0%,100%{transform:scaleX(.9);opacity:.4}50%{transform:scaleX(1.05);opacity:.8}}
+
+/* ── Stars/sky ── */
+.star{position:fixed;border-radius:50%;background:#fff;animation:twinkle ease-in-out infinite;}
+@keyframes twinkle{0%,100%{opacity:.1}50%{opacity:var(--sb)}}
+
+/* ── Crosshair reticle bg ── */
+.reticle-bg{
+  position:fixed;top:50%;right:80px;
+  transform:translateY(-50%);
+  opacity:.05;pointer-events:none;z-index:1;
+  animation:reticlePulse 4s ease-in-out infinite;
+}
+@keyframes reticlePulse{0%,100%{opacity:.04}50%{opacity:.08}}
+
+/* ── HUD corners — ocean teal ── */
+.hc{position:fixed;width:56px;height:56px;pointer-events:none;z-index:3;}
+.hc.tl{top:18px;left:18px;border-top:1.5px solid rgba(0,180,220,.45);border-left:1.5px solid rgba(0,180,220,.45);}
+.hc.tr{top:18px;right:18px;border-top:1.5px solid rgba(0,180,220,.45);border-right:1.5px solid rgba(0,180,220,.45);}
+.hc.bl{bottom:18px;left:18px;border-bottom:1.5px solid rgba(0,180,220,.45);border-left:1.5px solid rgba(0,180,220,.45);}
+.hc.br{bottom:18px;right:18px;border-bottom:1.5px solid rgba(0,180,220,.45);border-right:1.5px solid rgba(0,180,220,.45);}
+.hc.tl::after{content:'';position:absolute;top:-1.5px;left:60px;width:10px;height:1.5px;background:rgba(0,180,220,.4);}
+.hc.tr::after{content:'';position:absolute;top:-1.5px;right:60px;width:10px;height:1.5px;background:rgba(0,180,220,.4);}
+
+/* ── Fine grid ── */
+.grid{position:fixed;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(0,160,220,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,160,220,.03) 1px,transparent 1px);
+  background-size:48px 48px;}
+
+/* ── Scan ── */
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,180,220,.1),transparent);animation:sc 7s linear infinite;pointer-events:none;z-index:2;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+/* ── Ocean particles ── */
+.pt{position:fixed;border-radius:50%;animation:ptf linear infinite;pointer-events:none;z-index:2;}
+@keyframes ptf{0%{transform:translate(0,0);opacity:var(--op);}100%{transform:translate(var(--px),var(--py));opacity:0;}}
+
+/* ══ PAGE ══ */
+.page{
+  position:fixed;inset:0;bottom:120px;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:6px;
+}
+
+/* ── MAIN EMBLEM — crosshair + anchor ── */
+.emblem{
+  width:96px;height:96px;border-radius:50%;
+  border:2px solid rgba(0,180,220,.55);
+  background:radial-gradient(circle at 38% 32%,rgba(0,60,120,.4),rgba(0,0,0,.95));
+  display:flex;align-items:center;justify-content:center;
+  position:relative;margin-bottom:6px;
+  animation:embIn .8s cubic-bezier(.17,.67,.3,1.3) both,embGlow 3s 1s ease-in-out infinite;
+}
+@keyframes embIn{from{opacity:0;transform:scale(.3) rotate(-180deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes embGlow{
+  0%,100%{box-shadow:0 0 16px rgba(0,180,220,.3)}
+  50%{box-shadow:0 0 40px rgba(0,200,240,.85),0 0 80px rgba(0,160,200,.2)}
+}
+.er1{position:absolute;inset:-9px;border-radius:50%;border:1.5px solid transparent;border-top-color:rgba(0,200,240,.8);animation:ro 3s linear infinite;}
+.er2{position:absolute;inset:-17px;border-radius:50%;border:1px solid transparent;border-bottom-color:rgba(0,160,200,.4);animation:ro2 6s linear infinite;}
+.er3{position:absolute;inset:-25px;border-radius:50%;border:1px solid rgba(0,140,180,.08);animation:ro 14s linear infinite reverse;}
+@keyframes ro{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes ro2{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
+
+/* ── Name ── */
+.welcome-txt{font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:8px;color:rgba(255,255,255,.4);text-transform:uppercase;animation:fu .4s .45s ease both;}
+.fullname{
+  font-family:'Bebas Neue',sans-serif;font-size:68px;
+  color:#ffffff;letter-spacing:4px;line-height:1;
+  text-align:center;margin-bottom:4px;
+  animation:nameIn .7s .55s ease both;
+  text-shadow:0 0 24px rgba(0,180,220,.4),0 0 50px rgba(0,140,180,.15),0 2px 0 rgba(0,0,0,.9);
+}
+@keyframes nameIn{from{opacity:0;letter-spacing:16px}to{opacity:1;letter-spacing:4px}}
+
+/* ── Title banner ── */
+.title-banner{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  border:1px solid rgba(0,180,220,.28);
+  background:rgba(0,20,50,.25);
+  padding:10px 32px;margin-bottom:6px;
+  position:relative;overflow:hidden;
+  animation:fu .5s .7s ease both;min-width:310px;
+}
+.title-banner::before{content:'';position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,rgba(0,200,240,.7),transparent);}
+.title-banner::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,160,200,.35),transparent);}
+.tb-shine{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,180,220,.05),transparent);animation:tbS 4s ease-in-out infinite;}
+@keyframes tbS{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+.tb-main{font-family:'Barlow Condensed',sans-serif;font-size:20px;letter-spacing:5px;color:#ffffff;text-transform:uppercase;font-weight:700;line-height:1;}
+.tb-role{font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:4px;color:#00b8e0;text-transform:uppercase;font-weight:600;}
+.tb-dept{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:3px;color:rgba(255,255,255,.42);text-transform:uppercase;}
+.tb-co{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:3px;color:rgba(0,180,220,.4);text-transform:uppercase;}
+
+
+.passion-strip{
+  display:flex;align-items:center;gap:0;
+  border:1px solid rgba(0,160,200,.2);
+  background:rgba(0,0,0,.45);
+  margin-bottom:4px;
+  animation:fu .5s .84s ease both;
+}
+.passion{
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:10px 24px;border-right:1px solid rgba(0,160,200,.15);
+  position:relative;overflow:hidden;
+}
+.passion:last-child{border-right:none;}
+.passion-anim{
+  width:60px;height:44px;
+  display:flex;align-items:center;justify-content:center;
+}
+.p-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:3px;color:rgba(0,200,240,.55);text-transform:uppercase;}
+
+/* Motorcycle bob */
+.moto-bob{animation:motoBob 1.8s ease-in-out infinite;transform-origin:center bottom;}
+@keyframes motoBob{0%,100%{transform:translateY(0) rotate(-2deg)}45%{transform:translateY(-5px) rotate(-3deg)}75%{transform:translateY(-2px) rotate(-1.5deg)}}
+/* Scope pulse */
+.scope-pulse{animation:scopePulse 2.5s ease-in-out infinite;}
+@keyframes scopePulse{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
+/* Wave bob */
+.wave-bob{animation:waveBob 2.2s ease-in-out infinite;}
+@keyframes waveBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+
+/* Wheel spin */
+.wspin{animation:wsp .4s linear infinite;transform-origin:center;}
+@keyframes wsp{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+/* ── Status ── */
+.status-row{display:flex;align-items:center;gap:16px;margin-bottom:4px;animation:fu .4s .96s ease both;}
+.st-item{display:flex;align-items:center;gap:5px;}
+.st-dot{width:6px;height:6px;border-radius:50%;animation:stP 2s ease-in-out infinite;}
+@keyframes stP{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
+.st-dot.on{background:#00d890;box-shadow:0 0 6px rgba(0,200,140,.7);}
+.st-dot.sys{background:#00b8e0;box-shadow:0 0 6px rgba(0,180,220,.7);animation-delay:.5s;}
+.st-dot.rdy{background:#ffc800;box-shadow:0 0 6px rgba(200,160,0,.7);animation-delay:1s;}
+.st-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.35);text-transform:uppercase;}
+
+/* ── Progress ── */
+.pbar-wrap{width:300px;animation:fu .4s 1.08s ease both;}
+.pbar-top{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase;margin-bottom:5px;}
+.pbar-track{width:100%;height:5px;background:rgba(0,160,200,.1);border:1px solid rgba(0,180,220,.28);overflow:hidden;}
+.pbar-fill{height:100%;width:0%;background:linear-gradient(90deg,#001830,#0050aa,#0090d0,#00c0e8);background-size:300% 100%;animation:pf 6s 1.12s ease forwards,ps 4s 1.12s linear infinite;position:relative;}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:14px;height:100%;background:rgba(0,220,255,.6);filter:blur(3px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+@keyframes ps{0%{background-position:0%}100%{background-position:300%}}
+.pbar-ticks{display:flex;justify-content:space-between;margin-top:3px;}
+.ptick{width:1px;height:4px;background:rgba(0,180,220,.2);}
+.sys-txt{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(0,200,240,.45);text-transform:uppercase;margin-top:5px;text-align:center;animation:fu .4s 2.5s ease both;}
+
+@keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Ocean scene at bottom ── */
+.ocean-scene{
+  position:fixed;bottom:0;left:0;right:0;height:120px;
+  pointer-events:none;z-index:3;
+}
+
+.corner{position:fixed;font-family:'DM Mono',monospace;font-size:8px;color:rgba(0,180,220,.2);letter-spacing:2px;z-index:1;}
+.ctop{top:20px;left:84px;}.cbot{bottom:128px;right:20px;}
+
+/* ══ SPECIAL ANIMATIONS ══ */
+
+/* ── Shooting star streaks across sky ── */
+.shooting-star{
+  position:fixed;top:var(--sy);
+  width:0;height:1.5px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),rgba(200,240,255,.6),transparent);
+  pointer-events:none;z-index:4;
+  border-radius:1px;
+  animation:shootStar var(--sd) ease-in-out infinite;
+  animation-delay:var(--sdelay);
+  opacity:0;
+}
+@keyframes shootStar{
+  0%{left:-10%;width:0;opacity:0;}
+  5%{opacity:1;width:120px;}
+  40%{opacity:1;width:160px;}
+  60%{opacity:0;width:80px;}
+  100%{left:110%;width:0;opacity:0;}
+}
+
+/* ── Bullet fires from left — travels across screen ── */
+.bullet{
+  position:fixed;
+  top:50%;
+  width:8px;height:3px;
+  background:linear-gradient(90deg,rgba(255,220,100,.9),rgba(255,180,60,.6));
+  border-radius:50%;
+  box-shadow:0 0 6px rgba(255,200,80,.8),0 0 14px rgba(255,160,40,.4);
+  pointer-events:none;z-index:9;
+  animation:bulletFly 4s ease-in-out infinite;
+  animation-delay:2s;
+  opacity:0;
+}
+@keyframes bulletFly{
+  0%{left:-2%;opacity:0;width:8px;}
+  2%{opacity:1;width:20px;left:0%;}
+  3%{width:30px;}
+  60%{opacity:1;width:20px;left:90%;}
+  62%{left:96%;opacity:0;width:8px;}
+  100%{left:100%;opacity:0;}
+}
+
+/* ── Muzzle flash — left side where bullet fires from ── */
+.muzzle-flash{
+  position:fixed;
+  left:20px;top:50%;
+  transform:translateY(-50%);
+  pointer-events:none;z-index:9;
+  animation:muzzleFlash 4s ease-in-out infinite;
+  animation-delay:2s;
+  opacity:0;
+}
+@keyframes muzzleFlash{
+  0%,100%{opacity:0;}
+  1.5%{opacity:1;}
+  2.5%{opacity:0;}
+  3%{opacity:.5;}
+  3.5%{opacity:0;}
+}
+
+/* ── Target impact — bullseye hit on crosshair ── */
+.target-hit{
+  position:fixed;
+  right:110px;top:50%;
+  transform:translateY(-50%);
+  pointer-events:none;z-index:9;
+  animation:targetHit 4s ease-in-out infinite;
+  animation-delay:2s;
+  opacity:0;
+}
+@keyframes targetHit{
+  0%,55%,100%{opacity:0;}
+  60%{opacity:1;}
+  65%{opacity:0;}
+  68%{opacity:.6;}
+  72%{opacity:0;}
+}
+
+/* ── Impact spark ring on target ── */
+.impact-ring{
+  position:fixed;right:130px;top:50%;
+  transform:translate(50%,-50%);
+  border-radius:50%;
+  border:2px solid rgba(255,200,80,0);
+  pointer-events:none;z-index:8;
+  animation:impactRing 4s ease-in-out infinite;
+  animation-delay:2s;
+}
+@keyframes impactRing{
+  0%,58%,100%{width:0;height:0;border-color:rgba(255,200,80,0);opacity:0;}
+  60%{width:4px;height:4px;border-color:rgba(255,220,100,.9);opacity:1;}
+  65%{width:40px;height:40px;border-color:rgba(255,180,60,.5);opacity:.8;}
+  72%{width:70px;height:70px;border-color:rgba(255,140,40,.0);opacity:0;}
+}
+
+/* ── Motorcycle rides across bottom ocean scene ── */
+.moto-ride{
+  position:fixed;
+  bottom:108px;
+  pointer-events:none;z-index:5;
+  animation:motoRide 7s cubic-bezier(.25,.1,.25,1) infinite;
+  animation-delay:1s;
+}
+@keyframes motoRide{
+  0%{left:-200px;opacity:0;}
+  5%{opacity:1;}
+  88%{opacity:1;}
+  100%{left:110vw;opacity:0;}
+}
+.moto-lean{
+  animation:motoLean .35s ease-in-out infinite alternate;
+  transform-origin:center bottom;
+}
+@keyframes motoLean{from{transform:rotate(-3deg)}to{transform:rotate(-4.5deg) translateY(-2px)}}
+
+/* Moto wheel spin on ride */
+.mwr{animation:mwrs .25s linear infinite;transform-origin:center;}
+@keyframes mwrs{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+/* ── Moto speed blur streaks when riding ── */
+.moto-streak{
+  position:fixed;bottom:118px;
+  height:1.5px;border-radius:1px;
+  background:linear-gradient(90deg,rgba(0,180,220,.5),rgba(0,220,255,.2),transparent);
+  pointer-events:none;z-index:4;
+  animation:motoStreak 7s cubic-bezier(.25,.1,.25,1) infinite;
+}
+@keyframes motoStreak{
+  0%{left:-60%;width:0%;opacity:0;}
+  5%{opacity:.8;}
+  88%{opacity:.6;}
+  100%{left:110%;width:45%;opacity:0;}
+}
+
+/* ── Wave crash on shore ── */
+.wave-crash{
+  position:fixed;bottom:108px;left:0;right:0;
+  height:8px;
+  pointer-events:none;z-index:4;
+  animation:waveCrash 3s ease-in-out infinite;
+}
+@keyframes waveCrash{
+  0%,100%{opacity:0;transform:scaleX(.8) scaleY(.5);}
+  30%{opacity:.6;transform:scaleX(1.05) scaleY(1);}
+  60%{opacity:.8;transform:scaleX(1.1) scaleY(1.3);}
+  80%{opacity:.4;transform:scaleX(1.15) scaleY(.8);}
+}
+
+/* ── Lightning on horizon ── */
+.lightning-bolt{
+  position:fixed;
+  pointer-events:none;z-index:4;
+  animation:lbolt 8s ease-in-out infinite;
+  opacity:0;
+}
+@keyframes lbolt{
+  0%,100%{opacity:0;}
+  10%{opacity:0;}10.2%{opacity:1;}10.5%{opacity:0;}10.7%{opacity:.6;}11%{opacity:0;}
+  40%{opacity:0;}40.2%{opacity:.7;}40.4%{opacity:0;}
+}
+.lightning-flash{
+  position:fixed;inset:0;
+  pointer-events:none;z-index:3;
+  animation:lflash 8s ease-in-out infinite;
+  opacity:0;
+}
+@keyframes lflash{
+  0%,100%{opacity:0;background:transparent;}
+  10%{opacity:0;}10.2%{opacity:.3;background:rgba(200,220,255,.08);}10.5%{opacity:0;}
+  40%{opacity:0;}40.2%{opacity:.2;background:rgba(200,220,255,.06);}40.5%{opacity:0;}
+}
+
+/* ── Scope lock-on animation — reticle zooms in ── */
+.scope-lock{
+  position:fixed;right:70px;top:50%;
+  transform:translateY(-50%);
+  pointer-events:none;z-index:6;
+  animation:scopeLock 4s ease-in-out infinite;
+  animation-delay:2s;
+  opacity:0;
+}
+@keyframes scopeLock{
+  0%,55%,100%{opacity:0;transform:translateY(-50%) scale(1);}
+  58%{opacity:0;transform:translateY(-50%) scale(1.5);}
+  62%{opacity:1;transform:translateY(-50%) scale(1);}
+  70%{opacity:.8;}
+  75%{opacity:0;}
+}
+
+/* ── "CONFIRMED" text flash ── */
+.confirmed{
+  position:fixed;
+  right:40px;top:calc(50% + 50px);
+  font-family:'DM Mono',monospace;
+  font-size:11px;letter-spacing:4px;
+  color:rgba(0,255,120,.0);
+  pointer-events:none;z-index:9;
+  text-transform:uppercase;
+  animation:confirmedFlash 4s ease-in-out infinite;
+  animation-delay:2s;
+  white-space:nowrap;
+}
+@keyframes confirmedFlash{
+  0%,63%,100%{color:rgba(0,255,120,.0);}
+  65%{color:rgba(0,255,120,.9);text-shadow:0 0 10px rgba(0,255,120,.8);}
+  70%{color:rgba(0,255,120,.5);}
+  74%{color:rgba(0,255,120,.0);}
+}
+
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="grid"></div>
+<div class="scan"></div>
+<div class="ocean-horizon"></div>
+<div class="sun-glow"></div>
+
+<!-- Stars -->
+<div class="star" style="width:2px;height:2px;left:4%;top:5%;--sb:.9;animation-duration:2.2s;animation-delay:0s;"></div>
+<div class="star" style="width:1px;height:1px;left:12%;top:3%;--sb:.7;animation-duration:1.8s;animation-delay:.4s;"></div>
+<div class="star" style="width:2px;height:2px;left:22%;top:8%;--sb:.85;animation-duration:2.6s;animation-delay:.8s;"></div>
+<div class="star" style="width:1px;height:1px;left:36%;top:4%;--sb:.6;animation-duration:2s;animation-delay:1.2s;"></div>
+<div class="star" style="width:2px;height:2px;left:50%;top:7%;--sb:.9;animation-duration:2.4s;animation-delay:.2s;"></div>
+<div class="star" style="width:1px;height:1px;left:62%;top:3%;--sb:.7;animation-duration:1.9s;animation-delay:.9s;"></div>
+<div class="star" style="width:2px;height:2px;left:74%;top:9%;--sb:.8;animation-duration:2.1s;animation-delay:1.5s;"></div>
+<div class="star" style="width:1px;height:1px;left:86%;top:5%;--sb:.65;animation-duration:2.3s;animation-delay:.6s;"></div>
+<div class="star" style="width:2px;height:2px;left:94%;top:4%;--sb:.9;animation-duration:2s;animation-delay:1.8s;"></div>
+<div class="star" style="width:1px;height:1px;left:8%;top:16%;--sb:.5;animation-duration:2.5s;animation-delay:.5s;"></div>
+<div class="star" style="width:2px;height:2px;left:44%;top:12%;--sb:.75;animation-duration:2.2s;animation-delay:1.1s;"></div>
+<div class="star" style="width:1px;height:1px;left:80%;top:14%;--sb:.6;animation-duration:1.8s;animation-delay:.3s;"></div>
+
+<!-- Crosshair bg -->
+<svg class="reticle-bg" width="220" height="220" viewBox="0 0 220 220" fill="none">
+  <circle cx="110" cy="110" r="100" stroke="rgba(0,180,220,.8)" stroke-width="1"/>
+  <circle cx="110" cy="110" r="70"  stroke="rgba(0,160,200,.6)" stroke-width=".8" stroke-dasharray="4 5"/>
+  <circle cx="110" cy="110" r="40"  stroke="rgba(0,140,180,.5)" stroke-width=".8"/>
+  <circle cx="110" cy="110" r="12"  stroke="rgba(0,200,240,.6)" stroke-width="1.2"/>
+  <line x1="0"   y1="110" x2="90"  y2="110" stroke="rgba(0,180,220,.7)" stroke-width=".8"/>
+  <line x1="130" y1="110" x2="220" y2="110" stroke="rgba(0,180,220,.7)" stroke-width=".8"/>
+  <line x1="110" y1="0"   x2="110" y2="90"  stroke="rgba(0,180,220,.7)" stroke-width=".8"/>
+  <line x1="110" y1="130" x2="110" y2="220" stroke="rgba(0,180,220,.7)" stroke-width=".8"/>
+  <line x1="32"  y1="32"  x2="52"  y2="52"  stroke="rgba(0,160,200,.4)" stroke-width=".6"/>
+  <line x1="188" y1="32"  x2="168" y2="52"  stroke="rgba(0,160,200,.4)" stroke-width=".6"/>
+  <line x1="32"  y1="188" x2="52"  y2="168" stroke="rgba(0,160,200,.4)" stroke-width=".6"/>
+  <line x1="188" y1="188" x2="168" y2="168" stroke="rgba(0,160,200,.4)" stroke-width=".6"/>
+</svg>
+
+<!-- HUD corners -->
+<div class="hc tl"></div><div class="hc tr"></div>
+<div class="hc bl"></div><div class="hc br"></div>
+<div class="corner ctop">ZENNI LMS · MAINTENANCE & SAFETY</div>
+<div class="corner cbot">SESSION ACTIVE</div>
+
+<!-- Ocean scene SVG -->
+<svg class="ocean-scene" width="100%" height="120" viewBox="0 0 1400 120" preserveAspectRatio="xMidYMax slice">
+  <!-- Sky gradient -->
+  <rect width="1400" height="60" fill="url(#skyG)"/>
+  <defs>
+    <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(0,40,80,.0)"/>
+      <stop offset="100%" stop-color="rgba(0,60,100,.15)"/>
+    </linearGradient>
+    <linearGradient id="oceanG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(0,80,140,.6)"/>
+      <stop offset="100%" stop-color="rgba(0,40,80,.9)"/>
+    </linearGradient>
+  </defs>
+  <!-- Setting sun on horizon -->
+  <ellipse cx="700" cy="60" rx="40" ry="20" fill="rgba(255,160,40,.18)" filter="url(#sG)"/>
+  <defs><filter id="sG"><feGaussianBlur stdDeviation="8"/></filter></defs>
+  <!-- Ocean surface -->
+  <rect x="0" y="58" width="1400" height="62" fill="url(#oceanG)"/>
+  <!-- Wave 1 -->
+  <path d="M0 64 Q175 56 350 64 Q525 72 700 64 Q875 56 1050 64 Q1225 72 1400 64 L1400 72 Q1225 80 1050 72 Q875 64 700 72 Q525 80 350 72 Q175 64 0 72Z" fill="rgba(0,120,180,.3)">
+    <animateTransform attributeName="transform" type="translate" values="0,0;-350,0;0,0" dur="4s" repeatCount="indefinite"/>
+  </path>
+  <!-- Wave 2 -->
+  <path d="M0 75 Q200 68 400 75 Q600 82 800 75 Q1000 68 1200 75 Q1300 78 1400 75 L1400 82 Q1300 85 1200 82 Q1000 75 800 82 Q600 89 400 82 Q200 75 0 82Z" fill="rgba(0,100,160,.2)">
+    <animateTransform attributeName="transform" type="translate" values="0,0;350,0;0,0" dur="5s" repeatCount="indefinite"/>
+  </path>
+  <!-- Wave shimmer -->
+  <path d="M200 60 Q350 57 500 60" stroke="rgba(255,255,255,.12)" stroke-width="1.5" fill="none">
+    <animate attributeName="opacity" values="0;1;0" dur="3s" repeatCount="indefinite"/>
+  </path>
+  <path d="M800 62 Q950 58 1100 62" stroke="rgba(255,255,255,.1)" stroke-width="1" fill="none">
+    <animate attributeName="opacity" values="0;.8;0" dur="3.5s" begin="1.2s" repeatCount="indefinite"/>
+  </path>
+  <!-- Beach sand -->
+  <rect x="0" y="100" width="1400" height="20" fill="rgba(200,160,80,.12)"/>
+  <!-- Palm tree silhouette left -->
+  <line x1="80" y1="120" x2="90" y2="30" stroke="rgba(30,20,10,.5)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M90 35 Q60 20 40 28 Q55 36 70 42Z" fill="rgba(20,50,10,.4)"/>
+  <path d="M90 35 Q120 18 140 26 Q125 34 105 40Z" fill="rgba(20,50,10,.4)"/>
+  <path d="M90 35 Q85 10 95 8 Q98 22 95 38Z" fill="rgba(20,50,10,.35)"/>
+  <!-- Palm right -->
+  <line x1="1320" y1="120" x2="1310" y2="28" stroke="rgba(30,20,10,.5)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M1310 33 Q1280 16 1260 24 Q1275 32 1290 38Z" fill="rgba(20,50,10,.4)"/>
+  <path d="M1310 33 Q1340 15 1360 23 Q1345 31 1325 37Z" fill="rgba(20,50,10,.4)"/>
+  <path d="M1310 33 Q1305 8 1315 6 Q1318 20 1315 36Z" fill="rgba(20,50,10,.35)"/>
+  <!-- Distant boat -->
+  <path d="M660 61 Q700 57 740 61 Q700 65 660 61Z" fill="rgba(20,30,50,.4)"/>
+  <line x1="700" y1="61" x2="700" y2="48" stroke="rgba(60,80,100,.3)" stroke-width="1.5"/>
+</svg>
+
+<!-- Waves -->
+<div class="wave" style="bottom:118px;animation-duration:3.2s;animation-delay:0s;"></div>
+<div class="wave" style="bottom:112px;animation-duration:4s;animation-delay:1s;opacity:.5;height:2px;"></div>
+
+
+<!-- ══ SPECIAL ANIMATIONS ══ -->
+
+<!-- Shooting stars -->
+<div class="shooting-star" style="--sy:6%;--sd:5s;--sdelay:0s;"></div>
+<div class="shooting-star" style="--sy:11%;--sd:7s;--sdelay:3.2s;"></div>
+<div class="shooting-star" style="--sy:4%;--sd:6s;--sdelay:8s;"></div>
+<div class="shooting-star" style="--sy:9%;--sd:4.5s;--sdelay:12s;"></div>
+
+<!-- Lightning on horizon -->
+<div class="lightning-flash"></div>
+<svg class="lightning-bolt" style="left:15%;bottom:108px;" width="30" height="80" viewBox="0 0 30 80" fill="none">
+  <path d="M18 0 L8 35 L16 35 L4 80 L22 38 L13 38 Z" fill="rgba(200,220,255,.9)" filter="url(#lg)"/>
+  <defs><filter id="lg"><feGaussianBlur stdDeviation="2"/></filter></defs>
+</svg>
+<svg class="lightning-bolt" style="left:78%;bottom:108px;animation-delay:3.5s;" width="22" height="60" viewBox="0 0 22 60" fill="none">
+  <path d="M14 0 L6 26 L12 26 L2 60 L16 28 L10 28 Z" fill="rgba(200,220,255,.8)"/>
+</svg>
+
+<!-- Muzzle flash -->
+<div class="muzzle-flash">
+  <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+    <circle cx="25" cy="25" r="12" fill="rgba(255,200,80,.7)" filter="url(#mf)"/>
+    <circle cx="25" cy="25" r="6"  fill="rgba(255,230,150,.9)"/>
+    <path d="M25 5  L28 20 L40 15 L30 25 L45 25 L30 28 L38 42 L25 32 L20 48 L22 32 L8 38 L18 28 L5 25 L20 22 L14 10 L25 20Z" fill="rgba(255,200,60,.5)"/>
+    <defs><filter id="mf"><feGaussianBlur stdDeviation="4"/></filter></defs>
+  </svg>
+</div>
+
+<!-- Bullet -->
+<div class="bullet"></div>
+
+<!-- Impact ring on target -->
+<div class="impact-ring"></div>
+
+<!-- Target hit flash -->
+<div class="target-hit">
+  <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+    <circle cx="25" cy="25" r="10" fill="rgba(255,80,0,.5)" filter="url(#th)"/>
+    <path d="M18 18 L32 32 M32 18 L18 32" stroke="rgba(255,200,60,.9)" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="25" cy="25" r="4" fill="rgba(255,220,80,.8)"/>
+    <defs><filter id="th"><feGaussianBlur stdDeviation="3"/></filter></defs>
+  </svg>
+</div>
+
+<!-- Scope lock confirmed -->
+<svg class="scope-lock" width="80" height="80" viewBox="0 0 80 80" fill="none">
+  <circle cx="40" cy="40" r="36" stroke="rgba(0,255,120,.7)" stroke-width="1.5"/>
+  <circle cx="40" cy="40" r="20" stroke="rgba(0,255,120,.5)" stroke-width="1"/>
+  <line x1="4"  y1="40" x2="28" y2="40" stroke="rgba(0,255,120,.7)" stroke-width="1.2"/>
+  <line x1="52" y1="40" x2="76" y2="40" stroke="rgba(0,255,120,.7)" stroke-width="1.2"/>
+  <line x1="40" y1="4"  x2="40" y2="28" stroke="rgba(0,255,120,.7)" stroke-width="1.2"/>
+  <line x1="40" y1="52" x2="40" y2="76" stroke="rgba(0,255,120,.7)" stroke-width="1.2"/>
+  <circle cx="40" cy="40" r="4" fill="rgba(0,255,120,.8)"/>
+  <!-- Lock corners -->
+  <path d="M8 8 L8 18 L18 18"   fill="none" stroke="rgba(0,255,120,.7)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M72 8 L72 18 L62 18" fill="none" stroke="rgba(0,255,120,.7)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M8 72 L8 62 L18 62"  fill="none" stroke="rgba(0,255,120,.7)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M72 72 L72 62 L62 62" fill="none" stroke="rgba(0,255,120,.7)" stroke-width="2" stroke-linecap="round"/>
+</svg>
+<div class="confirmed">◆ Target Confirmed ◆</div>
+
+<!-- Moto speed streaks -->
+<div class="moto-streak" style="animation-delay:1s;"></div>
+<div class="moto-streak" style="bottom:124px;height:1px;animation-delay:1.18s;opacity:.6;"></div>
+<div class="moto-streak" style="bottom:114px;height:1px;animation-delay:1.35s;opacity:.4;"></div>
+
+<!-- Motorcycle rides across ocean scene -->
+<div class="moto-ride">
+  <svg width="160" height="70" viewBox="0 0 160 70" class="moto-lean">
+    <defs>
+      <radialGradient id="wr" cx="40%" cy="38%"><stop offset="0%" stop-color="#222"/><stop offset="100%" stop-color="#0a0a0a"/></radialGradient>
+      <linearGradient id="mb" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0a1828"/><stop offset="100%" stop-color="#060e18"/></linearGradient>
+    </defs>
+    <!-- Exhaust smoke -->
+    <circle cx="6" cy="52" r="7" fill="rgba(100,100,100,.15)" class="exhaust-puff"/>
+    <circle cx="4" cy="50" r="5" fill="rgba(100,100,100,.1)"  class="exhaust-puff2"/>
+    <!-- Rear wheel -->
+    <circle cx="22" cy="54" r="16" fill="url(#wr)" stroke="#1a1a1a" stroke-width="3"/>
+    <g class="mwr" style="transform-origin:22px 54px">
+      <line x1="22" y1="40" x2="22" y2="68" stroke="#222" stroke-width="1.5"/>
+      <line x1="8"  y1="54" x2="36" y2="54" stroke="#222" stroke-width="1.5"/>
+      <line x1="12" y1="44" x2="32" y2="64" stroke="#1a1a1a" stroke-width="1.2"/>
+      <line x1="32" y1="44" x2="12" y2="64" stroke="#1a1a1a" stroke-width="1.2"/>
+    </g>
+    <circle cx="22" cy="54" r="6" fill="#0050aa"/>
+    <circle cx="22" cy="54" r="3" fill="#0080ff"/>
+    <!-- Front wheel -->
+    <circle cx="130" cy="54" r="15" fill="url(#wr)" stroke="#1a1a1a" stroke-width="3"/>
+    <g class="mwr" style="transform-origin:130px 54px">
+      <line x1="130" y1="41" x2="130" y2="67" stroke="#222" stroke-width="1.5"/>
+      <line x1="117" y1="54" x2="143" y2="54" stroke="#222" stroke-width="1.5"/>
+      <line x1="121" y1="45" x2="139" y2="63" stroke="#1a1a1a" stroke-width="1.2"/>
+      <line x1="139" y1="45" x2="121" y2="63" stroke="#1a1a1a" stroke-width="1.2"/>
+    </g>
+    <circle cx="130" cy="54" r="5" fill="#0050aa"/>
+    <circle cx="130" cy="54" r="2.5" fill="#0080ff"/>
+    <!-- Fork -->
+    <line x1="110" y1="24" x2="126" y2="52" stroke="#444" stroke-width="5" stroke-linecap="round"/>
+    <line x1="116" y1="24" x2="132" y2="52" stroke="#555" stroke-width="4" stroke-linecap="round"/>
+    <!-- Body -->
+    <path d="M22 50 Q40 28 62 22 Q88 16 110 24 Q125 30 130 44" fill="url(#mb)" stroke="#1e2a3e" stroke-width="1.5"/>
+    <!-- Tank -->
+    <path d="M62 22 Q84 14 102 22 Q102 32 90 32 L62 32Z" fill="#0a1828" stroke="#1e2a3e" stroke-width="1"/>
+    <!-- Upper fairing -->
+    <path d="M110 24 Q128 20 142 30 Q148 38 144 46 Q136 44 130 44" fill="#0a1828" stroke="#1e2a3e" stroke-width="1.2"/>
+    <!-- Windscreen -->
+    <path d="M124 20 Q136 15 144 24 Q144 30 136 30" fill="rgba(40,100,200,.2)" stroke="rgba(80,160,220,.25)" stroke-width="1"/>
+    <!-- Headlights -->
+    <rect x="140" y="28" width="14" height="8" rx="3" fill="rgba(255,220,140,.95)">
+      <animate attributeName="opacity" values=".85;1;.85" dur=".18s" repeatCount="indefinite"/>
+    </rect>
+    <!-- Headlight beam -->
+    <path d="M154 32 Q200 28 220 32 Q200 36 154 36Z" fill="rgba(255,220,140,.18)"/>
+    <!-- Tail light -->
+    <rect x="16" y="46" width="9" height="5" rx="2" fill="#ff2020">
+      <animate attributeName="opacity" values=".7;1;.7" dur=".5s" repeatCount="indefinite"/>
+    </rect>
+    <!-- Rider -->
+    <ellipse cx="84" cy="16" rx="12" ry="11" fill="#050510"/>
+    <!-- Helmet visor -->
+    <path d="M76 16 Q84 10 92 16 Q92 22 84 23 Q76 22 76 16Z" fill="rgba(30,80,180,.25)" stroke="rgba(60,140,220,.3)" stroke-width=".8"/>
+    <path d="M78 14 Q84 11 90 14" fill="none" stroke="rgba(120,180,255,.2)" stroke-width=".8"/>
+    <!-- Rider body tucked -->
+    <path d="M84 27 Q78 34 74 40 Q72 44 74 48" stroke="#050510" stroke-width="8" stroke-linecap="round" fill="none"/>
+    <path d="M84 30 Q96 26 116 20" stroke="#050510" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <!-- Knee pads -->
+    <ellipse cx="72" cy="44" rx="8" ry="6" fill="#060614" stroke="#0a1828" stroke-width="1"/>
+    <!-- Back hump -->
+    <ellipse cx="72" cy="24" rx="10" ry="7" fill="#060614"/>
+  </svg>
+</div>
+
+<!-- Wave crash -->
+<svg class="wave-crash" style="bottom:108px;" width="100%" height="8" viewBox="0 0 1400 8" preserveAspectRatio="none">
+  <path d="M0 4 Q100 0 200 4 Q300 8 400 4 Q500 0 600 4 Q700 8 800 4 Q900 0 1000 4 Q1100 8 1200 4 Q1300 0 1400 4" 
+    stroke="rgba(0,200,240,.4)" stroke-width="2" fill="none"/>
+  <path d="M0 6 Q150 2 300 6 Q450 10 600 6 Q750 2 900 6 Q1050 10 1200 6 Q1300 3 1400 6"
+    stroke="rgba(255,255,255,.2)" stroke-width="1" fill="none"/>
+</svg>
+
+<!-- Ocean particles -->
+<div class="pt" style="width:2px;height:2px;left:18%;top:52%;background:#00b8e0;--px:-35px;--py:-100px;--op:.7;animation-duration:4s;animation-delay:0s;"></div>
+<div class="pt" style="width:3px;height:3px;left:30%;top:58%;background:#00d0f0;--px:-45px;--py:-90px;--op:.8;animation-duration:3.6s;animation-delay:.6s;"></div>
+<div class="pt" style="width:2px;height:2px;left:70%;top:54%;background:#0090c0;--px:40px;--py:-105px;--op:.7;animation-duration:4.2s;animation-delay:1.1s;"></div>
+<div class="pt" style="width:3px;height:3px;left:82%;top:60%;background:#00c0e0;--px:36px;--py:-92px;--op:.8;animation-duration:3.8s;animation-delay:.4s;"></div>
+
+<!-- PAGE -->
+<div class="page">
+
+  <!-- Emblem -->
+  <div class="emblem">
+    <div class="er1"></div><div class="er2"></div><div class="er3"></div>
+    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+      <!-- Crosshair + shield hybrid -->
+      <circle cx="30" cy="30" r="26" stroke="rgba(0,180,220,.6)" stroke-width="1.2"/>
+      <circle cx="30" cy="30" r="16" stroke="rgba(0,200,240,.5)" stroke-width="1" stroke-dasharray="3 4"/>
+      <circle cx="30" cy="30" r="6"  stroke="rgba(0,220,255,.7)" stroke-width="1.5"/>
+      <circle cx="30" cy="30" r="2.5" fill="#00d0f0"/>
+      <line x1="4"  y1="30" x2="22" y2="30" stroke="rgba(0,200,240,.7)" stroke-width="1.2"/>
+      <line x1="38" y1="30" x2="56" y2="30" stroke="rgba(0,200,240,.7)" stroke-width="1.2"/>
+      <line x1="30" y1="4"  x2="30" y2="22" stroke="rgba(0,200,240,.7)" stroke-width="1.2"/>
+      <line x1="30" y1="38" x2="30" y2="56" stroke="rgba(0,200,240,.7)" stroke-width="1.2"/>
+      <!-- Anchor hint bottom -->
+      <path d="M26 46 Q30 50 34 46" stroke="rgba(0,180,220,.5)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <line x1="30" y1="42" x2="30" y2="50" stroke="rgba(0,180,220,.5)" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <div class="welcome-txt">Welcome back</div>
+  <div class="fullname" id="displayName">David Watters</div>
+
+  <!-- Title banner -->
+  <div class="title-banner">
+    <div class="tb-shine"></div>
+    <div class="tb-main">Maintenance & Safety</div>
+    <div class="tb-role">Manager</div>
+    <div class="tb-dept">LMS · Zenni Optical</div>
+    <div class="tb-co">Zenni USA · Ohio</div>
+  </div>
+
+  <!-- 3 passion SVGs -->
+  <div class="passion-strip">
+
+    <!-- Motorcycle -->
+    <div class="passion">
+      <div class="passion-anim">
+        <svg width="60" height="40" viewBox="0 0 60 40" class="moto-bob">
+          <defs>
+            <radialGradient id="dw1" cx="40%" cy="38%"><stop offset="0%" stop-color="#222"/><stop offset="100%" stop-color="#0a0a0a"/></radialGradient>
+          </defs>
+          <!-- Rear wheel -->
+          <circle cx="10" cy="30" r="9" fill="url(#dw1)" stroke="#1a1a1a" stroke-width="2"/>
+          <g class="wspin" style="transform-origin:10px 30px">
+            <line x1="10" y1="22" x2="10" y2="38" stroke="#222" stroke-width="1.2"/>
+            <line x1="2"  y1="30" x2="18" y2="30" stroke="#222" stroke-width="1.2"/>
+            <line x1="4"  y1="24" x2="16" y2="36" stroke="#1a1a1a" stroke-width="1"/>
+            <line x1="16" y1="24" x2="4"  y2="36" stroke="#1a1a1a" stroke-width="1"/>
+          </g>
+          <circle cx="10" cy="30" r="3" fill="#0060cc"/>
+          <!-- Front wheel -->
+          <circle cx="50" cy="30" r="8" fill="url(#dw1)" stroke="#1a1a1a" stroke-width="2"/>
+          <g class="wspin" style="transform-origin:50px 30px">
+            <line x1="50" y1="23" x2="50" y2="37" stroke="#222" stroke-width="1.2"/>
+            <line x1="43" y1="30" x2="57" y2="30" stroke="#222" stroke-width="1.2"/>
+            <line x1="45" y1="24" x2="55" y2="36" stroke="#1a1a1a" stroke-width="1"/>
+          </g>
+          <circle cx="50" cy="30" r="3" fill="#0060cc"/>
+          <!-- Body -->
+          <path d="M10 26 Q18 14 28 12 Q38 10 44 16 Q50 22 50 28" fill="#0a1828" stroke="#1e2a3e" stroke-width="1.2"/>
+          <!-- Tank -->
+          <path d="M28 12 Q36 8 40 12 Q40 18 36 18 L28 18Z" fill="#0a1828" stroke="#243050" stroke-width="1"/>
+          <!-- Fork -->
+          <line x1="44" y1="18" x2="50" y2="30" stroke="#444" stroke-width="4" stroke-linecap="round"/>
+          <!-- Headlight -->
+          <circle cx="51" cy="22" r="3" fill="rgba(255,220,140,.9)">
+            <animate attributeName="opacity" values=".8;1;.8" dur=".25s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Tail light -->
+          <rect x="6" y="26" width="5" height="3" rx="1" fill="#ff2020">
+            <animate attributeName="opacity" values=".7;1;.7" dur=".6s" repeatCount="indefinite"/>
+          </rect>
+          <!-- Rider -->
+          <ellipse cx="30" cy="10" rx="7" ry="6" fill="#06060e"/>
+          <path d="M30 16 Q26 22 24 26" stroke="#06060e" stroke-width="5" stroke-linecap="round" fill="none"/>
+          <path d="M30 18 Q36 16 44 14" stroke="#06060e" stroke-width="4" stroke-linecap="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="p-lbl">Moto</div>
+    </div>
+
+    <!-- Competitive Shooting -->
+    <div class="passion">
+      <div class="passion-anim">
+        <svg width="60" height="40" viewBox="0 0 60 40" class="scope-pulse">
+          <!-- Target rings -->
+          <circle cx="30" cy="20" r="18" fill="none" stroke="rgba(0,180,220,.5)" stroke-width="1.2"/>
+          <circle cx="30" cy="20" r="13" fill="none" stroke="rgba(0,200,240,.45)" stroke-width="1"/>
+          <circle cx="30" cy="20" r="8"  fill="none" stroke="rgba(0,220,255,.5)" stroke-width="1"/>
+          <circle cx="30" cy="20" r="4"  fill="none" stroke="rgba(0,240,255,.6)" stroke-width="1.2"/>
+          <circle cx="30" cy="20" r="1.5" fill="#00d0f0"/>
+          <!-- Crosshair lines -->
+          <line x1="10" y1="20" x2="24" y2="20" stroke="rgba(0,200,240,.6)" stroke-width="1"/>
+          <line x1="36" y1="20" x2="50" y2="20" stroke="rgba(0,200,240,.6)" stroke-width="1"/>
+          <line x1="30" y1="3"  x2="30" y2="14" stroke="rgba(0,200,240,.6)" stroke-width="1"/>
+          <line x1="30" y1="26" x2="30" y2="37" stroke="rgba(0,200,240,.6)" stroke-width="1"/>
+          <!-- Bullet holes -->
+          <circle cx="30" cy="20" r="1.5" fill="#00d0f0">
+            <animate attributeName="r" values="1;2.5;1" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values=".6;1;.6" dur="2s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="26" cy="17" r=".8" fill="rgba(0,200,240,.5)"/>
+          <circle cx="33" cy="22" r=".6" fill="rgba(0,200,240,.4)"/>
+          <!-- Scope frame -->
+          <rect x="1" y="9" width="15" height="22" rx="2" fill="none" stroke="rgba(0,180,220,.3)" stroke-width="1"/>
+          <rect x="44" y="9" width="15" height="22" rx="2" fill="none" stroke="rgba(0,180,220,.3)" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="p-lbl">Shooting</div>
+    </div>
+
+    <!-- Beach / Travel -->
+    <div class="passion">
+      <div class="passion-anim">
+        <svg width="60" height="40" viewBox="0 0 60 40" class="wave-bob">
+          <!-- Sky -->
+          <rect width="60" height="22" rx="2" fill="rgba(0,40,80,.3)"/>
+          <!-- Sun -->
+          <circle cx="44" cy="10" r="7" fill="rgba(255,180,60,.6)"/>
+          <circle cx="44" cy="10" r="5" fill="rgba(255,200,80,.4)"/>
+          <!-- Sun rays -->
+          <line x1="44" y1="1"  x2="44" y2="4"  stroke="rgba(255,200,80,.4)" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="44" y1="16" x2="44" y2="19" stroke="rgba(255,200,80,.4)" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="35" y1="10" x2="38" y2="10" stroke="rgba(255,200,80,.4)" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="50" y1="10" x2="53" y2="10" stroke="rgba(255,200,80,.4)" stroke-width="1.2" stroke-linecap="round"/>
+          <line x1="37" y1="4"  x2="39" y2="6"  stroke="rgba(255,200,80,.3)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="49" y1="14" x2="51" y2="16" stroke="rgba(255,200,80,.3)" stroke-width="1" stroke-linecap="round"/>
+          <!-- Ocean -->
+          <rect x="0" y="22" width="60" height="18" rx="0" fill="rgba(0,80,140,.5)"/>
+          <!-- Waves -->
+          <path d="M0 24 Q15 21 30 24 Q45 27 60 24" stroke="rgba(0,180,220,.5)" stroke-width="1.5" fill="none">
+            <animateTransform attributeName="transform" type="translate" values="0,0;-30,0;0,0" dur="2s" repeatCount="indefinite"/>
+          </path>
+          <path d="M0 28 Q15 25 30 28 Q45 31 60 28" stroke="rgba(0,160,200,.35)" stroke-width="1" fill="none">
+            <animateTransform attributeName="transform" type="translate" values="0,0;30,0;0,0" dur="2.5s" repeatCount="indefinite"/>
+          </path>
+          <!-- Beach sand -->
+          <rect x="0" y="34" width="60" height="6" fill="rgba(200,160,80,.25)"/>
+          <!-- Palm -->
+          <line x1="8" y1="40" x2="12" y2="18" stroke="rgba(40,30,10,.6)" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M12 20 Q4 14 1 18 Q6 22 10 24Z" fill="rgba(20,60,10,.5)"/>
+          <path d="M12 20 Q20 12 24 16 Q20 20 16 22Z" fill="rgba(20,60,10,.5)"/>
+        </svg>
+      </div>
+      <div class="p-lbl">Beach</div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-row">
+    <div class="st-item"><div class="st-dot on"></div><div class="st-lbl">Online</div></div>
+    <div class="st-item"><div class="st-dot sys"></div><div class="st-lbl">Systems Active</div></div>
+    <div class="st-item"><div class="st-dot rdy"></div><div class="st-lbl">Ready</div></div>
+  </div>
+
+  <!-- Progress -->
+  <div class="pbar-wrap">
+    <div class="pbar-top"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+    <div class="pbar-ticks">
+      <div class="ptick"></div><div class="ptick"></div><div class="ptick"></div>
+      <div class="ptick"></div><div class="ptick"></div><div class="ptick"></div>
+      <div class="ptick"></div><div class="ptick"></div><div class="ptick"></div><div class="ptick"></div>
+    </div>
+    <div class="sys-txt" id="sysTxt">Initializing workspace...</div>
+  </div>
+
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"David Watters";
+  const r=sessionStorage.getItem("lms_role")||"Manager";
+  const s=sessionStorage.getItem("lms_subrole")||"Maintenance";
+  document.getElementById("displayName").textContent=n;
+
+  const msgs=["Initializing workspace...","Loading maintenance data...","Syncing safety systems...","Almost ready...","Cleared hot..."];
+  let p=0;const pEl=document.getElementById("pct");const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);pEl.textContent=p+"%";
+    if(p<20)sysEl.textContent=msgs[0];else if(p<40)sysEl.textContent=msgs[1];
+    else if(p<60)sysEl.textContent=msgs[2];else if(p<80)sysEl.textContent=msgs[3];
+    else sysEl.textContent=msgs[4];
+    if(p>=99)clearInterval(iv);
+  },100);
+  const MIN_TIME=6000;const startTime=Date.now();
+  const preload=document.createElement("link");preload.rel="prefetch";preload.href="index.html";document.head.appendChild(preload);
+  function go(){const e=Date.now()-startTime;const r=Math.max(0,MIN_TIME-e);setTimeout(()=>{p=100;pEl.textContent="100%";clearInterval(iv);setTimeout(()=>{window.location.replace("index.html");},400);},r);}
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>go()).catch(()=>go());
+  setTimeout(()=>{window.location.replace("index.html");},10000);
+
+  // Wire to login.js username
+  // Add "DWATTERS": "loader_DWATTERS.html" to LOADER_MAP
+</script>
+</body>
+</html>

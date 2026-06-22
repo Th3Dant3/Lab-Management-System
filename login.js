@@ -18,6 +18,7 @@ const LOADER_MAP = {
   "BHONICKER":     "loader_BHONICKER.html",
   "NPOSTON":       "loader_NPOSTON.html",
   "CSEARFOSS":     "loader_CSEARFOSS.html",
+   "DWATTERS":      "loader_DWATTERS.html",
   "CDAY":          "loader_TEAMLEAD.html",
   "JJOHNSON":      "loader_TEAMLEAD.html",
   "CPATRICK":      "loader_TEAMLEAD.html",
