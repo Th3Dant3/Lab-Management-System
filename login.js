@@ -163,10 +163,19 @@ async function handleLoginResponse(data, originalPassword) {
     setProgress(100);
     setMessage("Access granted. Redirecting...", "success");
 
-    // Route to personal loader if one exists, otherwise index.html
-    const loader = LOADER_MAP[data.username] || "index.html";
+    // If user tried to open a protected dashboard page first,
+    // send them back to that exact page after login.
+    // Otherwise route to personal loader if one exists, then index.html.
+    const requestedPage =
+      sessionStorage.getItem("lms_redirect_after_login") || "";
+
+    sessionStorage.removeItem("lms_redirect_after_login");
+
+    const fallbackPage = LOADER_MAP[data.username] || "index.html";
+    const nextPage = requestedPage || fallbackPage;
+
     setTimeout(() => {
-      window.location.replace(loader);
+      window.location.replace(nextPage);
     }, 400);
   }
 }
@@ -243,9 +252,18 @@ function applyVisibility() {
 }
 
 function requireAuth() {
-  if (sessionStorage.getItem("lms_logged_in") !== "true") {
+  const loggedIn = sessionStorage.getItem("lms_logged_in") === "true";
+  const username =
+    sessionStorage.getItem("lms_user") ||
+    sessionStorage.getItem("lms_username") ||
+    "";
+  const visibility = sessionStorage.getItem("lms_visibility") || "";
+
+  if (!loggedIn || !username || !visibility) {
+    sessionStorage.clear();
     window.location.replace("login.html");
     return false;
   }
+
   return true;
 }
