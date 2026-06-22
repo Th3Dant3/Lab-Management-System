@@ -5,7 +5,7 @@
  ************************************************************/
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbySXKQSHTXQVlZNq2vubqp2D3W-_IgtmaiFr_GDxz5X4FO2cqcYeUkAo_A9LajOfj9f/exec';
-const CLIENT_CACHE_KEY = 'PRODUCTIVITY_HUB_SHEET_PAYLOAD_CACHE_V5';
+const CLIENT_CACHE_KEY = 'PRODUCTIVITY_HUB_SHEET_PAYLOAD_CACHE_V6_SATURDAY_SHIFT_FIX';
 const CLIENT_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const STATE = {
@@ -41,7 +41,9 @@ const STATE = {
   currentUser: null,
   productivityLocks: [],
   productivityActivity: [],
-  productivityActivityLastSeen: ''
+  productivityActivityLastSeen: '',
+  tempNameMap: [],
+  associateArchive: []
 };
 
 
@@ -319,13 +321,7 @@ function renderNavBar() {
   const bar = document.getElementById('hubApBar');
   if (!bar) return;
 
-  // Build schedule map: operatorName -> scheduleType
-  const scheduleMap = new Map();
-  (STATE.associateSchedules || []).forEach(s => {
-    scheduleMap.set(String(s.OperatorName || '').trim(), String(s.ScheduleType || 'WEEKDAY').trim().toUpperCase());
-  });
-
-  // Get all rows for active dept (no AP filter yet, shift filter applied)
+  // Get all rows for active dept (no AP filter yet, shift filter applied by WorkDate)
   const startDate = STATE.selectedWeekStartDate || STATE.meta.weekStartDate;
   const endDate = STATE.selectedWeekEndDate || STATE.meta.weekEndDate;
   const start = parseLocalDate(startDate);
@@ -346,9 +342,7 @@ function renderNavBar() {
   const allRows = dedupeDailyRows([...(STATE.dailySnapshot || [])]).filter(r => {
     const d = parseLocalDate(r.WorkDate);
     const dateMatch = d && start && end && d >= start && d <= end;
-    const opName = String(r.OperatorName || '').trim();
-    const opShift = scheduleMap.get(opName) || 'WEEKDAY';
-    const rowShiftMatch = activeShift === 'ALL' || isMachineRow(r) || opShift === activeShift;
+    const rowShiftMatch = rowMatchesActiveShiftByDate(r, activeShift);
     return navDeptMatch(r) && dateMatch && rowShiftMatch;
   });
 
@@ -417,7 +411,15 @@ function getDeptLabel(dept) {
 }
 
 function reloadData() {
-  const cached = localStorage.getItem(CLIENT_CACHE_KEY) || localStorage.getItem('PRODUCTIVITY_HUB_CACHE_FAST_V2');
+  // Saturday fix: remove older browser cache keys that can keep showing only 2 days.
+  [
+    'PRODUCTIVITY_HUB_SHEET_PAYLOAD_CACHE_V5',
+    'PRODUCTIVITY_HUB_CACHE_FAST_V2'
+  ].forEach(key => {
+    try { localStorage.removeItem(key); } catch (err) {}
+  });
+
+  const cached = localStorage.getItem(CLIENT_CACHE_KEY);
 
   if (cached && !STATE.hasLoadedOnce) {
     try {
@@ -544,6 +546,8 @@ function loadFiscalWeekData(week) {
       STATE.breakageDailySnapshot = normalizeBreakageRows(data.breakageDailySnapshot || data.breakageSnapshot || []);
       STATE.breakageEditSnapshot = normalizeBreakageRows(data.breakageEditSnapshot || []);
       STATE.breakageAdjustments = normalizeBreakageRows(data.breakageAdjustments || []);
+      STATE.tempNameMap = normalizeTempNameMap(data.tempNameMap || STATE.tempNameMap || []);
+      STATE.associateArchive = normalizeAssociateArchive(data.associateArchive || STATE.associateArchive || []);
 
       STATE.weekDataCache[week.key] = {
         dailySnapshot: STATE.dailySnapshot.slice(),
@@ -671,6 +675,8 @@ function handleData(data, fromCache = false) {
   STATE.associateDayRules = [];
   STATE.associateSchedules = normalizeAssociateSchedules(data.associateSchedules || []);
   STATE.fiscalWeeks = normalizeFiscalWeeks(data.fiscalWeeks || []);
+  STATE.tempNameMap = normalizeTempNameMap(data.tempNameMap || STATE.tempNameMap || []);
+  STATE.associateArchive = normalizeAssociateArchive(data.associateArchive || STATE.associateArchive || []);
 
   const bootWeekKey = getCurrentFiscalWeekKeyFromMeta(data.meta || {});
   if (bootWeekKey) {
@@ -829,6 +835,55 @@ function defaultDaysForScheduleType(scheduleType) {
   const type = String(scheduleType || 'WEEKDAY').trim().toUpperCase();
   if (type === 'WEEKEND') return 'FRI,SAT,SUN';
   return 'MON,TUE,WED,THU';
+}
+
+
+/************************************************************
+ * SHIFT DATE FILTER FIX
+ * Weekday / Weekend must be based on the row WorkDate.
+ * This prevents Saturday rows from disappearing when associate schedules
+ * are missing, stale, or mismatched.
+ ************************************************************/
+function getShiftDayCodes(shift) {
+  const s = String(shift || 'ALL').trim().toUpperCase();
+  if (s === 'WEEKDAY') return ['MON', 'TUE', 'WED', 'THU'];
+  if (s === 'WEEKEND') return ['FRI', 'SAT', 'SUN'];
+  return ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+}
+
+function rowMatchesActiveShiftByDate(row, shift) {
+  const activeShift = String(shift || STATE.activeShift || 'ALL').trim().toUpperCase();
+  if (activeShift === 'ALL') return true;
+  if (isMachineRow(row)) return true;
+
+  const workDate = row && (row.WorkDate || row.workDate || row.Date || row.date);
+  const dayCode = getDayCode(workDate);
+  if (!dayCode) return true;
+
+  return getShiftDayCodes(activeShift).includes(dayCode);
+}
+
+function debugSelectedWeekWorkDates() {
+  const startDate = STATE.selectedWeekStartDate || STATE.meta.weekStartDate;
+  const endDate = STATE.selectedWeekEndDate || STATE.meta.weekEndDate;
+  const activeDept = String(STATE.activeDept || '').toUpperCase();
+  const activeShift = String(STATE.activeShift || '').toUpperCase();
+
+  const rows = (STATE.dailySnapshot || []).filter(r => {
+    const d = parseLocalDate(r.WorkDate);
+    const start = parseLocalDate(startDate);
+    const end = parseLocalDate(endDate);
+    if (!d || !start || !end || d < start || d > end) return false;
+    if (activeDept && activeDept !== 'PROD_ALL' && activeDept !== 'DIST_ALL') {
+      if (String(r.FinalDepartment || '').toUpperCase() !== activeDept) return false;
+    }
+    return rowMatchesActiveShiftByDate(r, activeShift);
+  });
+
+  const dates = Array.from(new Set(rows.map(r => formatDateKey(r.WorkDate)).filter(Boolean))).sort();
+  console.table(dates.map(d => ({ workDate: d, day: getDayName(d), rows: rows.filter(r => formatDateKey(r.WorkDate) === d).length })));
+  console.info('Selected week debug:', { activeDept, activeShift, startDate, endDate, dateCount: dates.length, dates, rowCount: rows.length });
+  return { activeDept, activeShift, startDate, endDate, dateCount: dates.length, dates, rowCount: rows.length };
 }
 
 function updateMeta() {
@@ -1033,7 +1088,7 @@ function renderAssociateDropdown() {
 
   select.innerHTML = summaries.map(s => `
     <option value="${escapeHtml(s.associate)}">
-      ${escapeHtml(s.associate)} — ${formatScheduleType(s.scheduleType)} — ${s.areas.length} area${s.areas.length === 1 ? '' : 's'} — ${s.workDays} day${s.workDays === 1 ? '' : 's'}
+      ${escapeHtml(getAssociateDisplayName(s))} — ${formatScheduleType(s.scheduleType)} — ${s.areas.length} area${s.areas.length === 1 ? '' : 's'} — ${s.workDays} day${s.workDays === 1 ? '' : 's'}
     </option>
   `).join('');
 
@@ -1406,8 +1461,7 @@ function renderScorecardsPage() {
     <section class="scoreboard-panel command-card full-scoreboard-page">
       <div class="section-head compact">
         <div>
-          <h3>Associate Scorecards</h3>
-          <p>Separate Full Time, Temps, and Machine rows. Production temps start with PROD. Picking temps start with OHIO. Machine includes MEI, Unknown Operator, and machine/operator placeholder rows like 54R, FLEX, ODT, OTL, ORB, and OTB.</p>
+          <h3>Associate Scorecards</h3>          
         </div>
         <span class="scoreboard-count">${activeRows.length} ${escapeHtml(getEmployeeTypeLabel(activeType))}</span>
       </div>
@@ -1448,7 +1502,7 @@ function renderScorecardsPage() {
             return `
               <button class="score-kpi ${active} ${statusCss(s.status)} ${employeeType.toLowerCase()}-associate" type="button" onclick="selectAssociateFromScoreboard('${escapeJs(s.associate)}')">
                 <span class="score-status-dot"></span>
-                <span class="score-name">${escapeHtml(s.associate)}</span>
+                <span class="score-name">${escapeHtml(getAssociateDisplayName(s))}</span>
                 <span class="score-dept">${escapeHtml(s.departments || 'No department')} • ${escapeHtml(getEmployeeTypeLabel(employeeType))}</span>
                 <strong>${pct}</strong>
                 <span class="score-meta">${formatDecimal(s.totalHours)} hrs • ${formatNumber(s.totalJobs)} jobs • ${formatDecimal(s.workProduced)} produced</span>
@@ -2468,7 +2522,7 @@ function renderHero(summary) {
         <div class="avatar">👤</div>
         <div>
           <span class="profile-tag">Associate Profile</span>
-          <h3>${escapeHtml(summary.associate)}</h3>
+          <h3>${escapeHtml(getAssociateDisplayName(summary))}</h3>
           <p>${escapeHtml(summary.departments || STATE.activeDept)} • ${formatScheduleType(summary.scheduleType)} Schedule • ${summary.scheduledDaysWorked} of ${summary.eligibleWorkDays} eligible day${summary.eligibleWorkDays === 1 ? '' : 's'} worked • ${summary.excludedDays} excluded • ${summary.areas.length} area${summary.areas.length === 1 ? '' : 's'}</p>
           ${statusBadge(summary.status)}
         </div>
@@ -2530,8 +2584,34 @@ function renderHero(summary) {
           <small>${formatQualityPercent(quality.framePercent)}</small>
         </div>
       </div>
+    ${renderAssociateAdminToolbar(summary)}
     </section>
   `;
+}
+
+function isSharpsScanOnlyArea(area) {
+  const ap = String((area && area.accessPoint) || '').toUpperCase();
+  const sg = String((area && area.stationGroup) || '').toUpperCase();
+  return sg.includes('HANDSTONE') && ap.includes('SHARPS');
+}
+
+function isNoTargetDisplayArea(area) {
+  const target = Number((area && area.weightedTarget) || 0);
+  return target <= 0 || isSharpsScanOnlyArea(area);
+}
+
+function getAreaDisplayStatus(area) {
+  if (isSharpsScanOnlyArea(area)) return 'SCAN COUNT';
+  if (isNoTargetDisplayArea(area)) return 'NO TARGET';
+  return area.status || 'NO TARGET';
+}
+
+function statusBadgeSafe(label) {
+  const text = String(label || 'NO TARGET').trim();
+  if (text === 'SCAN COUNT') {
+    return '<span class="badge NO-TARGET">Scan Count</span>';
+  }
+  return statusBadge(text);
 }
 
 function renderAreaSection(summary) {
@@ -2544,25 +2624,35 @@ function renderAreaSection(summary) {
       </div>
 
       <div class="area-grid">
-        ${summary.areas.map(area => `
-          <article class="area-card">
-            <div class="area-top">
-              <div>
-                <h4>${escapeHtml(area.stationGroup)}</h4>
-                <p>${escapeHtml(area.department)} • ${escapeHtml(area.accessPoint)}</p>
-              </div>
-              ${statusBadge(area.status)}
-            </div>
+        ${summary.areas.map(area => {
+          const scanOnly = isSharpsScanOnlyArea(area);
+          const noTarget = isNoTargetDisplayArea(area);
+          const displayStatus = getAreaDisplayStatus(area);
+          const producedLabel = scanOnly ? 'Sharps Scans' : 'Produced';
+          const producedValue = scanOnly ? formatNumber(area.totalJobs) : formatDecimal(area.workProduced);
+          const percentLabel = noTarget ? 'Target Type' : 'Area %';
+          const percentValue = scanOnly ? 'Scan Only' : (noTarget ? 'No Target' : formatPercent(area.productivityPercent));
 
-            <div class="area-metrics area-metrics-five">
-              <div><span>Days</span><strong>${area.workDays}</strong></div>
-              <div><span>Hours</span><strong>${formatDecimal(area.totalHours)}</strong></div>
-              <div><span>Jobs</span><strong>${formatNumber(area.totalJobs)}</strong></div>
-              <div><span>Produced</span><strong>${formatDecimal(area.workProduced)}</strong></div>
-              <div><span>Area %</span><strong>${formatPercent(area.productivityPercent)}</strong></div>
-            </div>
-          </article>
-        `).join('')}
+          return `
+            <article class="area-card">
+              <div class="area-top">
+                <div>
+                  <h4>${escapeHtml(area.stationGroup)}</h4>
+                  <p>${escapeHtml(area.department)} • ${escapeHtml(area.accessPoint)}</p>
+                </div>
+                ${statusBadgeSafe(displayStatus)}
+              </div>
+
+              <div class="area-metrics area-metrics-five">
+                <div><span>Days</span><strong>${area.workDays}</strong></div>
+                <div><span>Hours</span><strong>${formatDecimal(area.totalHours)}</strong></div>
+                <div><span>Jobs</span><strong>${formatNumber(area.totalJobs)}</strong></div>
+                <div><span>${producedLabel}</span><strong>${producedValue}</strong></div>
+                <div><span>${percentLabel}</span><strong>${percentValue}</strong></div>
+              </div>
+            </article>
+          `;
+        }).join('')}
       </div>
     </section>
   `;
@@ -2644,8 +2734,7 @@ function renderRecordsSection(summary) {
     <section class="adjustment-command-panel">
       <div class="section-head compact">
         <div>
-          <h3>Adjustment Control</h3>
-          <p>Use the date scorecards above to edit time. Detailed records stay collapsed to keep the profile clean.</p>
+          <h3>Adjustment Control</h3>          
         </div>
         <button class="small-action" type="button" onclick="toggleAdjustmentRecords()">Show Records</button>
       </div>
@@ -2749,19 +2838,8 @@ function getWeekRowsForActiveDept() {
     return rowDept === activeDept;
   }
 
-  // Build schedule map for shift filtering
-  const scheduleMap = new Map();
-  (STATE.associateSchedules || []).forEach(s => {
-    scheduleMap.set(String(s.OperatorName || '').trim(), String(s.ScheduleType || 'WEEKDAY').trim().toUpperCase());
-  });
-
   function shiftMatch(r) {
-    if (activeShift === 'ALL') return true;
-    // Machine/equipment rows show on both shifts
-    if (isMachineRow(r)) return true;
-    const opName = String(r.OperatorName || '').trim();
-    const opShift = scheduleMap.get(opName) || 'WEEKDAY';
-    return opShift === activeShift;
+    return rowMatchesActiveShiftByDate(r, activeShift);
   }
 
   const snapshotRows = STATE.dailySnapshot.filter(r => {
@@ -2774,9 +2852,11 @@ function getWeekRowsForActiveDept() {
 
   return combined.filter(r => {
     const apMatch = activeAP === 'ALL' || String(r.StationGroup || '').trim() === activeAP;
-    const blob = [r.OperatorName, r.StationGroup, r.AccessPoint, r.FinalDepartment].join(' ').toLowerCase();
+    const displayName = getAssociateDisplayNameForRow(r);
+    const blob = [displayName, r.OperatorName, r.StationGroup, r.AccessPoint, r.FinalDepartment].join(' ').toLowerCase();
     const searchMatch = !STATE.search || blob.includes(STATE.search);
-    return apMatch && searchMatch;
+    const archiveMatch = !isAssociateArchivedForRow(r);
+    return apMatch && searchMatch && archiveMatch;
   });
 }
 
@@ -6501,3 +6581,654 @@ function openSeparateBreakageHub() {
 }
 
 console.info('[Productivity Hub] Old Breakage Hub tab disabled. Associate scorecard still shows lens/frame breakage counts only.');
+
+/************************************************************
+ * FINAL MEI MACHINE TAB OVERRIDE
+ * MEI rows must appear under the Machine employee type.
+ ************************************************************/
+try {
+  localStorage.removeItem('PRODUCTIVITY_HUB_SHEET_PAYLOAD_CACHE_V5');
+  localStorage.removeItem('PRODUCTIVITY_HUB_CACHE_FAST_V2');
+} catch (err) {}
+
+function isMachineRow(r) {
+  const n = String(r && r.OperatorName || '').toUpperCase();
+  const ap = String(r && r.AccessPoint || '').toUpperCase();
+  const sg = String(r && r.StationGroup || '').toUpperCase();
+  const dept = String(r && r.Department || '').toUpperCase();
+  const finalDept = String(r && r.FinalDepartment || '').toUpperCase();
+  const blob = `${n} ${ap} ${sg} ${dept} ${finalDept}`;
+
+  return (
+    blob.includes('UNKNOWN') ||
+    blob.includes('MEI') ||
+    blob.includes('54R') ||
+    blob.includes('FLEX') ||
+    blob.includes('ODT') ||
+    blob.includes('OTL') ||
+    blob.includes('ORB') ||
+    blob.includes('OTB') ||
+    blob.includes('AR41') ||
+    blob.includes('IQ-STAR') ||
+    blob.includes('MANUAL BLK') ||
+    blob.includes('MANUAL BLOCK')
+  );
+}
+
+function getAssociateEmployeeType(summary) {
+  const name = String(summary && summary.associate ? summary.associate : '').trim().toUpperCase();
+  const departments = String(summary && summary.departments ? summary.departments : STATE.activeDept || '').trim().toUpperCase();
+  const areasText = Array.isArray(summary && summary.areas) ? summary.areas.join(' ').toUpperCase() : '';
+  const combined = `${name} ${departments} ${areasText}`;
+
+  const machineNamePatterns = [
+    'UNKNOWN',
+    'UNKNOWN OPERATOR',
+    'MEI',
+    'MEI LINE',
+    '54R',
+    'FLEX',
+    'ODT',
+    'OTL',
+    'ORB',
+    'OTB',
+    'AR41',
+    'IQ-STAR',
+    'MANUAL BLK',
+    'MANUAL BLOCK'
+  ];
+
+  if (machineNamePatterns.some(pattern => combined.includes(pattern))) {
+    return 'MACHINE';
+  }
+
+  const isProductionDept =
+    departments.includes('FINISH') ||
+    departments.includes('SURFACE') ||
+    departments.includes('AR') ||
+    String(STATE.activeDept || '').toUpperCase() === 'PROD_ALL';
+
+  const isDistributionInventoryDept =
+    departments.includes('INVENTORY') ||
+    String(STATE.activeDept || '').toUpperCase() === 'INVENTORY' ||
+    String(STATE.activeDept || '').toUpperCase() === 'DIST_ALL';
+
+  if (isProductionDept && name.startsWith('PROD')) return 'TEMP';
+  if (isDistributionInventoryDept && name.startsWith('OHIO')) return 'TEMP';
+  if (name.startsWith('PROD') || name.startsWith('OHIO')) return 'TEMP';
+
+  return 'FTE';
+}
+
+function debugMEIRowsOnWebpage() {
+  const rows = (STATE.dailySnapshot || []).filter(r => {
+    const blob = [r.FinalDepartment, r.StationGroup, r.Department, r.AccessPoint, r.OperatorName].join(' ').toUpperCase();
+    return blob.includes('MEI');
+  });
+  console.table(rows.map(r => ({
+    WorkDate: r.WorkDate,
+    FinalDepartment: r.FinalDepartment,
+    StationGroup: r.StationGroup,
+    Department: r.Department,
+    AccessPoint: r.AccessPoint,
+    OperatorName: r.OperatorName,
+    Jobs: r.TotalJobScan,
+    Machine: isMachineRow(r)
+  })));
+  return rows;
+}
+
+
+/************************************************************
+ * TEMP NAME + ASSOCIATE ARCHIVE CONTROL PATCH
+ * LMS, Supervisor, Manager, and Director can edit temp display identity
+ * and archive / restore records. Raw productivity history is never deleted.
+ ************************************************************/
+
+function normalizeTempNameMap(rows) {
+  return (rows || []).map(row => ({
+    ...row,
+    OperatorName: String(row.OperatorName || row.operatorName || '').trim(),
+    ProdNumber: String(row.ProdNumber || row.prodNumber || row.OperatorName || '').trim(),
+    FullName: String(row.FullName || row.fullName || '').trim(),
+    DisplayName: String(row.DisplayName || row.displayName || '').trim(),
+    Status: String(row.Status || row.status || 'ACTIVE').trim().toUpperCase(),
+    StartDate: formatDateKey(row.StartDate || row.startDate || ''),
+    EndDate: formatDateKey(row.EndDate || row.endDate || ''),
+    UpdatedAt: String(row.UpdatedAt || row.updatedAt || '').trim(),
+    UpdatedBy: String(row.UpdatedBy || row.updatedBy || '').trim(),
+    Note: String(row.Note || row.note || '').trim()
+  })).filter(row => row.OperatorName);
+}
+
+function normalizeAssociateArchive(rows) {
+  return (rows || []).map(row => ({
+    ...row,
+    ArchiveID: String(row.ArchiveID || row.archiveId || '').trim(),
+    ArchivedAt: String(row.ArchivedAt || row.archivedAt || '').trim(),
+    ArchivedBy: String(row.ArchivedBy || row.archivedBy || '').trim(),
+    OriginalOperatorName: String(row.OriginalOperatorName || row.operatorName || row.OperatorName || '').trim(),
+    ProdNumber: String(row.ProdNumber || row.prodNumber || '').trim(),
+    FullName: String(row.FullName || row.fullName || '').trim(),
+    DisplayName: String(row.DisplayName || row.displayName || '').trim(),
+    FinalDepartment: String(row.FinalDepartment || row.finalDepartment || '').trim(),
+    Shift: String(row.Shift || row.shift || '').trim(),
+    AssociateType: String(row.AssociateType || row.associateType || '').trim(),
+    Reason: String(row.Reason || row.reason || '').trim(),
+    Status: String(row.Status || row.status || 'ARCHIVED').trim().toUpperCase(),
+    ArchiveNote: String(row.ArchiveNote || row.archiveNote || '').trim(),
+    LastSeenDate: formatDateKey(row.LastSeenDate || row.lastSeenDate || ''),
+    StartDate: formatDateKey(row.StartDate || row.startDate || ''),
+    EndDate: formatDateKey(row.EndDate || row.endDate || '')
+  })).filter(row => row.OriginalOperatorName || row.DisplayName);
+}
+
+function isTempOperatorName(name) {
+  const n = String(name || '').trim().toUpperCase();
+  return n.startsWith('PROD') || n.startsWith('OHIO');
+}
+
+function dateKeyToTime(key) {
+  if (!key) return 0;
+  const d = parseLocalDate(key);
+  return d ? d.getTime() : 0;
+}
+
+function tempMapAppliesToRow(mapRow, row) {
+  const op = String(row.OperatorName || '').trim().toUpperCase();
+  if (String(mapRow.OperatorName || '').trim().toUpperCase() !== op) return false;
+
+  const rowDate = formatDateKey(row.WorkDate || row.Date || '');
+  const rowTime = dateKeyToTime(rowDate);
+  const startTime = dateKeyToTime(mapRow.StartDate);
+  const endTime = dateKeyToTime(mapRow.EndDate);
+
+  if (startTime && rowTime && rowTime < startTime) return false;
+  if (endTime && rowTime && rowTime > endTime) return false;
+  return true;
+}
+
+function getTempIdentityForRow(row) {
+  const matches = (STATE.tempNameMap || [])
+    .filter(mapRow => tempMapAppliesToRow(mapRow, row))
+    .sort((a, b) => {
+      const dateDiff = dateKeyToTime(b.StartDate) - dateKeyToTime(a.StartDate);
+      if (dateDiff !== 0) return dateDiff;
+      return String(b.UpdatedAt || '').localeCompare(String(a.UpdatedAt || ''));
+    });
+
+  return matches[0] || null;
+}
+
+function getCurrentTempIdentity(operatorName) {
+  const today = formatDateKey(new Date());
+  return getTempIdentityForRow({ OperatorName: operatorName, WorkDate: today }) ||
+    (STATE.tempNameMap || []).filter(r => String(r.OperatorName || '').trim().toUpperCase() === String(operatorName || '').trim().toUpperCase()).slice(-1)[0] ||
+    null;
+}
+
+function getAssociateDisplayNameForRow(row) {
+  const raw = String(row.OperatorName || '').trim();
+  const identity = getTempIdentityForRow(row);
+  if (identity && identity.DisplayName) return identity.DisplayName;
+  if (identity && identity.ProdNumber && identity.FullName) return `${identity.ProdNumber} (${identity.FullName})`;
+  return raw;
+}
+
+function getAssociateDisplayName(summaryOrName) {
+  if (!summaryOrName) return '';
+  if (typeof summaryOrName === 'string') {
+    const identity = getCurrentTempIdentity(summaryOrName);
+    if (identity && identity.DisplayName) return identity.DisplayName;
+    if (identity && identity.ProdNumber && identity.FullName) return `${identity.ProdNumber} (${identity.FullName})`;
+    return summaryOrName;
+  }
+
+  const row = summaryOrName.rows && summaryOrName.rows[0]
+    ? summaryOrName.rows[0]
+    : { OperatorName: summaryOrName.associate || '', WorkDate: STATE.selectedWeekEndDate || STATE.meta.weekEndDate || new Date() };
+  return getAssociateDisplayNameForRow(row);
+}
+
+function isAssociateArchivedForRow(row) {
+  const identity = getTempIdentityForRow(row);
+  return !!(identity && String(identity.Status || '').toUpperCase() === 'ARCHIVED');
+}
+
+function canManageAssociateArchive() {
+  const user = getCurrentProductivityUser && getCurrentProductivityUser();
+  const role = String((user && user.role) || '').toUpperCase();
+  return role.includes('LMS') || role.includes('SUPERVISOR') || role.includes('MANAGER') || role.includes('DIRECTOR');
+}
+
+function renderAssociateAdminToolbar(summary) {
+  if (!summary || !canManageAssociateArchive()) return '';
+
+  const associateName = String(summary.associate || '').trim();
+  const isTemp = isTempOperatorName(associateName);
+
+  if (!isTemp) {
+    return `
+      <div class="associate-admin-toolbar fte-archive-toolbar">
+        <div>
+          <strong>Associate Archive Control</strong>          
+        </div>
+        <button class="danger-action" type="button" onclick="openArchiveAssociateModal('${escapeJs(associateName)}')">Archive Associate</button>
+        <button class="ghost-action small" type="button" onclick="setActivePage('archive')">View Archive</button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="associate-admin-toolbar temp-archive-toolbar">
+      <div>
+        <strong>Temp Identity Control</strong>
+        <span>Raw source stays ${escapeHtml(associateName)}. Display name/archive is controlled here.</span>
+      </div>
+      <button class="small-action" type="button" onclick="openTempNameModal('${escapeJs(associateName)}')">Edit Name / PROD #</button>
+      <button class="danger-action" type="button" onclick="openArchiveAssociateModal('${escapeJs(associateName)}')">Archive Associate</button>
+      <button class="ghost-action small" type="button" onclick="setActivePage('archive')">View Archive</button>
+    </div>
+  `;
+}
+
+function closeAssociateAdminModal() {
+  const modal = document.getElementById('associateAdminModal');
+  if (modal) modal.remove();
+}
+
+function getAssociateSummaryByRawName(operatorName) {
+  return buildAssociateSummaries().find(s => String(s.associate || '').trim() === String(operatorName || '').trim()) || null;
+}
+
+function openTempNameModal(operatorName) {
+  if (!canManageAssociateArchive()) {
+    alert('Only LMS, supervisors, managers, and directors can edit temp identity.');
+    return;
+  }
+
+  const identity = getCurrentTempIdentity(operatorName) || {};
+  const prodNumber = identity.ProdNumber || operatorName;
+  const fullName = identity.FullName || '';
+  const startDate = identity.StartDate || STATE.selectedWeekStartDate || formatDateKey(new Date());
+  const note = identity.Note || '';
+
+  closeAssociateAdminModal();
+  const modal = document.createElement('div');
+  modal.id = 'associateAdminModal';
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `
+    <div class="modal-card associate-admin-modal">
+      <div class="modal-head">
+        <div>
+          <h3>Edit Temp Name / PROD Number</h3>
+          <p>Raw OperatorName remains locked as ${escapeHtml(operatorName)}. This edits the display identity and reuse period.</p>
+        </div>
+        <button class="modal-x" type="button" onclick="closeAssociateAdminModal()">×</button>
+      </div>
+
+      <div class="form-grid">
+        <label><span>Raw OperatorName</span><input id="tempRawOperator" type="text" value="${escapeHtml(operatorName)}" disabled></label>
+        <label><span>Display PROD #</span><input id="tempProdNumber" type="text" value="${escapeHtml(prodNumber)}" placeholder="PROD, 11"></label>
+        <label><span>Full Name</span><input id="tempFullName" type="text" value="${escapeHtml(fullName)}" placeholder="Full Name"></label>
+        <label><span>Start Date</span><input id="tempStartDate" type="date" value="${escapeHtml(startDate)}"></label>
+        <label class="wide"><span>Note</span><textarea id="tempIdentityNote" rows="3" placeholder="Example: temp assigned to PROD, 11">${escapeHtml(note)}</textarea></label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="ghost-action" type="button" onclick="closeAssociateAdminModal()">Cancel</button>
+        <button class="primary-btn" type="button" onclick="saveTempDisplayName('${escapeJs(operatorName)}')">Save Identity</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function saveTempDisplayName(operatorName) {
+  const prodNumber = document.getElementById('tempProdNumber')?.value.trim() || operatorName;
+  const fullName = document.getElementById('tempFullName')?.value.trim() || '';
+  const startDate = document.getElementById('tempStartDate')?.value || formatDateKey(new Date());
+  const note = document.getElementById('tempIdentityNote')?.value.trim() || '';
+
+  if (!prodNumber) {
+    alert('PROD number is required.');
+    return;
+  }
+
+  const btn = document.querySelector('#associateAdminModal .primary-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  productivityJsonpRequest({
+    action: 'saveTempDisplayName',
+    operatorName,
+    prodNumber,
+    fullName,
+    startDate,
+    note,
+    editedBy: getCurrentProductivityUsername() || 'WEBPAGE'
+  }).then(response => {
+    STATE.tempNameMap = normalizeTempNameMap(response.tempNameMap || []);
+    STATE.associateArchive = normalizeAssociateArchive(response.associateArchive || []);
+    clearClientProductivityCache();
+    closeAssociateAdminModal();
+    renderNavBar();
+    renderEverything();
+    showRefreshStatus('Temp identity saved.');
+  }).catch(err => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Identity'; }
+    alert('Could not save temp identity: ' + (err.message || err));
+  });
+}
+
+function openArchiveAssociateModal(operatorName) {
+  if (!canManageAssociateArchive()) {
+    alert('Only LMS, supervisors, managers, and directors can archive associates.');
+    return;
+  }
+
+  const summary = getAssociateSummaryByRawName(operatorName);
+  const isTemp = isTempOperatorName(operatorName);
+  const identity = getCurrentTempIdentity(operatorName) || {};
+  const prodNumber = isTemp ? (identity.ProdNumber || operatorName) : operatorName;
+  const fullName = isTemp ? (identity.FullName || '') : '';
+  const displayName = isTemp
+    ? (identity.DisplayName || (fullName ? `${prodNumber} (${fullName})` : prodNumber))
+    : operatorName;
+  const associateType = isTemp ? 'TEMP' : 'FTE';
+  const archiveTitle = isTemp ? 'Archive Temp Associate' : 'Archive Full-Time Associate';
+  const archiveHelp = isTemp
+    ? 'This hides the temp from live scorecards but keeps history so the PROD/OHIO number can be reused safely.'
+    : 'This hides the full-time associate from live scorecards but keeps all historical productivity records in archive.';
+  const lastSeen = summary && summary.rows && summary.rows.length
+    ? summary.rows.map(r => formatDateKey(r.WorkDate)).sort().slice(-1)[0]
+    : formatDateKey(new Date());
+
+  closeAssociateAdminModal();
+  const modal = document.createElement('div');
+  modal.id = 'associateAdminModal';
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `
+    <div class="modal-card associate-admin-modal">
+      <div class="modal-head">
+        <div>
+          <h3>${escapeHtml(archiveTitle)}</h3>
+          <p>${escapeHtml(archiveHelp)}</p>
+        </div>
+        <button class="modal-x" type="button" onclick="closeAssociateAdminModal()">×</button>
+      </div>
+
+      <div class="archive-warning-box">
+        <strong>${escapeHtml(displayName)}</strong>
+        <span>Type: ${escapeHtml(associateType)} · Raw source: ${escapeHtml(operatorName)}. Do not delete snapshot history.</span>
+      </div>
+
+      <div class="form-grid">
+        <label><span>Reason</span>
+          <select id="archiveReason">
+            <option value="Terminated">Terminated</option>
+            <option value="No Longer Active">No Longer Active</option>
+            <option value="Transferred / Moved Department">Transferred / Moved Department</option>
+            <option value="Leave / Long-Term Inactive">Leave / Long-Term Inactive</option>
+            <option value="PROD Number Reused">PROD Number Reused</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <label><span>Last Seen / End Date</span><input id="archiveEndDate" type="date" value="${escapeHtml(lastSeen)}"></label>
+        <label class="wide"><span>Archive Note</span><textarea id="archiveNote" rows="3" placeholder="Optional note"></textarea></label>
+      </div>
+
+      <div class="modal-actions">
+        <button class="ghost-action" type="button" onclick="closeAssociateAdminModal()">Cancel</button>
+        <button class="danger-action" type="button" onclick="confirmArchiveAssociate('${escapeJs(operatorName)}')">Archive</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function confirmArchiveAssociate(operatorName) {
+  const summary = getAssociateSummaryByRawName(operatorName) || {};
+  const isTemp = isTempOperatorName(operatorName);
+  const identity = getCurrentTempIdentity(operatorName) || {};
+  const prodNumber = isTemp ? (identity.ProdNumber || operatorName) : operatorName;
+  const fullName = isTemp ? (identity.FullName || '') : '';
+  const displayName = isTemp
+    ? (identity.DisplayName || (fullName ? `${prodNumber} (${fullName})` : prodNumber))
+    : operatorName;
+  const associateType = isTemp ? 'TEMP' : 'FTE';
+  const reason = document.getElementById('archiveReason')?.value || 'No Longer Active';
+  const endDate = document.getElementById('archiveEndDate')?.value || formatDateKey(new Date());
+  const note = document.getElementById('archiveNote')?.value.trim() || '';
+
+  const btn = document.querySelector('#associateAdminModal .danger-action');
+  if (btn) { btn.disabled = true; btn.textContent = 'Archiving...'; }
+
+  productivityJsonpRequest({
+    action: 'archiveAssociate',
+    operatorName,
+    prodNumber,
+    fullName,
+    displayName,
+    startDate: identity.StartDate || '',
+    endDate,
+    lastSeenDate: endDate,
+    finalDepartment: summary.departments || STATE.activeDept || '',
+    shift: STATE.activeShift || '',
+    associateType,
+    reason,
+    note,
+    editedBy: getCurrentProductivityUsername() || 'WEBPAGE'
+  }).then(response => {
+    STATE.tempNameMap = normalizeTempNameMap(response.tempNameMap || []);
+    STATE.associateArchive = normalizeAssociateArchive(response.associateArchive || []);
+    clearClientProductivityCache();
+    closeAssociateAdminModal();
+    STATE.selectedAssociate = '';
+    STATE.activePage = 'scorecards';
+    renderNavBar();
+    renderEverything();
+    showRefreshStatus(isTemp ? 'Associate archived. PROD number can be reused with a new active identity.' : 'Full-time associate archived and hidden from live scorecards.');
+  }).catch(err => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Archive'; }
+    alert('Could not archive associate: ' + (err.message || err));
+  });
+}
+
+function restoreArchivedAssociate(archiveIndex) {
+  const row = (STATE.associateArchive || [])[archiveIndex];
+  if (!row) return;
+  if (!canManageAssociateArchive()) {
+    alert('Only LMS, supervisors, managers, and directors can restore archive records.');
+    return;
+  }
+
+  const startDate = prompt('Restore start date for this PROD/temp number:', formatDateKey(new Date()));
+  if (!startDate) return;
+
+  productivityJsonpRequest({
+    action: 'restoreArchivedAssociate',
+    operatorName: row.OriginalOperatorName,
+    prodNumber: row.ProdNumber || row.OriginalOperatorName,
+    fullName: row.FullName || '',
+    displayName: row.DisplayName || '',
+    startDate,
+    note: 'Restored from archive page',
+    editedBy: getCurrentProductivityUsername() || 'WEBPAGE'
+  }).then(response => {
+    STATE.tempNameMap = normalizeTempNameMap(response.tempNameMap || []);
+    STATE.associateArchive = normalizeAssociateArchive(response.associateArchive || []);
+    clearClientProductivityCache();
+    renderEverything();
+    showRefreshStatus('Archive record restored as active.');
+  }).catch(err => alert('Could not restore: ' + (err.message || err)));
+}
+
+function renderArchivePage() {
+  const page = document.getElementById('pageContent');
+  if (!page) return;
+
+  const rows = (STATE.associateArchive || []).slice().reverse();
+  const canRestore = canManageAssociateArchive();
+
+  page.innerHTML = `
+    <section class="scoreboard-panel command-card full-scoreboard-page associate-archive-page">
+      <div class="section-head compact">
+        <div>
+          <h3>Associate Archive Records</h3>
+          <p>Archived associates stay out of live scorecards. History remains here for review and reuse control.</p>
+        </div>
+        <span class="scoreboard-count">${formatNumber(rows.length)} archived</span>
+      </div>
+
+      ${rows.length ? `
+        <div class="table-wrap archive-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Archived At</th>
+                <th>Archived By</th>
+                <th>Raw Operator</th>
+                <th>Display Name</th>
+                <th>Department</th>
+                <th>Shift</th>
+                <th>Reason</th>
+                <th>Last Seen</th>
+                <th>Note</th>
+                <th>Restore</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((r, idx) => {
+                const originalIndex = (STATE.associateArchive || []).length - 1 - idx;
+                return `
+                  <tr>
+                    <td>${escapeHtml(r.ArchivedAt || '—')}</td>
+                    <td>${escapeHtml(r.ArchivedBy || '—')}</td>
+                    <td><strong>${escapeHtml(r.OriginalOperatorName || '—')}</strong></td>
+                    <td>${escapeHtml(r.DisplayName || r.ProdNumber || '—')}</td>
+                    <td>${escapeHtml(r.FinalDepartment || '—')}</td>
+                    <td>${escapeHtml(r.Shift || '—')}</td>
+                    <td>${escapeHtml(r.Reason || '—')}</td>
+                    <td>${escapeHtml(r.LastSeenDate || r.EndDate || '—')}</td>
+                    <td>${escapeHtml(r.ArchiveNote || '—')}</td>
+                    <td>${canRestore ? `<button class="small-action" type="button" onclick="restoreArchivedAssociate(${originalIndex})">Restore</button>` : 'View Only'}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div class="empty-hub-note">No associate archive records yet.</div>
+      `}
+    </section>
+  `;
+}
+
+function injectArchiveSideNav() {
+  const nav = document.querySelector('.side-nav');
+  if (!nav || document.querySelector('[data-page="archive"]')) return;
+  const btn = document.createElement('button');
+  btn.className = 'side-link';
+  btn.dataset.page = 'archive';
+  btn.type = 'button';
+  btn.textContent = '▥ Associate Archive';
+  btn.addEventListener('click', () => setActivePage('archive'));
+  nav.appendChild(btn);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(injectArchiveSideNav, 300);
+});
+
+const __prodArchiveRenderEverythingBase = renderEverything;
+renderEverything = function() {
+  injectArchiveSideNav();
+  renderTopSummary();
+  renderAssociateDropdown();
+
+  if (STATE.activePage === 'archive') {
+    renderArchivePage();
+    return;
+  }
+
+  return __prodArchiveRenderEverythingBase();
+};
+
+const __prodArchiveSetActivePageBase = setActivePage;
+setActivePage = function(page) {
+  if (page === 'archive') {
+    STATE.activePage = 'archive';
+    setActiveSideNav('archive');
+    renderEverything();
+    return;
+  }
+  return __prodArchiveSetActivePageBase(page);
+};
+
+function loadAssociateArchiveQuietly() {
+  productivityJsonpRequest({
+    action: 'associateArchiveBoot',
+    editedBy: getCurrentProductivityUsername() || 'WEBPAGE'
+  }).then(response => {
+    STATE.tempNameMap = normalizeTempNameMap(response.tempNameMap || []);
+    STATE.associateArchive = normalizeAssociateArchive(response.associateArchive || []);
+    renderEverything();
+  }).catch(err => console.warn('[Productivity Hub] Associate archive boot skipped:', err));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(loadAssociateArchiveQuietly, 1800);
+});
+
+console.info('[Productivity Hub] Associate temp name + archive control loaded.');
+
+/************************************************************
+ * TEMP / PROD ARCHIVE PATCH — FINAL PROFILE BUTTON OVERRIDE
+ * This final override fixes the case where the breakage-fast renderHero
+ * override loads after the original profile hero and removes the temp buttons.
+ ************************************************************/
+(function installFinalTempArchiveHeroPatch() {
+  if (typeof renderHero !== 'function') return;
+
+  const __renderHeroBeforeFinalTempArchivePatch = renderHero;
+
+  renderHero = function(summary) {
+    let html = __renderHeroBeforeFinalTempArchivePatch(summary);
+
+    if (!summary) return html;
+
+    const associateName = String(summary.associate || STATE.selectedAssociate || '').trim();
+    if (!associateName) return html;
+
+    const canManage = (typeof canManageAssociateArchive === 'function' && canManageAssociateArchive()) ||
+      (typeof canManageTempArchive === 'function' && canManageTempArchive());
+
+    if (!canManage) return html;
+
+    const toolbar = (typeof renderAssociateAdminToolbar === 'function')
+      ? renderAssociateAdminToolbar(summary)
+      : `
+        <div class="associate-admin-toolbar">
+          <div>
+            <strong>Associate Archive Control</strong>
+            <span>Archive/hide this associate from live scorecards while keeping history.</span>
+          </div>
+          <button class="danger-action" type="button" onclick="openArchiveAssociateModal('${escapeJs(associateName)}')">Archive Associate</button>
+          <button class="ghost-action small" type="button" onclick="setActivePage('archive')">View Archive</button>
+        </div>
+      `;
+
+    if (html.includes('associate-admin-toolbar')) return html;
+
+    // Best placement: directly under the identity block, before the productivity ring.
+    if (html.includes('<div class="ring-wrap">')) {
+      return html.replace('<div class="ring-wrap">', `${toolbar}\n      <div class="ring-wrap">`);
+    }
+
+    // Safe fallback: before profile hero closes.
+    return html.replace('</section>', `${toolbar}\n    </section>`);
+  };
+})();
+
+console.info('[Productivity Hub] Final temp archive profile-button override loaded.');

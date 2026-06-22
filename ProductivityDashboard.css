@@ -3272,3 +3272,229 @@ td { color:#e5edf7; }
     text-align: left;
   }
 }
+
+
+/************************************************************
+ * TEMP NAME + ASSOCIATE ARCHIVE CONTROL PATCH
+ ************************************************************/
+.associate-admin-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-top: 8px;
+  border: 1px solid rgba(34, 211, 238, .24);
+  border-radius: 14px;
+  background: rgba(2, 9, 20, .48);
+}
+
+.associate-admin-toolbar strong {
+  display: block;
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #e8f2ff;
+}
+
+.associate-admin-toolbar span,
+.archive-view-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.danger-action {
+  border: 1px solid rgba(239, 68, 68, .42);
+  color: #fff;
+  background: linear-gradient(135deg, rgba(239, 68, 68, .8), rgba(127, 29, 29, .85));
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 900;
+  box-shadow: 0 10px 30px rgba(239, 68, 68, .12);
+}
+
+.danger-action:disabled,
+.primary-btn:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.associate-admin-modal {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.archive-warning-box {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  margin: 14px 0;
+  border: 1px solid rgba(245, 158, 11, .35);
+  border-radius: 14px;
+  background: rgba(245, 158, 11, .08);
+}
+
+.archive-warning-box strong { color: #fff; }
+.archive-warning-box span { color: var(--muted); font-size: 13px; }
+
+.associate-archive-page .table-wrap,
+.archive-table-wrap {
+  max-height: 620px;
+  overflow: auto;
+}
+
+.associate-archive-page table td,
+.associate-archive-page table th {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .associate-admin-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/************************************************************
+ * TEMP / PROD ARCHIVE BUTTONS — FINAL PROFILE FIX
+ ************************************************************/
+.associate-admin-toolbar {
+  grid-column: 1 / -1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 12px 0 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 211, 238, .34);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, .10), rgba(37, 99, 235, .08));
+  box-shadow: 0 0 24px rgba(34, 211, 238, .08);
+}
+
+.associate-admin-toolbar > div {
+  display: grid;
+  gap: 4px;
+}
+
+.associate-admin-toolbar strong {
+  color: #e8f2ff;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.associate-admin-toolbar span,
+.archive-view-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.associate-admin-toolbar .small-action,
+.associate-admin-toolbar .danger-action,
+.associate-admin-toolbar .ghost-action.small {
+  white-space: nowrap;
+}
+
+.small-action,
+.danger-action,
+.ghost-action.small {
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.small-action {
+  border: 1px solid rgba(34, 211, 238, .55);
+  color: #e8f2ff;
+  background: rgba(34, 211, 238, .12);
+}
+
+.danger-action {
+  border: 1px solid rgba(239, 68, 68, .70);
+  color: #fee2e2;
+  background: rgba(239, 68, 68, .16);
+}
+
+.ghost-action.small {
+  border: 1px solid rgba(143, 165, 191, .35);
+  color: #c7d7ee;
+  background: rgba(255, 255, 255, .045);
+}
+
+.small-action:hover,
+.danger-action:hover,
+.ghost-action.small:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.12);
+}
+
+.associate-admin-modal {
+  max-width: 680px;
+}
+
+.associate-admin-modal .modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.associate-admin-modal .modal-field.full {
+  grid-column: 1 / -1;
+}
+
+.associate-admin-modal input,
+.associate-admin-modal select,
+.associate-admin-modal textarea {
+  width: 100%;
+}
+
+.associate-archive-page .empty-hub-note {
+  padding: 20px;
+  border: 1px dashed rgba(143, 165, 191, .35);
+  border-radius: 14px;
+  color: #bdd2eb;
+  background: rgba(255, 255, 255, .035);
+}
+
+.archive-table-wrap table td,
+.archive-table-wrap table th {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .associate-admin-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .associate-admin-toolbar .small-action,
+  .associate-admin-toolbar .danger-action,
+  .associate-admin-toolbar .ghost-action.small {
+    width: 100%;
+  }
+
+  .associate-admin-modal .modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/************************************************************
+ * FTE ARCHIVE ONLY — NO NAME EDIT
+ ************************************************************/
+.fte-archive-toolbar {
+  border-color: rgba(239, 68, 68, .30);
+  background: rgba(239, 68, 68, .07);
+}
+
+.temp-archive-toolbar {
+  border-color: rgba(34, 211, 238, .24);
+}
