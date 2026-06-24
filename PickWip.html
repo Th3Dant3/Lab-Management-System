@@ -11,81 +11,56 @@
 <link href="Pickwip.css" rel="stylesheet">
 </link></head>
 <body>
-<!-- ── LOADING SCREEN ── -->
+<!-- ── LOADING SCREEN — Executive Brand Fade ── -->
 <div class="loader-screen" id="loaderScreen">
-<!-- Horizontal sweep lines — industrial feel -->
-<div class="ld-sweep-a"></div>
-<div class="ld-sweep-b"></div>
-<!-- Top bar — facility identity -->
-<div class="ld-topbar">
-<div class="ld-topbar-left">
-<span class="ld-cube">▦</span>
-<div>
-<div class="ld-facility">ZENNI USA · OPTICAL MANUFACTURING</div>
-<div class="ld-station">PICKING FLOOR — WIP MONITOR</div>
-</div>
-</div>
-<div class="ld-topbar-right">
-<span class="ld-live-dot"></span>
-<span class="ld-clock" id="loaderTime">--:--:--</span>
-</div>
-</div>
-<!-- Main terminal block -->
-<div class="ld-terminal">
-<!-- Left: boot log stream -->
-<div class="ld-log-panel">
-<div class="ld-log-title">// SYSTEM BOOT LOG</div>
-<div class="ld-log-body" id="ldLogBody">
-<div class="ld-log-line" style="animation-delay:.1s"><span class="ld-tag ok">[  OK  ]</span> Initializing picking floor monitor...</div>
-<div class="ld-log-line" style="animation-delay:.4s"><span class="ld-tag ok">[  OK  ]</span> Loading UI components</div>
-<div class="ld-log-line" style="animation-delay:.7s"><span class="ld-tag ok">[  OK  ]</span> Establishing API connection</div>
-<div class="ld-log-line" style="animation-delay:1.0s"><span class="ld-tag wait">[ WAIT ]</span> Syncing WIP, activity, and operator intelligence...</div>
-<div class="ld-log-line ld-log-cursor" id="ldCursorLine" style="animation-delay:1.3s">
-<span class="ld-tag pend">[ PEND ]</span> <span id="ldCursorText">Preparing Picking dashboard</span><span class="ld-blink">_</span>
-</div>
-</div>
-</div>
-<!-- Right: system status panels -->
-<div class="ld-status-panel">
-<div class="ld-status-title">// SUBSYSTEM STATUS</div>
-<div class="ld-status-row" id="lc-api">
-<div class="ld-status-name">LIVE API</div>
-<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-api"></div></div>
-<div class="ld-status-val" id="lsv-api">STANDBY</div>
-</div>
-<div class="ld-status-row" id="lc-wip">
-<div class="ld-status-name">WIP DATA</div>
-<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-wip"></div></div>
-<div class="ld-status-val" id="lsv-wip">STANDBY</div>
-</div>
-<div class="ld-status-row" id="lc-movement">
-<div class="ld-status-name">MOVEMENT CHK</div>
-<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-movement"></div></div>
-<div class="ld-status-val" id="lsv-movement">STANDBY</div>
-</div>
-<div class="ld-status-row" id="lc-stats">
-<div class="ld-status-name">DAILY STATS</div>
-<div class="ld-status-bar"><div class="ld-status-fill" id="lsf-stats"></div></div>
-<div class="ld-status-val" id="lsv-stats">STANDBY</div>
-</div>
-<!-- Big progress readout -->
-<div class="ld-pct-block">
-<div class="ld-pct-num" id="ldPctNum">0<span>%</span></div>
-<div class="ld-pct-label" id="loaderBarLabel">Initializing...</div>
-</div>
-</div>
-</div>
-<!-- Bottom master progress bar — full width -->
-<div class="ld-master-bar">
-<div class="ld-master-fill" id="loaderBarFill"></div>
-<div class="ld-master-shimmer"></div>
-</div>
-<!-- Bottom strip -->
-<div class="ld-footer-strip">
-<span>FACILITY: ZENNI USA OPTICAL LAB</span>
-<span>MODULE: PICKING FLOOR WIP MONITOR v2.1</span>
-<span>STATUS: <span id="ldFooterStatus" style="color:var(--cyan)">BOOTING</span></span>
-</div>
+  <!-- Hidden legacy IDs kept for JS compatibility -->
+  <div id="ldLogBody" style="display:none"></div>
+  <div id="ldCursorLine" style="display:none"><span id="ldCursorText"></span></div>
+  <div id="lc-api" style="display:none"><div class="ld-status-bar"><div class="ld-status-fill" id="lsf-api"></div></div><div id="lsv-api"></div></div>
+  <div id="lc-wip" style="display:none"><div class="ld-status-bar"><div class="ld-status-fill" id="lsf-wip"></div></div><div id="lsv-wip"></div></div>
+  <div id="lc-movement" style="display:none"><div class="ld-status-bar"><div class="ld-status-fill" id="lsf-movement"></div></div><div id="lsv-movement"></div></div>
+  <div id="lc-stats" style="display:none"><div class="ld-status-bar"><div class="ld-status-fill" id="lsf-stats"></div></div><div id="lsv-stats"></div></div>
+  <div id="ldPctNum" style="display:none"></div>
+  <div id="loaderTime" style="display:none"></div>
+  <div id="ldFooterStatus" style="display:none"></div>
+
+  <!-- Visible loader UI -->
+  <div class="ld-center">
+    <div class="ld-wordmark">Zenni USA · Optical Manufacturing</div>
+
+    <div class="ld-icon-ring">
+      <span>▦</span>
+    </div>
+
+    <div class="ld-dash-name">Picking Dashboard</div>
+    <div class="ld-dash-sub">Production · Optical · Zenni Lab</div>
+
+    <div class="ld-bar-wrap">
+      <div class="ld-bar-track">
+        <div class="ld-master-fill" id="loaderBarFill"></div>
+      </div>
+      <div class="ld-bar-label" id="loaderBarLabel">Initializing...</div>
+    </div>
+
+    <div class="ld-status-dots">
+      <div class="ld-dot-item">
+        <div class="ld-dot" id="lsdot-api"></div>
+        <span>API</span>
+      </div>
+      <div class="ld-dot-item">
+        <div class="ld-dot" id="lsdot-wip"></div>
+        <span>WIP</span>
+      </div>
+      <div class="ld-dot-item">
+        <div class="ld-dot" id="lsdot-movement"></div>
+        <span>Movement</span>
+      </div>
+      <div class="ld-dot-item">
+        <div class="ld-dot" id="lsdot-stats"></div>
+        <span>Stats</span>
+      </div>
+    </div>
+  </div>
 </div>
 <div class="scan-line"></div>
 <div class="data-ticker">
@@ -175,96 +150,193 @@
 </header>
 <!-- TAB: Command Center -->
 <div class="tab-content" id="tab-command-center">
-<section class="command-hero">
-<div class="command-hero-copy">
-<span class="command-eyebrow">Live Picking Intelligence</span>
-<h2>Overview</h2>
-</div>
+<!-- ── COMMAND OVERVIEW ── -->
+<section class="ov-header">
+  <div class="ov-header-left">
+    <span class="ov-eyebrow">Live · Picking Floor</span>
+    <h2 class="ov-title">Picking Overview</h2>
+  </div>
+  <div class="ov-header-right">
+    <div class="ov-wip-hero">
+      <span class="ov-wip-label">Total WIP</span>
+      <strong class="ov-wip-num" id="kpiTotalWip">0</strong>
+      <span class="ov-wip-sub">items in process</span>
+    </div>
+  </div>
 </section>
-<section class="kpi-strip command-kpi-strip">
-<article class="kpi-card blue">
-<div class="kpi-icon">▦</div>
-<div>
-<span>Total Picking WIP</span>
-<strong id="kpiTotalWip">0</strong>
-<small>Items currently in process</small>
-</div>
-<svg class="spark" viewbox="0 0 100 36">
-<polyline points="0,28 12,27 20,30 31,20 43,26 55,13 68,21 82,4 100,14"></polyline>
-</svg>
-</article>
-<article class="kpi-card green">
-<div class="kpi-icon">SF</div>
-<div>
-<span>SF Productive Today</span>
-<strong id="kpiSFProductive">0</strong>
-<small>Total Surface Scan &amp; Verify</small>
-</div>
-<div class="mini-bars"><i></i><i></i><i></i><i></i></div>
-</article>
-<article class="kpi-card orange">
-<div class="kpi-icon">FSV</div>
-<div>
-<span>FSV Productive Today</span>
-<strong id="kpiFSVProductive">0</strong>
-<small>Total Finish Scan &amp; Verify</small>
-</div>
-<svg class="spark orange-spark" viewbox="0 0 100 36">
-<polyline points="0,29 12,30 20,24 31,27 43,18 55,24 68,9 82,20 100,15"></polyline>
-</svg>
-</article>
-<article class="kpi-card yellow">
-<div class="kpi-icon">FO</div>
-<div>
-<span>Frame Only Productive</span>
-<strong id="kpiFrameOnlyProductive">0</strong>
-<small>Total Frame Only Scan &amp; Verify</small>
-</div>
-<div class="mini-bars yellow-bars"><i></i><i></i><i></i><i></i></div>
-</article>
-<article class="kpi-card purple">
-<div class="kpi-icon">BR</div>
-<div>
-<span>Breakage Count Today</span>
-<strong id="kpiBreakageCount">0</strong>
-<small>Drops from Breakage to Picking</small>
-</div>
-<div class="mini-bars purple-bars"><i></i><i></i><i></i><i></i></div>
-</article>
-<article class="kpi-card teal">
-<div class="kpi-icon">RP</div>
-<div>
-<span>Replenishment Count</span>
-<strong id="kpiReplenishmentCount">0</strong>
-<small>Drops from Replenishment</small>
-</div>
-</article>
+
+<!-- ── THROUGHPUT ROW: SF / FSV / Frame Only ── -->
+<section class="ov-throughput-row">
+  <div class="ov-section-label">Today's Throughput</div>
+  <div class="ov-throughput-cards">
+
+    <article class="ov-thru-card sf-card">
+      <div class="ov-thru-badge">SF</div>
+      <div class="ov-thru-body">
+        <span>SF Productive</span>
+        <strong id="kpiSFProductive">0</strong>
+        <small>Surface Scan &amp; Verify</small>
+      </div>
+      <svg class="ov-spark" viewBox="0 0 100 32" fill="none">
+        <polyline points="0,26 15,24 30,28 45,18 60,22 75,10 90,16 100,12"
+          stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </svg>
+    </article>
+
+    <article class="ov-thru-card fsv-card">
+      <div class="ov-thru-badge">FSV</div>
+      <div class="ov-thru-body">
+        <span>FSV Productive</span>
+        <strong id="kpiFSVProductive">0</strong>
+        <small>Finish Scan &amp; Verify</small>
+      </div>
+      <svg class="ov-spark" viewBox="0 0 100 32" fill="none">
+        <polyline points="0,28 15,26 30,22 45,25 60,16 75,20 90,8 100,14"
+          stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      </svg>
+    </article>
+
+    <article class="ov-thru-card fo-card">
+      <div class="ov-thru-badge">FO</div>
+      <div class="ov-thru-body">
+        <span>Frame Only</span>
+        <strong id="kpiFrameOnlyProductive">0</strong>
+        <small>Frame Only S&amp;V</small>
+      </div>
+    </article>
+
+  </div>
 </section>
-<section class="wip-split-strip">
-<article class="wip-split-card clean">
-<div class="split-icon">PK</div>
-<div>
-<span>Picking WIP</span>
-<strong id="kpiPickingWipSplit">0</strong>
-<small>Pickroom WIP</small>
-</div>
-</article>
-<article class="wip-split-card inventory">
-<div class="split-icon">INV</div>
-<div>
-<span>Inventory Department WIP</span>
-<strong id="kpiInventoryWip">0</strong>
-<small>Inventory/Picking WIP</small>
-</div>
-</article>
-<article class="wip-split-card scan">
-<div class="split-icon">SV</div>
-<div>
-<span>Scan Verify WIP</span>
-<strong id="kpiScanVerifyWip">0</strong>
-<small>SF + FSV + Frame Only WIP</small>
-</div>
-</article>
+
+<!-- ── WIP SPLIT ROW ── -->
+<section class="ov-wip-split-row">
+  <div class="ov-section-label">WIP by Zone</div>
+  <div class="ov-wip-split-cards">
+
+    <article class="ov-wip-card">
+      <div class="ov-wip-zone-badge">PK</div>
+      <div>
+        <span>Pickroom WIP</span>
+        <strong id="kpiPickingWipSplit">0</strong>
+      </div>
+    </article>
+
+    <article class="ov-wip-card">
+      <div class="ov-wip-zone-badge inv">INV</div>
+      <div>
+        <span>Inventory WIP</span>
+        <strong id="kpiInventoryWip">0</strong>
+      </div>
+    </article>
+
+    <article class="ov-wip-card">
+      <div class="ov-wip-zone-badge sv">SV</div>
+      <div>
+        <span>Scan Verify WIP</span>
+        <strong id="kpiScanVerifyWip">0</strong>
+      </div>
+    </article>
+
+    <div class="ov-wip-divider"></div>
+
+    <article class="ov-wip-card alert-card br-card">
+      <div class="ov-wip-zone-badge br">BR</div>
+      <div>
+        <span>Breakage Today</span>
+        <strong id="kpiBreakageCount">0</strong>
+      </div>
+    </article>
+
+    <article class="ov-wip-card alert-card rp-card">
+      <div class="ov-wip-zone-badge rp">RP</div>
+      <div>
+        <span>Replenishment</span>
+        <strong id="kpiReplenishmentCount">0</strong>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+
+<section class="scan-breakdown-panel" aria-label="Picking daily breakdown">
+  <div class="scan-breakdown-head">
+    <div>
+      <span class="command-eyebrow">Picking Daily Detail</span>
+      <h2>Picking Daily Breakdown</h2>
+    </div>
+    <small>SF / FSV detail + Frame Only + Recovery</small>
+  </div>
+
+  <div class="scan-breakdown-grid">
+    <article class="scan-detail-card sf">
+      <span>SF Regular</span>
+      <strong id="detailSfRegular">0</strong>
+      <small>SF Scan &amp; Verify</small>
+    </article>
+
+    <article class="scan-detail-card sf">
+      <span>SF Lenses</span>
+      <strong id="detailSfLens">0</strong>
+      <small>SF Scan &amp; Verify Lenses</small>
+    </article>
+
+    <article class="scan-detail-card sf miss">
+      <span>SF Miss S&amp;V</span>
+      <strong id="detailSfMiss">0</strong>
+      <small>SF Miss S&amp;V</small>
+    </article>
+
+    <article class="scan-detail-card fsv">
+      <span>FSV Regular</span>
+      <strong id="detailFsvRegular">0</strong>
+      <small>FSV Scan &amp; Verify</small>
+    </article>
+
+    <article class="scan-detail-card fsv">
+      <span>FSV Lenses</span>
+      <strong id="detailFsvLens">0</strong>
+      <small>FSV Scan &amp; Verify Lenses</small>
+    </article>
+
+    <article class="scan-detail-card fsv miss">
+      <span>FSV Miss S&amp;V</span>
+      <strong id="detailFsvMiss">0</strong>
+      <small>FSV Miss S&amp;V</small>
+    </article>
+  </div>
+
+  <div class="scan-breakdown-subgrid">
+    <article class="exception-card frame-only breakdown-exception">
+      <div class="exception-icon">FO</div>
+      <div>
+        <span>Frame Only Flow</span>
+        <strong id="flowFrameOnlyWip">0</strong>
+        <small>Frame Only Scan &amp; Verify WIP</small>
+      </div>
+      <div class="exception-path">Frame-only route</div>
+    </article>
+
+    <article class="exception-card breakage-card breakdown-exception">
+      <div class="exception-icon">BR</div>
+      <div>
+        <span>Recovery Queue</span>
+        <strong id="flowBreakage">0</strong>
+        <small>Breakage to Picking</small>
+      </div>
+      <div class="exception-path">Picking recovery</div>
+    </article>
+
+    <article class="exception-card replenish-card breakdown-exception">
+      <div class="exception-icon">RP</div>
+      <div>
+        <span>Supply Recovery</span>
+        <strong id="flowReplenishment">0</strong>
+        <small>Replenishment</small>
+      </div>
+      <div class="exception-path">Supply recovery</div>
+    </article>
+  </div>
 </section>
 <section class="pick-flow-command">
 <div class="pick-flow-head">
@@ -333,35 +405,6 @@
 <em>Sent to Finish Unbox</em>
 </div>
 </div>
-</article>
-</div>
-<div class="exception-rail">
-<article class="exception-card frame-only">
-<div class="exception-icon">FO</div>
-<div>
-<span>Frame Only Flow</span>
-<strong id="flowFrameOnlyWip">0</strong>
-<small>Frame Only Scan &amp; Verify WIP</small>
-</div>
-<div class="exception-path">Frame-only route</div>
-</article>
-<article class="exception-card breakage-card">
-<div class="exception-icon">BR</div>
-<div>
-<span>Recovery Queue</span>
-<strong id="flowBreakage">0</strong>
-<small>Breakage to Picking</small>
-</div>
-<div class="exception-path">Picking recovery</div>
-</article>
-<article class="exception-card replenish-card">
-<div class="exception-icon">RP</div>
-<div>
-<span>Supply Recovery</span>
-<strong id="flowReplenishment">0</strong>
-<small>Replenishment</small>
-</div>
-<div class="exception-path">Supply recovery</div>
 </article>
 </div>
 </section>
@@ -840,6 +883,36 @@
 </main>
 </div>
 <div class="toast" id="toast">Connecting to live API...</div>
+<script>
+/* Loader dot shim — wires new status dots to existing loaderSetCheck() calls */
+(function() {
+  const DOT_MAP = {
+    'lc-api':      'lsdot-api',
+    'lc-wip':      'lsdot-wip',
+    'lc-movement': 'lsdot-movement',
+    'lc-stats':    'lsdot-stats'
+  };
+
+  // Observe class changes on hidden legacy rows and mirror to visible dots
+  function mirrorDots() {
+    Object.entries(DOT_MAP).forEach(([rowId, dotId]) => {
+      const row = document.getElementById(rowId);
+      const dot = document.getElementById(dotId);
+      if (!row || !dot) return;
+
+      const obs = new MutationObserver(() => {
+        const cls = row.className;
+        dot.className = 'ld-dot';
+        if (cls.includes('active')) dot.classList.add('active');
+        else if (cls.includes('done')) dot.classList.add('done');
+      });
+      obs.observe(row, { attributes: true, attributeFilter: ['class'] });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', mirrorDots);
+})();
+</script>
 <script src="Pickwip.js"></script>
 </body>
 </html>

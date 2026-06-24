@@ -54,6 +54,7 @@ let STATE = {
   dailyStats: {},
   activityByOperator: [],
   hourlyActivity: [],
+  activitySummary: {},
   manualCounts: {},
   dailyActivityCounts: {},
   snapshotRecordCounts: {},
@@ -62,6 +63,7 @@ let STATE = {
   totalPickingWip: 0,
   totalInventoryWip: 0,
   scanVerifyWip: 0,
+  scanVerifyBreakdown: {},
   demo: false
 };
 
@@ -76,6 +78,9 @@ let LAST_GOOD_PICKING_RECORD_COUNTS = {
   breakageCountToday: null,
   replenishmentCountToday: null
 };
+
+const PICKING_RECORD_COUNT_STORAGE_KEY = 'picking_last_good_record_counts_v2';
+loadLastGoodPickingRecordCounts_();
 
 let OP_STATION_VIEW = 'all';
 let OP_DETAIL_STATION = '';
@@ -622,6 +627,128 @@ async function apiFetch(debug = true) {
   }
 }
 
+
+function sleepPickingDashboard_(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchPickingPayloadWithRetry_(showToast = false) {
+  /*
+   * The Picking API sometimes returns while the snapshot / daily log is still
+   * finishing. Do not make supervisors refresh 5 times.
+   *
+   * Rule:
+   * - Fetch the Picking payload.
+   * - If the payload looks incomplete while WIP exists, wait briefly and retry.
+   * - Keep using debug=true + cache-buster from apiFetch() so we do not reuse
+   *   stale browser/API cache.
+   */
+  const maxAttempts = showToast ? 4 : 3;
+  let lastPayload = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    lastPayload = await apiFetch(true);
+
+    if (!lastPayload || lastPayload.status !== 'success') {
+      return lastPayload;
+    }
+
+    if (!isPickingPayloadProbablyIncomplete_(lastPayload)) {
+      if (attempt > 1) {
+        logError(
+          'info',
+          'Picking payload recovered',
+          `Loaded good payload after retry ${attempt}/${maxAttempts}.`,
+          'fetchPickingPayloadWithRetry_'
+        );
+      }
+
+      return lastPayload;
+    }
+
+    if (attempt < maxAttempts) {
+      loaderSetCursor(`Payload looked partial — retrying ${attempt}/${maxAttempts}`);
+      loaderAppendLog(' WAIT ', 'wait', `Partial payload detected. Retry ${attempt}/${maxAttempts}...`);
+      await sleepPickingDashboard_(700 + attempt * 450);
+    }
+  }
+
+  logError(
+    'warning',
+    'Partial Picking payload used',
+    'Retry limit reached. Rendering best payload received.',
+    'fetchPickingPayloadWithRetry_'
+  );
+
+  return lastPayload;
+}
+
+function isPickingPayloadProbablyIncomplete_(payload) {
+  if (!payload || payload.status !== 'success') return false;
+
+  const wip = normalizeWip(payload.wip || payload.data || []);
+  const daily = normalizeDailyStats(
+    payload.dailyStats || {},
+    payload.dailyActivityCounts || payload.snapshotRecordCounts || payload.recordCounts || {},
+    payload.manualCounts || {}
+  );
+
+  const totalWip = getSafePickingWipTotal_(payload, wip);
+  const hasLiveWip = totalWip > 0 || wip.length > 0;
+
+  if (!hasLiveWip) return false;
+
+  const sf = num(daily.sfProductivityToday);
+  const fsv = num(daily.fsvProductivityToday);
+  const frameOnly = num(daily.frameOnlyProductivityToday || daily.framePickingActivityToday);
+  const breakage = num(daily.breakageCountToday);
+  const replenishment = num(daily.replenishmentCountToday);
+
+  const sfWip = getWipFor('SF Scan & Verify', wip);
+  const fsvWip = getWipFor('FSV Scan & Verify', wip);
+  const frameOnlyWip = getWipFor('Frame Only Scan & Verify', wip);
+  const breakageWip = getWipFor('Breakage to Picking', wip);
+  const replenishmentWip = getWipFor('Replenishment', wip);
+
+  /*
+   * If live WIP exists but all productivity counters are zero, the API likely
+   * answered before activity/daily metrics were ready.
+   */
+  if ((sfWip > 0 || fsvWip > 0 || frameOnlyWip > 0) && sf === 0 && fsv === 0 && frameOnly === 0) {
+    return true;
+  }
+
+  /*
+   * Breakage/Replenishment are daily record counts.
+   * During auto-refresh, a partial backend payload can return both as 0 even
+   * though the current screen already has good counts. Treat that as incomplete
+   * and retry before rendering.
+   */
+  const previousBreakage = num(STATE?.dailyStats?.breakageCountToday);
+  const previousReplenishment = num(STATE?.dailyStats?.replenishmentCountToday);
+  const stickyBreakage = num(LAST_GOOD_PICKING_RECORD_COUNTS?.breakageCountToday);
+  const stickyReplenishment = num(LAST_GOOD_PICKING_RECORD_COUNTS?.replenishmentCountToday);
+
+  if (
+    (previousBreakage > 0 || previousReplenishment > 0 || stickyBreakage > 0 || stickyReplenishment > 0) &&
+    breakage === 0 &&
+    replenishment === 0
+  ) {
+    return true;
+  }
+
+  /*
+   * First-load protection when the related live WIP queues are active but daily
+   * record counters are missing.
+   */
+  if ((breakageWip > 0 || replenishmentWip > 0) && breakage === 0 && replenishment === 0) {
+    return true;
+  }
+
+  return false;
+}
+
+
 async function fetchAll(showToast = false) {
   /*
    * Loading should not clear the dashboard.
@@ -639,7 +766,7 @@ async function fetchAll(showToast = false) {
   loaderSetCursor('Querying picking floor data source');
 
   try {
-    const payload = await apiFetch(true);
+    const payload = await fetchPickingPayloadWithRetry_(showToast);
 
     if (payload.status !== 'success') {
       throw new Error(payload.message || 'API returned an error');
@@ -692,6 +819,7 @@ async function fetchAll(showToast = false) {
       dailyStats: nextDailyStats,
       activityByOperator: normalizeOperatorActivity(payload.activityByOperator || []),
       hourlyActivity: normalizeHourlyActivity(payload.hourlyActivity || []),
+      activitySummary: payload.activitySummary || {},
       manualCounts: payload.manualCounts || {},
       dailyActivityCounts: payload.dailyActivityCounts || payload.snapshotRecordCounts || payload.recordCounts || {},
       snapshotRecordCounts: payload.snapshotRecordCounts || payload.dailyActivityCounts || payload.recordCounts || {},
@@ -700,6 +828,7 @@ async function fetchAll(showToast = false) {
       totalPickingWip: getSafePickingWipTotal_(payload, nextWip),
       totalInventoryWip: getSafeInventoryWipTotal_(payload, nextWip),
       scanVerifyWip: getSafeScanVerifyWipTotal_(payload, nextWip),
+      scanVerifyBreakdown: payload.scanVerifyBreakdown || payload.activitySummary?.scanVerifyBreakdown || {},
       wipBreakdown: payload.wipBreakdown || {},
       demo: false
     };
@@ -712,12 +841,50 @@ async function fetchAll(showToast = false) {
     loaderAppendLog('  OK  ', 'ok', `Movement check — ${payload.movementStatus || 'NORMAL'}`);
 
     /*
+     * Final front-end safety:
+     * Auto-refresh must never overwrite good daily record counts with transient 0.
+     * This is the exact issue seen when the page is updating.
+     */
+    nextState.dailyStats = protectPickingRecordCountsAgainstRefreshZero_(
+      nextState.dailyStats,
+      payload
+    );
+
+    nextState.completion = normalizeCompletion(
+      payload.completion && payload.completion.length
+        ? payload.completion
+        : buildCompletionFromDailyStats(nextState.dailyStats)
+    );
+
+    nextState.recordCounts = Object.assign({}, nextState.recordCounts, {
+      breakageCountToday: nextState.dailyStats.breakageCountToday,
+      replenishmentCountToday: nextState.dailyStats.replenishmentCountToday
+    });
+
+    nextState.dailyActivityCounts = Object.assign({}, nextState.dailyActivityCounts, {
+      breakageCountToday: nextState.dailyStats.breakageCountToday,
+      replenishmentCountToday: nextState.dailyStats.replenishmentCountToday
+    });
+
+    nextState.snapshotRecordCounts = Object.assign({}, nextState.snapshotRecordCounts, {
+      breakageCountToday: nextState.dailyStats.breakageCountToday,
+      replenishmentCountToday: nextState.dailyStats.replenishmentCountToday
+    });
+
+    /*
      * Only now replace STATE and repaint the page.
      */
     STATE = nextState;
 
     setLiveState('ok', 'LIVE');
-    renderAll();
+
+    try {
+      renderAll();
+    } catch (renderErr) {
+      console.error(renderErr);
+      logError('error', 'Render Failed', renderErr.message || String(renderErr), 'renderAll');
+      toast('Data loaded, but one dashboard section failed to render.');
+    }
 
     // Loader: complete — dismiss after brief hold
     loaderSetBar(100, 'Picking dashboard online.');
@@ -880,58 +1047,59 @@ function normalizeDailyStats(stats, dailyActivityCounts = {}, manualCounts = {})
   const lensPicking = num(safeStats.lensPickingActivityToday);
 
   /*
-   * Record counts now come from PICKING_DAILY_ACTIVITY_LOG.
-   * Manual counts are only a fallback for old API payloads.
-   * Do not let a stale manual sheet override the new automatic log.
+   * Breakage / Replenishment are DAILY RECORD COUNTS.
+   * Never allow a partial API payload with 0 to beat:
+   *   1) a positive dailyActivityCounts value
+   *   2) a positive dailyStats value
+   *   3) a positive manual fallback
+   *   4) last good value kept in browser storage for the same day
    */
   const dailyBreakage = getNullableNumber_(safeDailyCounts.breakageCountToday);
   const dailyReplenishment = getNullableNumber_(safeDailyCounts.replenishmentCountToday);
+
   const statsBreakage = getNullableNumber_(
     safeStats.breakageCountToday ??
     safeStats.breakageRecordCountToday ??
     safeStats.breakageToPickingCountToday
   );
+
   const statsReplenishment = getNullableNumber_(
     safeStats.replenishmentCountToday ??
     safeStats.replenishmentRecordCountToday ??
     safeStats.replenishmentDropCountToday
   );
+
   const manualRecordCounts = getManualRecordCounts_(safeManual);
+  const stored = getStoredPickingRecordCountsForToday_();
 
-  /*
-   * Do NOT let an empty dailyActivityCounts payload overwrite good API stats.
-   * This is what was forcing Breakage Count and Replenishment Count to 0
-   * after the Picking dashboard loaded.
-   * Priority:
-   *   1) daily activity count when it is greater than 0
-   *   2) pickingDashboard dailyStats value
-   *   3) manual fallback
-   *   4) true zero only when every source is empty/zero
-   */
-  const breakage = dailyBreakage !== null && dailyBreakage > 0
-    ? dailyBreakage
-    : statsBreakage !== null
-      ? statsBreakage
-      : manualRecordCounts.breakageCountToday !== null
-        ? manualRecordCounts.breakageCountToday
-        : dailyBreakage !== null
-          ? dailyBreakage
-          : 0;
+  const breakage = firstPositiveNumber_(
+    dailyBreakage,
+    statsBreakage,
+    manualRecordCounts.breakageCountToday,
+    stored.breakageCountToday
+  ) ?? firstNumber_(
+    dailyBreakage,
+    statsBreakage,
+    manualRecordCounts.breakageCountToday,
+    stored.breakageCountToday
+  ) ?? 0;
 
-  const replenishment = dailyReplenishment !== null && dailyReplenishment > 0
-    ? dailyReplenishment
-    : statsReplenishment !== null
-      ? statsReplenishment
-      : manualRecordCounts.replenishmentCountToday !== null
-        ? manualRecordCounts.replenishmentCountToday
-        : dailyReplenishment !== null
-          ? dailyReplenishment
-          : 0;
+  const replenishment = firstPositiveNumber_(
+    dailyReplenishment,
+    statsReplenishment,
+    manualRecordCounts.replenishmentCountToday,
+    stored.replenishmentCountToday
+  ) ?? firstNumber_(
+    dailyReplenishment,
+    statsReplenishment,
+    manualRecordCounts.replenishmentCountToday,
+    stored.replenishmentCountToday
+  ) ?? 0;
 
   const totalProductivity = num(
     safeStats.totalProductivityToday ||
     (lensPicking + frameOnly) ||
-    (sf + fsv)
+    (sf + fsv + frameOnly)
   );
 
   const recordCountToday = num(
@@ -951,7 +1119,7 @@ function normalizeDailyStats(stats, dailyActivityCounts = {}, manualCounts = {})
     outOfFinishQueueDropToday: num(safeStats.outOfFinishQueueDropToday),
     framePickingActivityToday: frameOnly,
     lensFsvActivityToday: num(safeStats.lensFsvActivityToday),
-    lensPickingActivityToday: lensPicking || (sf + fsv - frameOnly),
+    lensPickingActivityToday: lensPicking || Math.max((sf + fsv + frameOnly) - frameOnly, 0),
 
     breakageCountToday: breakage,
     replenishmentCountToday: replenishment,
@@ -972,7 +1140,6 @@ function normalizeDailyStats(stats, dailyActivityCounts = {}, manualCounts = {})
   };
 }
 
-
 function protectPickingRecordCountsAgainstRefreshZero_(dailyStats, payload = {}) {
   const stats = Object.assign({}, dailyStats || {});
   const todayKey = getPickingLocalDateKey_();
@@ -985,21 +1152,27 @@ function protectPickingRecordCountsAgainstRefreshZero_(dailyStats, payload = {})
     };
   }
 
+  const stored = getStoredPickingRecordCountsForToday_();
+
   const currentBreakage = getNullableNumber_(stats.breakageCountToday);
   const currentReplenishment = getNullableNumber_(stats.replenishmentCountToday);
   const previousBreakage = getNullableNumber_(STATE?.dailyStats?.breakageCountToday);
   const previousReplenishment = getNullableNumber_(STATE?.dailyStats?.replenishmentCountToday);
   const stickyBreakage = getNullableNumber_(LAST_GOOD_PICKING_RECORD_COUNTS.breakageCountToday);
   const stickyReplenishment = getNullableNumber_(LAST_GOOD_PICKING_RECORD_COUNTS.replenishmentCountToday);
+  const storedBreakage = getNullableNumber_(stored.breakageCountToday);
+  const storedReplenishment = getNullableNumber_(stored.replenishmentCountToday);
 
   const bestBreakage = Math.max(
     stickyBreakage || 0,
-    previousBreakage || 0
+    previousBreakage || 0,
+    storedBreakage || 0
   );
 
   const bestReplenishment = Math.max(
     stickyReplenishment || 0,
-    previousReplenishment || 0
+    previousReplenishment || 0,
+    storedReplenishment || 0
   );
 
   const hasLivePayload = Array.isArray(payload.wip || payload.data)
@@ -1027,6 +1200,8 @@ function protectPickingRecordCountsAgainstRefreshZero_(dailyStats, payload = {})
       breakageCountToday: finalBreakage,
       replenishmentCountToday: finalReplenishment
     };
+
+    saveLastGoodPickingRecordCounts_();
   }
 
   stats.recordCountToday = num(
@@ -1035,6 +1210,69 @@ function protectPickingRecordCountsAgainstRefreshZero_(dailyStats, payload = {})
   );
 
   return stats;
+}
+
+function firstPositiveNumber_(...values) {
+  for (const value of values) {
+    const n = getNullableNumber_(value);
+    if (n !== null && n > 0) return n;
+  }
+  return null;
+}
+
+function firstNumber_(...values) {
+  for (const value of values) {
+    const n = getNullableNumber_(value);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+function loadLastGoodPickingRecordCounts_() {
+  try {
+    const raw = localStorage.getItem(PICKING_RECORD_COUNT_STORAGE_KEY);
+    if (!raw) return;
+
+    const parsed = JSON.parse(raw);
+    const todayKey = getPickingLocalDateKey_();
+
+    if (parsed && parsed.dateKey === todayKey) {
+      LAST_GOOD_PICKING_RECORD_COUNTS = {
+        dateKey: todayKey,
+        breakageCountToday: getNullableNumber_(parsed.breakageCountToday),
+        replenishmentCountToday: getNullableNumber_(parsed.replenishmentCountToday)
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to load last good Picking record counts.', err);
+  }
+}
+
+function saveLastGoodPickingRecordCounts_() {
+  try {
+    localStorage.setItem(
+      PICKING_RECORD_COUNT_STORAGE_KEY,
+      JSON.stringify(LAST_GOOD_PICKING_RECORD_COUNTS)
+    );
+  } catch (err) {
+    console.warn('Failed to save last good Picking record counts.', err);
+  }
+}
+
+function getStoredPickingRecordCountsForToday_() {
+  const todayKey = getPickingLocalDateKey_();
+
+  if (LAST_GOOD_PICKING_RECORD_COUNTS.dateKey === todayKey) {
+    return {
+      breakageCountToday: LAST_GOOD_PICKING_RECORD_COUNTS.breakageCountToday,
+      replenishmentCountToday: LAST_GOOD_PICKING_RECORD_COUNTS.replenishmentCountToday
+    };
+  }
+
+  return {
+    breakageCountToday: null,
+    replenishmentCountToday: null
+  };
 }
 
 function getPickingLocalDateKey_() {
@@ -1251,6 +1489,7 @@ function renderAll() {
   animateNumber('kpiBreakageCount', breakageCount);
   animateNumber('kpiReplenishmentCount', replenishmentCount);
   renderWipSplitCards();
+  renderScanVerifyBreakdown();
   renderCommandHeroMetrics(wip, daily, latest);
 
   const trendInfo = getOverallTrend();
@@ -1278,6 +1517,97 @@ function renderWipSplitCards() {
   animateNumber('kpiPickingWipSplit', pickingWip);
   animateNumber('kpiInventoryWip', inventoryWip);
   animateNumber('kpiScanVerifyWip', scanVerifyWip);
+}
+
+
+function renderScanVerifyBreakdown() {
+  const breakdown = getScanVerifyActivityBreakdown_();
+
+  animateNumber('detailSfRegular', breakdown.sfRegular);
+  animateNumber('detailSfLens', breakdown.sfLens);
+  animateNumber('detailSfMiss', breakdown.sfMiss);
+
+  animateNumber('detailFsvRegular', breakdown.fsvRegular);
+  animateNumber('detailFsvLens', breakdown.fsvLens);
+  animateNumber('detailFsvMiss', breakdown.fsvMiss);
+}
+
+
+function getScanVerifyActivityBreakdown_() {
+  const direct = STATE.scanVerifyBreakdown || {};
+  const summary = STATE.activitySummary || {};
+
+  const fromApi = {
+    sfRegular: num(direct.sfRegular ?? summary.sfRegularActivity),
+    sfLens: num(direct.sfLens ?? summary.sfLensActivity),
+    sfMiss: num(direct.sfMiss ?? summary.sfMissActivity),
+    fsvRegular: num(direct.fsvRegular ?? summary.fsvRegularActivity),
+    fsvLens: num(direct.fsvLens ?? summary.fsvLensActivity),
+    fsvMiss: num(direct.fsvMiss ?? summary.fsvMissActivity)
+  };
+
+  const apiTotal =
+    fromApi.sfRegular +
+    fromApi.sfLens +
+    fromApi.sfMiss +
+    fromApi.fsvRegular +
+    fromApi.fsvLens +
+    fromApi.fsvMiss;
+
+  if (apiTotal > 0) {
+    return fromApi;
+  }
+
+  /*
+    Fallback only. Older API builds collapse activityByOperator rows into
+    parent SF/FSV buckets, so this cannot always split Lenses/Miss correctly.
+    The updated API sends scanVerifyBreakdown and should be the source of truth.
+  */
+  const rows = Array.isArray(STATE.activityByOperator) ? STATE.activityByOperator : [];
+
+  const result = {
+    sfRegular: 0,
+    sfLens: 0,
+    sfMiss: 0,
+    fsvRegular: 0,
+    fsvLens: 0,
+    fsvMiss: 0
+  };
+
+  rows.forEach(row => {
+    const accessPoint = normalizeScanVerifyBreakdownKey_(
+      row.accessPoint ||
+      row.AccessPoint ||
+      row.rawFlowStation ||
+      row.flowStation ||
+      ''
+    );
+
+    const total = num(row.hourlyTotal ?? row.total ?? row.HourlyTotal ?? row.Total);
+
+    if (!total) return;
+
+    if (accessPoint === 'SF SCAN AND VERIFY') result.sfRegular += total;
+    if (accessPoint === 'SF SCAN AND VERIFY LENSES') result.sfLens += total;
+    if (accessPoint === 'SF MISS SANDV') result.sfMiss += total;
+
+    if (accessPoint === 'FSV SCAN AND VERIFY') result.fsvRegular += total;
+    if (accessPoint === 'FSV SCAN AND VERIFY LENSES') result.fsvLens += total;
+    if (accessPoint === 'FSV MISS SANDV') result.fsvMiss += total;
+  });
+
+  return result;
+}
+
+
+function normalizeScanVerifyBreakdownKey_(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function renderCommandHeroMetrics(wip, daily, latest) {
@@ -3012,13 +3342,77 @@ function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProducti
     minute: '2-digit'
   });
 
-  const otherQueues = STATE.wip
-    .filter(r => !TRACKED.includes(r.picking) && r.total > 0)
+  const activeQueues = (STATE.wip || [])
+    .filter(r => Number(r.total || 0) > 0)
+    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
+
+  const otherQueues = activeQueues
+    .filter(r => !TRACKED.includes(r.picking))
     .sort((a, b) => b.total - a.total);
 
   const otherHighlight = otherQueues
-    .slice(0, 3)
-    .map(r => `<span class="narr-tag orange">${escHtml(r.picking)}: ${r.total.toLocaleString()}</span>`)
+    .slice(0, 5)
+    .map(r => `<span class="narr-tag orange">${escHtml(r.picking)}: ${Number(r.total || 0).toLocaleString()}</span>`)
+    .join(' ');
+
+  const bd = getScanVerifyActivityBreakdown_();
+
+  const sfBreakdownTotal = bd.sfRegular + bd.sfLens + bd.sfMiss;
+  const fsvBreakdownTotal = bd.fsvRegular + bd.fsvLens + bd.fsvMiss;
+  const missedScanVerify = bd.sfMiss + bd.fsvMiss;
+  const scanVerifyBreakdownTotal = sfBreakdownTotal + fsvBreakdownTotal;
+
+  const sfMissPct = pctOf(bd.sfMiss, sfBreakdownTotal);
+  const fsvMissPct = pctOf(bd.fsvMiss, fsvBreakdownTotal);
+  const totalMissPct = pctOf(missedScanVerify, scanVerifyBreakdownTotal);
+
+  const sfWip = getWipFor('SF Scan & Verify', STATE.wip || []);
+  const fsvWip = getWipFor('FSV Scan & Verify', STATE.wip || []);
+  const frameOnlyWip = getWipFor('Frame Only Scan & Verify', STATE.wip || []);
+  const brkWip = getWipFor('Breakage to Picking', STATE.wip || []);
+  const repWip = getWipFor('Replenishment', STATE.wip || []);
+
+  const movementRows = Array.isArray(STATE.movement) ? STATE.movement : [];
+  const gains = movementRows.filter(r => Number(r.difference || 0) > 0);
+  const drops = movementRows.filter(r => Number(r.difference || 0) < 0);
+  const biggestGain = gains.sort((a, b) => Number(b.difference || 0) - Number(a.difference || 0))[0];
+  const biggestDrop = drops.sort((a, b) => Number(a.difference || 0) - Number(b.difference || 0))[0];
+
+  const critical = buildPickingCriticalAnalysis_({
+    totalWip,
+    activeQueueCount: activeQueues.length,
+    sf,
+    fsv,
+    frame,
+    brk,
+    rep,
+    totalProductivity,
+    sfWip,
+    fsvWip,
+    frameOnlyWip,
+    brkWip,
+    repWip,
+    missedScanVerify,
+    totalMissPct,
+    sfMissPct,
+    fsvMissPct,
+    otherQueues,
+    movementStatus: STATE.movementStatus,
+    movementMessage: STATE.movementMessage
+  });
+
+  const actionItemsHtml = critical.actions.map(action => `
+    <br><span class="narr-tag ${action.cls}">${escHtml(action.label)}</span>
+    ${escHtml(action.text)}
+  `).join('');
+
+  const queueExposureHtml = activeQueues
+    .slice(0, 7)
+    .map(r => {
+      const pct = pctOf(Number(r.total || 0), totalWip);
+      const cls = TRACKED.includes(r.picking) ? 'cyan' : 'orange';
+      return `<span class="narr-tag ${cls}">${escHtml(r.picking)}: ${Number(r.total || 0).toLocaleString()} / ${pct}%</span>`;
+    })
     .join(' ');
 
   narrativeEl.innerHTML = `
@@ -3027,13 +3421,67 @@ function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProducti
     </div>
 
     <div class="narr-block">
+      <div class="narr-section-title">Critical Analysis</div>
+      <p class="narr-text">
+        Current risk level is
+        <span class="narr-tag ${critical.riskClass}">${escHtml(critical.riskLevel)}</span>.
+        ${escHtml(critical.summary)}
+        ${actionItemsHtml || '<br><span class="narr-tag green">CONTROLLED</span> No immediate escalation trigger found from the available data.'}
+      </p>
+    </div>
+
+    <div class="narr-block">
       <div class="narr-section-title">Overall Status</div>
       <p class="narr-text">
         As of <strong>${timeNow}</strong>, total picking WIP stands at
-        <span class="narr-num cyan">${totalWip.toLocaleString()}</span> items across
-        <span class="narr-num">${STATE.wip.filter(r => r.total > 0).length}</span> active queues.
+        <span class="narr-num cyan">${Number(totalWip || 0).toLocaleString()}</span> items across
+        <span class="narr-num">${activeQueues.length}</span> active queues.
         SF + FSV + Frame Only productive movement today is
-        <span class="narr-num green">${totalProductivity.toLocaleString()}</span>.
+        <span class="narr-num green">${Number(totalProductivity || 0).toLocaleString()}</span>.
+      </p>
+    </div>
+
+    <div class="narr-block">
+      <div class="narr-section-title">Missed Scan Verify Breakdown</div>
+      <p class="narr-text">
+        Total missed Scan & Verify volume is
+        <span class="narr-num red">${missedScanVerify.toLocaleString()}</span>
+        out of
+        <span class="narr-num">${scanVerifyBreakdownTotal.toLocaleString()}</span>
+        detailed Scan & Verify jobs
+        <span class="narr-tag ${missedScanVerify > 0 ? 'red' : 'green'}">${totalMissPct}% Miss Rate</span>.
+        <br>
+        SF Miss S&V:
+        <span class="narr-num cyan">${bd.sfMiss.toLocaleString()}</span>
+        <span class="narr-tag ${bd.sfMiss > 0 ? 'red' : 'green'}">${sfMissPct}% of SF detail</span>
+        · FSV Miss S&V:
+        <span class="narr-num orange">${bd.fsvMiss.toLocaleString()}</span>
+        <span class="narr-tag ${bd.fsvMiss > 0 ? 'red' : 'green'}">${fsvMissPct}% of FSV detail</span>
+      </p>
+    </div>
+
+    <div class="narr-block">
+      <div class="narr-section-title">Scan Verify Detail</div>
+      <p class="narr-text">
+        SF Regular:
+        <span class="narr-num cyan">${bd.sfRegular.toLocaleString()}</span>
+        <span class="narr-tag cyan">Surface S&V</span>
+        · SF Lenses:
+        <span class="narr-num cyan">${bd.sfLens.toLocaleString()}</span>
+        <span class="narr-tag cyan">Surface Lens S&V</span>
+        · SF Miss:
+        <span class="narr-num red">${bd.sfMiss.toLocaleString()}</span>
+        <span class="narr-tag red">Missed Surface S&V</span>
+        <br>
+        FSV Regular:
+        <span class="narr-num orange">${bd.fsvRegular.toLocaleString()}</span>
+        <span class="narr-tag orange">Finish S&V</span>
+        · FSV Lenses:
+        <span class="narr-num orange">${bd.fsvLens.toLocaleString()}</span>
+        <span class="narr-tag orange">Finish Lens S&V</span>
+        · FSV Miss:
+        <span class="narr-num red">${bd.fsvMiss.toLocaleString()}</span>
+        <span class="narr-tag red">Missed Finish S&V</span>
       </p>
     </div>
 
@@ -3041,12 +3489,22 @@ function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProducti
       <div class="narr-section-title">Productivity Counts</div>
       <p class="narr-text">
         SF Productive Today:
-        <span class="narr-num cyan">${sf.toLocaleString()}</span>
+        <span class="narr-num cyan">${Number(sf || 0).toLocaleString()}</span>
         <span class="narr-tag cyan">Surface Unbox</span>
+        · Current SF S&V WIP:
+        <span class="narr-num cyan">${sfWip.toLocaleString()}</span>
         <br>
         FSV Productive Today:
-        <span class="narr-num orange">${fsv.toLocaleString()}</span>
+        <span class="narr-num orange">${Number(fsv || 0).toLocaleString()}</span>
         <span class="narr-tag orange">Finish Unbox</span>
+        · Current FSV S&V WIP:
+        <span class="narr-num orange">${fsvWip.toLocaleString()}</span>
+        <br>
+        Frame Only Productive Today:
+        <span class="narr-num yellow">${Number(frame || 0).toLocaleString()}</span>
+        <span class="narr-tag yellow">Frame Only S&V</span>
+        · Current Frame Only WIP:
+        <span class="narr-num yellow">${frameOnlyWip.toLocaleString()}</span>
       </p>
     </div>
 
@@ -3054,12 +3512,16 @@ function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProducti
       <div class="narr-section-title">Record Counts</div>
       <p class="narr-text">
         Breakage Count Today:
-        <span class="narr-num orange">${brk.toLocaleString()}</span>
+        <span class="narr-num orange">${Number(brk || 0).toLocaleString()}</span>
         <span class="narr-tag orange">Drop from Breakage to Picking</span>
+        · Current Breakage WIP:
+        <span class="narr-num orange">${brkWip.toLocaleString()}</span>
         <br>
         Replenishment Count Today:
-        <span class="narr-num cyan">${rep.toLocaleString()}</span>
+        <span class="narr-num cyan">${Number(rep || 0).toLocaleString()}</span>
         <span class="narr-tag cyan">Drop from Replenishment</span>
+        · Current Replenishment WIP:
+        <span class="narr-num cyan">${repWip.toLocaleString()}</span>
       </p>
     </div>
 
@@ -3067,6 +3529,15 @@ function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProducti
       <div class="narr-section-title">Movement Check</div>
       <p class="narr-text">
         ${escHtml(STATE.movementMessage || 'Normal WIP movement.')}
+        ${biggestGain ? `<br>Largest gain: <span class="narr-tag green">${escHtml(biggestGain.subDepartment)} +${Number(biggestGain.difference || 0).toLocaleString()}</span>` : ''}
+        ${biggestDrop ? `<br>Largest drop: <span class="narr-tag orange">${escHtml(biggestDrop.subDepartment)} ${Number(biggestDrop.difference || 0).toLocaleString()}</span>` : ''}
+      </p>
+    </div>
+
+    <div class="narr-block">
+      <div class="narr-section-title">Queue Exposure</div>
+      <p class="narr-text">
+        ${queueExposureHtml || 'No active WIP queues loaded.'}
       </p>
     </div>
 
@@ -3076,7 +3547,7 @@ function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProducti
         <p class="narr-text">
           ${otherQueues.length} additional queue${otherQueues.length > 1 ? 's' : ''} currently active:
           ${otherHighlight}
-          ${otherQueues.length > 3 ? `<span class="narr-tag gray">+${otherQueues.length - 3} more</span>` : ''}
+          ${otherQueues.length > 5 ? `<span class="narr-tag gray">+${otherQueues.length - 5} more</span>` : ''}
         </p>
       </div>
     ` : ''}
@@ -3087,6 +3558,120 @@ function renderNarrativeReport(totalWip, sf, fsv, frame, brk, rep, totalProducti
     </div>
   `;
 }
+
+function pctOf(value, total) {
+  const n = Number(value || 0);
+  const d = Number(total || 0);
+  if (!d) return '0.0';
+  return ((n / d) * 100).toFixed(1);
+}
+
+function buildPickingCriticalAnalysis_(input) {
+  const actions = [];
+  let score = 0;
+
+  const missed = Number(input.missedScanVerify || 0);
+  const missPct = Number(input.totalMissPct || 0);
+  const totalWip = Number(input.totalWip || 0);
+  const activeQueueCount = Number(input.activeQueueCount || 0);
+  const brkWip = Number(input.brkWip || 0);
+  const repWip = Number(input.repWip || 0);
+  const sfWip = Number(input.sfWip || 0);
+  const fsvWip = Number(input.fsvWip || 0);
+  const frameOnlyWip = Number(input.frameOnlyWip || 0);
+  const totalProductivity = Number(input.totalProductivity || 0);
+
+  if (missed > 0) {
+    score += missPct >= 5 ? 3 : 2;
+    actions.push({
+      cls: missPct >= 5 ? 'red' : 'orange',
+      label: 'MISS S&V',
+      text: `${missed.toLocaleString()} missed Scan & Verify jobs found (${missPct.toFixed(1)}%). Audit the Miss S&V access points before calling the day clean.`
+    });
+  }
+
+  if (brkWip > 0) {
+    score += brkWip >= 50 ? 3 : 1;
+    actions.push({
+      cls: brkWip >= 50 ? 'red' : 'orange',
+      label: 'BREAKAGE WIP',
+      text: `${brkWip.toLocaleString()} jobs still sitting in Breakage to Picking. Clear this before it rolls into tomorrow's picking load.`
+    });
+  }
+
+  if (repWip > 0) {
+    score += repWip >= 25 ? 2 : 1;
+    actions.push({
+      cls: repWip >= 25 ? 'orange' : 'cyan',
+      label: 'REPLENISHMENT',
+      text: `${repWip.toLocaleString()} replenishment jobs remain open. Confirm the drop was processed and not only counted.`
+    });
+  }
+
+  if (totalWip > 0 && totalProductivity > 0) {
+    const wipVsOutput = totalWip / totalProductivity;
+    if (wipVsOutput >= 0.10) {
+      score += 1;
+      actions.push({
+        cls: 'orange',
+        label: 'WIP RATIO',
+        text: `Current WIP is ${(wipVsOutput * 100).toFixed(1)}% of today's productive movement. Watch this if the floor is close to EOS.`
+      });
+    }
+  }
+
+  if (activeQueueCount >= 7) {
+    score += 1;
+    actions.push({
+      cls: 'yellow',
+      label: 'QUEUE SPREAD',
+      text: `${activeQueueCount} active queues are open. This is manageable only if ownership is assigned by queue, not by general floor coverage.`
+    });
+  }
+
+  if (String(input.movementStatus || '').toUpperCase().includes('WARNING')) {
+    score += 3;
+    actions.push({
+      cls: 'red',
+      label: 'MOVEMENT REVIEW',
+      text: input.movementMessage || 'Movement status is warning. Snapshot movement needs review.'
+    });
+  }
+
+  const primaryPressure = [
+    { name: 'SF S&V', value: sfWip },
+    { name: 'FSV S&V', value: fsvWip },
+    { name: 'Frame Only', value: frameOnlyWip },
+    { name: 'Breakage', value: brkWip },
+    { name: 'Replenishment', value: repWip }
+  ].sort((a, b) => b.value - a.value)[0];
+
+  let riskLevel = 'CONTROLLED';
+  let riskClass = 'green';
+
+  if (score >= 6) {
+    riskLevel = 'CRITICAL';
+    riskClass = 'red';
+  } else if (score >= 3) {
+    riskLevel = 'WATCH';
+    riskClass = 'orange';
+  } else if (score >= 1) {
+    riskLevel = 'MONITOR';
+    riskClass = 'yellow';
+  }
+
+  const summary = primaryPressure && primaryPressure.value > 0
+    ? `Main pressure point is ${primaryPressure.name} with ${primaryPressure.value.toLocaleString()} items.`
+    : 'No single pressure queue is dominating the report.';
+
+  return {
+    riskLevel,
+    riskClass,
+    summary,
+    actions
+  };
+}
+
 
 /* ──────────────────────────────────────────────────
    Helpers
