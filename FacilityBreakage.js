@@ -848,44 +848,108 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
       };
 
       const renderByReason = () => {
-        // Group by reason across all operators
+        // Group by reason across all operators.
+        // Critical fix:
+        // F-Frame Breakage stores the real broken quantity in frames, not lenses.
+        // The old render used r.lenses/op.lenses only, so frame reasons displayed as 0.
         const byReason = {};
+
         operators.forEach(op => {
-          const total = op.total ?? ((op.lensTotal||0)+(op.frameTotal||0));
-          if (total === 0 && !(op.reasons||[]).length) return;
-          (op.reasons||[]).forEach(r => {
-            if (!byReason[r.reason]) byReason[r.reason] = { reason: r.reason, lenses: 0, frames: 0, ops: [] };
-            byReason[r.reason].lenses += r.lenses;
-            byReason[r.reason].frames += r.frames;
-            byReason[r.reason].ops.push({ name: op.operator||'NONE', lenses: r.lenses, frames: r.frames });
+          const total = op.total ?? ((op.lensTotal || 0) + (op.frameTotal || 0));
+          if (total === 0 && !(op.reasons || []).length) return;
+
+          (op.reasons || []).forEach(r => {
+            const reasonName = r.reason || 'NO REASON';
+            const lenses = Number(r.lenses || 0);
+            const frames = Number(r.frames || 0);
+
+            if (!byReason[reasonName]) {
+              byReason[reasonName] = {
+                reason: reasonName,
+                lenses: 0,
+                frames: 0,
+                ops: []
+              };
+            }
+
+            byReason[reasonName].lenses += lenses;
+            byReason[reasonName].frames += frames;
+            byReason[reasonName].ops.push({
+              name: op.operator || 'NONE',
+              lenses,
+              frames
+            });
           });
         });
-        const sortedR = Object.values(byReason).sort((a,b)=>(b.lenses+b.frames)-(a.lenses+a.frames));
-        const maxR    = sortedR[0] ? sortedR[0].lenses + sortedR[0].frames : 1;
-        const uid     = tabId + 'r';
+
+        const getReasonDisplayTotal = r => {
+          const reasonText = String(r.reason || '').toUpperCase();
+          const lenses = Number(r.lenses || 0);
+          const frames = Number(r.frames || 0);
+
+          // Frame reason must show frame quantity even when lenses are 0.
+          if (reasonText.includes('FRAME')) return frames;
+
+          // Keep normal lens reasons behaving the same, with a safe fallback.
+          return lenses || frames || 0;
+        };
+
+        const getOpDisplayTotal = (reason, op) => {
+          const reasonText = String(reason || '').toUpperCase();
+          const lenses = Number(op.lenses || 0);
+          const frames = Number(op.frames || 0);
+
+          if (reasonText.includes('FRAME')) return frames;
+
+          return lenses || frames || 0;
+        };
+
+        const sortedR = Object.values(byReason)
+          .filter(r => (Number(r.lenses || 0) + Number(r.frames || 0)) > 0)
+          .sort((a, b) => getReasonDisplayTotal(b) - getReasonDisplayTotal(a));
+
+        const maxR = sortedR[0] ? getReasonDisplayTotal(sortedR[0]) : 1;
+        const uid  = tabId + 'r';
+
         return `
           <div class="op-collapse-list">
             ${sortedR.map((r, idx) => {
               const detailId = `op-detail-${uid}-${idx}`;
               const headerId = `op-header-${uid}-${idx}`;
-              const total    = r.lenses + r.frames;
+              const displayTotal = getReasonDisplayTotal(r);
+              const reasonText = String(r.reason || '').toUpperCase();
+              const isFrameReason = reasonText.includes('FRAME');
+
+              const sortedOps = r.ops
+                .filter(op => getOpDisplayTotal(r.reason, op) > 0)
+                .sort((a, b) => getOpDisplayTotal(r.reason, b) - getOpDisplayTotal(r.reason, a));
+
               return `
                 <div class="op-group-header" id="${headerId}" onclick="toggleOperator('${detailId}','${headerId}')">
                   <svg class="op-header-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                   <div class="op-header-name" style="color:${color}">${r.reason}</div>
-                  <div class="op-header-meta"><span>${r.ops.length} ${colLabel.toLowerCase()}${r.ops.length!==1?'s':''}</span></div>
-                  <div class="op-header-total" style="color:${color}">${r.lenses}</div>
+                  <div class="op-header-meta">
+                    <span>${sortedOps.length} ${colLabel.toLowerCase()}${sortedOps.length !== 1 ? 's' : ''}</span>
+                    ${isFrameReason && r.frames > 0 ? `<span style="color:var(--amber)">${r.frames}f</span>` : ''}
+                  </div>
+                  <div class="op-header-total" style="color:${color}">${displayTotal}</div>
                 </div>
                 <div class="op-reasons-detail" id="${detailId}">
                   <div class="op-reasons-inner">
-                    ${r.ops.sort((a,b)=>(b.lenses+b.frames)-(a.lenses+a.frames)).map(op => `
-                      <div class="op-reason-row">
-                        <span class="op-reason-tag">${op.name==='NONE'?'⚠ Unassigned':op.name}</span>
-                        <span class="op-reason-bar-wrap">
-                          <span class="op-reason-bar" style="width:${Math.round((op.lenses/total)*100)}%;background:${color}60"></span>
-                        </span>
-                        <span class="op-reason-num" style="color:${color}">${op.lenses}</span>
-                      </div>`).join('')}
+                    ${sortedOps.length ? sortedOps.map(op => {
+                      const opDisplayTotal = getOpDisplayTotal(r.reason, op);
+                      const width = displayTotal > 0 ? Math.round((opDisplayTotal / displayTotal) * 100) : 0;
+
+                      return `
+                        <div class="op-reason-row">
+                          <span class="op-reason-tag">${op.name === 'NONE' ? '⚠ Unassigned' : op.name}</span>
+                          <span class="op-reason-bar-wrap">
+                            <span class="op-reason-bar" style="width:${width}%;background:${color}60"></span>
+                          </span>
+                          <span class="op-reason-num" style="color:${color}">${opDisplayTotal}</span>
+                          ${isFrameReason && op.frames > 0 ? `<span class="op-reason-frames">${op.frames}f</span>` : ''}
+                        </div>`;
+                    }).join('') : '<div class="op-reason-row"><span class="op-reason-tag" style="color:var(--muted)">No operator data</span></div>'}
                   </div>
                 </div>`;
             }).join('')}
