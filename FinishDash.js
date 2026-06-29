@@ -14,6 +14,260 @@ const FINISH_PERSONAL_PROFILE_META_BASE_KEY = "finishPersonalOperatorProfileMeta
 const FINISH_CAPACITY_CONFIG_KEY = "finishCapacityConfig";
 
 
+/*******************************************************
+ * FINISH WEBPAGE HIDE CONTROLS
+ * JS-only visual hide. Sheet/API data stays untouched.
+ *******************************************************/
+const FINISH_WEBPAGE_HIDE_OPERATORS = new Set([
+  "CYNTHIA FORBES",
+  "BRIAN HONICKER",
+  "CALEB DAY",
+  "MARIA MITCHELL",
+  "OHIOUSER3",
+  "OHIOUSER5",
+  "SARAH MCCARTNEY",
+  "ESTENFANIA MONTENEGRO",
+  "CARLY WOOD",
+  "PRINCESS HENRY"
+]);
+
+const FINISH_LMS_HIDE_AREAS = new Set([
+  "UTILITY",
+  "MEI LINE B",
+  "MEI LINE C",
+  "MEI EASY FIT",
+  "MEI"
+]);
+
+function normalizeFinishHiddenOperatorName_(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function shouldHideFinishOperatorOnWebpage(name) {
+  const clean = normalizeFinishHiddenOperatorName_(name);
+
+  return (
+    FINISH_WEBPAGE_HIDE_OPERATORS.has(clean) ||
+    clean === "MEI" ||
+    clean.startsWith("MEI ") ||
+    clean.startsWith("MEI0") ||
+    clean.startsWith("MEI-")
+  );
+}
+
+function getFinishOperatorNameFromAnyRow_(row) {
+  if (!row || typeof row !== "object") return "";
+
+  return (
+    row.OperatorName ||
+    row.operatorName ||
+    row.Operator ||
+    row.operator ||
+    row.Associate ||
+    row.associate ||
+    row.Name ||
+    row.name ||
+    row.EmployeeName ||
+    row.employeeName ||
+    ""
+  );
+}
+
+function filterHiddenFinishOperators(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.filter(row => {
+    const name = getFinishOperatorNameFromAnyRow_(row);
+    return !shouldHideFinishOperatorOnWebpage(name);
+  });
+}
+
+function normalizeFinishLmsArea_(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function shouldHideFinishLmsArea_(value) {
+  return FINISH_LMS_HIDE_AREAS.has(normalizeFinishLmsArea_(value));
+}
+
+function getFinishAreaFromAnyRow_(row) {
+  if (!row || typeof row !== "object") return "";
+
+  return (
+    row.defaultArea ||
+    row.DefaultArea ||
+    row.Area ||
+    row.area ||
+    row.DefaultRole ||
+    row.defaultRole ||
+    row.Role ||
+    row.role ||
+    row.FlowStation ||
+    row.flowStation ||
+    row.Station ||
+    row.station ||
+    row.lastFlowStation ||
+    row.LastFlowStation ||
+    row.lastAccessPoint ||
+    row.LastAccessPoint ||
+    row.accessPoint ||
+    row.AccessPoint ||
+    ""
+  );
+}
+
+function filterFinishLmsVisibleRows_(rows) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.filter(row => {
+    const area = getFinishAreaFromAnyRow_(row);
+    const operatorName = getFinishOperatorNameFromAnyRow_(row);
+
+    return (
+      !shouldHideFinishLmsArea_(area) &&
+      !shouldHideFinishLmsArea_(operatorName) &&
+      !shouldHideFinishOperatorOnWebpage(operatorName)
+    );
+  });
+}
+
+function filterFinishWebpageRows_(rows) {
+  return filterFinishLmsVisibleRows_(filterHiddenFinishOperators(rows));
+}
+
+
+function normalizeFinishAssignmentStatusForUi_(row) {
+  if (!row || typeof row !== "object") return "Unassigned";
+
+  const activeStatus = String(row.activeStatus || row.ActiveStatus || "").trim();
+  const roleType = String(row.roleType || row.RoleType || row.role || row.Role || "").trim();
+  const defaultArea = String(row.defaultArea || row.DefaultArea || row.area || row.Area || "").trim();
+  const defaultPosition = String(row.defaultPosition || row.DefaultPosition || row.position || row.Position || "").trim();
+  const defaultLine = String(row.defaultLine || row.DefaultLine || row.line || row.Line || "").trim();
+  const shiftType = String(row.shiftType || row.ShiftType || row.shift || row.Shift || "").trim();
+
+  const removed = activeStatus.toLowerCase() === "removed" || activeStatus.toLowerCase() === "inactive";
+  if (removed) return "Unassigned";
+
+  const hasAssignment =
+    row.isSaved === true ||
+    row.saved === true ||
+    !!row.assignmentKey ||
+    !!row.AssignmentKey ||
+    !!shiftType ||
+    !!defaultArea ||
+    !!defaultPosition ||
+    !!defaultLine ||
+    (roleType && roleType.toLowerCase() !== "unassigned") ||
+    (activeStatus && activeStatus.toLowerCase() === "active");
+
+  return hasAssignment ? "Active" : "Unassigned";
+}
+
+function normalizeFinishRoleStatusForUi_(row) {
+  if (!row || typeof row !== "object") return "Unassigned";
+
+  const roleType = String(row.roleType || row.RoleType || row.role || row.Role || "").trim();
+  const activeStatus = String(row.activeStatus || row.ActiveStatus || "").trim();
+
+  if (roleType) {
+    const upper = roleType.toUpperCase();
+    if (upper === "TQ") return "Certified";
+    if (upper === "TRAINING") return "Training";
+    if (upper === "CERTIFIED") return "Certified";
+    if (upper !== "UNASSIGNED") return roleType;
+  }
+
+  if (normalizeFinishAssignmentStatusForUi_(row) === "Active") {
+    return activeStatus && activeStatus.toLowerCase() !== "unassigned" ? activeStatus : "Certified";
+  }
+
+  return "Unassigned";
+}
+
+function isFinishRosterRowAssignedForUi_(row) {
+  return normalizeFinishAssignmentStatusForUi_(row) === "Active";
+}
+
+function normalizeFinishRosterShiftDropdown_() {
+  const shiftSelect = document.getElementById("finishRosterShiftSelect");
+  if (!shiftSelect) return;
+
+  Array.from(shiftSelect.options || []).forEach(option => {
+    const text = String(option.textContent || "").trim().toLowerCase();
+    const value = String(option.value || "").trim().toLowerCase();
+
+    if (text === "all floor operators" || value === "all floor operators") {
+      option.textContent = "All Shifts";
+      option.value = "all";
+    }
+  });
+
+  if (!Array.from(shiftSelect.options || []).some(option => String(option.value || "").toLowerCase() === "all")) {
+    const option = document.createElement("option");
+    option.value = "all";
+    option.textContent = "All Shifts";
+    shiftSelect.appendChild(option);
+  }
+}
+
+function cleanFinishLmsDropdownOptions_() {
+  const selectors = [
+    "#finishRosterAreaFilter",
+    "#finishRosterDetailArea",
+    "[data-content='lms-control'] select",
+    ".lms-control-center select",
+    "#lmsControlCenter select"
+  ];
+
+  const selects = document.querySelectorAll(selectors.join(","));
+
+  selects.forEach(select => {
+    Array.from(select.options || []).forEach(option => {
+      const text = option.textContent || option.value || "";
+      const value = option.value || text;
+
+      if (shouldHideFinishLmsArea_(text) || shouldHideFinishLmsArea_(value)) {
+        option.remove();
+      }
+    });
+
+    const selected = select.selectedOptions && select.selectedOptions[0];
+    if (selected && (shouldHideFinishLmsArea_(selected.textContent) || shouldHideFinishLmsArea_(selected.value))) {
+      select.selectedIndex = 0;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+}
+
+function initFinishLmsHideAreaObserver_() {
+  normalizeFinishRosterShiftDropdown_();
+  applyFinishEditingProfileVisibility();
+  cleanFinishLmsDropdownOptions_();
+
+  const target = document.querySelector("[data-content='lms-control']") || document.body;
+  if (!target || target.__finishLmsHideAreaObserverAttached) return;
+
+  target.__finishLmsHideAreaObserverAttached = true;
+
+  const observer = new MutationObserver(() => {
+    cleanFinishLmsDropdownOptions_();
+  });
+
+  observer.observe(target, {
+    childList: true,
+    subtree: true
+  });
+}
+
+
+
 /* Login-sheet fallback overrides for testing/personal profile resolution.
    This is still local JS only. It does not save globally.
    Add more users here only if their login page is not saving Role/Username correctly. */
@@ -123,6 +377,7 @@ function applyFinishLoginOverride(profile) {
 
 const FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK = role => {
   const value = String(role || "").trim().toLowerCase();
+
   return (
     value === "lms" ||
     value.includes("director") ||
@@ -500,7 +755,44 @@ const FINISH_MORNING_SETUP_EDIT_USERS = new Set([
   "BLOPEZ"
 ]);
 
-const FINISH_SHARED_MORNING_SETUP_OWNER = "FINISH_SHARED";
+const FINISH_SHARED_MORNING_SETUP_OWNER = "BLOPEZ";
+
+
+const FINISH_GLOBAL_ROSTER_OWNER = "BLOPEZ";
+const FINISH_PROFILE_SELECTOR_VISIBLE_USERS = new Set([
+  "BLOPEZ",
+  "JBOOMERSHINE"
+]);
+
+function canSeeFinishEditingProfileControl() {
+  return FINISH_PROFILE_SELECTOR_VISIBLE_USERS.has(getFinishVisibilityUsername());
+}
+
+function getFinishGlobalRosterOwnerUsername() {
+  return FINISH_GLOBAL_ROSTER_OWNER;
+}
+
+function applyFinishEditingProfileVisibility() {
+  const canSee = canSeeFinishEditingProfileControl();
+  const ownerSelect = document.getElementById("finishRosterOwnerSelect");
+  if (!ownerSelect) return;
+
+  const wrappers = [
+    ownerSelect.closest(".setup-filter"),
+    ownerSelect.closest(".filter-field"),
+    ownerSelect.closest("label"),
+    ownerSelect.parentElement
+  ].filter(Boolean);
+
+  const target = wrappers[0] || ownerSelect;
+
+  target.style.display = canSee ? "" : "none";
+  target.hidden = !canSee;
+  target.setAttribute("aria-hidden", canSee ? "false" : "true");
+
+  ownerSelect.disabled = !canSee || !canEditFinishOperatorAssignments();
+}
+
 
 function normalizeFinishVisibilityUsername(value) {
   return String(value || "")
@@ -596,6 +888,7 @@ function activateFinishFallbackTab() {
     if (tabName === "personal" && typeof renderFinishThreeLineCell === "function") {
       renderFinishThreeLineCell();
       if (typeof renderMorningSetupRosterSummary === "function") renderMorningSetupRosterSummary();
+      setTimeout(applyFinishMorningSlotStatusDots_, 0);
     }
     return;
   }
@@ -2035,9 +2328,73 @@ function getAssignmentRoleLabel(operatorName, stationName, config = loadConfig()
   return "Certified";
 }
 
+
+/*******************************************************
+ * FINISH OPERATOR COMMAND — FLOATER DISPLAY
+ * If an operator works multiple Finish areas today, display role as Floater.
+ * JPH target DOES NOT change. Target still comes from the current station/area.
+ *******************************************************/
+function getFinishOperatorMultiStationInfo_(operatorName) {
+  const targetName = normalizeAssignmentOperatorName(operatorName || "").toLowerCase();
+  const stations = [];
+  let total = 0;
+
+  if (!targetName) {
+    return { isFloater: false, count: 0, stations: [], total: 0 };
+  }
+
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    const stationName = normalizeFinishOperatorStation(station?.name || "");
+    if (!stationName || !isFinishOperatorStationAllowed(stationName)) return;
+    if (shouldHideFinishLmsArea_(stationName)) return;
+
+    const matched = (station.operatorList || []).find(operator =>
+      normalizeAssignmentOperatorName(operator?.name || "").toLowerCase() === targetName
+    );
+
+    if (!matched) return;
+
+    const matchedTotal = Number(matched.total || 0) || 0;
+    if (matchedTotal <= 0) return;
+
+    stations.push(stationName);
+    total += matchedTotal;
+  });
+
+  return {
+    isFloater: stations.length > 1,
+    count: stations.length,
+    stations,
+    total
+  };
+}
+
+function getFinishOperatorDisplayRoleLabel_(operatorName, stationName) {
+  const multi = getFinishOperatorMultiStationInfo_(operatorName);
+
+  if (multi.isFloater) {
+    return "Floater";
+  }
+
+  return getAssignmentRoleLabel(operatorName, stationName, loadConfig());
+}
+
+function getFinishOperatorAreaDisplayLabel_(operatorName, stationName) {
+  const multi = getFinishOperatorMultiStationInfo_(operatorName);
+
+  if (multi.isFloater) {
+    return `Floater · ${multi.count} areas`;
+  }
+
+  return normalizeFinishOperatorStation(stationName || "") || "Finish";
+}
+
+
 function getAssignmentTargetLabel(operatorName, stationName, config = loadConfig()) {
+  // IMPORTANT:
+  // Multi-area operators display as Floater, but the base/JPH target remains station-specific.
   const base = getFinishOperatorBaseRate(stationName, operatorName);
-  const role = getAssignmentRoleLabel(operatorName, stationName, config);
+  const role = getFinishOperatorDisplayRoleLabel_(operatorName, stationName);
   return `${role} · ${numberFmt(base)}/hr`;
 }
 
@@ -3602,12 +3959,504 @@ function normalizeFinishOperatorStation(value) {
   return text || "Unmapped";
 }
 
+
+/*******************************************************
+ * FINISH OPERATOR PERFORMANCE — AR STYLE DASHBOARD
+ * Reworks the Finish Hourly Operator Performance tab into the AR-style layout:
+ * KPI strip, process flow cards, productivity overview, leaderboard, and loadout cards.
+ *******************************************************/
+const FINISH_AR_STYLE_STATION_ORDER = [
+  "Finish Unbox",
+  "Mounting",
+  "Drill",
+  "Bigs",
+  "Sharps",
+  "Final Inspection"
+];
+
+function getFinishArStyleStationConfig_(stationName) {
+  const name = normalizeFinishOperatorStation(stationName);
+  const config = loadConfig();
+
+  const map = {
+    "Finish Unbox": {
+      label: "FINISH UNBOX",
+      zone: "Feed",
+      capacity: Number(config.unboxRate || 0) * Math.max(1, Number(config.unboxCount || 1)),
+      assigned: 1,
+      statusType: "watch"
+    },
+    "Mounting": {
+      label: "MOUNTING",
+      zone: "Mount / Assemble",
+      capacity: Number(config.mountRate || 0) * Math.max(1, Number(config.mountCount || 1)),
+      assigned: Math.max(1, Number(config.mountCount || 1)),
+      statusType: "watch"
+    },
+    "Drill": {
+      label: "DRILL",
+      zone: "Specialty",
+      capacity: Number(config.drillRate || 0) * Math.max(1, Number(config.drillCount || 1)),
+      assigned: Math.max(1, Number(config.drillCount || 1)),
+      statusType: "constraint"
+    },
+    "Bigs": {
+      label: "BIGS",
+      zone: "Specialty",
+      capacity: 0,
+      assigned: 0,
+      statusType: "constraint"
+    },
+    "Sharps": {
+      label: "SHARPS",
+      zone: "Specialty",
+      capacity: 0,
+      assigned: 0,
+      statusType: "constraint"
+    },
+    "Final Inspection": {
+      label: "FINAL INSPECTION",
+      zone: "QA",
+      capacity: Number(config.finalRate || 0) * Math.max(1, Number(config.finalCount || 1)),
+      assigned: Math.max(1, Number(config.finalCount || 1)),
+      statusType: "watch"
+    }
+  };
+
+  return map[name] || {
+    label: name.toUpperCase(),
+    zone: "Finish",
+    capacity: getFinishOperatorStationTarget(name),
+    assigned: 0,
+    statusType: "watch"
+  };
+}
+
+function getFinishArVisibleStations_(stations) {
+  const stationMap = stations || {};
+  const ordered = [];
+
+  FINISH_AR_STYLE_STATION_ORDER.forEach(name => {
+    if (stationMap[name]) ordered.push(stationMap[name]);
+  });
+
+  Object.values(stationMap || {})
+    .filter(station => {
+      const name = normalizeFinishOperatorStation(station.name || "");
+      if (FINISH_AR_STYLE_STATION_ORDER.includes(name)) return false;
+      if (!isFinishOperatorStationAllowed(name)) return false;
+      if (shouldHideFinishLmsArea_(name)) return false;
+      return true;
+    })
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+    .forEach(station => ordered.push(station));
+
+  return ordered;
+}
+
+function getFinishArStationStatus_(station) {
+  const cfg = getFinishArStyleStationConfig_(station.name);
+  const output = Number(station.total || 0);
+  const capacity = Number(cfg.capacity || 0);
+  const pct = capacity > 0 ? Math.round((output / capacity) * 100) : 0;
+
+  if (capacity <= 0) {
+    return { label: "CONSTRAINT", className: "constraint", pct: 0, gap: "No JPH" };
+  }
+
+  if (pct >= 100) {
+    return { label: "ON TRACK", className: "ontrack", pct, gap: output - capacity };
+  }
+
+  if (pct >= 75) {
+    return { label: "WATCH", className: "watch", pct, gap: output - capacity };
+  }
+
+  return { label: "BEHIND", className: "behind", pct, gap: output - capacity };
+}
+
+function buildFinishArOperatorLeaderboard_(stations) {
+  const byName = {};
+
+  Object.values(stations || {}).forEach(station => {
+    const stationName = normalizeFinishOperatorStation(station.name || "");
+    if (!isFinishOperatorStationAllowed(stationName)) return;
+    if (shouldHideFinishLmsArea_(stationName)) return;
+
+    (station.operatorList || []).forEach(operator => {
+      const name = normalizeAssignmentOperatorName(operator.name || "");
+      if (!name || shouldHideFinishOperatorOnWebpage(name)) return;
+
+      if (!byName[name]) {
+        byName[name] = {
+          name,
+          total: 0,
+          stations: new Set(),
+          bestHour: "",
+          bestHourValue: 0,
+          primaryStation: stationName
+        };
+      }
+
+      byName[name].total += Number(operator.total || 0) || 0;
+      byName[name].stations.add(stationName);
+
+      Object.keys(operator.hourly || {}).forEach(hour => {
+        const value = Number(operator.hourly[hour] || 0) || 0;
+        if (value > byName[name].bestHourValue) {
+          byName[name].bestHourValue = value;
+          byName[name].bestHour = hour;
+          byName[name].primaryStation = stationName;
+        }
+      });
+    });
+  });
+
+  return Object.values(byName)
+    .map(row => ({
+      ...row,
+      stations: Array.from(row.stations),
+      roleLabel: row.stations.size > 1 ? "Floater" : getAssignmentRoleLabel(row.name, row.primaryStation, loadConfig())
+    }))
+    .sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
+}
+
+
+function installFinishArFloaterAreaListStyles_() {
+  if (document.getElementById("finishArFloaterAreaListStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishArFloaterAreaListStyles";
+  style.textContent = `
+    .finish-ar-floater-area-list {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid rgba(95,216,255,.26);
+      border-radius: 12px;
+      background: rgba(95,216,255,.055);
+    }
+
+    .finish-ar-floater-area-list > strong {
+      display: block;
+      color: #5fd8ff;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 950;
+      letter-spacing: .10em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .finish-ar-floater-area-list > div {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .finish-ar-floater-area-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(95,216,255,.38);
+      background: rgba(2,12,24,.72);
+      color: #dff8ff;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .finish-ar-floater-area-pill b {
+      color: #ffd166;
+      font-size: 12px;
+    }
+
+    .finish-ar-floater-area-pill small {
+      color: #8fa6c3;
+      font-size: 10px;
+      font-weight: 800;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
+function renderFinishArStyleOperatorPerformance_(stations, summary = {}) {
+  installFinishArFloaterAreaListStyles_();
+
+  const root =
+    document.getElementById("operatorCommandPanel") ||
+    document.querySelector('[data-content="operators"] .operator-command-panel') ||
+    document.querySelector('[data-content="operators"]');
+
+  if (!root) return false;
+
+  const visibleStations = getFinishArVisibleStations_(stations);
+  const leaderboard = buildFinishArOperatorLeaderboard_(stations);
+  const totalOutput = visibleStations.reduce((sum, station) => sum + (Number(station.total || 0) || 0), 0);
+  const activeOperators = leaderboard.length;
+  const capacityToday = visibleStations.reduce((sum, station) => {
+    const cfg = getFinishArStyleStationConfig_(station.name);
+    return sum + (Number(cfg.capacity || 0) || 0);
+  }, 0);
+  const outputPct = capacityToday > 0 ? Math.round((totalOutput / capacityToday) * 100) : 0;
+  const topStation = visibleStations.slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
+  const peakHour = summary.peakHour || buildOperatorSummaryFromStations(stations).peakHour || "--";
+  const topOperator = leaderboard[0];
+  const pressureStation = visibleStations
+    .map(station => ({ station, status: getFinishArStationStatus_(station) }))
+    .sort((a, b) => Number(a.status.gap || 0) - Number(b.status.gap || 0))[0];
+
+  root.classList.add("finish-ar-style-command");
+
+  root.innerHTML = `
+    <section class="finish-ar-hero">
+      <div>
+        <div class="finish-ar-eyebrow">FINISH PRODUCTIVITY COMMAND CENTER</div>
+        <h2>Finish Operator Performance</h2>
+        <p>Professional associate productivity, station flow, capacity health, and hourly performance by role target.</p>
+      </div>
+      <div class="finish-ar-actions">
+        <button id="operatorRefreshBtn" class="finish-ar-refresh" type="button">Refresh Metrics</button>
+      </div>
+    </section>
+
+    <section class="finish-ar-kpi-grid">
+      ${renderFinishArKpiCard_("Total Finish Output", numberFmt(totalOutput), "All visible Finish station activity today")}
+      ${renderFinishArKpiCard_("Active Operators", numberFmt(activeOperators), "Operators with Finish activity")}
+      ${renderFinishArKpiCard_("Capacity Today", numberFmt(capacityToday), "Configured station JPH capacity")}
+      ${renderFinishArKpiCard_("Output vs Capacity", capacityToday > 0 ? outputPct + "%" : "N/A", capacityToday > 0 ? "Gap: " + numberFmt(totalOutput - capacityToday) : "No capacity target")}
+      ${renderFinishArKpiCard_("Top Station", topStation?.name || "--", numberFmt(topStation?.total || 0) + " output today")}
+      ${renderFinishArKpiCard_("Peak Hour", peakHour || "--", "Peak combined Finish demand")}
+    </section>
+
+    <section class="finish-ar-section">
+      <header class="finish-ar-section-head">
+        <div>
+          <h3>Finish Process Flow</h3>
+          <p>Station health, capacity pressure, and labor status from Finish Unbox through Final Inspection.</p>
+        </div>
+        <div class="finish-ar-legend">
+          <span><i class="ontrack"></i>On Track</span>
+          <span><i class="watch"></i>Watch</span>
+          <span><i class="behind"></i>Behind</span>
+          <span><i class="constraint"></i>Constraint</span>
+        </div>
+      </header>
+      <div class="finish-ar-flow-grid">
+        ${visibleStations.map(renderFinishArProcessCard_).join("")}
+      </div>
+    </section>
+
+    <section class="finish-ar-two-col">
+      <article class="finish-ar-panel">
+        <header class="finish-ar-panel-head">
+          <h3>Operator Productivity Overview</h3>
+          <span>${numberFmt(activeOperators)} operators with output</span>
+        </header>
+        <div class="finish-ar-overview-body">
+          <div class="finish-ar-ring">
+            <strong>${capacityToday > 0 ? outputPct : 0}%</strong>
+            <span>Avg target</span>
+          </div>
+          <div class="finish-ar-overview-lines">
+            ${renderFinishArOverviewLine_("Full Target", leaderboard.filter(op => getFinishOperatorMultiStationInfo_(op.name).isFloater || true).slice(0, 0).length, "green")}
+            ${renderFinishArOverviewLine_("Top Output", topOperator ? topOperator.name : "--", "amber")}
+            ${renderFinishArOverviewLine_("Highest Pressure", pressureStation?.station?.name || "--", "red")}
+          </div>
+        </div>
+        <div class="finish-ar-mini-panels">
+          <div><span>Best Performer</span><strong>${escapeHtml(topOperator?.name || "--")}</strong><small>${numberFmt(topOperator?.total || 0)} total output</small></div>
+          <div><span>Highest Pressure</span><strong>${escapeHtml(pressureStation?.station?.name || "--")}</strong><small>Gap: ${numberFmt(pressureStation?.status?.gap || 0)}</small></div>
+        </div>
+      </article>
+
+      <article class="finish-ar-panel">
+        <header class="finish-ar-panel-head">
+          <h3>Operator Performance Leaderboard</h3>
+          <button type="button" class="finish-ar-small-btn">View All</button>
+        </header>
+        <div class="finish-ar-leaderboard">
+          ${leaderboard.slice(0, 6).map((op, index) => renderFinishArLeaderboardRow_(op, index)).join("")}
+        </div>
+        <div class="finish-ar-signal-grid">
+          <div><span>Station Focus</span><strong>${escapeHtml(pressureStation?.station?.name || "--")}</strong></div>
+          <div><span>Labor Signal</span><strong>${escapeHtml(topOperator ? topOperator.name + " leads output" : "--")}</strong></div>
+          <div><span>Peak Demand</span><strong>${escapeHtml(peakHour || "--")}</strong></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="finish-ar-section">
+      <header class="finish-ar-section-head">
+        <div>
+          <h3>Operator Loadout Details</h3>
+          <p>Click to open associate productivity cards. Multi-area operators show as Floater while JPH remains by area.</p>
+        </div>
+        <span class="finish-ar-sort">Sort by output</span>
+      </header>
+      <div class="finish-ar-loadout-grid">
+        ${leaderboard.map(renderFinishArLoadoutCard_).join("")}
+      </div>
+    </section>
+  `;
+
+  root.querySelector("#operatorRefreshBtn")?.addEventListener("click", loadFinishOperatorActivity);
+
+  root.querySelectorAll("[data-finish-ar-station]").forEach(card => {
+    card.addEventListener("click", () => openOperatorDrawer(card.dataset.finishArStation));
+  });
+
+  root.querySelectorAll("[data-finish-ar-operator]").forEach(card => {
+    card.addEventListener("click", () => {
+      const stationName = card.dataset.finishArStation || card.dataset.primaryStation || "Mounting";
+      const operatorName = card.dataset.finishArOperator;
+      openExpandedOperatorViewer(stationName, operatorName);
+    });
+  });
+
+  return true;
+}
+
+function renderFinishArKpiCard_(label, value, sub) {
+  return `
+    <article class="finish-ar-kpi-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(sub || "")}</small>
+    </article>`;
+}
+
+function renderFinishArProcessCard_(station) {
+  const cfg = getFinishArStyleStationConfig_(station.name);
+  const status = getFinishArStationStatus_(station);
+  const output = Number(station.total || 0) || 0;
+  const capacity = Number(cfg.capacity || 0) || 0;
+  const bar = capacity > 0 ? Math.min(100, Math.round((output / capacity) * 100)) : 100;
+
+  return `
+    <article class="finish-ar-process-card ${escapeHtml(status.className)}" data-finish-ar-station="${escapeHtml(station.name)}">
+      <header>
+        <h4>${escapeHtml(cfg.label)}</h4>
+        <span>${escapeHtml(status.label)}</span>
+      </header>
+      <div class="finish-ar-process-metrics">
+        <div><span>Output</span><strong>${numberFmt(output)}</strong></div>
+        <div><span>Capacity</span><strong>${capacity > 0 ? numberFmt(capacity) : "N/A"}</strong></div>
+      </div>
+      <div class="finish-ar-bar"><i style="width:${bar}%;"></i></div>
+      <footer>
+        <div><span>Pace</span><strong>${capacity > 0 ? status.pct + "%" : "Process"}</strong></div>
+        <div><span>Gap</span><strong>${capacity > 0 ? numberFmt(status.gap) : "No JPH"}</strong></div>
+        <div><span>Assigned</span><strong>${numberFmt((station.operatorList || []).length)}</strong></div>
+      </footer>
+    </article>`;
+}
+
+function renderFinishArOverviewLine_(label, value, tone) {
+  return `
+    <div class="finish-ar-overview-line ${escapeHtml(tone)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value))}</strong>
+    </div>`;
+}
+
+function renderFinishArLeaderboardRow_(operator, index) {
+  const primaryStation = operator.primaryStation || operator.stations?.[0] || "Mounting";
+  const isFloater = operator.stations.length > 1;
+  const target = getFinishOperatorBaseRate(primaryStation, operator.name);
+  const targetPct = target > 0 ? Math.round((operator.bestHourValue / target) * 100) : 0;
+  const status = targetPct >= 100 ? "Elite" : targetPct >= 90 ? "Watch" : "Needs Support";
+
+  return `
+    <button class="finish-ar-leader-row" type="button" data-finish-ar-operator="${escapeHtml(operator.name)}" data-primary-station="${escapeHtml(primaryStation)}">
+      <b>${index + 1}</b>
+      <span>
+        <strong>${escapeHtml(operator.name)}</strong>
+        <small>${escapeHtml(isFloater ? "Floater · " + operator.stations.join(" / ") : primaryStation)} · ${escapeHtml(operator.roleLabel)}</small>
+      </span>
+      <em>${numberFmt(operator.total)}<small>current output</small></em>
+      <em>${target > 0 ? targetPct + "%" : "N/A"}<small>target %</small></em>
+      <em>${escapeHtml(shortHour(operator.bestHour) || "--")}<small>peak hour</small></em>
+      <i>${escapeHtml(status)}</i>
+    </button>`;
+}
+
+
+function renderFinishArFloaterAreaList_(operator) {
+  const stations = Array.isArray(operator?.stations) ? operator.stations : [];
+  if (stations.length <= 1) return "";
+
+  const items = stations.map(stationName => {
+    const station = finishOperatorState.stations?.[stationName];
+    const stationOperator = (station?.operatorList || []).find(item => item.name === operator.name);
+    const output = Number(stationOperator?.total || 0) || 0;
+    const target = getFinishOperatorBaseRate(stationName, operator.name);
+
+    return `
+      <span class="finish-ar-floater-area-pill">
+        ${escapeHtml(stationName)}
+        <b>${numberFmt(output)}</b>
+        <small>${target > 0 ? numberFmt(target) + "/hr" : "No JPH"}</small>
+      </span>`;
+  }).join("");
+
+  return `
+    <div class="finish-ar-floater-area-list">
+      <strong>Areas worked today</strong>
+      <div>${items}</div>
+    </div>`;
+}
+
+
+function renderFinishArLoadoutCard_(operator) {
+  const primaryStation = operator.primaryStation || operator.stations?.[0] || "Mounting";
+  const isFloater = operator.stations.length > 1;
+  const initials = getFinishRosterCardInitials(operator.name);
+  const station = finishOperatorState.stations?.[primaryStation];
+  const stationOperator = (station?.operatorList || []).find(item => item.name === operator.name);
+  const hours = stationOperator?.hourly || {};
+  const best = getPeakHour(hours);
+  const target = getFinishOperatorBaseRate(primaryStation, operator.name);
+  const targetPct = target > 0 ? Math.round((best.value / target) * 100) : 0;
+
+  return `
+    <article class="finish-ar-loadout-card ${targetPct >= 100 ? "good" : targetPct >= 90 ? "watch" : "behind"}" data-finish-ar-operator="${escapeHtml(operator.name)}" data-finish-ar-station="${escapeHtml(primaryStation)}">
+      <header>
+        <span>${escapeHtml(initials)}</span>
+        <div>
+          <h4>${escapeHtml(operator.name)}</h4>
+          <small>${escapeHtml(isFloater ? "Floater" : primaryStation)} · ${escapeHtml(operator.roleLabel)}</small>
+        </div>
+        <strong>${numberFmt(operator.total)}<small>output</small></strong>
+      </header>
+      ${isFloater ? `<div class="finish-ar-floater-strip">↔ Floater · ${numberFmt(operator.stations.length)} areas</div>` : ""}
+      ${renderFinishArFloaterAreaList_(operator)}
+      <div class="finish-ar-loadout-metrics">
+        <div><span>Target</span><strong>${target > 0 ? targetPct + "%" : "N/A"}</strong></div>
+        <div><span>Peak Hour</span><strong>${escapeHtml(shortHour(best.hour) || "--")}</strong></div>
+        <div><span>Status</span><strong>${targetPct >= 100 ? "Elite" : targetPct >= 90 ? "Watch" : "Needs Support"}</strong></div>
+      </div>
+      <div class="finish-ar-hours-mini">
+        ${getOperatorHourOrder(hours).map(hour => {
+          const value = Number(hours[hour] || 0) || 0;
+          const hourTarget = getOperatorHourTarget(primaryStation, hour, "operator", operator.name);
+          const status = getOperatorPerformanceStatus(value, hourTarget);
+          return `<i class="${escapeHtml(status.className)}"><span>${escapeHtml(shortHour(hour))}</span><b>${numberFmt(value)}</b></i>`;
+        }).join("")}
+      </div>
+    </article>`;
+}
+
+
 function renderOperatorSummary(summary) {
+  if (renderFinishArStyleOperatorPerformance_(finishOperatorState.stations || {}, summary || {})) {
+    return;
+  }
+
   setText("operatorTotalJobs", summary.totalJobs || 0);
   setText("operatorTotalOperators", summary.totalOperators || 0);
-  setText("operatorTopStationTotal", summary.topStationTotal || 0);
   setText("operatorTopStation", summary.topStation || "--");
-  setText("operatorPeakHourTotal", summary.peakHourTotal || 0);
   setText("operatorPeakHour", summary.peakHour || "--");
 }
 
@@ -3802,13 +4651,18 @@ function renderDrawerOperators(station) {
   target.innerHTML = filteredOperators.map(operator => {
     const hours = operator.hourly || {};
     const currentPerf = getLatestOperatorPerformance(operator, station.name);
+    const multiInfo = getFinishOperatorMultiStationInfo_(operator.name);
+    const floaterBadge = multiInfo.isFloater
+      ? `<small style="display:inline-flex;margin-top:8px;margin-right:6px;padding:5px 9px;border-radius:999px;border:1px solid rgba(251,191,36,.65);color:#fbbf24;font-weight:900;letter-spacing:.06em;text-transform:uppercase;">Floater · ${numberFmt(multiInfo.count)} areas</small>`
+      : "";
 
     return `
       <article class="operator-person-card perf-${escapeHtml(currentPerf.className)} operator-person-clickable" data-expanded-operator="${escapeHtml(operator.name)}" style="border-color:${currentPerf.color};box-shadow:0 0 18px ${currentPerf.color}1f;cursor:pointer;">
         <div class="operator-person-head">
           <div>
             <h4>${escapeHtml(operator.name)}</h4>
-            <span>${escapeHtml(operator.accessPoints?.join(" + ") || station.name)} · ${escapeHtml(getAssignmentTargetLabel(operator.name, station.name))}</span>
+            <span>${escapeHtml(getFinishOperatorAreaDisplayLabel_(operator.name, station.name))} · ${escapeHtml(getAssignmentTargetLabel(operator.name, station.name))}</span>
+            ${floaterBadge}
             <small style="display:inline-flex;margin-top:8px;padding:5px 9px;border-radius:999px;border:1px solid ${currentPerf.color};color:${currentPerf.color};font-weight:900;letter-spacing:.06em;text-transform:uppercase;">
               Current JPH ${escapeHtml(currentPerf.label)} · ${escapeHtml(shortHour(currentPerf.hour)) || "--"}: ${numberFmt(currentPerf.value)} / ${numberFmt(currentPerf.target)}
             </small>
@@ -4153,8 +5007,265 @@ function ensureExpandedOperatorViewer() {
   });
 }
 
+
+/*******************************************************
+ * EXPANDED OPERATOR VIEW — FLOATER AREA BREAKDOWN
+ * Shows every area worked in the expanded modal.
+ *******************************************************/
+function getFinishExpandedOperatorAreaEntries_(operatorName) {
+  const cleanName = normalizeAssignmentOperatorName(operatorName || "").toLowerCase();
+  const entries = [];
+
+  if (!cleanName) return entries;
+
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    const stationName = normalizeFinishOperatorStation(station?.name || "");
+    if (!stationName || !isFinishOperatorStationAllowed(stationName)) return;
+    if (shouldHideFinishLmsArea_(stationName)) return;
+
+    const operator = (station.operatorList || []).find(item =>
+      normalizeAssignmentOperatorName(item?.name || "").toLowerCase() === cleanName
+    );
+
+    if (!operator) return;
+
+    const output = Number(operator.total || 0) || 0;
+    if (output <= 0) return;
+
+    entries.push({
+      station,
+      stationName,
+      operator,
+      output,
+      hours: operator.hourly || {},
+      accessPoints: operator.accessPoints || []
+    });
+  });
+
+  return entries.sort((a, b) => Number(b.output || 0) - Number(a.output || 0));
+}
+
+function getFinishExpandedCombinedHours_(entries) {
+  const combined = {};
+
+  (entries || []).forEach(entry => {
+    Object.keys(entry.hours || {}).forEach(hour => {
+      combined[hour] = (combined[hour] || 0) + (Number(entry.hours[hour] || 0) || 0);
+    });
+  });
+
+  return combined;
+}
+
+function getFinishExpandedBestAreaHour_(entries) {
+  let best = { stationName: "", hour: "", value: 0 };
+
+  (entries || []).forEach(entry => {
+    Object.keys(entry.hours || {}).forEach(hour => {
+      const value = Number(entry.hours[hour] || 0) || 0;
+      if (value > best.value) {
+        best = { stationName: entry.stationName, hour, value };
+      }
+    });
+  });
+
+  return best;
+}
+
+function getFinishExpandedLastActiveHour_(entries) {
+  const combined = getFinishExpandedCombinedHours_(entries);
+  let last = "";
+
+  getOperatorHourOrder(combined).forEach(hour => {
+    if ((Number(combined[hour] || 0) || 0) > 0) last = hour;
+  });
+
+  return last;
+}
+
+function renderFinishExpandedAreaCard_(entry) {
+  const stationName = entry.stationName;
+  const operator = entry.operator;
+  const hours = entry.hours || {};
+  const orderedHours = getOperatorHourOrder(hours);
+  const targetPerHour = getFinishOperatorBaseRate(stationName, operator.name);
+  const role = getAssignmentRoleLabel(operator.name, stationName, loadConfig());
+  const best = getPeakHour(hours);
+  let lastActive = "";
+
+  orderedHours.forEach(hour => {
+    if ((Number(hours[hour] || 0) || 0) > 0) lastActive = hour;
+  });
+
+  return `
+    <article class="expanded-floater-area-card">
+      <header>
+        <div>
+          <h3>${escapeHtml(stationName)}</h3>
+          <p>${escapeHtml(role)} · ${targetPerHour > 0 ? numberFmt(targetPerHour) + "/hr target" : "No JPH target"}</p>
+          <small>Best hour: ${escapeHtml(shortHour(best.hour) || "--")} (${numberFmt(best.value)}) · Last active: ${escapeHtml(shortHour(lastActive) || "--")}</small>
+        </div>
+        <strong>${numberFmt(entry.output)}<span>output</span></strong>
+      </header>
+
+      <div class="expanded-floater-hour-grid">
+        ${orderedHours.map(hour => {
+          const value = Number(hours[hour] || 0) || 0;
+          const target = getOperatorHourTarget(stationName, hour, "operator", operator.name);
+          const status = getOperatorPerformanceStatus(value, target);
+          const pctRaw = target > 0 ? Math.round((value / target) * 100) : 0;
+          const barPct = target > 0 ? Math.min(100, Math.max(4, pctRaw)) : (value > 0 ? 18 : 4);
+
+          return `
+            <div class="expanded-floater-hour perf-${escapeHtml(status.className)}">
+              <span>${escapeHtml(shortHour(hour))}</span>
+              <strong style="color:${status.color};">${numberFmt(value)}</strong>
+              <i style="height:${barPct}%;background:${status.color};box-shadow:0 0 14px ${status.color};"></i>
+              <small>${target > 0 ? numberFmt(target) + " target" : "No target"}</small>
+              <b style="color:${status.color};">${escapeHtml(status.label)}</b>
+            </div>`;
+        }).join("")}
+      </div>
+    </article>`;
+}
+
+function installFinishExpandedFloaterStyles_() {
+  if (document.getElementById("finishExpandedFloaterStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishExpandedFloaterStyles";
+  style.textContent = `
+    .expanded-floater-area-stack {
+      display: grid;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .expanded-floater-area-card {
+      padding: 16px;
+      border: 1px solid rgba(95,216,255,.22);
+      border-radius: 18px;
+      background: rgba(2,12,24,.62);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .expanded-floater-area-card header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid rgba(95,216,255,.16);
+    }
+
+    .expanded-floater-area-card h3 {
+      margin: 0;
+      color: #eef8ff;
+      font-size: 21px;
+      font-weight: 950;
+    }
+
+    .expanded-floater-area-card p {
+      margin: 6px 0 0;
+      color: #5fd8ff;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .expanded-floater-area-card small {
+      color: #8fa6c3;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .expanded-floater-area-card header strong {
+      color: #ffd166;
+      font-size: 30px;
+      font-weight: 950;
+      text-align: right;
+    }
+
+    .expanded-floater-area-card header strong span {
+      display: block;
+      color: #8fa6c3;
+      font-size: 10px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .expanded-floater-hour-grid {
+      display: grid;
+      grid-template-columns: repeat(15, minmax(54px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .expanded-floater-hour {
+      min-height: 128px;
+      position: relative;
+      padding: 8px 6px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      background: rgba(255,255,255,.045);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 5px;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .expanded-floater-hour span {
+      color: #8fa6c3;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .expanded-floater-hour strong {
+      font-size: 16px;
+      font-weight: 950;
+    }
+
+    .expanded-floater-hour i {
+      align-self: end;
+      width: 74%;
+      justify-self: center;
+      min-height: 4px;
+      border-radius: 9px 9px 3px 3px;
+      opacity: .92;
+    }
+
+    .expanded-floater-hour small {
+      color: #8fa6c3;
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .expanded-floater-hour b {
+      font-size: 10px;
+      font-weight: 950;
+    }
+
+    .expanded-floater-summary-note {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(95,216,255,.20);
+      border-radius: 14px;
+      background: rgba(95,216,255,.055);
+      color: #bfdaf2;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
 function openExpandedOperatorViewer(stationName, operatorName) {
   ensureExpandedOperatorViewer();
+  installFinishExpandedFloaterStyles_();
 
   const station = finishOperatorState.stations?.[stationName];
   const operator = (station?.operatorList || []).find(item => item.name === operatorName);
@@ -4163,70 +5274,67 @@ function openExpandedOperatorViewer(stationName, operatorName) {
 
   if (!station || !operator || !viewer || !body) return;
 
-  const currentPerf = getLatestOperatorPerformance(operator, station.name);
-  const hours = operator.hourly || {};
-  const orderedHours = getOperatorHourOrder(hours);
-  const meta = FINISH_OPERATOR_STATION_META[station.name] || { zone: "Finish" };
-  const best = getPeakHour(hours);
-  const activeHours = orderedHours.filter(hour => Number(hours[hour] || 0) > 0).length;
-  const avgPerActiveHour = activeHours > 0 ? Math.round(Number(operator.total || 0) / activeHours) : 0;
+  const entries = getFinishExpandedOperatorAreaEntries_(operator.name);
+  const safeEntries = entries.length ? entries : [{
+    station,
+    stationName: station.name,
+    operator,
+    output: Number(operator.total || 0) || 0,
+    hours: operator.hourly || {},
+    accessPoints: operator.accessPoints || []
+  }];
+
+  const isFloater = safeEntries.length > 1;
+  const totalOutput = safeEntries.reduce((sum, entry) => sum + (Number(entry.output || 0) || 0), 0);
+  const combinedHours = getFinishExpandedCombinedHours_(safeEntries);
+  const orderedCombinedHours = getOperatorHourOrder(combinedHours);
+  const activeHours = orderedCombinedHours.filter(hour => Number(combinedHours[hour] || 0) > 0).length;
+  const avgPerActiveHour = activeHours > 0 ? Math.round(totalOutput / activeHours) : 0;
+  const best = getFinishExpandedBestAreaHour_(safeEntries);
+  const lastActive = getFinishExpandedLastActiveHour_(safeEntries);
+  const roleLabel = isFloater ? `Floater · ${safeEntries.length} areas` : getAssignmentRoleLabel(operator.name, station.name, loadConfig());
 
   setText("expandedOperatorName", operator.name);
-  setText("expandedOperatorSub", `${station.name} • ${meta.zone} • ${getAssignmentTargetLabel(operator.name, station.name)} • ${operator.accessPoints?.join(" + ") || "Mapped station"}`);
+  setText(
+    "expandedOperatorSub",
+    `${roleLabel} • JPH by area • Current station: ${station.name}`
+  );
 
   body.innerHTML = `
     <section class="expanded-operator-scoreboard">
       <article class="expanded-score-card">
+        <span>Role</span>
+        <strong>${escapeHtml(isFloater ? "Floater" : getAssignmentRoleLabel(operator.name, station.name, loadConfig()))}</strong>
+        <small>${isFloater ? numberFmt(safeEntries.length) + " areas worked today" : escapeHtml(station.name)}</small>
+      </article>
+      <article class="expanded-score-card">
+        <span>Final JPH</span>
+        <strong>By area</strong>
+        <small>Floater does not change the station target</small>
+      </article>
+      <article class="expanded-score-card">
         <span>Total Output</span>
-        <strong>${numberFmt(operator.total)}</strong>
-        <small>Jobs scanned today</small>
+        <strong>${numberFmt(totalOutput)}</strong>
+        <small>Across visible Finish areas</small>
       </article>
       <article class="expanded-score-card">
-        <span>Current JPH</span>
-        <strong style="color:${currentPerf.color};">${escapeHtml(currentPerf.label)}</strong>
-        <small>${escapeHtml(shortHour(currentPerf.hour)) || "--"}: ${numberFmt(currentPerf.value)} / ${numberFmt(currentPerf.target)}</small>
-      </article>
-      <article class="expanded-score-card">
-        <span>Peak Hour</span>
-        <strong>${escapeHtml(shortHour(best.hour) || "--")}</strong>
+        <span>Best Hour</span>
+        <strong>${escapeHtml(best.stationName || "--")} · ${escapeHtml(shortHour(best.hour) || "--")}</strong>
         <small>${numberFmt(best.value)} jobs</small>
       </article>
       <article class="expanded-score-card">
-        <span>Active Hour Avg</span>
-        <strong>${numberFmt(avgPerActiveHour)}</strong>
-        <small>${numberFmt(activeHours)} active hours</small>
+        <span>Last Active</span>
+        <strong>${escapeHtml(shortHour(lastActive) || "--")}</strong>
+        <small>${numberFmt(activeHours)} active hours · ${numberFmt(avgPerActiveHour)} avg/hr</small>
       </article>
     </section>
 
-    <section class="expanded-operator-timeline">
-      ${orderedHours.map(hour => {
-        const value = Number(hours[hour] || 0);
-        const target = getOperatorHourTarget(station.name, hour, "operator", operator.name);
-        const status = getOperatorPerformanceStatus(value, target);
-        const pctRaw = target > 0 ? Math.round((value / target) * 100) : 0;
-        const barPct = target > 0 ? Math.min(100, Math.max(4, pctRaw)) : (value > 0 ? 18 : 4);
-        const targetLine = target > 0 ? 70 : 4;
-
-        return `
-          <article class="expanded-hour-tower perf-${escapeHtml(status.className)}">
-            <div class="expanded-hour-top">
-              <span>${escapeHtml(shortHour(hour))}</span>
-              <strong style="color:${status.color};">${numberFmt(value)}</strong>
-            </div>
-            <div class="expanded-hour-bar-wrap" style="--target-line:${targetLine}%;">
-              <div class="expanded-hour-target-line"></div>
-              <div class="expanded-hour-fill" style="--bar-height:${barPct}%;--bar-color:${status.color};"></div>
-            </div>
-            <div class="expanded-hour-foot">
-              <span>${target > 0 ? numberFmt(target) + " target" : "No target"}</span>
-              <strong style="color:${status.color};">${escapeHtml(status.label)}</strong>
-            </div>
-          </article>`;
-      }).join("")}
+    <section class="expanded-floater-area-stack">
+      ${safeEntries.map(renderFinishExpandedAreaCard_).join("")}
     </section>
 
-    <div class="expanded-operator-note">
-      Green means the operator met or beat the configured JPH target. Amber means 90% to 99%. Red means below 90%. The white marker represents the target line for that hour after shift breaks are applied.
+    <div class="expanded-floater-summary-note">
+      Floater is display-only when an operator works multiple Finish areas. Each area keeps its own configured JPH target, so the hourly colors and target lines remain accurate by station.
     </div>
   `;
 
@@ -4320,9 +5428,234 @@ const FINISH_LINE_LAYOUT = {
   finalRight: ["FI-04", "FI-02"]
 };
 
+
+/*******************************************************
+ * MORNING SET UP — SLOT STATUS DOTS
+ * Green = activity this hour / active recently
+ * Yellow = watch
+ * Red = no activity / inactive
+ *******************************************************/
+function getFinishMorningSlotStatus_(assignment) {
+  if (!assignment || !assignment.operator) {
+    return { key: "empty", label: "Open", dot: "empty" };
+  }
+
+  const total = Number(assignment.total || 0) || 0;
+  const thisHour =
+    Number(
+      assignment.thisHour ??
+      assignment.currentHour ??
+      assignment.hourOutput ??
+      assignment.currentHourOutput ??
+      0
+    ) || 0;
+
+  const statusText = String(
+    assignment.status ||
+    assignment.activityStatus ||
+    assignment.gapStatus ||
+    assignment.liveStatus ||
+    ""
+  ).trim().toLowerCase();
+
+  if (
+    statusText.includes("inactive") ||
+    statusText.includes("no activity") ||
+    statusText.includes("no scan") ||
+    statusText.includes("down")
+  ) {
+    return { key: "inactive", label: "No activity", dot: "red" };
+  }
+
+  if (
+    statusText.includes("watch") ||
+    statusText.includes("warning") ||
+    statusText.includes("idle") ||
+    statusText.includes("gap")
+  ) {
+    return { key: "watch", label: "Watch", dot: "yellow" };
+  }
+
+  if (thisHour > 0 || total > 0 || assignment.liveNow) {
+    return { key: "active", label: "Active", dot: "green" };
+  }
+
+  return { key: "inactive", label: "No activity", dot: "red" };
+}
+
+function applyFinishMorningSlotStatusDots_() {
+  const slots = document.querySelectorAll(".finish-slot[data-operator], .finish-slot.assigned, .finish-slot.empty");
+
+  slots.forEach(slot => {
+    const operator = String(slot.dataset.operator || "").trim();
+    const station = normalizeFinishOperatorStation(slot.dataset.station || "");
+    const line = String(slot.dataset.line || "").trim();
+    const position = String(slot.dataset.slot || "").trim();
+
+    let assignment = null;
+
+    if (operator) {
+      assignment = findFinishMorningSlotAssignment_(operator, station, line, position);
+    }
+
+    const status = getFinishMorningSlotStatus_(assignment);
+
+    slot.classList.remove(
+      "morning-slot-dot-active",
+      "morning-slot-dot-watch",
+      "morning-slot-dot-inactive",
+      "morning-slot-dot-empty"
+    );
+
+    slot.classList.add(`morning-slot-dot-${status.dot}`);
+
+    // Use the existing visual dot if the card already has one.
+    // Do NOT append a second dot near the output number.
+    const dot =
+      slot.querySelector(".slot-status-dot") ||
+      slot.querySelector(".morning-slot-live-dot");
+
+    if (dot) {
+      dot.classList.add("morning-slot-live-dot");
+      dot.setAttribute("title", status.label);
+      dot.setAttribute("aria-label", status.label);
+    }
+  });
+}
+
+function findFinishMorningSlotAssignment_(operatorName, stationName, line, position) {
+  const cleanOperator = normalizeAssignmentOperatorName(operatorName || "").toLowerCase();
+  const cleanStation = normalizeFinishOperatorStation(stationName || "");
+  const cleanLine = String(line || "").trim().toLowerCase();
+  const cleanPosition = String(position || "").trim().toLowerCase();
+
+  const roster = [
+    ...(Array.isArray(finishRosterApiState?.morningRoster) ? finishRosterApiState.morningRoster : []),
+    ...(Array.isArray(window.__finishConfigAssignedRosterRows) ? window.__finishConfigAssignedRosterRows : [])
+  ];
+
+  const saved = roster.find(row => {
+    const rowName = normalizeAssignmentOperatorName(row.operatorName || row.OperatorName || "").toLowerCase();
+    const rowStation = normalizeFinishOperatorStation(row.defaultArea || row.DefaultArea || row.area || row.Area || "");
+    const rowLine = String(row.defaultLine || row.DefaultLine || row.line || row.Line || "").trim().toLowerCase();
+    const rowPosition = String(row.defaultPosition || row.DefaultPosition || row.position || row.Position || "").trim().toLowerCase();
+
+    return (
+      rowName === cleanOperator &&
+      (!cleanStation || rowStation === cleanStation) &&
+      (!cleanLine || rowLine === cleanLine) &&
+      (!cleanPosition || rowPosition === cleanPosition)
+    );
+  });
+
+  const liveStation = finishOperatorState?.stations?.[cleanStation];
+  const liveOperator = (liveStation?.operatorList || []).find(item =>
+    normalizeAssignmentOperatorName(item.name || "").toLowerCase() === cleanOperator
+  );
+
+  return {
+    ...(saved || {}),
+    operator: operatorName,
+    total: Number(liveOperator?.total || saved?.total || 0) || 0,
+    liveNow: !!liveOperator,
+    thisHour: getFinishLiveOperatorCurrentHourOutput_(liveOperator)
+  };
+}
+
+function getFinishLiveOperatorCurrentHourOutput_(operator) {
+  if (!operator || !operator.hourly) return 0;
+
+  const hours = operator.hourly || {};
+  const ordered = getOperatorHourOrder(hours);
+  let latestValue = 0;
+
+  ordered.forEach(hour => {
+    const value = Number(hours[hour] || 0) || 0;
+    if (value > 0) latestValue = value;
+  });
+
+  return latestValue;
+}
+
+function installFinishMorningSlotStatusDotStyles_() {
+  if (document.getElementById("finishMorningSlotStatusDotStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishMorningSlotStatusDotStyles";
+  style.textContent = `
+    .finish-slot {
+      position: relative;
+    }
+
+    /* Use the existing slot dot. Keep it away from the output number. */
+    .finish-slot .slot-status-dot,
+    .finish-slot .morning-slot-live-dot {
+      position: absolute !important;
+      top: 9px !important;
+      right: 9px !important;
+      width: 8px !important;
+      height: 8px !important;
+      min-width: 8px !important;
+      min-height: 8px !important;
+      border-radius: 50% !important;
+      z-index: 3 !important;
+      pointer-events: none !important;
+    }
+
+    /* Give the output number breathing room so it does not touch the status dot. */
+    .finish-slot [class*="output"],
+    .finish-slot [class*="total"],
+    .finish-slot .slot-total,
+    .finish-slot .slot-output,
+    .finish-slot .slot-count {
+      padding-right: 18px !important;
+    }
+
+    .morning-slot-dot-green .slot-status-dot,
+    .morning-slot-dot-green .morning-slot-live-dot {
+      background: #4ade80 !important;
+      box-shadow: 0 0 0 3px rgba(74,222,128,.14), 0 0 16px rgba(74,222,128,.85) !important;
+    }
+
+    .morning-slot-dot-yellow .slot-status-dot,
+    .morning-slot-dot-yellow .morning-slot-live-dot {
+      background: #facc15 !important;
+      box-shadow: 0 0 0 3px rgba(250,204,21,.14), 0 0 16px rgba(250,204,21,.85) !important;
+    }
+
+    .morning-slot-dot-red .slot-status-dot,
+    .morning-slot-dot-red .morning-slot-live-dot {
+      background: #fb7185 !important;
+      box-shadow: 0 0 0 3px rgba(251,113,133,.14), 0 0 16px rgba(251,113,133,.85) !important;
+    }
+
+    .morning-slot-dot-empty .slot-status-dot,
+    .morning-slot-dot-empty .morning-slot-live-dot {
+      background: #64748b !important;
+      box-shadow: 0 0 0 3px rgba(100,116,139,.14), 0 0 10px rgba(100,116,139,.45) !important;
+    }
+
+    .finish-slot.morning-slot-dot-green {
+      border-color: rgba(74,222,128,.74) !important;
+    }
+
+    .finish-slot.morning-slot-dot-yellow {
+      border-color: rgba(250,204,21,.74) !important;
+    }
+
+    .finish-slot.morning-slot-dot-red {
+      border-color: rgba(251,113,133,.74) !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
 function initFinishThreeLineCell() {
+  installFinishMorningSlotStatusDotStyles_();
   installFinishLineSlotDelegatedClickHandler();
   renderFinishThreeLineCell();
+  setTimeout(applyFinishMorningSlotStatusDots_, 0);
 }
 
 /*
@@ -4559,6 +5892,8 @@ function renderFinishThreeLineCell() {
       ${renderOneFinishLine(selectedLine, assignmentMap, statusMap)}
     </div>`;
   bindFinishLineCellEvents();
+
+  setTimeout(applyFinishMorningSlotStatusDots_, 0);
 }
 
 function getLineStationCapacityStats(lineAssignments, stationName) {
@@ -5282,6 +6617,33 @@ function renderOperatorError(error) {
 ========================================================= */
 const FINISH_ROSTER_API_BASE_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec";
 
+const FINISH_ROSTER_ASSIGNABLE_AREAS = [
+  "Finish Unbox",
+  "Mounting",
+  "Drill",
+  "Bigs",
+  "Sharps",
+  "Final Inspection",
+  "Floater"
+];
+
+function isFinishRosterAssignableArea(value) {
+  const station = normalizeFinishOperatorStation(value);
+  return FINISH_ROSTER_ASSIGNABLE_AREAS.includes(station);
+}
+
+function buildFinishRosterAreaOptions(selectedArea, includeAll = false) {
+  const selected = normalizeFinishOperatorStation(selectedArea || "");
+  const visibleAreas = FINISH_ROSTER_ASSIGNABLE_AREAS.filter(area => !shouldHideFinishLmsArea_(area));
+  const options = includeAll ? ['all', ...visibleAreas] : visibleAreas;
+  return options.map(area => {
+    const value = area === 'all' ? 'all' : area;
+    const label = area === 'all' ? 'All Floor Operators' : area;
+    const isSelected = area === 'all' ? String(selectedArea || '').toLowerCase() === 'all' : selected === area;
+    return `<option value="${escapeHtml(value)}" ${isSelected ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+  }).join('');
+}
+
 const finishRosterApiState = {
   profiles: [],
   operators: [],
@@ -5356,15 +6718,29 @@ function canEditFinishOperatorAssignments() {
 }
 
 function getRosterOwnerUsername() {
-  return finishRosterApiState.ownerUsername || getCurrentUsername();
+  // Shared Finish Setup roster.
+  // Supervisors/Managers/LMS can edit, but all saves go to BLOPEZ so everyone sees the same roster.
+  return getFinishGlobalRosterOwnerUsername();
 }
 
 function getRosterShiftType() {
-  return finishRosterApiState.shiftType || "Weekday";
+  const raw =
+    document.getElementById("finishRosterShiftSelect")?.value ||
+    finishRosterApiState.shiftType ||
+    "Weekday";
+
+  const value = String(raw || "").trim().toLowerCase();
+
+  if (value === "all" || value === "all shifts" || value === "all floor operators") {
+    return "all";
+  }
+
+  return value === "weekend" ? "Weekend" : "Weekday";
 }
 
 function getMorningSetupOwnerUsername() {
-  return FINISH_SHARED_MORNING_SETUP_OWNER;
+  // Morning Set Up reads the same shared roster built in Finish Setup.
+  return getFinishGlobalRosterOwnerUsername();
 }
 
 function getMorningSetupShiftType() {
@@ -5390,10 +6766,16 @@ async function loadMorningSetupRoster(options = {}) {
       shiftType
     });
 
-    finishRosterApiState.morningRoster = (rosterPayload.data || [])
+    finishRosterApiState.morningRoster = filterFinishWebpageRows_(rosterPayload.data || [])
       .filter(row => String(row.ownerUsername || "").toUpperCase() === ownerUsername)
       .filter(row => String(row.shiftType || "").toLowerCase() === shiftType.toLowerCase())
       .filter(row => String(row.activeStatus || "").toLowerCase() !== "removed");
+
+    console.log("[Finish Morning Setup] Loaded shared roster", {
+      ownerUsername,
+      shiftType,
+      rows: finishRosterApiState.morningRoster.length
+    });
 
     if (!options.silent) {
       renderFinishThreeLineCell();
@@ -5527,6 +6909,67 @@ function getFinishOperatorRoster() {
   });
 }
 
+
+function normalizeFinishRosterOperatorList(rows) {
+  const byName = new Map();
+  (Array.isArray(rows) ? rows : []).forEach(row => {
+    const operatorName = normalizeAssignmentOperatorName(
+      row.operatorName || row.OperatorName || row.operator || row.Operator || row.name || row.Name || ''
+    );
+    if (!operatorName || operatorName.toLowerCase().includes('unassigned')) return;
+
+    const existing = byName.get(operatorName.toLowerCase()) || {
+      operatorName,
+      area: 'Finish',
+      lastFlowStation: '',
+      lastAccessPoint: '',
+      lastTotal: 0,
+      isActive: true,
+      source: 'Finish roster fallback'
+    };
+
+    const station = normalizeFinishOperatorStation(
+      row.lastFlowStation || row.LastFlowStation || row.flowStation || row.FlowStation || row.accessPoint || row.AccessPoint || ''
+    );
+
+    const total = Number(row.lastTotal || row.LastTotal || row.total || row.Total || row.hourlyTotal || row.HourlyTotal || 0) || 0;
+
+    existing.lastTotal += total;
+    if (station && station !== 'Unmapped') existing.lastFlowStation = station;
+    existing.lastAccessPoint = row.lastAccessPoint || row.LastAccessPoint || row.accessPoint || row.AccessPoint || existing.lastAccessPoint || '';
+    existing.updatedAt = row.updatedAt || row.UpdatedAt || row.generatedAt || existing.updatedAt || '';
+
+    byName.set(operatorName.toLowerCase(), existing);
+  });
+
+  return Array.from(byName.values()).sort((a, b) => a.operatorName.localeCompare(b.operatorName));
+}
+
+async function loadFinishOperatorMasterWithFallback() {
+  const masterPayload = await fetchFinishRosterApi('getFinishOperatorMaster', {
+    activeOnly: 'false',
+    debug: 'true',
+    t: Date.now()
+  });
+
+  let operators = normalizeFinishRosterOperatorList(masterPayload.data || masterPayload.operators || []);
+
+  if (operators.length) return filterFinishWebpageRows_(operators);
+
+  // Fallback: use today's live Finish operator activity so the dropdown never goes blank.
+  const activityPayload = await fetchFinishRosterApi('operatorActivity', {
+    area: 'Finish',
+    debug: 'true',
+    t: Date.now()
+  });
+
+  operators = normalizeFinishRosterOperatorList(
+    activityPayload.operatorActivity || activityPayload.data || activityPayload.rows || []
+  );
+
+  return filterFinishWebpageRows_(operators);
+}
+
 async function loadFinishRosterBackend(options = {}) {
   const silent = !!options.silent;
   finishRosterApiState.loading = true;
@@ -5538,13 +6981,24 @@ async function loadFinishRosterBackend(options = {}) {
       finishRosterApiState.ownerUsername = getCurrentUsername();
     }
 
-    const [profilesPayload, operatorsPayload] = await Promise.all([
-      fetchFinishRosterApi("getFinishUserProfiles"),
-      fetchFinishRosterApi("getFinishOperatorMaster")
+    const [profilesPayload, operators] = await Promise.all([
+      fetchFinishRosterApi("getFinishUserProfiles", { debug: "true", t: Date.now() }),
+      loadFinishOperatorMasterWithFallback()
     ]);
 
     finishRosterApiState.profiles = profilesPayload.data || [];
-    finishRosterApiState.operators = operatorsPayload.data || [];
+    finishRosterApiState.operators = filterFinishWebpageRows_(operators);
+
+    if (!finishRosterApiState.profiles.length) {
+      finishRosterApiState.profiles = [{
+        username: getCurrentUsername(),
+        fullName: getCurrentUserDisplayName(),
+        role: getCurrentUserRole() || "LMS",
+        shiftGroup: "Weekday",
+        canEdit: canEditFinishOperatorAssignments(),
+        isActive: true
+      }];
+    }
 
     const currentProfile = getFinishRosterCurrentProfile();
     if (!currentProfile && finishRosterApiState.ownerUsername === "DEFAULT") {
@@ -5574,13 +7028,34 @@ async function loadFinishRosterForSelectedProfile(options = {}) {
   const ownerUsername = getRosterOwnerUsername();
   const shiftType = getRosterShiftType();
 
-  const [rosterPayload, auditPayload] = await Promise.all([
-    fetchFinishRosterApi("getFinishRosterControl", { ownerUsername, shiftType }),
-    fetchFinishRosterApi("getFinishRosterAuditLog", { targetUsername: ownerUsername, limit: 75 })
-  ]);
+  let rosterRows = [];
+  let auditPayload = { data: [] };
 
-  finishRosterApiState.roster = rosterPayload.data || [];
-  finishRosterApiState.audit = auditPayload.data || [];
+  if (String(shiftType).toLowerCase() === "all") {
+    const [weekdayPayload, weekendPayload, auditResult] = await Promise.all([
+      fetchFinishRosterApi("getFinishRosterControl", { ownerUsername, shiftType: "Weekday" }),
+      fetchFinishRosterApi("getFinishRosterControl", { ownerUsername, shiftType: "Weekend" }),
+      fetchFinishRosterApi("getFinishRosterAuditLog", { targetUsername: ownerUsername, limit: 75 })
+    ]);
+
+    rosterRows = [
+      ...(weekdayPayload.data || []),
+      ...(weekendPayload.data || [])
+    ];
+
+    auditPayload = auditResult || { data: [] };
+  } else {
+    const [rosterPayload, auditResult] = await Promise.all([
+      fetchFinishRosterApi("getFinishRosterControl", { ownerUsername, shiftType }),
+      fetchFinishRosterApi("getFinishRosterAuditLog", { targetUsername: ownerUsername, limit: 75 })
+    ]);
+
+    rosterRows = rosterPayload.data || [];
+    auditPayload = auditResult || { data: [] };
+  }
+
+  finishRosterApiState.roster = filterFinishWebpageRows_(rosterRows);
+  finishRosterApiState.audit = filterHiddenFinishOperators(auditPayload.data || []);
 
   if (!options.silent) {
     renderFinishRosterApiPanel();
@@ -5589,6 +7064,44 @@ async function loadFinishRosterForSelectedProfile(options = {}) {
     renderFinishThreeLineCell();
   }
 }
+
+
+/*******************************************************
+ * RENAME LMS CONTROL CENTER → FINISH SETUP
+ *******************************************************/
+function applyFinishSetupLabelRename_() {
+  const renameExact = (selector, replacement) => {
+    document.querySelectorAll(selector).forEach(el => {
+      const current = String(el.textContent || "").trim().replace(/\s+/g, " ");
+      if (current === "LMS Control Center" || current === "LMS CONTROL CENTER") {
+        el.textContent = replacement;
+      }
+    });
+  };
+
+  renameExact('.tab-btn[data-tab="lms-control"]', "Finish Setup");
+  renameExact('[data-content="lms-control"] .lms-control-title', "Finish Setup");
+  renameExact('[data-content="lms-control"] h2', "Finish Setup");
+  renameExact('[data-content="lms-control"] h3', "Finish Setup");
+
+  document.querySelectorAll('[data-content="lms-control"], .lms-control-center, #finishRosterApiPanel').forEach(root => {
+    root.querySelectorAll("*").forEach(el => {
+      if (!el.childNodes || el.childNodes.length !== 1 || el.childNodes[0].nodeType !== Node.TEXT_NODE) return;
+
+      const text = String(el.textContent || "").trim();
+      if (text === "LMS Control Center" || text === "LMS CONTROL CENTER") {
+        el.textContent = "Finish Setup";
+      }
+      if (text === "Finish Roster Control") {
+        el.textContent = "Finish Setup";
+      }
+    });
+  });
+
+  const tab = document.querySelector('.tab-btn[data-tab="lms-control"]');
+  if (tab) tab.textContent = "Finish Setup";
+}
+
 
 function initFinishRosterApiPanel() {
   const ownerSelect = document.getElementById("finishRosterOwnerSelect");
@@ -5600,18 +7113,28 @@ function initFinishRosterApiPanel() {
   const addBtn = document.getElementById("finishRosterAddOperatorBtn");
 
   ownerSelect?.addEventListener("change", async event => {
-    finishRosterApiState.ownerUsername = String(event.target.value || getCurrentUsername()).toUpperCase();
+    // Profile selector is visible only to BLOPEZ/JBOOMERSHINE.
+    // Roster save/read stays global so every Supervisor/Manager/LMS sees the same shift setup.
+    finishRosterApiState.ownerUsername = getFinishGlobalRosterOwnerUsername();
+    event.target.value = finishRosterApiState.ownerUsername;
     finishRosterUiState.selectedRosterKey = "";
     finishRosterUiState.draftAssignment = null;
     await loadFinishRosterForSelectedProfile();
   });
 
   shiftSelect?.addEventListener("change", async event => {
-    finishRosterApiState.shiftType = String(event.target.value || "Weekday");
+    const value = String(event.target.value || "Weekday").trim().toLowerCase();
+    finishRosterApiState.shiftType = value === "all" || value === "all shifts" || value === "all floor operators"
+      ? "all"
+      : (value === "weekend" ? "Weekend" : "Weekday");
     finishRosterUiState.selectedRosterKey = "";
     finishRosterUiState.draftAssignment = null;
     await loadFinishRosterForSelectedProfile();
   });
+
+  if (areaFilter) {
+    areaFilter.innerHTML = buildFinishRosterAreaOptions(areaFilter.value || 'all', true);
+  }
 
   roleFilter?.addEventListener("change", renderFinishRosterApiPanel);
   areaFilter?.addEventListener("change", renderFinishRosterApiPanel);
@@ -5621,7 +7144,41 @@ function initFinishRosterApiPanel() {
 }
 
 
+
+/*******************************************************
+ * ROLE FILTER FIX — NO TQ
+ * Role filter must only show:
+ * All Floor Operators, Unassigned, Certified, Training
+ *******************************************************/
+function buildFinishRosterRoleFilterOptions_(selectedValue = "all") {
+  const selected = String(selectedValue || "all").trim();
+  const options = [
+    { value: "all", label: "All Floor Operators" },
+    { value: "Unassigned", label: "Unassigned" },
+    { value: "Certified", label: "Certified" },
+    { value: "Training", label: "Training" }
+  ];
+
+  return options.map(option => {
+    const isSelected = selected.toLowerCase() === option.value.toLowerCase();
+    return `<option value="${escapeHtml(option.value)}" ${isSelected ? "selected" : ""}>${escapeHtml(option.label)}</option>`;
+  }).join("");
+}
+
+function fixFinishRosterRoleFilterNoTq_() {
+  const roleFilter = document.getElementById("finishRosterRoleFilter");
+  if (!roleFilter) return;
+
+  const current = String(roleFilter.value || "all").trim();
+  roleFilter.innerHTML = buildFinishRosterRoleFilterOptions_(
+    current.toUpperCase() === "TQ" ? "Certified" : current
+  );
+}
+
+
 function renderFinishRosterApiPanel() {
+  applyFinishSetupLabelRename_();
+
   const panel = document.getElementById("finishRosterApiPanel");
   if (!panel) return;
 
@@ -5640,37 +7197,53 @@ function renderFinishRosterApiPanel() {
   const selectedShift = getRosterShiftType();
 
   if (ownerSelect) {
-    const allProfiles = finishRosterApiState.profiles.length
-      ? finishRosterApiState.profiles
-      : [{ username: currentUsername, fullName: getCurrentUserDisplayName(), role: getCurrentUserRole(), shiftGroup: "Weekday" }];
+    const canSeeProfileSelector = canSeeFinishEditingProfileControl();
+    const globalOwner = getFinishGlobalRosterOwnerUsername();
 
-    const currentRoleValue = String(currentProfile?.role || getCurrentUserRole() || "").trim().toLowerCase();
-    const canSwitchProfiles = currentRoleValue === "lms";
-    const profiles = canSwitchProfiles
-      ? allProfiles
-      : allProfiles.filter(profile => String(profile.username || "").toUpperCase() === currentUsername);
+    ownerSelect.innerHTML = `
+      <option value="${escapeHtml(globalOwner)}" selected>
+        ${escapeHtml("Shared Finish Roster · LMS Controlled")}
+      </option>`;
 
-    ownerSelect.innerHTML = profiles.map(profile => {
-      const username = String(profile.username || "").toUpperCase();
-      const label = `${profile.fullName || username} · ${profile.role || "Role"} · ${profile.shiftGroup || "Shift"}`;
-      return `<option value="${escapeHtml(username)}" ${username === selectedOwner ? "selected" : ""}>${escapeHtml(label)}</option>`;
-    }).join("");
+    ownerSelect.value = globalOwner;
+    finishRosterApiState.ownerUsername = globalOwner;
+    ownerSelect.disabled = !canSeeProfileSelector || !canEdit;
 
-    if (!canSwitchProfiles && selectedOwner !== currentUsername) {
-      finishRosterApiState.ownerUsername = currentUsername;
-      ownerSelect.value = currentUsername;
-    }
-
-    ownerSelect.disabled = !canEdit || !canSwitchProfiles;
+    applyFinishEditingProfileVisibility();
   }
 
-  if (shiftSelect) shiftSelect.value = selectedShift;
+  if (shiftSelect) {
+    const existing = Array.from(shiftSelect.options || []).map(option => String(option.value || "").toLowerCase());
+    if (!existing.includes("all")) {
+      const option = document.createElement("option");
+      option.value = "all";
+      option.textContent = "All Shifts";
+      shiftSelect.appendChild(option);
+    }
+
+    Array.from(shiftSelect.options || []).forEach(option => {
+      const text = String(option.textContent || "").trim().toLowerCase();
+      if (text === "all floor operators") {
+        option.textContent = "All Shifts";
+        option.value = "all";
+      }
+    });
+
+    shiftSelect.value = String(selectedShift || "").toLowerCase() === "all" ? "all" : selectedShift;
+  }
   if (banner) {
     banner.classList.toggle("can-edit", canEdit);
     banner.innerHTML = canEdit
       ? `<strong>Edit access active</strong><span>${escapeHtml(getCurrentUserDisplayName())} · ${escapeHtml(currentProfile?.role || getCurrentUserRole())} can save/edit/delete roster rows.</span>`
       : `<strong>View only</strong><span>${escapeHtml(getCurrentUserDisplayName())} · your role can view this roster, but the API blocks edit/delete.</span>`;
   }
+
+  if (areaFilter && !areaFilter.dataset.finishAreasLoaded) {
+    areaFilter.innerHTML = buildFinishRosterAreaOptions(areaFilter.value || 'all', true);
+    areaFilter.dataset.finishAreasLoaded = 'true';
+  }
+
+  fixFinishRosterRoleFilterNoTq_();
 
   const filterArea = areaFilter?.value || "all";
   const filterRole = roleFilter?.value || "all";
@@ -5686,6 +7259,12 @@ function renderFinishRosterApiPanel() {
   setText("finishRosterCountMeta", `${rows.length} results`);
   setText("finishRosterApiSyncNote", `Last synced: ${formatTime(new Date())}`);
 
+  const stationLoadout = document.getElementById("finishRosterStationLoadout");
+
+  if (stationLoadout) {
+    renderFinishRosterStationLoadout(rows, stationLoadout);
+  }
+
   if (tableBody) {
     if (finishRosterApiState.lastError) {
       tableBody.innerHTML = `<tr><td colspan="10" class="roster-api-empty">${escapeHtml(finishRosterApiState.lastError)}</td></tr>`;
@@ -5693,9 +7272,10 @@ function renderFinishRosterApiPanel() {
       tableBody.innerHTML = `<tr><td colspan="10" class="roster-api-empty">No operators match the current filter selection.</td></tr>`;
     } else {
       tableBody.innerHTML = rows.map(renderFinishRosterTableRow).join("");
-      bindFinishRosterTableEvents(rows);
     }
   }
+
+  bindFinishRosterTableEvents(rows);
 
   if (!finishRosterUiState.selectedRosterKey && rows.length && !finishRosterUiState.draftAssignment) {
     finishRosterUiState.selectedRosterKey = makeFinishRosterAssignmentKey(rows[0]);
@@ -5703,13 +7283,147 @@ function renderFinishRosterApiPanel() {
 
   renderFinishRosterDetailPanel(rows, currentProfile, canEdit);
   renderFinishRosterAuditLog();
+  fixFinishRosterRoleFilterNoTq_();
+}
+
+
+function getFinishRosterStationTheme(station) {
+  const clean = normalizeFinishOperatorStation(station || "");
+  if (clean.includes("MEI")) return "cyan";
+  if (clean === "Mounting") return "orange";
+  if (clean === "Final Inspection") return "green";
+  if (clean === "Drill") return "purple";
+  if (clean === "Bigs" || clean === "Sharps") return "pink";
+  if (clean === "Floater" || clean === "Utility") return "amber";
+  return "blue";
+}
+
+function getFinishRosterCardInitials(name) {
+  return String(name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0])
+    .join("")
+    .toUpperCase() || "OP";
+}
+
+function getFinishRosterStationJph(rows) {
+  return (rows || []).reduce((sum, row) => {
+    const custom = Number(String(row.individualJph || "").replace(/,/g, ""));
+    if (Number.isFinite(custom) && custom > 0) return sum + custom;
+
+    const finalJph = Number(String(row.finalJph || row.FinalJPH || "").replace(/,/g, ""));
+    if (Number.isFinite(finalJph) && finalJph > 0) return sum + finalJph;
+
+    const station = normalizeFinishOperatorStation(row.defaultArea || row.liveStation || "");
+    if (station === "Mounting") return sum + 25;
+    if (station === "Final Inspection") return sum + 75;
+    if (station === "Drill") return sum + 65;
+    if (station === "Finish Unbox") return sum + 125;
+    if (station.includes("MEI")) return sum + 50;
+    if (station === "Bigs" || station === "Sharps") return sum + 15;
+    return sum;
+  }, 0);
+}
+
+function renderFinishRosterStationLoadout(rows, target) {
+  if (!target) return;
+
+  if (finishRosterApiState.lastError) {
+    target.innerHTML = `<article class="roster-api-empty">${escapeHtml(finishRosterApiState.lastError)}</article>`;
+    return;
+  }
+
+  const stationOrder = FINISH_ROSTER_ASSIGNABLE_AREAS.filter(station => !shouldHideFinishLmsArea_(station));
+  const grouped = {};
+  stationOrder.forEach(station => { grouped[station] = []; });
+
+  (rows || []).forEach(row => {
+    const station = normalizeFinishOperatorStation(row.defaultArea || row.liveStation || "Unassigned");
+    if (shouldHideFinishLmsArea_(station)) return;
+    const key = stationOrder.includes(station) ? station : "Floater";
+    grouped[key].push(row);
+  });
+
+  Object.keys(grouped).forEach(key => {
+    grouped[key] = (grouped[key] || []).filter(row => {
+      const name = row.operatorName || "";
+      const station = row.defaultArea || row.liveStation || key || "";
+      return (
+        !shouldHideFinishOperatorOnWebpage(name) &&
+        !shouldHideFinishLmsArea_(name) &&
+        !shouldHideFinishLmsArea_(station)
+      );
+    });
+  });
+
+  const visibleStations = stationOrder.filter(station => grouped[station] && grouped[station].length);
+  const stationsToRender = visibleStations.length ? visibleStations : stationOrder.slice(0, 6);
+
+  if (!rows || !rows.length) {
+    target.innerHTML = `<article class="finish-roster-empty-loadout"><h3>No operators match this setup</h3><p>Clear filters or add an operator to begin the Finish roster setup.</p></article>`;
+    return;
+  }
+
+  target.innerHTML = stationsToRender.map(station => {
+    const stationRows = (grouped[station] || []).sort((a, b) => String(a.operatorName || "").localeCompare(String(b.operatorName || "")));
+    const theme = getFinishRosterStationTheme(station);
+    const activeCount = stationRows.filter(row => isFinishRosterRowAssignedForUi_(row)).length;
+    const jph = getFinishRosterStationJph(stationRows);
+    const cards = stationRows.length
+      ? stationRows.map(renderFinishRosterStationAssociateCard).join("")
+      : `<article class="finish-roster-empty-station">No associates assigned</article>`;
+
+    return `
+      <section class="finish-roster-station-panel ${escapeHtml(theme)}">
+        <header class="finish-roster-station-header">
+          <div>
+            <span class="finish-roster-station-dot"></span>
+            <h4>${escapeHtml(station)}</h4>
+          </div>
+          <div class="finish-roster-station-metrics">
+            <strong>${numberFmt(activeCount)}</strong><span>body</span>
+            <strong>${numberFmt(jph)}</strong><span>lane jph</span>
+          </div>
+        </header>
+        <div class="finish-roster-associate-grid">
+          ${cards}
+        </div>
+      </section>`;
+  }).join("");
+}
+
+function renderFinishRosterStationAssociateCard(row) {
+  const key = makeFinishRosterAssignmentKey(row);
+  const selected = finishRosterUiState.selectedRosterKey === key && !finishRosterUiState.draftAssignment;
+  const initials = getFinishRosterCardInitials(row.operatorName);
+  const isAssigned = isFinishRosterRowAssignedForUi_(row);
+  const status = isAssigned ? normalizeFinishAssignmentStatusForUi_(row) : "Unassigned";
+  const role = isAssigned ? normalizeFinishRoleStatusForUi_(row) : "Unassigned";
+  const position = [row.defaultLine, row.defaultPosition].filter(Boolean).join(" · ");
+  const jph = row.individualJph || row.finalJph || row.FinalJPH || "Default";
+
+  return `
+    <button type="button" class="finish-roster-person-card ${selected ? "is-selected" : ""} ${isAssigned ? "" : "is-unassigned"}" data-roster-select="${escapeHtml(key)}">
+      <span class="finish-roster-person-avatar">${escapeHtml(initials)}</span>
+      <span class="finish-roster-person-main">
+        <strong>${escapeHtml(row.operatorName || "Unnamed")}</strong>
+        <small>${escapeHtml(row.liveStation || row.defaultArea || "No station")} ${position ? "· " + escapeHtml(position) : ""}</small>
+      </span>
+      <span class="finish-roster-person-tags">
+        <i>${escapeHtml(status)}</i>
+        <i>${escapeHtml(role)}</i>
+        <i>${escapeHtml(String(jph))} JPH</i>
+      </span>
+    </button>`;
 }
 
 function renderFinishRosterTableRow(row) {
   const selected = finishRosterUiState.selectedRosterKey === makeFinishRosterAssignmentKey(row) && !finishRosterUiState.draftAssignment;
   const initials = String(row.operatorName || "").split(/\s+/).filter(Boolean).slice(0,2).map(part => part[0]).join("").toUpperCase() || "OP";
-  const status = String(row.activeStatus || "Active");
-  const isAssigned = !!row.isSaved && !!row.shiftType;
+  const isAssigned = isFinishRosterRowAssignedForUi_(row);
+  const status = isAssigned ? normalizeFinishAssignmentStatusForUi_(row) : "Unassigned";
   const shiftDisplay = isAssigned ? row.shiftType : "Not Assigned";
   const statusClass = status.toLowerCase() === "active" ? "active" : "archived";
 
@@ -5757,7 +7471,7 @@ function renderFinishRosterDetailPanel(rows, currentProfile, canEdit) {
   const selected = finishRosterUiState.draftAssignment ? finishRosterUiState.draftAssignment : (rows || []).find(row => makeFinishRosterAssignmentKey(row) === finishRosterUiState.selectedRosterKey);
 
   if (!selected) {
-    target.innerHTML = `<div class="finish-roster-detail-empty"><h3>Select an operator</h3><p>Click a row to view or edit the assignment. Use Add Operator to create a new LMS roster row.</p></div>`;
+    target.innerHTML = `<div class="finish-roster-detail-empty"><h3>Assignment Console</h3><p>Select an associate card or use Add Operator to create a new Finish setup row.</p></div>`;
     return;
   }
 
@@ -5782,10 +7496,10 @@ function renderFinishRosterDetailPanel(rows, currentProfile, canEdit) {
         <label class="full"><span>Operator</span>${isDraft ? `<select id="finishRosterDetailOperator" ${disabled}>${operatorOptions}</select>` : `<input id="finishRosterDetailOperator" value="${escapeHtml(selected.operatorName || '')}" disabled />`}</label>
         <label><span>Status</span><select id="finishRosterDetailStatus" ${disabled}>${['Active','Archived'].map(v => `<option value="${v}" ${statusTag === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label><span>Shift</span><select id="finishRosterDetailShift" ${disabled}>${['','Weekday','Weekend'].map(v => `<option value="${v}" ${String(selected.shiftType || '') === v ? 'selected' : ''}>${v || 'Select Shift'}</option>`).join('')}</select></label>
-        <label><span>Area</span><select id="finishRosterDetailArea" ${disabled}>${['Mounting','Final Inspection','Drill'].map(v => `<option value="${v}" ${String(selected.defaultArea || '') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label><span>Area</span><select id="finishRosterDetailArea" ${disabled}>${buildFinishRosterAreaOptions(selected.defaultArea || '', false)}</select></label>
         <label><span>Line</span><select id="finishRosterDetailLine" ${disabled}>${['','Line A','Line B','Line C'].map(v => `<option value="${v}" ${String(selected.defaultLine || '') === v ? 'selected' : ''}>${v || 'Select'}</option>`).join('')}</select></label>
         <label><span>Position</span><select id="finishRosterDetailPosition" ${disabled}>${buildRosterPositionOptions(selected.defaultArea || '', selected.defaultPosition || '')}</select></label>
-        <label><span>Role</span><select id="finishRosterDetailRole" ${disabled}>${['Unassigned','Certified','TQ','Training'].map(v => `<option value="${v}" ${String(selected.roleType || 'Unassigned') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label><span>Role</span><select id="finishRosterDetailRole" ${disabled}>${['Unassigned','Certified','Training'].map(v => `<option value="${v}" ${String(selected.roleType || 'Unassigned') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label><span>Week</span><select id="finishRosterDetailWeek" ${disabled}>${['','W1','W2','W3','W4','W5','W6','W7','W8'].map(v => `<option value="${v}" ${String(selected.trainingWeek || '') === v ? 'selected' : ''}>${v || '—'}</option>`).join('')}</select></label>
         <label><span>Individual JPH</span><input id="finishRosterDetailJph" type="number" min="0" step="0.1" value="${escapeHtml(selected.individualJph || '')}" placeholder="Default" ${disabled} /></label>
       </div>
@@ -5957,7 +7671,9 @@ async function saveFinishRosterDetail(selected, isDraft) {
   if (!operatorName) { showFinishAssignmentToast('Pick an operator before saving.'); return; }
   const selectedShiftValue = document.getElementById('finishRosterDetailShift')?.value || '';
   if (!selectedShiftValue) { showFinishAssignmentToast('Select Weekday or Weekend before saving this operator.'); return; }
-  const payload = { updatedBy: getCurrentUsername(), ownerUsername: getRosterOwnerUsername(), shiftType: selectedShiftValue, operatorName, activeStatus: document.getElementById('finishRosterDetailStatus')?.value || 'Active', defaultArea: document.getElementById('finishRosterDetailArea')?.value || '', defaultLine: document.getElementById('finishRosterDetailLine')?.value || '', defaultPosition: document.getElementById('finishRosterDetailPosition')?.value || '', roleType: document.getElementById('finishRosterDetailRole')?.value || 'Unassigned', trainingWeek: document.getElementById('finishRosterDetailRole')?.value === 'Training' ? (document.getElementById('finishRosterDetailWeek')?.value || '') : '', individualJph: document.getElementById('finishRosterDetailJph')?.value || '' };
+  const selectedRoleRaw = document.getElementById('finishRosterDetailRole')?.value || 'Unassigned';
+  const selectedRole = String(selectedRoleRaw).toUpperCase() === 'TQ' ? 'Certified' : selectedRoleRaw;
+  const payload = { updatedBy: getCurrentUsername(), ownerUsername: getRosterOwnerUsername(), shiftType: selectedShiftValue, operatorName, activeStatus: document.getElementById('finishRosterDetailStatus')?.value || 'Active', defaultArea: document.getElementById('finishRosterDetailArea')?.value || '', defaultLine: document.getElementById('finishRosterDetailLine')?.value || '', defaultPosition: document.getElementById('finishRosterDetailPosition')?.value || '', roleType: selectedRole, trainingWeek: selectedRole === 'Training' ? (document.getElementById('finishRosterDetailWeek')?.value || '') : '', individualJph: document.getElementById('finishRosterDetailJph')?.value || '' };
   if (!isDraft) {
     payload.originalDefaultArea = selected.defaultArea || '';
     payload.originalDefaultLine = selected.defaultLine || '';
@@ -6004,8 +7720,8 @@ function makeFinishRosterAssignmentKey(row) {
 function buildFinishRosterEditorRows(options = {}) {
   const { filterArea = "all", filterRole = "all", searchText = "" } = options || {};
   const selectedShift = getRosterShiftType();
-  const rosterRows = dedupeFinishRosterRowsForUi(Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : []);
-  const masterOps = Array.isArray(finishRosterApiState.operators) ? finishRosterApiState.operators : [];
+  const rosterRows = dedupeFinishRosterRowsForUi(filterFinishWebpageRows_(Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : []));
+  const masterOps = filterFinishWebpageRows_(Array.isArray(finishRosterApiState.operators) ? finishRosterApiState.operators : []);
 
   const liveByName = {};
   masterOps.forEach(op => {
@@ -6029,11 +7745,11 @@ function buildFinishRosterEditorRows(options = {}) {
       shiftType: saved.shiftType || selectedShift,
       liveStation: live.liveStation || normalizeFinishOperatorStation(saved.defaultArea || ""),
       lastTotal: Number(live.lastTotal || 0) || 0,
-      activeStatus: saved.activeStatus || "Active",
+      activeStatus: normalizeFinishAssignmentStatusForUi_(saved),
       defaultLine: saved.defaultLine || "",
       defaultArea: normalizeFinishOperatorStation(saved.defaultArea || ""),
       defaultPosition: saved.defaultPosition || "",
-      roleType: saved.roleType || "Unassigned",
+      roleType: normalizeFinishRoleStatusForUi_(saved),
       trainingWeek: saved.trainingWeek || "",
       individualJph: saved.individualJph ?? saved.individualJPH ?? "",
       isSaved: true
@@ -6054,6 +7770,11 @@ function buildFinishRosterEditorRows(options = {}) {
     const alreadySaved = rows.some(row => normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === operatorName.toLowerCase());
     if (alreadySaved) return;
 
+    // Strict shift filter:
+    // Weekday/Weekend shows only associates already saved to that selected shift.
+    // All Shifts is the only view that includes first-time / not-assigned live operators.
+    if (String(selectedShift || "").toLowerCase() !== "all") return;
+
     rows.push({
       operatorName,
       shiftType: "",
@@ -6062,7 +7783,7 @@ function buildFinishRosterEditorRows(options = {}) {
       lastTotal: Number(op.lastTotal || 0) || 0,
       activeStatus: "Unassigned",
       defaultLine: liveStation === "Drill" ? "Line C" : "",
-      defaultArea: (isLineSlotStation(liveStation) || liveStation === "Drill") ? liveStation : "",
+      defaultArea: isFinishRosterAssignableArea(liveStation) ? liveStation : "",
       defaultPosition: "",
       roleType: "Unassigned",
       trainingWeek: "",
@@ -6072,6 +7793,13 @@ function buildFinishRosterEditorRows(options = {}) {
   });
 
   return rows
+    .filter(row => {
+      if (String(selectedShift || "").toLowerCase() === "all") return true;
+      return (
+        !!row.shiftType &&
+        String(row.shiftType || "").toLowerCase() === String(selectedShift || "").toLowerCase()
+      );
+    })
     .filter(row => filterArea === "all" || row.defaultArea === filterArea || row.liveStation === filterArea)
     .filter(row => filterRole === "all" || (filterRole === "Unassigned" ? (!row.isSaved || String(row.roleType || "Unassigned") === "Unassigned") : String(row.roleType || "Unassigned") === filterRole))
     .filter(row => {
@@ -6146,7 +7874,7 @@ function renderFinishRosterEditorRow(row, canEdit) {
 
         <label><span>Area</span>
           <select data-roster-field="defaultArea" ${disabled}>
-            ${["Mounting", "Final Inspection", "Drill"].map(v => `<option value="${v}" ${row.defaultArea === v ? "selected" : ""}>${v}</option>`).join("")}
+            ${buildFinishRosterAreaOptions(row.defaultArea || '', false)}
           </select>
         </label>
 
@@ -6164,7 +7892,7 @@ function renderFinishRosterEditorRow(row, canEdit) {
 
         <label><span>Role</span>
           <select data-roster-field="roleType" ${disabled}>
-            ${["Unassigned", "Certified", "TQ", "Training"].map(v => `<option value="${v}" ${row.roleType === v ? "selected" : ""}>${v}</option>`).join("")}
+            ${["Unassigned", "Certified", "Training"].map(v => `<option value="${v}" ${row.roleType === v ? "selected" : ""}>${v}</option>`).join("")}
           </select>
         </label>
 
@@ -6309,7 +8037,7 @@ async function saveFinishRosterRowFromDom(rowEl) {
 
     showFinishAssignmentToast(`Saved ${operatorName} / ${saveShift}`);
 
-    if (saveShift !== getRosterShiftType()) {
+    if (String(getRosterShiftType()).toLowerCase() !== "all" && saveShift !== getRosterShiftType()) {
       finishRosterApiState.shiftType = saveShift;
       const shiftSelect = document.getElementById("finishRosterShiftSelect");
       if (shiftSelect) shiftSelect.value = saveShift;
@@ -6621,7 +8349,9 @@ function applyFinishAssignmentPermissionLock() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  applyFinishSetupLabelRename_();
   initFinishRosterApiPanel();
+  initFinishLmsHideAreaObserver_();
   loadFinishRosterBackend({ silent: true });
 });
 
@@ -10020,3 +11750,20 @@ setTimeout(() => {
   window.refreshFinishDowntimeStatusEvents = fetchStatusEvents;
 })();
 
+
+
+
+function cleanFinishTqRoleOptionsOnce_() {
+  const root = document.querySelector("[data-content='lms-control']") || document.body;
+
+  root.querySelectorAll("select").forEach(select => {
+    Array.from(select.options || []).forEach(option => {
+      const text = String(option.textContent || "").trim().toUpperCase();
+      const value = String(option.value || "").trim().toUpperCase();
+
+      if (text === "TQ" || value === "TQ") {
+        option.remove();
+      }
+    });
+  });
+}

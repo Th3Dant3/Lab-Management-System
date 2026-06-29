@@ -13,7 +13,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="FinishDash.css?v=20260608-status-events">
+  <link rel="stylesheet" href="FinishDash.css?v=20260629-finish-roster-fix">
 </head>
 
 <body>
@@ -673,7 +673,7 @@
           <div>
             <span class="roster-api-eyebrow">LMS CONTROL CENTER</span>
             <h2>Finish Roster Control</h2>
-            <p>LMS-only roster editor. Clean filters on the left, live roster in the center, and full assignment detail on the right.</p>
+            <p>AR-style roster setup for Finish. Assign associates by station, shift, training status, and custom JPH from the webpage.</p>
           </div>
           <div class="roster-api-status-card finish-roster-admin-status">
             <span>Roster API</span>
@@ -685,8 +685,8 @@
         <div class="finish-roster-admin-layout">
           <aside class="finish-roster-left-rail">
             <div class="finish-roster-side-card">
-              <span class="finish-side-title">Roster Filters</span>
-              <p class="finish-side-help">Unassigned operators stay separate until a shift is saved.</p>
+              <span class="finish-side-title">Setup Filters</span>
+              <p class="finish-side-help">Pick the profile and shift, then use the assignment console to save the setup.</p>
 
               <label>
                 Editing Profile
@@ -718,9 +718,17 @@
                 Area Filter
                 <select id="finishRosterAreaFilter">
                   <option value="all">All Floor Operators</option>
+                  <option value="Finish Unbox">Finish Unbox</option>
+                  <option value="MEI Line B">MEI Line B</option>
+                  <option value="MEI Line C">MEI Line C</option>
+                  <option value="MEI Easy Fit">MEI Easy Fit</option>
                   <option value="Mounting">Mounting</option>
-                  <option value="Final Inspection">Final Inspection</option>
                   <option value="Drill">Drill</option>
+                  <option value="Bigs">Bigs</option>
+                  <option value="Sharps">Sharps</option>
+                  <option value="Final Inspection">Final Inspection</option>
+                  <option value="Floater">Floater</option>
+                  <option value="Utility">Utility</option>
                 </select>
               </label>
 
@@ -751,39 +759,25 @@
               <article><span>Open Exceptions</span><strong id="finishRosterExceptionCountTop">0</strong><small>Need attention</small></article>
             </div>
 
-            <section class="finish-roster-table-card">
-              <div class="finish-roster-table-head">
+            <section class="finish-roster-loadout-card">
+              <div class="finish-roster-table-head finish-roster-loadout-head">
                 <div>
-                  <h3>Roster</h3>
+                  <h3>Station Loadout</h3>
                   <span id="finishRosterCountMeta">0 results</span>
                 </div>
                 <div class="finish-roster-table-tools">
                   <input id="finishRosterSearchInput" type="search" placeholder="Search associates..." />
-                  <span id="finishRosterSortHint">Sorted by Name (A–Z)</span>
+                  <span id="finishRosterSortHint">Grouped by Finish station</span>
                 </div>
               </div>
 
-              <div class="finish-roster-table-wrap">
-                <table class="finish-roster-table">
-                  <thead>
-                    <tr>
-                      <th>Associate</th>
-                      <th>Status</th>
-                      <th>Shift</th>
-                      <th>Area</th>
-                      <th>Line</th>
-                      <th>Position</th>
-                      <th>Role</th>
-                      <th>Week</th>
-                      <th>JPH</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody id="finishRosterTableBody">
-                    <tr><td colspan="10" class="roster-api-empty">Waiting for roster API...</td></tr>
-                  </tbody>
-                </table>
+              <div id="finishRosterStationLoadout" class="finish-roster-station-loadout">
+                <article class="roster-api-empty">Waiting for roster API...</article>
               </div>
+
+              <table class="finish-roster-table finish-roster-hidden-table" aria-hidden="true">
+                <tbody id="finishRosterTableBody"></tbody>
+              </table>
             </section>
           </main>
 
@@ -791,8 +785,8 @@
             <section class="finish-roster-detail-card">
               <div id="finishRosterDetailPanel" class="finish-roster-detail-panel">
                 <div class="finish-roster-detail-empty">
-                  <h3>Select an operator</h3>
-                  <p>Click a row to view or edit the assignment. Use Add Operator to create a new LMS roster row.</p>
+                  <h3>Assignment Console</h3>
+                  <p>Select an associate card or use Add Operator to create a new Finish setup row.</p>
                 </div>
               </div>
             </section>
