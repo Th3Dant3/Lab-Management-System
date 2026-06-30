@@ -761,14 +761,14 @@ function canEditFinishOperatorAssignments() {
   const currentRole = String(getCurrentUserRole() || "").trim();
   const role = profileRole || currentRole;
 
-  const profileInactive =
+  const inactive =
     profile &&
     (
       profile.isActive === false ||
       String(profile.activeStatus || profile.status || "Active").trim().toLowerCase() === "inactive"
     );
 
-  if (profileInactive) return false;
+  if (inactive) return false;
 
   return (
     isFinishSharedSetupEditorUser_() ||
@@ -3742,16 +3742,16 @@ const FINISH_OPERATOR_STATION_META = {
 };
 
 function isFinishOperatorStationAllowed(stationName) {
-  const name = normalizeFinishOperatorStation(stationName);
+  const station = normalizeFinishOperatorStation(stationName || "");
 
-  return ![
-    "FSV Scan & Verify",
-    "FSV / Frame Only",
-    "Frame Only",
-    "Frame Only Scan & Verify",
-    "FSV Scan & Verify / Frame Only",
-    "AR-OUT"
-  ].includes(name);
+  // Finish Setup and Morning Set Up must include these assignable areas.
+  if (["Finish Unbox", "Mounting", "Drill", "Final Inspection", "MEI Line B", "MEI Line C", "MEI Easy Fit"].includes(station)) {
+    return true;
+  }
+
+  if (!station) return false;
+  if (station === "Utility") return false;
+  return true;
 }
 
 let finishOperatorState = {
@@ -6968,7 +6968,7 @@ window.debugFinishSetupPermissions = function() {
     canEditSharedFinishSetup: canEditFinishOperatorAssignments(),
     canSeeEditingProfileDropdown: canSeeFinishEditingProfileControl(),
     sharedOwnerUsername: getRosterOwnerUsername(),
-    note: "If role/profile is blank, TEST users are allowed for validation. Real supervisors/managers should be added to FINISH_USER_PROFILES with Supervisor/Manager role."
+    note: "Approved editors can edit the shared Finish Setup roster directly. No own-profile lock. No BLOPEZ approval needed."
   };
   console.log("[Finish Setup Permissions]", result);
   return result;
@@ -7455,10 +7455,16 @@ function forceUnlockFinishSetupForSharedEditors_() {
     el.classList.remove("is-disabled", "disabled");
   });
 
-  const warning = root.querySelector(".finish-assignment-readonly-banner, .finish-roster-readonly-banner, .readonly-banner");
-  if (warning) {
+  root.querySelectorAll(".finish-assignment-readonly-banner, .finish-roster-readonly-banner, .readonly-banner").forEach(warning => {
     warning.innerHTML = `<strong>Edit access active</strong><span>You can edit the shared Finish Setup roster. Saves update Weekday/Weekend/JPH under BLOPEZ for everyone.</span>`;
-  }
+  });
+
+  document.querySelectorAll(".toast, .finish-toast, .finish-assignment-toast, [role='alert']").forEach(el => {
+    const text = String(el.textContent || "").toLowerCase();
+    if (text.includes("only lms can edit") || text.includes("own roster") || text.includes("another profile")) {
+      el.remove();
+    }
+  });
 }
 
 
@@ -7616,6 +7622,8 @@ function getFinishRosterStationJph(rows) {
 }
 
 function renderFinishRosterStationLoadout(rows, target) {
+  rows = filterFinishStationLoadoutRowsToAssigned_(rows);
+
   if (!target) return;
 
   if (finishRosterApiState.lastError) {
@@ -7753,6 +7761,51 @@ function bindFinishRosterTableEvents(rows) {
 }
 
 
+
+/*******************************************************
+ * FINISH SETUP — ASSIGNABLE AREA PATCH
+ * Adds Finish Unbox + MEI to assignment list.
+ *******************************************************/
+function getFinishSetupAssignableAreas_() {
+  return [
+    "Finish Unbox",
+    "Mounting",
+    "Drill",
+    "Final Inspection",
+    "MEI Line B",
+    "MEI Line C",
+    "MEI Easy Fit"
+  ];
+}
+
+function isFinishSetupMorningAssignableArea_(area) {
+  const station = normalizeFinishOperatorStation(area || "");
+  return getFinishSetupAssignableAreas_().includes(station);
+}
+
+function getFinishSetupDefaultJphForArea_(area) {
+  const station = normalizeFinishOperatorStation(area || "");
+  const defaults = {
+    "Finish Unbox": 72,
+    "Mounting": 25,
+    "Drill": 65,
+    "Final Inspection": 75,
+    "MEI Line B": 75,
+    "MEI Line C": 75,
+    "MEI Easy Fit": 75
+  };
+
+  return defaults[station] || getFinishOperatorBaseRate(station, "") || 0;
+}
+
+function getFinishSetupAreaType_(area) {
+  const station = normalizeFinishOperatorStation(area || "");
+  if (station === "Finish Unbox") return "unbox";
+  if (station.startsWith("MEI")) return "mei";
+  return "production";
+}
+
+
 /*******************************************************
  * FINISH SETUP — ASSOCIATE AREA CERTIFICATION MATRIX
  * Associate first setup:
@@ -7797,13 +7850,16 @@ function findFinishAssociateAreaRow_(operatorName, shiftType, area) {
 function getFinishAreaDefaultLine_(area) {
   const station = normalizeFinishOperatorStation(area || "");
   if (station === "Drill") return "Line C";
+  if (station === "MEI Line B") return "Line B";
+  if (station === "MEI Line C") return "Line C";
+  if (station === "MEI Easy Fit") return "Line B";
   return "";
 }
 
 function getFinishAssociateAreaList_() {
-  return (FINISH_ROSTER_ASSIGNABLE_AREAS || [])
-    .filter(area => area && area !== "Floater")
-    .filter(area => !shouldHideFinishLmsArea_(area));
+  // Associate-first setup must include all assignable Finish areas,
+  // including Finish Unbox and MEI, so they can be used in Morning Set Up.
+  return getFinishSetupAssignableAreas_();
 }
 
 function renderFinishAssociateAreaSetupPanel_(selected, canEdit) {
@@ -7854,7 +7910,13 @@ function renderFinishAssociateAreaSetupPanel_(selected, canEdit) {
         <h4>Associate Area Setup</h4>
         <p>${escapeHtml(operatorName)} · ${escapeHtml(shiftType)} · Set every area this associate can work.</p>
       </div>
-      <button id="finishAssociateAreaSaveAll" class="finish-associate-area-save-all" type="button" ${disabled}>Save All Areas</button>
+      <div class="finish-associate-area-head-actions">
+        <label class="finish-associate-move-toggle">
+          <input id="finishAssociateMoveMode" type="checkbox" checked ${disabled}>
+          <span>Move associate when changing primary area</span>
+        </label>
+        <button id="finishAssociateAreaSaveAll" class="finish-associate-area-save-all" type="button" ${disabled}>Save All Areas</button>
+      </div>
     </div>
 
     <div class="finish-associate-area-grid">
@@ -7863,7 +7925,7 @@ function renderFinishAssociateAreaSetupPanel_(selected, canEdit) {
         const role = normalizeFinishAssociateAreaRole_(existing?.roleType || "");
         const week = existing?.trainingWeek || "";
         const customJph = existing?.individualJph || "";
-        const baseJph = getFinishOperatorBaseRate(area, operatorName) || 0;
+        const baseJph = getFinishSetupDefaultJphForArea_(area) || 0;
         const line = existing?.defaultLine || getFinishAreaDefaultLine_(area);
         const position = existing?.defaultPosition || "";
 
@@ -7992,7 +8054,7 @@ function buildFinishAssociateAreaPayload_(selected, area) {
     shiftType,
     operatorName,
     activeStatus: "Active",
-    defaultArea: area,
+    defaultArea: normalizeFinishSetupAreaForSave_(area),
     defaultLine,
     defaultPosition,
     roleType: role,
@@ -8005,6 +8067,47 @@ function buildFinishAssociateAreaPayload_(selected, area) {
 
   return payload;
 }
+
+
+async function removeConflictingFinishAssociateAreaRows_(payload) {
+  if (!payload || !payload.operatorName || !payload.shiftType || !payload.defaultArea) return;
+
+  const operatorName = normalizeAssignmentOperatorName(payload.operatorName || "").toLowerCase();
+  const owner = String(payload.ownerUsername || getRosterOwnerUsername() || "").trim().toUpperCase();
+  const shift = String(payload.shiftType || "").trim().toLowerCase();
+  const newArea = normalizeFinishOperatorStation(payload.defaultArea || "");
+
+  const rows = (finishRosterApiState.roster || []).filter(row =>
+    String(row.activeStatus || "").toLowerCase() !== "removed" &&
+    String(row.ownerUsername || "").trim().toUpperCase() === owner &&
+    normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === operatorName &&
+    String(row.shiftType || "").trim().toLowerCase() === shift &&
+    normalizeFinishOperatorStation(row.defaultArea || "") !== newArea
+  );
+
+  // Move behavior:
+  // If associate is being assigned to a new primary area from the single-row detail editor,
+  // remove old active primary rows so they move instead of duplicate.
+  for (const row of rows) {
+    const removePayload = {
+      updatedBy: getCurrentUsername(),
+      ownerUsername: owner,
+      shiftType: row.shiftType,
+      operatorName: row.operatorName,
+      activeStatus: "Removed",
+      defaultArea: row.defaultArea,
+      defaultLine: row.defaultLine,
+      defaultPosition: row.defaultPosition,
+      roleType: row.roleType,
+      trainingWeek: row.trainingWeek,
+      individualJph: row.individualJph
+    };
+
+    applyOriginalRosterLookupToPayload(removePayload, row);
+    await fetchFinishRosterApi("saveFinishRosterControl", removePayload);
+  }
+}
+
 
 async function saveFinishAssociateAreaSetup_(selected, area) {
   if (!canEditFinishOperatorAssignments()) {
@@ -8025,6 +8128,11 @@ async function saveFinishAssociateAreaSetup_(selected, area) {
   }
 
   try {
+    const moveMode = !!document.getElementById("finishAssociateMoveMode")?.checked;
+    if (moveMode && payload.roleType !== "Unassigned") {
+      await removeConflictingFinishAssociateAreaRows_(payload);
+    }
+
     await fetchFinishRosterApi("saveFinishRosterControl", payload);
     showFinishAssignmentToast(`Saved ${payload.operatorName} · ${payload.defaultArea} · ${payload.roleType}`);
     await loadFinishRosterForSelectedProfile({ silent: true });
@@ -8115,6 +8223,35 @@ function installFinishAssociateAreaSetupStyles_() {
       font-size: 12px;
       font-weight: 750;
       line-height: 1.45;
+    }
+
+
+    .finish-associate-area-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .finish-associate-move-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 10px;
+      border: 1px solid rgba(95,216,255,.20);
+      border-radius: 12px;
+      background: rgba(95,216,255,.07);
+      color: #bfefff;
+      font-size: 11px;
+      font-weight: 850;
+      cursor: pointer;
+      max-width: 280px;
+    }
+
+    .finish-associate-move-toggle input {
+      width: auto;
+      accent-color: #5fd8ff;
     }
 
     .finish-associate-area-save-all {
@@ -8301,6 +8438,7 @@ function renderFinishRosterDetailPanel(rows, currentProfile, canEdit) {
 
   bindFinishRosterDetailEvents(selected, isDraft, canEdit);
   installFinishAssociateAreaSetupStyles_();
+  installFinishOperatorDropdownPatch_();
   renderFinishAssociateAreaSetupPanel_(selected, canEdit);
   setTimeout(forceUnlockFinishSetupForSharedEditors_, 0);
 }
@@ -9137,6 +9275,7 @@ function applyFinishAssignmentPermissionLock() {
 document.addEventListener("DOMContentLoaded", () => {
   applyFinishSetupLabelRename_();
   installFinishKmanackPreviewStyles_();
+  installFinishAssignedOnlyLoadoutStyles_();
   installFinishKmanackPreviewButton_();
   forceFinishSetupTabVisibilityForAllowedRoles_();
   initFinishRosterApiPanel();
@@ -12576,3 +12715,170 @@ window.emergencyClearFinishPreview = function() {
 window.previewKmanack = function() {
   return setFinishPreviewKmanack();
 };
+
+
+
+/*******************************************************
+ * FINISH SETUP — OPERATOR DROPDOWN + EMPTY AREA SETUP
+ * Requested behavior:
+ * - Operator field is a dropdown from all active floor operators
+ * - Area setup starts empty/unassigned until user assigns associate
+ * - Areas shown: Finish Unbox, MEI, Mounting, Big & Sharp, Drill, Final Inspection
+ *******************************************************/
+function getFinishSetupAssignableAreas_() {
+  return [
+    "Finish Unbox",
+    "MEI",
+    "Mounting",
+    "Big & Sharp",
+    "Drill",
+    "Final Inspection"
+  ];
+}
+
+function normalizeFinishSetupAreaForSave_(area) {
+  const station = normalizeFinishOperatorStation(area || "");
+  if (station === "Bigs" || station === "Sharps" || station === "Big & Sharp" || station === "Bigs / Sharps") return "Big & Sharp";
+  if (station === "MEI Line B" || station === "MEI Line C" || station === "MEI Easy Fit" || station === "MEI") return "MEI";
+  return station;
+}
+
+function getFinishSetupDefaultJphForArea_(area) {
+  const station = normalizeFinishSetupAreaForSave_(area || "");
+  const defaults = {
+    "Finish Unbox": 72,
+    "MEI": 75,
+    "Mounting": 25,
+    "Big & Sharp": 25,
+    "Drill": 65,
+    "Final Inspection": 75
+  };
+
+  return defaults[station] || getFinishOperatorBaseRate(station, "") || 0;
+}
+
+function getFinishAreaDefaultLine_(area) {
+  const station = normalizeFinishSetupAreaForSave_(area || "");
+  if (station === "Drill") return "Line C";
+  return "";
+}
+
+function getFinishAssociateAreaList_() {
+  return getFinishSetupAssignableAreas_();
+}
+
+function buildFinishOperatorDropdownOptions_(selectedName) {
+  const selected = normalizeAssignmentOperatorName(selectedName || "").toLowerCase();
+  const seen = new Set();
+  const names = [];
+
+  const addName = name => {
+    const clean = normalizeAssignmentOperatorName(name || "");
+    if (!clean) return;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+    if (shouldHideFinishOperatorOnWebpage(clean)) return;
+    seen.add(key);
+    names.push(clean);
+  };
+
+  (finishRosterApiState.master || []).forEach(row => addName(row.operatorName || row.OperatorName || row.name));
+  (finishRosterApiState.roster || []).forEach(row => addName(row.operatorName || row.OperatorName || row.name));
+
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    (station.operatorList || []).forEach(op => addName(op.name));
+  });
+
+  names.sort((a, b) => a.localeCompare(b));
+
+  return `
+    <option value="">Select associate</option>
+    ${names.map(name => `<option value="${escapeHtml(name)}" ${name.toLowerCase() === selected ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+  `;
+}
+
+function installFinishOperatorDropdownPatch_() {
+  const input = document.getElementById("finishRosterDetailOperator");
+  if (!input || input.tagName === "SELECT") return;
+
+  const selectedValue = input.value || input.getAttribute("value") || "";
+  const select = document.createElement("select");
+  select.id = input.id;
+  select.className = input.className;
+  select.name = input.name || input.id;
+  select.innerHTML = buildFinishOperatorDropdownOptions_(selectedValue);
+
+  [...input.attributes].forEach(attr => {
+    if (attr.name !== "type" && attr.name !== "value") {
+      select.setAttribute(attr.name, attr.value);
+    }
+  });
+
+  input.replaceWith(select);
+
+  select.addEventListener("change", () => {
+    const selected = {
+      operatorName: select.value,
+      shiftType: document.getElementById("finishRosterDetailShift")?.value || "Weekday"
+    };
+    renderFinishAssociateAreaSetupPanel_(selected, canEditFinishOperatorAssignments());
+  });
+}
+
+function shouldShowFinishStationLoadoutRow_(row) {
+  if (!row) return false;
+  if (String(row.activeStatus || "").toLowerCase() === "removed") return false;
+  const role = normalizeFinishAssociateAreaRole_(row.roleType || row.role || "");
+  if (role === "Unassigned") return false;
+  return !!normalizeAssignmentOperatorName(row.operatorName || "");
+}
+
+function filterFinishStationLoadoutRowsToAssigned_(rows) {
+  return (rows || []).filter(shouldShowFinishStationLoadoutRow_);
+}
+
+
+
+/*******************************************************
+ * FINISH SETUP — EMPTY AREA / ASSIGNED ONLY VISUAL FIX
+ *******************************************************/
+function installFinishAssignedOnlyLoadoutStyles_() {
+  if (document.getElementById("finishAssignedOnlyLoadoutStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishAssignedOnlyLoadoutStyles";
+  style.textContent = `
+    /* Associate setup should be the source of truth. Do not make unassigned rows look assigned. */
+    .finish-associate-area-card .role-unassigned {
+      color: #94a3b8 !important;
+      border-color: rgba(148,163,184,.25) !important;
+      background: rgba(148,163,184,.09) !important;
+    }
+
+    #finishRosterDetailOperator {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.11);
+      border-radius: 12px;
+      background: rgba(5,14,28,.88);
+      color: #e5f3ff;
+      padding: 11px 12px;
+      outline: none;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
+
+function startFinishSetupSharedEditUnlockLoop_() {
+  if (window.__finishSetupSharedEditUnlockLoop) return;
+  window.__finishSetupSharedEditUnlockLoop = setInterval(() => {
+    if (typeof forceUnlockFinishSetupForSharedEditors_ === "function") {
+      forceUnlockFinishSetupForSharedEditors_();
+    }
+  }, 800);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (typeof startFinishSetupSharedEditUnlockLoop_ === "function") startFinishSetupSharedEditUnlockLoop_();
+});
