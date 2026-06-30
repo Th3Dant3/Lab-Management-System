@@ -689,6 +689,8 @@ function getCurrentLoggedInUser() {
 }
 
 function getCurrentUsername() {
+  const previewUsername = (typeof getFinishPreviewUsername_ === "function") ? getFinishPreviewUsername_() : "";
+  if (previewUsername) return previewUsername;
   const user = getCurrentLoggedInUser();
   const username = String(
     user.username ||
@@ -729,14 +731,26 @@ const FINISH_SHARED_SETUP_EDITOR_USERS = new Set([
   "BHONICKER",
   "NPOSTON",
   "BDADE",
-  "PTOWNSEND"
+  "PTOWNSEND",
+
+  // Test / validation logins.
+  // Your console showed TEST2 has no role/profile, so role-based edit cannot detect it.
+  "TEST1",
+  "TEST2",
+  "TEST3",
+  "TEST4",
+  "TEST5"
 ]);
 
 function isFinishSharedSetupEditorUser_() {
   const username = String(getCurrentUsername() || getFinishVisibilityUsername() || "").trim().toUpperCase();
   const role = String(getCurrentUserRole() || getFinishRosterCurrentProfile()?.role || "").trim();
 
-  return FINISH_SHARED_SETUP_EDITOR_USERS.has(username) || FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(role);
+  return (
+    FINISH_SHARED_SETUP_EDITOR_USERS.has(username) ||
+    /^TEST\d+$/i.test(username) ||
+    FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(role)
+  );
 }
 
 
@@ -757,7 +771,9 @@ function canEditFinishOperatorAssignments() {
   if (profileInactive) return false;
 
   return (
+    isFinishSharedSetupEditorUser_() ||
     FINISH_SHARED_SETUP_EDITOR_USERS.has(username) ||
+    /^TEST\d+$/i.test(username) ||
     FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(role) ||
     FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(currentRole)
   );
@@ -847,6 +863,8 @@ function normalizeFinishVisibilityUsername(value) {
 }
 
 function getFinishVisibilityUsername() {
+  const previewUsername = (typeof getFinishPreviewUsername_ === "function") ? getFinishPreviewUsername_() : "";
+  if (previewUsername) return previewUsername;
   return normalizeFinishVisibilityUsername(getCurrentUsername());
 }
 
@@ -6809,21 +6827,145 @@ function getRosterOwnerUsername() {
 }
 
 
+
+/*******************************************************
+ * ADMIN PREVIEW — KMANACK ONLY
+ * BLOPEZ/JBOOMERSHINE can preview the page permissions as KMANACK.
+ * This does not change the sheet. It only changes the browser view.
+ *******************************************************/
+const FINISH_ADMIN_PREVIEW_ALLOWED_USERS = new Set(["BLOPEZ", "JBOOMERSHINE"]);
+const FINISH_ADMIN_PREVIEW_STORAGE_KEY = "finishPreviewUsername";
+
+function getFinishActualLoggedUsername_() {
+  const raw =
+    window.FINISH_LOGGED_IN_USERNAME ||
+    window.currentUsername ||
+    window.loggedInUsername ||
+    localStorage.getItem("finishUsername") ||
+    localStorage.getItem("currentUsername") ||
+    "";
+
+  return String(raw || "").trim().toUpperCase();
+}
+
+function canUseFinishAdminPreview_() {
+  const actual = getFinishActualLoggedUsername_() || String(getCurrentUsername?.() || "").trim().toUpperCase();
+  return FINISH_ADMIN_PREVIEW_ALLOWED_USERS.has(actual);
+}
+
+function getFinishPreviewUsername_() {
+  if (!canUseFinishAdminPreview_()) return "";
+  return String(localStorage.getItem(FINISH_ADMIN_PREVIEW_STORAGE_KEY) || "").trim().toUpperCase();
+}
+
+function setFinishPreviewKmanack() {
+  if (!canUseFinishAdminPreview_()) {
+    console.warn("[Finish Preview] Only BLOPEZ/JBOOMERSHINE can use preview mode.");
+    return false;
+  }
+
+  localStorage.setItem(FINISH_ADMIN_PREVIEW_STORAGE_KEY, "KMANACK");
+  console.log("[Finish Preview] Preview user set to KMANACK. Reloading...");
+  location.reload();
+  return true;
+}
+
+function clearFinishPreviewUser() {
+  localStorage.removeItem(FINISH_ADMIN_PREVIEW_STORAGE_KEY);
+  console.log("[Finish Preview] Preview cleared. Reloading...");
+  location.reload();
+  return true;
+}
+
+window.setFinishPreviewKmanack = setFinishPreviewKmanack;
+window.clearFinishPreviewUser = clearFinishPreviewUser;
+
+function installFinishKmanackPreviewButton_() {
+  if (!canUseFinishAdminPreview_()) return;
+  if (document.getElementById("finishKmanackPreviewControl")) return;
+
+  const tabHost =
+    document.querySelector(".tabs") ||
+    document.querySelector(".tab-bar") ||
+    document.querySelector(".dashboard-tabs") ||
+    document.querySelector(".finish-tabs");
+
+  if (!tabHost) return;
+
+  const preview = getFinishPreviewUsername_();
+  const wrap = document.createElement("div");
+  wrap.id = "finishKmanackPreviewControl";
+  wrap.className = "finish-kmanack-preview-control";
+  wrap.innerHTML = `
+    <span>Admin Preview</span>
+    <button type="button" id="finishPreviewKmanackBtn">${preview === "KMANACK" ? "Viewing KMANACK" : "Preview KMANACK"}</button>
+    ${preview ? `<button type="button" id="finishPreviewClearBtn">Clear</button>` : ""}
+  `;
+
+  tabHost.appendChild(wrap);
+
+  document.getElementById("finishPreviewKmanackBtn")?.addEventListener("click", setFinishPreviewKmanack);
+  document.getElementById("finishPreviewClearBtn")?.addEventListener("click", clearFinishPreviewUser);
+}
+
+function installFinishKmanackPreviewStyles_() {
+  if (document.getElementById("finishKmanackPreviewStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishKmanackPreviewStyles";
+  style.textContent = `
+    .finish-kmanack-preview-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      padding: 7px 9px;
+      border: 1px solid rgba(95,216,255,.22);
+      border-radius: 14px;
+      background: rgba(2,12,24,.72);
+    }
+
+    .finish-kmanack-preview-control span {
+      color: #8fa6c3;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .finish-kmanack-preview-control button {
+      border: 1px solid rgba(95,216,255,.35);
+      border-radius: 10px;
+      background: rgba(95,216,255,.11);
+      color: #bfefff;
+      padding: 7px 10px;
+      font-size: 11px;
+      font-weight: 950;
+      cursor: pointer;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
 /*******************************************************
  * FINISH SETUP PERMISSION DEBUG
  *******************************************************/
 window.debugFinishSetupPermissions = function() {
   const profile = getFinishRosterCurrentProfile();
+  const username = String(getCurrentUsername() || getFinishVisibilityUsername() || "").trim().toUpperCase();
+
   const result = {
     username: getCurrentUsername(),
     visibilityUsername: getFinishVisibilityUsername(),
     currentRole: getCurrentUserRole(),
     profileRole: profile?.role || profile?.Role || "",
-    isKnownEditorUser: FINISH_SHARED_SETUP_EDITOR_USERS.has(String(getCurrentUsername() || "").trim().toUpperCase()),
+    isKnownEditorUser: FINISH_SHARED_SETUP_EDITOR_USERS.has(username),
+    isTestEditorUser: /^TEST\d+$/i.test(username),
     canEditSharedFinishSetup: canEditFinishOperatorAssignments(),
     canSeeEditingProfileDropdown: canSeeFinishEditingProfileControl(),
     sharedOwnerUsername: getRosterOwnerUsername(),
-    note: "Supervisors/Managers/LMS/Training edit shared setup. Editing Profile dropdown is only BLOPEZ/JBOOMERSHINE."
+    note: "If role/profile is blank, TEST users are allowed for validation. Real supervisors/managers should be added to FINISH_USER_PROFILES with Supervisor/Manager role."
   };
   console.log("[Finish Setup Permissions]", result);
   return result;
@@ -8991,6 +9133,8 @@ function applyFinishAssignmentPermissionLock() {
 
 document.addEventListener("DOMContentLoaded", () => {
   applyFinishSetupLabelRename_();
+  installFinishKmanackPreviewStyles_();
+  installFinishKmanackPreviewButton_();
   forceFinishSetupTabVisibilityForAllowedRoles_();
   initFinishRosterApiPanel();
   setTimeout(forceUnlockFinishSetupForSharedEditors_, 300);
