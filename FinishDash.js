@@ -380,10 +380,14 @@ const FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK = role => {
 
   return (
     value === "lms" ||
+    value.includes("lms") ||
     value.includes("director") ||
     value.includes("manager") ||
+    value.includes("mgr") ||
     value.includes("supervisor") ||
-    value.includes("training")
+    value.includes("sup") ||
+    value.includes("training") ||
+    value.includes("trainer")
   );
 };
 
@@ -714,8 +718,49 @@ function getCurrentUserDisplayName() {
   return full || getCurrentUsername();
 }
 
+
+const FINISH_SHARED_SETUP_EDITOR_USERS = new Set([
+  "BLOPEZ",
+  "JBOOMERSHINE",
+  "BKARR",
+  "RTATE",
+  "KMANACK",
+  "BHECK",
+  "BHONICKER",
+  "NPOSTON",
+  "BDADE",
+  "PTOWNSEND"
+]);
+
+function isFinishSharedSetupEditorUser_() {
+  const username = String(getCurrentUsername() || getFinishVisibilityUsername() || "").trim().toUpperCase();
+  const role = String(getCurrentUserRole() || getFinishRosterCurrentProfile()?.role || "").trim();
+
+  return FINISH_SHARED_SETUP_EDITOR_USERS.has(username) || FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(role);
+}
+
+
 function canEditFinishOperatorAssignments() {
-  return FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(getCurrentUserRole());
+  const profile = getFinishRosterCurrentProfile();
+  const username = String(getCurrentUsername() || getFinishVisibilityUsername() || "").trim().toUpperCase();
+  const profileRole = String(profile?.role || profile?.Role || "").trim();
+  const currentRole = String(getCurrentUserRole() || "").trim();
+  const role = profileRole || currentRole;
+
+  const profileInactive =
+    profile &&
+    (
+      profile.isActive === false ||
+      String(profile.activeStatus || profile.status || "Active").trim().toLowerCase() === "inactive"
+    );
+
+  if (profileInactive) return false;
+
+  return (
+    FINISH_SHARED_SETUP_EDITOR_USERS.has(username) ||
+    FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(role) ||
+    FINISH_ASSIGNMENT_ALLOWED_EDIT_ROLE_CHECK(currentRole)
+  );
 }
 
 function isCurrentUserLmsOnly() {
@@ -2583,14 +2628,14 @@ function ensureOperatorAssignmentConfigPanel() {
     <summary>
       <div>
         <h3>Operator Capacity Assignment</h3>
-        <p>Select who counts as Certified/TQ core capacity and who is on Training Metric. Saved to this browser profile only.</p>
+        <p>Select who counts as Certified or Training. Finish Setup saves to the shared roster so Supervisors, Managers, and LMS see the same setup.</p>
       </div>
       <span>Open / Close</span>
     </summary>
 
     <div class="operator-assignment-shell">
       <div class="assignment-warning-card">
-        <strong>Personal Login Profile</strong>        
+        <strong>Shared Finish Setup Profile</strong>        
       </div>
 
       <div id="finishAssignmentPermissionNotice" class="assignment-permission-notice"></div>
@@ -2836,7 +2881,7 @@ function applyFinishAssignmentPermissionLock() {
     notice.classList.toggle("can-edit", canEdit);
     notice.classList.toggle("view-only", !canEdit);
     notice.innerHTML = canEdit
-      ? `<strong>Edit access active</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · personal setup saves under ${escapeHtml(getCurrentUsername())}</span>`
+      ? `<strong>Edit access active</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · shared Finish Setup saves under BLOPEZ</span>`
       : `<strong>View only</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · Director, Manager, Supervisor, and LMS can edit. Team Lead and other roles can only view.</span>`;
   }
 }
@@ -6347,7 +6392,7 @@ function openMorningLineSlotAssignment(line, station, slot, currentOperator = ""
   }
 
   if (!rows.length) {
-    body.innerHTML = `<article class="morning-slot-empty">No active associates are assigned to your ${escapeHtml(getMorningSetupShiftType())} roster yet. LMS must add them first.</article>`;
+    body.innerHTML = `<article class="morning-slot-empty">No active associates are assigned to the shared ${escapeHtml(getMorningSetupShiftType())} Finish Setup roster yet. Add/save associates in Finish Setup first.</article>`;
   } else {
     body.innerHTML = `
       <div class="morning-slot-command">
@@ -6471,7 +6516,7 @@ function refreshMorningSetupUiFast() {
 
 async function assignMorningOperatorToSlot(operatorName, line, station, slot, currentOperatorToReplace = "") {
   if (!canEditFinishMorningSetup()) {
-    showFinishAssignmentToast("View only. You can see Morning Set Up, but only approved users can update it.");
+    showFinishAssignmentToast("View only. You can see Morning Set Up, but only approved setup editors can update it.");
     return;
   }
 
@@ -6568,7 +6613,7 @@ async function assignMorningOperatorToSlot(operatorName, line, station, slot, cu
 
 async function clearMorningOperatorPosition(operatorName, station, line = "", slot = "") {
   if (!canEditFinishMorningSetup()) {
-    showFinishAssignmentToast("View only. You can see Morning Set Up, but only approved users can update it.");
+    showFinishAssignmentToast("View only. You can see Morning Set Up, but only approved setup editors can update it.");
     return;
   }
 
@@ -6762,6 +6807,28 @@ function getRosterOwnerUsername() {
   // Supervisors/Managers/LMS can edit, but all saves go to BLOPEZ so everyone sees the same roster.
   return getFinishGlobalRosterOwnerUsername();
 }
+
+
+/*******************************************************
+ * FINISH SETUP PERMISSION DEBUG
+ *******************************************************/
+window.debugFinishSetupPermissions = function() {
+  const profile = getFinishRosterCurrentProfile();
+  const result = {
+    username: getCurrentUsername(),
+    visibilityUsername: getFinishVisibilityUsername(),
+    currentRole: getCurrentUserRole(),
+    profileRole: profile?.role || profile?.Role || "",
+    isKnownEditorUser: FINISH_SHARED_SETUP_EDITOR_USERS.has(String(getCurrentUsername() || "").trim().toUpperCase()),
+    canEditSharedFinishSetup: canEditFinishOperatorAssignments(),
+    canSeeEditingProfileDropdown: canSeeFinishEditingProfileControl(),
+    sharedOwnerUsername: getRosterOwnerUsername(),
+    note: "Supervisors/Managers/LMS/Training edit shared setup. Editing Profile dropdown is only BLOPEZ/JBOOMERSHINE."
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
 
 function getRosterShiftType() {
   const raw =
@@ -7216,8 +7283,44 @@ function fixFinishRosterRoleFilterNoTq_() {
 }
 
 
+
+/*******************************************************
+ * HARD FIX — UNLOCK FINISH SETUP FOR SHARED EDITORS
+ *******************************************************/
+function forceUnlockFinishSetupForSharedEditors_() {
+  if (!canEditFinishOperatorAssignments()) return;
+
+  const root =
+    document.getElementById("finishRosterApiPanel") ||
+    document.querySelector('[data-content="lms-control"]');
+
+  if (!root) return;
+
+  root.querySelectorAll("input, select, textarea, button").forEach(el => {
+    const id = String(el.id || "");
+    const keepLocked =
+      id === "finishEditingProfileSelect" ||
+      el.dataset.keepLocked === "true" ||
+      el.dataset.profileSelector === "true";
+
+    if (keepLocked && !canSeeFinishEditingProfileControl()) return;
+
+    el.disabled = false;
+    el.removeAttribute("disabled");
+    el.classList.remove("is-disabled", "disabled");
+  });
+
+  const warning = root.querySelector(".finish-assignment-readonly-banner, .finish-roster-readonly-banner, .readonly-banner");
+  if (warning) {
+    warning.innerHTML = `<strong>Edit access active</strong><span>You can edit the shared Finish Setup roster. Saves update Weekday/Weekend/JPH under BLOPEZ for everyone.</span>`;
+  }
+}
+
+
 function renderFinishRosterApiPanel() {
   applyFinishSetupLabelRename_();
+
+  setTimeout(forceUnlockFinishSetupForSharedEditors_, 0);
 
   const panel = document.getElementById("finishRosterApiPanel");
   if (!panel) return;
@@ -8054,6 +8157,7 @@ function renderFinishRosterDetailPanel(rows, currentProfile, canEdit) {
   bindFinishRosterDetailEvents(selected, isDraft, canEdit);
   installFinishAssociateAreaSetupStyles_();
   renderFinishAssociateAreaSetupPanel_(selected, canEdit);
+  setTimeout(forceUnlockFinishSetupForSharedEditors_, 0);
 }
 
 function buildFinishRosterOperatorOptions(selectedName) {
@@ -8889,6 +8993,7 @@ document.addEventListener("DOMContentLoaded", () => {
   applyFinishSetupLabelRename_();
   forceFinishSetupTabVisibilityForAllowedRoles_();
   initFinishRosterApiPanel();
+  setTimeout(forceUnlockFinishSetupForSharedEditors_, 300);
   initFinishLmsHideAreaObserver_();
   loadFinishRosterBackend({ silent: true });
 });
