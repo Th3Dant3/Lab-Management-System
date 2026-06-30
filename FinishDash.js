@@ -810,7 +810,17 @@ function canViewFinishConfigAndDowntimeTabs() {
 }
 
 function canViewFinishLmsControlTab() {
-  return FINISH_LMS_CONTROL_VISIBLE_USERS.has(getFinishVisibilityUsername());
+  const username = getFinishVisibilityUsername();
+  const role = String(getCurrentUserRole() || "").trim().toLowerCase();
+
+  return (
+    FINISH_LMS_CONTROL_VISIBLE_USERS.has(username) ||
+    role === "lms" ||
+    role.includes("director") ||
+    role.includes("manager") ||
+    role.includes("supervisor") ||
+    role.includes("training")
+  );
 }
 
 function canEditFinishMorningSetup() {
@@ -908,6 +918,34 @@ function moveOffHiddenFinishTabIfNeeded() {
   }
 }
 
+
+/*******************************************************
+ * HARD FIX — FINISH SETUP TAB VISIBILITY
+ * Supervisors/Managers/LMS/Training must see Finish Setup.
+ * Editing Profile selector remains BLOPEZ/JBOOMERSHINE only.
+ *******************************************************/
+function forceFinishSetupTabVisibilityForAllowedRoles_() {
+  const allowed = canViewFinishLmsControlTab();
+  const tab = document.querySelector('.tab-btn[data-tab="lms-control"]');
+  const content = document.querySelector('.tab-content[data-content="lms-control"]');
+
+  if (tab) {
+    tab.textContent = "Finish Setup";
+    tab.hidden = !allowed;
+    tab.style.display = allowed ? "" : "none";
+    tab.setAttribute("aria-hidden", allowed ? "false" : "true");
+    tab.dataset.restrictedTabHidden = allowed ? "false" : "true";
+  }
+
+  if (content) {
+    content.hidden = !allowed;
+    content.style.display = allowed ? "" : "none";
+    content.setAttribute("aria-hidden", allowed ? "false" : "true");
+    content.dataset.restrictedTabHidden = allowed ? "false" : "true";
+  }
+}
+
+
 function applyFinishRestrictedTabVisibility() {
   const canViewConfigDowntime = canViewFinishConfigAndDowntimeTabs();
   const canViewLmsControl = canViewFinishLmsControlTab();
@@ -946,6 +984,8 @@ function applyFinishRestrictedTabVisibility() {
       }, 0);
     }
   }
+
+  forceFinishSetupTabVisibilityForAllowedRoles_();
 }
 
 // Keep the old function name so existing startup code still works.
@@ -8350,6 +8390,7 @@ function applyFinishAssignmentPermissionLock() {
 
 document.addEventListener("DOMContentLoaded", () => {
   applyFinishSetupLabelRename_();
+  forceFinishSetupTabVisibilityForAllowedRoles_();
   initFinishRosterApiPanel();
   initFinishLmsHideAreaObserver_();
   loadFinishRosterBackend({ silent: true });
@@ -11767,3 +11808,10 @@ function cleanFinishTqRoleOptionsOnce_() {
     });
   });
 }
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (typeof forceFinishSetupTabVisibilityForAllowedRoles_ === "function") {
+    forceFinishSetupTabVisibilityForAllowedRoles_();
+  }
+});
