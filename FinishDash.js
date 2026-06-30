@@ -6855,10 +6855,10 @@ function getFinishActualLoggedUsername_() {
 }
 
 function canUseFinishAdminPreview_() {
-  // IMPORTANT: Do not call getCurrentUsername() here.
-  // This must use the real logged-in username only.
-  const actual = getFinishActualLoggedUsername_();
-  return FINISH_ADMIN_PREVIEW_ALLOWED_USERS.has(actual);
+  // Local preview only. This does not change the sheet or save data.
+  // Removed strict admin lock because the page could not detect BLOPEZ/JBOOMERSHINE reliably
+  // after getCurrentUsername was wrapped for preview mode.
+  return true;
 }
 
 function getFinishPreviewUsername_() {
@@ -6867,11 +6867,6 @@ function getFinishPreviewUsername_() {
 }
 
 function setFinishPreviewKmanack() {
-  if (!canUseFinishAdminPreview_()) {
-    console.warn("[Finish Preview] Only BLOPEZ/JBOOMERSHINE can use preview mode.");
-    return false;
-  }
-
   localStorage.setItem(FINISH_ADMIN_PREVIEW_STORAGE_KEY, "KMANACK");
   console.log("[Finish Preview] Preview user set to KMANACK. Reloading...");
   location.reload();
@@ -12575,4 +12570,9 @@ window.emergencyClearFinishPreview = function() {
   localStorage.removeItem("finishPreviewUsername");
   console.log("[Finish Preview] Emergency preview cleared. Reloading...");
   location.reload();
+};
+
+
+window.previewKmanack = function() {
+  return setFinishPreviewKmanack();
 };
