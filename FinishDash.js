@@ -7504,6 +7504,499 @@ function bindFinishRosterTableEvents(rows) {
   });
 }
 
+
+/*******************************************************
+ * FINISH SETUP — ASSOCIATE AREA CERTIFICATION MATRIX
+ * Associate first setup:
+ * - Pick associate + shift once
+ * - Select each area as Certified / Training / Unassigned
+ * - Custom JPH optional per area
+ * - Saved rows still use shared BLOPEZ roster
+ *******************************************************/
+function normalizeFinishAssociateAreaRole_(value) {
+  const raw = String(value || "").trim();
+  const upper = raw.toUpperCase();
+
+  if (upper === "TQ" || upper === "CERTIFIED" || upper === "ACTIVE") return "Certified";
+  if (upper === "TRAINING") return "Training";
+  return "Unassigned";
+}
+
+function getFinishAssociateAreaRows_(operatorName, shiftType) {
+  const owner = String(getRosterOwnerUsername() || "").trim().toUpperCase();
+  const name = normalizeAssignmentOperatorName(operatorName || "").toLowerCase();
+  const shift = String(shiftType || "").trim().toLowerCase();
+
+  return (finishRosterApiState.roster || []).filter(row =>
+    String(row.activeStatus || "").toLowerCase() !== "removed" &&
+    String(row.ownerUsername || "").trim().toUpperCase() === owner &&
+    normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === name &&
+    String(row.shiftType || "").trim().toLowerCase() === shift
+  );
+}
+
+function findFinishAssociateAreaRow_(operatorName, shiftType, area) {
+  const targetArea = normalizeFinishOperatorStation(area || "");
+  const rows = getFinishAssociateAreaRows_(operatorName, shiftType).filter(row =>
+    normalizeFinishOperatorStation(row.defaultArea || "") === targetArea
+  );
+
+  if (!rows.length) return null;
+
+  return rows.sort((a, b) => getRosterRowDuplicateScore(b) - getRosterRowDuplicateScore(a))[0] || null;
+}
+
+function getFinishAreaDefaultLine_(area) {
+  const station = normalizeFinishOperatorStation(area || "");
+  if (station === "Drill") return "Line C";
+  return "";
+}
+
+function getFinishAssociateAreaList_() {
+  return (FINISH_ROSTER_ASSIGNABLE_AREAS || [])
+    .filter(area => area && area !== "Floater")
+    .filter(area => !shouldHideFinishLmsArea_(area));
+}
+
+function renderFinishAssociateAreaSetupPanel_(selected, canEdit) {
+  const target = document.getElementById("finishRosterDetailPanel");
+  if (!target || !selected) return;
+
+  let panel = document.getElementById("finishAssociateAreaSetupPanel");
+  if (!panel) {
+    const meta = target.querySelector(".finish-roster-detail-meta");
+    if (!meta) return;
+    meta.insertAdjacentHTML("afterend", `<section id="finishAssociateAreaSetupPanel" class="finish-associate-area-setup"></section>`);
+    panel = document.getElementById("finishAssociateAreaSetupPanel");
+  }
+
+  const operatorName = normalizeAssignmentOperatorName(
+    document.getElementById("finishRosterDetailOperator")?.value || selected.operatorName || ""
+  );
+  const shiftType = document.getElementById("finishRosterDetailShift")?.value || selected.shiftType || "";
+  const disabled = canEdit ? "" : "disabled";
+
+  if (!operatorName) {
+    panel.innerHTML = `
+      <div class="finish-associate-area-head">
+        <div>
+          <h4>Associate Area Setup</h4>
+          <p>Select an associate first.</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (!shiftType || String(shiftType).toLowerCase() === "all") {
+    panel.innerHTML = `
+      <div class="finish-associate-area-head">
+        <div>
+          <h4>Associate Area Setup</h4>
+          <p>Select Weekday or Weekend first, then set Certified/Training by area.</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const areas = getFinishAssociateAreaList_();
+
+  panel.innerHTML = `
+    <div class="finish-associate-area-head">
+      <div>
+        <h4>Associate Area Setup</h4>
+        <p>${escapeHtml(operatorName)} · ${escapeHtml(shiftType)} · Set every area this associate can work.</p>
+      </div>
+      <button id="finishAssociateAreaSaveAll" class="finish-associate-area-save-all" type="button" ${disabled}>Save All Areas</button>
+    </div>
+
+    <div class="finish-associate-area-grid">
+      ${areas.map(area => {
+        const existing = findFinishAssociateAreaRow_(operatorName, shiftType, area);
+        const role = normalizeFinishAssociateAreaRole_(existing?.roleType || "");
+        const week = existing?.trainingWeek || "";
+        const customJph = existing?.individualJph || "";
+        const baseJph = getFinishOperatorBaseRate(area, operatorName) || 0;
+        const line = existing?.defaultLine || getFinishAreaDefaultLine_(area);
+        const position = existing?.defaultPosition || "";
+
+        return `
+          <article class="finish-associate-area-card" data-associate-area-card="${escapeHtml(area)}">
+            <header>
+              <div>
+                <strong>${escapeHtml(area)}</strong>
+                <span>Base JPH: ${baseJph > 0 ? numberFmt(baseJph) : "No default"}</span>
+              </div>
+              <b class="finish-associate-area-role-badge role-${escapeHtml(role.toLowerCase())}">${escapeHtml(role)}</b>
+            </header>
+
+            <div class="finish-associate-area-fields">
+              <label>
+                <span>Status</span>
+                <select data-associate-area-role="${escapeHtml(area)}" ${disabled}>
+                  ${["Unassigned", "Certified", "Training"].map(value =>
+                    `<option value="${value}" ${role === value ? "selected" : ""}>${value}</option>`
+                  ).join("")}
+                </select>
+              </label>
+
+              <label>
+                <span>Training Week</span>
+                <select data-associate-area-week="${escapeHtml(area)}" ${role === "Training" && canEdit ? "" : "disabled"}>
+                  ${["", "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"].map(value =>
+                    `<option value="${value}" ${String(week || "") === value ? "selected" : ""}>${value || "—"}</option>`
+                  ).join("")}
+                </select>
+              </label>
+
+              <label>
+                <span>Custom JPH</span>
+                <input data-associate-area-jph="${escapeHtml(area)}" type="number" min="0" step="0.1" value="${escapeHtml(customJph)}" placeholder="${baseJph > 0 ? "Default " + numberFmt(baseJph) : "Default"}" ${disabled}>
+              </label>
+
+              <label>
+                <span>Line</span>
+                <select data-associate-area-line="${escapeHtml(area)}" ${disabled}>
+                  ${["", "Line A", "Line B", "Line C"].map(value =>
+                    `<option value="${value}" ${String(line || "") === value ? "selected" : ""}>${value || "Any"}</option>`
+                  ).join("")}
+                </select>
+              </label>
+
+              <label>
+                <span>Position</span>
+                <select data-associate-area-position="${escapeHtml(area)}" ${disabled}>
+                  ${buildRosterPositionOptions(area, position || "")}
+                </select>
+              </label>
+            </div>
+
+            <div class="finish-associate-area-actions">
+              <button type="button" data-associate-area-save="${escapeHtml(area)}" ${disabled}>Save ${escapeHtml(area)}</button>
+              <small>${customJph ? "Using custom JPH" : "Uses area default JPH"}</small>
+            </div>
+          </article>`;
+      }).join("")}
+    </div>
+
+    <div class="finish-associate-area-help">
+      Certified and Training rows follow the area JPH automatically. Add Custom JPH only when that associate needs a different target for that specific area.
+    </div>
+  `;
+
+  bindFinishAssociateAreaSetupEvents_(selected, canEdit);
+}
+
+function bindFinishAssociateAreaSetupEvents_(selected, canEdit) {
+  if (!canEdit) return;
+
+  document.querySelectorAll("[data-associate-area-role]").forEach(select => {
+    select.addEventListener("change", event => {
+      const area = event.currentTarget.dataset.associateAreaRole || "";
+      const card = document.querySelector(`[data-associate-area-card="${CSS.escape(area)}"]`);
+      const week = document.querySelector(`[data-associate-area-week="${CSS.escape(area)}"]`);
+      const badge = card?.querySelector(".finish-associate-area-role-badge");
+      const role = normalizeFinishAssociateAreaRole_(event.currentTarget.value);
+
+      if (week) {
+        week.disabled = role !== "Training";
+        if (role !== "Training") week.value = "";
+      }
+
+      if (badge) {
+        badge.textContent = role;
+        badge.className = `finish-associate-area-role-badge role-${role.toLowerCase()}`;
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-associate-area-line]").forEach(select => {
+    select.addEventListener("change", event => {
+      const area = event.currentTarget.dataset.associateAreaLine || "";
+      const position = document.querySelector(`[data-associate-area-position="${CSS.escape(area)}"]`);
+      if (!position) return;
+      position.innerHTML = buildRosterPositionOptions(area, position.value || "");
+    });
+  });
+
+  document.querySelectorAll("[data-associate-area-save]").forEach(button => {
+    button.addEventListener("click", () => saveFinishAssociateAreaSetup_(selected, button.dataset.associateAreaSave || ""));
+  });
+
+  document.getElementById("finishAssociateAreaSaveAll")?.addEventListener("click", () => saveAllFinishAssociateAreas_(selected));
+}
+
+function buildFinishAssociateAreaPayload_(selected, area) {
+  const operatorName = normalizeAssignmentOperatorName(
+    document.getElementById("finishRosterDetailOperator")?.value || selected.operatorName || ""
+  );
+  const shiftType = document.getElementById("finishRosterDetailShift")?.value || selected.shiftType || "";
+  const role = normalizeFinishAssociateAreaRole_(document.querySelector(`[data-associate-area-role="${CSS.escape(area)}"]`)?.value || "Unassigned");
+  const trainingWeek = role === "Training"
+    ? (document.querySelector(`[data-associate-area-week="${CSS.escape(area)}"]`)?.value || "")
+    : "";
+  const individualJph = document.querySelector(`[data-associate-area-jph="${CSS.escape(area)}"]`)?.value || "";
+  const defaultLine = document.querySelector(`[data-associate-area-line="${CSS.escape(area)}"]`)?.value || getFinishAreaDefaultLine_(area);
+  const defaultPosition = document.querySelector(`[data-associate-area-position="${CSS.escape(area)}"]`)?.value || "";
+
+  const payload = {
+    updatedBy: getCurrentUsername(),
+    ownerUsername: getRosterOwnerUsername(),
+    shiftType,
+    operatorName,
+    activeStatus: "Active",
+    defaultArea: area,
+    defaultLine,
+    defaultPosition,
+    roleType: role,
+    trainingWeek,
+    individualJph
+  };
+
+  const existing = findExistingRosterRowForUpsert(payload);
+  if (existing) applyOriginalRosterLookupToPayload(payload, existing);
+
+  return payload;
+}
+
+async function saveFinishAssociateAreaSetup_(selected, area) {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role cannot edit Finish Setup.");
+    return;
+  }
+
+  const payload = buildFinishAssociateAreaPayload_(selected, area);
+
+  if (!payload.operatorName) {
+    showFinishAssignmentToast("Select an associate first.");
+    return;
+  }
+
+  if (!payload.shiftType || String(payload.shiftType).toLowerCase() === "all") {
+    showFinishAssignmentToast("Select Weekday or Weekend before saving area setup.");
+    return;
+  }
+
+  try {
+    await fetchFinishRosterApi("saveFinishRosterControl", payload);
+    showFinishAssignmentToast(`Saved ${payload.operatorName} · ${payload.defaultArea} · ${payload.roleType}`);
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    renderFinishRosterApiPanel();
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+  }
+}
+
+async function saveAllFinishAssociateAreas_(selected) {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role cannot edit Finish Setup.");
+    return;
+  }
+
+  const areas = getFinishAssociateAreaList_();
+  const payloads = areas.map(area => buildFinishAssociateAreaPayload_(selected, area));
+
+  if (!payloads[0]?.operatorName) {
+    showFinishAssignmentToast("Select an associate first.");
+    return;
+  }
+
+  if (!payloads[0]?.shiftType || String(payloads[0].shiftType).toLowerCase() === "all") {
+    showFinishAssignmentToast("Select Weekday or Weekend before saving area setup.");
+    return;
+  }
+
+  const saveable = payloads.filter(payload =>
+    payload.roleType !== "Unassigned" ||
+    !!findFinishAssociateAreaRow_(payload.operatorName, payload.shiftType, payload.defaultArea)
+  );
+
+  if (!saveable.length) {
+    showFinishAssignmentToast("Nothing to save. Mark at least one area Certified or Training.");
+    return;
+  }
+
+  try {
+    for (const payload of saveable) {
+      await fetchFinishRosterApi("saveFinishRosterControl", payload);
+    }
+
+    showFinishAssignmentToast(`Saved ${saveable.length} area setup rows for ${saveable[0].operatorName}`);
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    renderFinishRosterApiPanel();
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+  }
+}
+
+function installFinishAssociateAreaSetupStyles_() {
+  if (document.getElementById("finishAssociateAreaSetupStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishAssociateAreaSetupStyles";
+  style.textContent = `
+    .finish-associate-area-setup {
+      margin: 18px 0;
+      padding: 16px;
+      border: 1px solid rgba(95,216,255,.18);
+      border-radius: 18px;
+      background: rgba(2,12,24,.52);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .finish-associate-area-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .finish-associate-area-head h4 {
+      margin: 0;
+      color: #eef8ff;
+      font-size: 18px;
+      font-weight: 950;
+    }
+
+    .finish-associate-area-head p,
+    .finish-associate-area-help {
+      margin: 5px 0 0;
+      color: #8fa6c3;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+
+    .finish-associate-area-save-all {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 13px;
+      background: linear-gradient(135deg, #5fd8ff, #4ade80);
+      color: #06111f;
+      font-weight: 950;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .finish-associate-area-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .finish-associate-area-card {
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 16px;
+      padding: 13px;
+      background: rgba(255,255,255,.045);
+    }
+
+    .finish-associate-area-card header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .finish-associate-area-card header strong {
+      display: block;
+      color: #eef8ff;
+      font-size: 15px;
+      font-weight: 950;
+    }
+
+    .finish-associate-area-card header span {
+      color: #8fa6c3;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .finish-associate-area-role-badge {
+      border-radius: 999px;
+      padding: 5px 8px;
+      font-size: 10px;
+      font-weight: 950;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255,255,255,.14);
+      color: #cbd5e1;
+      background: rgba(148,163,184,.12);
+    }
+
+    .finish-associate-area-role-badge.role-certified {
+      color: #4ade80;
+      background: rgba(74,222,128,.11);
+      border-color: rgba(74,222,128,.25);
+    }
+
+    .finish-associate-area-role-badge.role-training {
+      color: #facc15;
+      background: rgba(250,204,21,.12);
+      border-color: rgba(250,204,21,.30);
+    }
+
+    .finish-associate-area-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .finish-associate-area-fields label {
+      display: grid;
+      gap: 5px;
+    }
+
+    .finish-associate-area-fields label span {
+      color: #8fa6c3;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .finish-associate-area-fields select,
+    .finish-associate-area-fields input {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.11);
+      border-radius: 10px;
+      background: rgba(5,14,28,.82);
+      color: #e5f3ff;
+      padding: 9px 10px;
+      outline: none;
+    }
+
+    .finish-associate-area-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 11px;
+    }
+
+    .finish-associate-area-actions button {
+      border: 1px solid rgba(95,216,255,.30);
+      border-radius: 11px;
+      background: rgba(95,216,255,.10);
+      color: #bfefff;
+      padding: 8px 10px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .finish-associate-area-actions small {
+      color: #8fa6c3;
+      font-size: 10px;
+      font-weight: 800;
+      text-align: right;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
 function renderFinishRosterDetailPanel(rows, currentProfile, canEdit) {
   const target = document.getElementById('finishRosterDetailPanel');
   if (!target) return;
@@ -7559,6 +8052,8 @@ function renderFinishRosterDetailPanel(rows, currentProfile, canEdit) {
     </div>`;
 
   bindFinishRosterDetailEvents(selected, isDraft, canEdit);
+  installFinishAssociateAreaSetupStyles_();
+  renderFinishAssociateAreaSetupPanel_(selected, canEdit);
 }
 
 function buildFinishRosterOperatorOptions(selectedName) {
@@ -7592,6 +8087,8 @@ function bindFinishRosterDetailEvents(selected, isDraft, canEdit) {
   const archiveBtn = document.getElementById('finishRosterDetailArchive');
   const deleteBtn = document.getElementById('finishRosterDetailDelete');
   areaSelect?.addEventListener('change', event => { if (positionSelect) positionSelect.innerHTML = buildRosterPositionOptions(event.target.value, ''); if (lineSelect && event.target.value === 'Drill') lineSelect.value = 'Line C'; });
+  document.getElementById('finishRosterDetailOperator')?.addEventListener('change', () => renderFinishAssociateAreaSetupPanel_(selected, canEdit));
+  document.getElementById('finishRosterDetailShift')?.addEventListener('change', () => renderFinishAssociateAreaSetupPanel_(selected, canEdit));
   roleSelect?.addEventListener('change', event => { if (!weekSelect) return; const enabled = event.target.value === 'Training'; weekSelect.disabled = !enabled || !canEdit; if (!enabled) weekSelect.value = ''; });
   saveBtn?.addEventListener('click', () => saveFinishRosterDetail(selected, isDraft));
   archiveBtn?.addEventListener('click', () => updateFinishRosterDetailStatus(selected, 'archiveFinishRosterOperator'));
