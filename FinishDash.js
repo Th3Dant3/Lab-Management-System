@@ -6837,19 +6837,27 @@ const FINISH_ADMIN_PREVIEW_ALLOWED_USERS = new Set(["BLOPEZ", "JBOOMERSHINE"]);
 const FINISH_ADMIN_PREVIEW_STORAGE_KEY = "finishPreviewUsername";
 
 function getFinishActualLoggedUsername_() {
+  // IMPORTANT: Do not call getCurrentUsername() from here.
+  // getCurrentUsername() may call preview logic, which causes a recursion loop.
   const raw =
+    window.FINISH_ACTUAL_USERNAME ||
     window.FINISH_LOGGED_IN_USERNAME ||
     window.currentUsername ||
     window.loggedInUsername ||
+    localStorage.getItem("finishActualUsername") ||
     localStorage.getItem("finishUsername") ||
     localStorage.getItem("currentUsername") ||
+    sessionStorage.getItem("finishActualUsername") ||
+    sessionStorage.getItem("finishUsername") ||
     "";
 
   return String(raw || "").trim().toUpperCase();
 }
 
 function canUseFinishAdminPreview_() {
-  const actual = getFinishActualLoggedUsername_() || String(getCurrentUsername?.() || "").trim().toUpperCase();
+  // IMPORTANT: Do not call getCurrentUsername() here.
+  // This must use the real logged-in username only.
+  const actual = getFinishActualLoggedUsername_();
   return FINISH_ADMIN_PREVIEW_ALLOWED_USERS.has(actual);
 }
 
@@ -12561,3 +12569,10 @@ document.addEventListener("DOMContentLoaded", () => {
     forceFinishSetupTabVisibilityForAllowedRoles_();
   }
 });
+
+
+window.emergencyClearFinishPreview = function() {
+  localStorage.removeItem("finishPreviewUsername");
+  console.log("[Finish Preview] Emergency preview cleared. Reloading...");
+  location.reload();
+};
