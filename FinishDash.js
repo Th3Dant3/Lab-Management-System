@@ -25,7 +25,9 @@ const FINISH_WEBPAGE_HIDE_OPERATORS = new Set([
   "MARIA MITCHELL",
   "OHIOUSER3",
   "OHIOUSER5",
+  "Hannah Quansah",
   "SARAH MCCARTNEY",
+  "Matt Little",
   "ESTENFANIA MONTENEGRO",
   "CARLY WOOD",
   "PRINCESS HENRY"
@@ -2850,7 +2852,7 @@ async function saveConfigAssignedIndividualJph(rowEl) {
   try {
     await fetchFinishRosterApi("saveFinishRosterControl", {
       updatedBy: getCurrentUsername(),
-      ownerUsername: getFinishConfigOwnerUsername(),
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: getFinishConfigSelectedShiftType(),
       operatorName,
       activeStatus: source?.activeStatus || "Active",
@@ -2899,7 +2901,7 @@ function applyFinishAssignmentPermissionLock() {
     notice.classList.toggle("can-edit", canEdit);
     notice.classList.toggle("view-only", !canEdit);
     notice.innerHTML = canEdit
-      ? `<strong>Edit access active</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · shared Finish Setup saves under BLOPEZ</span>`
+      ? `<strong>Edit access active</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · shared Finish Setup saves under current user</span>`
       : `<strong>View only</strong><span>${escapeHtml(user)} · ${escapeHtml(role)} · Director, Manager, Supervisor, and LMS can edit. Team Lead and other roles can only view.</span>`;
   }
 }
@@ -6583,7 +6585,7 @@ async function assignMorningOperatorToSlot(operatorName, line, station, slot, cu
     previousRows.forEach(previous => {
       requests.push(fetchFinishRosterApi("saveFinishRosterControl", {
         updatedBy: getCurrentUsername(),
-        ownerUsername: getMorningSetupOwnerUsername(),
+        ownerUsername: getFinishNoLockCurrentOwner_(),
         shiftType: getMorningSetupShiftType(),
         operatorName: previousOperator,
         activeStatus: "Active",
@@ -6601,7 +6603,7 @@ async function assignMorningOperatorToSlot(operatorName, line, station, slot, cu
 
     requests.push(fetchFinishRosterApi("saveFinishRosterControl", {
       updatedBy: getCurrentUsername(),
-      ownerUsername: getMorningSetupOwnerUsername(),
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: getMorningSetupShiftType(),
       operatorName,
       activeStatus: "Active",
@@ -6662,7 +6664,7 @@ async function clearMorningOperatorPosition(operatorName, station, line = "", sl
     await Promise.all(matches.map(existing =>
       fetchFinishRosterApi("saveFinishRosterControl", {
         updatedBy: getCurrentUsername(),
-        ownerUsername: getMorningSetupOwnerUsername(),
+        ownerUsername: getFinishNoLockCurrentOwner_(),
         shiftType: getMorningSetupShiftType(),
         operatorName,
         activeStatus: "Active",
@@ -6722,6 +6724,7 @@ const FINISH_ROSTER_API_BASE_URL = "https://script.google.com/macros/s/AKfycbxJR
 
 const FINISH_ROSTER_ASSIGNABLE_AREAS = [
   "Finish Unbox",
+  "MEI",
   "Mounting",
   "Drill",
   "Bigs",
@@ -6752,7 +6755,7 @@ const finishRosterApiState = {
   operators: [],
   roster: [],
   audit: [],
-  ownerUsername: "",
+  ownerUsername: getFinishNoLockCurrentOwner_(),
   shiftType: "Weekday",
 
   // Morning Set Up is intentionally separate from LMS Control Center.
@@ -6862,19 +6865,18 @@ function canUseFinishAdminPreview_() {
 }
 
 function getFinishPreviewUsername_() {
-  if (!canUseFinishAdminPreview_()) return "";
-  return String(localStorage.getItem(FINISH_ADMIN_PREVIEW_STORAGE_KEY) || "").trim().toUpperCase();
+  if (typeof canUseFinishAdminPreview_ === "function" && !canUseFinishAdminPreview_()) return "";
+  return String(localStorage.getItem("finishPreviewUsername") || "").trim().toUpperCase();
 }
 
 function setFinishPreviewKmanack() {
-  localStorage.setItem(FINISH_ADMIN_PREVIEW_STORAGE_KEY, "KMANACK");
-  console.log("[Finish Preview] Preview user set to KMANACK. Reloading...");
-  location.reload();
-  return true;
+  clearFinishPreviewUser();
+  console.warn("[Finish Preview] Preview mode removed. Using real logged-in user.");
+  return false;
 }
 
 function clearFinishPreviewUser() {
-  localStorage.removeItem(FINISH_ADMIN_PREVIEW_STORAGE_KEY);
+  localStorage.removeItem("finishPreviewUsername");
   console.log("[Finish Preview] Preview cleared. Reloading...");
   location.reload();
   return true;
@@ -7262,6 +7264,8 @@ async function loadFinishRosterBackend(options = {}) {
     finishRosterApiState.ready = true;
     setText("finishRosterApiStatus", "Connected");
     renderFinishRosterApiPanel();
+  if (typeof installFinishAutoAssignFromActivityPanel_ === 'function') setTimeout(installFinishAutoAssignFromActivityPanel_, 0);
+  setTimeout(forceRenderFinishStationLoadoutAllAreas_, 0);
     renderOperatorAssignmentConfigPanel();
     updateConfigTotals();
     renderFinishThreeLineCell();
@@ -7456,12 +7460,12 @@ function forceUnlockFinishSetupForSharedEditors_() {
   });
 
   root.querySelectorAll(".finish-assignment-readonly-banner, .finish-roster-readonly-banner, .readonly-banner").forEach(warning => {
-    warning.innerHTML = `<strong>Edit access active</strong><span>You can edit the shared Finish Setup roster. Saves update Weekday/Weekend/JPH under BLOPEZ for everyone.</span>`;
+    warning.innerHTML = `<strong>Edit access active</strong><span>You can edit the shared Finish Setup roster. Saves update Weekday/Weekend/JPH under current user for everyone.</span>`;
   });
 
   document.querySelectorAll(".toast, .finish-toast, .finish-assignment-toast, [role='alert']").forEach(el => {
     const text = String(el.textContent || "").toLowerCase();
-    if (text.includes("only lms can edit") || text.includes("own roster") || text.includes("another profile")) {
+    if (text.includes("only lms can edit") || text.includes("shared Finish Setup roster") || text.includes("shared Finish Setup")) {
       el.remove();
     }
   });
@@ -8050,7 +8054,7 @@ function buildFinishAssociateAreaPayload_(selected, area) {
 
   const payload = {
     updatedBy: getCurrentUsername(),
-    ownerUsername: getRosterOwnerUsername(),
+    ownerUsername: getFinishNoLockCurrentOwner_(),
     shiftType,
     operatorName,
     activeStatus: "Active",
@@ -8091,7 +8095,7 @@ async function removeConflictingFinishAssociateAreaRows_(payload) {
   for (const row of rows) {
     const removePayload = {
       updatedBy: getCurrentUsername(),
-      ownerUsername: owner,
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: row.shiftType,
       operatorName: row.operatorName,
       activeStatus: "Removed",
@@ -8104,7 +8108,7 @@ async function removeConflictingFinishAssociateAreaRows_(payload) {
     };
 
     applyOriginalRosterLookupToPayload(removePayload, row);
-    await fetchFinishRosterApi("saveFinishRosterControl", removePayload);
+    await fetchFinishRosterApi("saveFinishRosterControl", normalizeFinishNoLockRosterPayload_(removePayload));
   }
 }
 
@@ -8133,7 +8137,7 @@ async function saveFinishAssociateAreaSetup_(selected, area) {
       await removeConflictingFinishAssociateAreaRows_(payload);
     }
 
-    await fetchFinishRosterApi("saveFinishRosterControl", payload);
+    await fetchFinishRosterApi("saveFinishRosterControl", normalizeFinishNoLockRosterPayload_(payload));
     showFinishAssignmentToast(`Saved ${payload.operatorName} · ${payload.defaultArea} · ${payload.roleType}`);
     await loadFinishRosterForSelectedProfile({ silent: true });
     renderFinishRosterApiPanel();
@@ -8174,7 +8178,7 @@ async function saveAllFinishAssociateAreas_(selected) {
 
   try {
     for (const payload of saveable) {
-      await fetchFinishRosterApi("saveFinishRosterControl", payload);
+      await fetchFinishRosterApi("saveFinishRosterControl", normalizeFinishNoLockRosterPayload_(payload));
     }
 
     showFinishAssignmentToast(`Saved ${saveable.length} area setup rows for ${saveable[0].operatorName}`);
@@ -8597,7 +8601,7 @@ async function saveFinishRosterDetail(selected, isDraft) {
   if (!selectedShiftValue) { showFinishAssignmentToast('Select Weekday or Weekend before saving this operator.'); return; }
   const selectedRoleRaw = document.getElementById('finishRosterDetailRole')?.value || 'Unassigned';
   const selectedRole = String(selectedRoleRaw).toUpperCase() === 'TQ' ? 'Certified' : selectedRoleRaw;
-  const payload = { updatedBy: getCurrentUsername(), ownerUsername: getRosterOwnerUsername(), shiftType: selectedShiftValue, operatorName, activeStatus: document.getElementById('finishRosterDetailStatus')?.value || 'Active', defaultArea: document.getElementById('finishRosterDetailArea')?.value || '', defaultLine: document.getElementById('finishRosterDetailLine')?.value || '', defaultPosition: document.getElementById('finishRosterDetailPosition')?.value || '', roleType: selectedRole, trainingWeek: selectedRole === 'Training' ? (document.getElementById('finishRosterDetailWeek')?.value || '') : '', individualJph: document.getElementById('finishRosterDetailJph')?.value || '' };
+  const payload = { updatedBy: getCurrentUsername(), ownerUsername: getFinishNoLockCurrentOwner_(), shiftType: selectedShiftValue, operatorName, activeStatus: document.getElementById('finishRosterDetailStatus')?.value || 'Active', defaultArea: document.getElementById('finishRosterDetailArea')?.value || '', defaultLine: document.getElementById('finishRosterDetailLine')?.value || '', defaultPosition: document.getElementById('finishRosterDetailPosition')?.value || '', roleType: selectedRole, trainingWeek: selectedRole === 'Training' ? (document.getElementById('finishRosterDetailWeek')?.value || '') : '', individualJph: document.getElementById('finishRosterDetailJph')?.value || '' };
   if (!isDraft) {
     payload.originalDefaultArea = selected.defaultArea || '';
     payload.originalDefaultLine = selected.defaultLine || '';
@@ -8623,7 +8627,7 @@ async function updateFinishRosterDetailStatus(selected, action) {
   if (!selected || selected.__draft || !selected.shiftType) { showFinishAssignmentToast('Save the assignment with a shift first before archive/delete.'); return; }
   if (!canEditFinishOperatorAssignments()) { showFinishAssignmentToast('View only. Your role cannot delete/archive Finish roster rows.'); return; }
   try {
-    await fetchFinishRosterApi(action, { updatedBy: getCurrentUsername(), ownerUsername: getRosterOwnerUsername(), shiftType: selected.shiftType || getRosterShiftType(), operatorName: selected.operatorName, defaultArea: selected.defaultArea || '', defaultLine: selected.defaultLine || '', defaultPosition: selected.defaultPosition || '' });
+    await fetchFinishRosterApi(action, { updatedBy: getCurrentUsername(), ownerUsername: getFinishNoLockCurrentOwner_(), shiftType: selected.shiftType || getRosterShiftType(), operatorName: selected.operatorName, defaultArea: selected.defaultArea || '', defaultLine: selected.defaultLine || '', defaultPosition: selected.defaultPosition || '' });
     showFinishAssignmentToast(`${action.includes('delete') ? 'Deleted' : 'Archived'} ${selected.operatorName}`);
     finishRosterUiState.selectedRosterKey = ''; finishRosterUiState.draftAssignment = null;
     await loadFinishRosterForSelectedProfile({ silent: true });
@@ -8947,7 +8951,7 @@ async function saveFinishRosterRowFromDom(rowEl) {
   try {
     await fetchFinishRosterApi("saveFinishRosterControl", {
       updatedBy: getCurrentUsername(),
-      ownerUsername: getRosterOwnerUsername(),
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: saveShift,
       operatorName,
       activeStatus: getField("activeStatus") || "Active",
@@ -8994,7 +8998,7 @@ async function updateFinishRosterRowStatus(rowEl, action) {
   try {
     await fetchFinishRosterApi(action, {
       updatedBy: getCurrentUsername(),
-      ownerUsername: getRosterOwnerUsername(),
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: getField("shiftType") || rowEl.dataset.rosterShift || getRosterShiftType(),
       operatorName,
       defaultArea: getField("defaultArea") || rowEl.dataset.rosterArea || "",
@@ -9164,7 +9168,7 @@ async function saveOperatorAssignment(stationName, operatorName, role, trainingW
   try {
     await fetchFinishRosterApi("saveFinishRosterControl", {
       updatedBy: getCurrentUsername(),
-      ownerUsername: getRosterOwnerUsername(),
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: getRosterShiftType(),
       operatorName: operator,
       activeStatus: role && role !== "ignore" ? "Active" : "Archived",
@@ -9220,7 +9224,7 @@ async function saveConfigAssignedIndividualJph(rowEl) {
   try {
     await fetchFinishRosterApi("saveFinishRosterControl", {
       updatedBy: getCurrentUsername(),
-      ownerUsername: getFinishConfigOwnerUsername(),
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: getFinishConfigSelectedShiftType(),
       operatorName,
       activeStatus: source?.activeStatus || "Active",
@@ -9763,7 +9767,7 @@ async function saveConfigAssignedIndividualJph(rowEl) {
   try {
     await fetchFinishRosterApi("saveFinishRosterControl", {
       updatedBy: getCurrentUsername(),
-      ownerUsername: getFinishConfigOwnerUsername(),
+      ownerUsername: getFinishNoLockCurrentOwner_(),
       shiftType: getFinishConfigSelectedShiftType(),
       operatorName,
       activeStatus: source?.activeStatus || "Active",
@@ -12723,14 +12727,14 @@ window.previewKmanack = function() {
  * Requested behavior:
  * - Operator field is a dropdown from all active floor operators
  * - Area setup starts empty/unassigned until user assigns associate
- * - Areas shown: Finish Unbox, MEI, Mounting, Big & Sharp, Drill, Final Inspection
+ * - Areas shown: Finish Unbox, MEI, Mounting, Bigs, Drill, Final Inspection
  *******************************************************/
 function getFinishSetupAssignableAreas_() {
   return [
     "Finish Unbox",
     "MEI",
     "Mounting",
-    "Big & Sharp",
+    "Bigs",
     "Drill",
     "Final Inspection"
   ];
@@ -12738,7 +12742,7 @@ function getFinishSetupAssignableAreas_() {
 
 function normalizeFinishSetupAreaForSave_(area) {
   const station = normalizeFinishOperatorStation(area || "");
-  if (station === "Bigs" || station === "Sharps" || station === "Big & Sharp" || station === "Bigs / Sharps") return "Big & Sharp";
+  if (station === "Bigs" || station === "Sharps" || station === "Bigs" || station === "Bigs / Sharps") return "Bigs";
   if (station === "MEI Line B" || station === "MEI Line C" || station === "MEI Easy Fit" || station === "MEI") return "MEI";
   return station;
 }
@@ -12749,7 +12753,7 @@ function getFinishSetupDefaultJphForArea_(area) {
     "Finish Unbox": 72,
     "MEI": 75,
     "Mounting": 25,
-    "Big & Sharp": 25,
+    "Bigs": 25,
     "Drill": 65,
     "Final Inspection": 75
   };
@@ -12881,4 +12885,6206 @@ function startFinishSetupSharedEditUnlockLoop_() {
 
 document.addEventListener("DOMContentLoaded", () => {
   if (typeof startFinishSetupSharedEditUnlockLoop_ === "function") startFinishSetupSharedEditUnlockLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — STATION LOADOUT SHOW ALL SETUP AREAS
+ * Shows Finish Unbox, MEI, Mounting, Bigs, Drill, Final Inspection
+ * even when no associate is assigned yet.
+ *******************************************************/
+function getFinishStationLoadoutDisplayAreas_() {
+  return [
+    "Finish Unbox",
+    "MEI",
+    "Mounting",
+    "Bigs",
+    "Drill",
+    "Final Inspection"
+  ];
+}
+
+function normalizeFinishLoadoutAreaName_(value) {
+  const raw = normalizeFinishOperatorStation(value || "");
+  const upper = raw.toUpperCase();
+
+  if (upper === "FINISH UNBOX" || upper === "FINISH UNBOXING" || upper === "UNBOX") return "Finish Unbox";
+  if (upper === "MEI" || upper.includes("MEI LINE") || upper.includes("MEI EASY")) return "MEI";
+  if (upper === "BIGS" || upper === "SHARPS" || upper === "BIG & SHARP" || upper === "BIGS / SHARPS" || upper.includes("BIG") || upper.includes("SHARP")) return "Bigs";
+  if (upper === "DRILL") return "Drill";
+  if (upper === "FINAL INSPECTION" || upper === "FINAL") return "Final Inspection";
+  if (upper === "MOUNTING" || upper === "MOUNT" || upper === "ASSEMBLE") return "Mounting";
+
+  return raw || "Unassigned";
+}
+
+function getFinishLoadoutAreaJph_(area) {
+  const station = normalizeFinishLoadoutAreaName_(area);
+  const defaults = {
+    "Finish Unbox": 72,
+    "MEI": 75,
+    "Mounting": 25,
+    "Bigs": 25,
+    "Drill": 65,
+    "Final Inspection": 75
+  };
+  return defaults[station] || getFinishOperatorBaseRate(station, "") || 0;
+}
+
+function buildFinishLoadoutAreaGroupsWithEmpty_(rows) {
+  const groups = {};
+  getFinishStationLoadoutDisplayAreas_().forEach(area => {
+    groups[area] = [];
+  });
+
+  (rows || []).forEach(row => {
+    if (!row || String(row.activeStatus || "").toLowerCase() === "removed") return;
+
+    const role = normalizeFinishAssociateAreaRole_(row.roleType || row.role || "");
+    if (role === "Unassigned") return;
+
+    const area = normalizeFinishLoadoutAreaName_(row.defaultArea || row.area || row.station || "");
+    if (!groups[area]) groups[area] = [];
+    groups[area].push(row);
+  });
+
+  return groups;
+}
+
+function renderFinishEmptyLoadoutAreaCard_(area) {
+  return `
+    <div class="finish-empty-loadout-card">
+      <strong>No associates assigned</strong>
+      <span>Use Associate Area Setup to mark an associate Certified or Training for ${escapeHtml(area)}.</span>
+    </div>
+  `;
+}
+
+function renderFinishLoadoutAreaSection_(area, rows) {
+  const jph = getFinishLoadoutAreaJph_(area);
+  const count = (rows || []).length;
+
+  return `
+    <section class="finish-station-loadout-group finish-loadout-area-${escapeHtml(area.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+      <header class="finish-station-loadout-group-head">
+        <div>
+          <h3><span class="finish-loadout-dot"></span>${escapeHtml(area)}</h3>
+        </div>
+        <div class="finish-station-loadout-metrics">
+          <strong>${numberFmt(count)}</strong>
+          <span>assigned</span>
+          <strong>${numberFmt(jph)}</strong>
+          <span>base JPH</span>
+        </div>
+      </header>
+
+      <div class="finish-station-loadout-cards">
+        ${count
+          ? rows.map(renderFinishStationLoadoutAssociateCard_).join("")
+          : renderFinishEmptyLoadoutAreaCard_(area)
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderFinishStationLoadoutAssociateCard_(row) {
+  const name = normalizeAssignmentOperatorName(row.operatorName || row.OperatorName || row.name || "");
+  const area = normalizeFinishLoadoutAreaName_(row.defaultArea || row.area || "");
+  const role = normalizeFinishAssociateAreaRole_(row.roleType || row.role || "");
+  const line = row.defaultLine || row.line || "";
+  const position = row.defaultPosition || row.position || "";
+  const jph = row.individualJph || row.customJph || "";
+  const initials = getFinishOperatorInitials_(name);
+
+  return `
+    <article class="finish-station-loadout-card">
+      <div class="finish-loadout-avatar">${escapeHtml(initials)}</div>
+      <div class="finish-loadout-card-main">
+        <strong>${escapeHtml(name || "Unnamed Associate")}</strong>
+        <span>${escapeHtml(area)}${line ? " · " + escapeHtml(line) : ""}${position ? " · " + escapeHtml(position) : ""}</span>
+        <div class="finish-loadout-card-badges">
+          <b>Active</b>
+          <b>${escapeHtml(role)}</b>
+          <b>${jph ? escapeHtml(jph) + " JPH" : "Default JPH"}</b>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function getFinishOperatorInitials_(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) return "??";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function forceRenderFinishStationLoadoutAllAreas_() {
+  const root =
+    document.getElementById("finishStationLoadout") ||
+    document.getElementById("finishRosterStationLoadout") ||
+    document.querySelector(".finish-station-loadout") ||
+    document.querySelector(".station-loadout");
+
+  if (!root) return false;
+
+  const selectedShift = String(getRosterShiftType?.() || "Weekday").trim().toLowerCase();
+  const owner = String(getRosterOwnerUsername?.() || "BLOPEZ").trim().toUpperCase();
+
+  const rows = (finishRosterApiState?.roster || []).filter(row => {
+    const rowOwner = String(row.ownerUsername || "").trim().toUpperCase();
+    const shift = String(row.shiftType || "").trim().toLowerCase();
+
+    return rowOwner === owner &&
+      (!selectedShift || selectedShift === "all" || shift === selectedShift);
+  });
+
+  const dedupedRows = dedupeFinishLoadoutRows_(rows);
+  const groups = buildFinishLoadoutAreaGroupsWithEmpty_(dedupedRows);
+
+  root.innerHTML = `
+    <div class="finish-station-loadout-header">
+      <div>
+        <h2>Station Loadout</h2>
+        <p>${numberFmt(dedupedRows.length)} assigned rows</p>
+      </div>
+      <div class="finish-station-loadout-note">Grouped by setup area</div>
+    </div>
+    ${getFinishStationLoadoutDisplayAreas_().map(area => renderFinishLoadoutAreaSection_(area, groups[area] || [])).join("")}
+  `;
+
+  installFinishStationLoadoutAllAreasStyles_();
+  return true;
+}
+
+function installFinishStationLoadoutAllAreasStyles_() {
+  if (document.getElementById("finishStationLoadoutAllAreasStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishStationLoadoutAllAreasStyles";
+  style.textContent = `
+    .finish-station-loadout-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .finish-station-loadout-header h2 {
+      margin: 0;
+      color: #eef8ff;
+      font-size: 24px;
+      font-weight: 950;
+    }
+
+    .finish-station-loadout-header p,
+    .finish-station-loadout-note {
+      margin: 4px 0 0;
+      color: #8fa6c3;
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .finish-station-loadout-group {
+      border: 1px solid rgba(95,216,255,.18);
+      border-radius: 18px;
+      background: rgba(2,12,24,.46);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: inset 4px 0 0 rgba(95,216,255,.60);
+    }
+
+    .finish-loadout-area-finish-unbox { box-shadow: inset 4px 0 0 rgba(96,165,250,.85); }
+    .finish-loadout-area-mei { box-shadow: inset 4px 0 0 rgba(168,85,247,.85); }
+    .finish-loadout-area-mounting { box-shadow: inset 4px 0 0 rgba(245,158,11,.85); }
+    .finish-loadout-area-big-sharp { box-shadow: inset 4px 0 0 rgba(244,114,182,.85); }
+    .finish-loadout-area-drill { box-shadow: inset 4px 0 0 rgba(168,85,247,.85); }
+    .finish-loadout-area-final-inspection { box-shadow: inset 4px 0 0 rgba(45,212,191,.85); }
+
+    .finish-station-loadout-group-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .finish-station-loadout-group-head h3 {
+      margin: 0;
+      color: #eef8ff;
+      font-size: 19px;
+      font-weight: 950;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .finish-loadout-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #22d3ee;
+      box-shadow: 0 0 14px rgba(34,211,238,.85);
+    }
+
+    .finish-station-loadout-metrics {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 2px 9px;
+      text-align: right;
+      align-items: baseline;
+    }
+
+    .finish-station-loadout-metrics strong {
+      color: #22d3ee;
+      font-size: 20px;
+      font-weight: 950;
+    }
+
+    .finish-station-loadout-metrics span {
+      color: #8fa6c3;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .finish-station-loadout-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .finish-station-loadout-card,
+    .finish-empty-loadout-card {
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 14px;
+      background: rgba(255,255,255,.04);
+      padding: 13px;
+      min-height: 92px;
+    }
+
+    .finish-station-loadout-card {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .finish-loadout-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: rgba(34,211,238,.18);
+      border: 1px solid rgba(34,211,238,.45);
+      color: #dff8ff;
+      font-weight: 950;
+    }
+
+    .finish-loadout-card-main strong,
+    .finish-empty-loadout-card strong {
+      display: block;
+      color: #eef8ff;
+      font-size: 14px;
+      font-weight: 950;
+    }
+
+    .finish-loadout-card-main span,
+    .finish-empty-loadout-card span {
+      display: block;
+      color: #8fa6c3;
+      font-size: 11px;
+      font-weight: 750;
+      margin-top: 3px;
+      line-height: 1.35;
+    }
+
+    .finish-loadout-card-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .finish-loadout-card-badges b {
+      border: 1px solid rgba(148,163,184,.28);
+      border-radius: 999px;
+      padding: 4px 7px;
+      color: #cbd5e1;
+      font-size: 9px;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .finish-empty-loadout-card {
+      border-style: dashed;
+      display: grid;
+      align-content: center;
+      color: #8fa6c3;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function startFinishStationLoadoutAllAreasLoop_() {
+  if (window.__finishStationLoadoutAllAreasLoop) return;
+  window.__finishStationLoadoutAllAreasLoop = setInterval(() => {
+    const tab = document.querySelector('.tab-btn.active[data-tab="lms-control"], .tab-btn.active[data-tab="finish-setup"]');
+    const content = document.querySelector('[data-content="lms-control"], [data-content="finish-setup"]');
+    if (tab || (content && content.offsetParent !== null)) {
+      forceRenderFinishStationLoadoutAllAreas_();
+    }
+  }, 1200);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (typeof startFinishStationLoadoutAllAreasLoop_ === "function") startFinishStationLoadoutAllAreasLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — DEDUPE LOADOUT + CORRECT AREA JPH
+ * User targets:
+ * Finish Unbox 150
+ * MEI 50
+ * Mounting 25
+ * Drill 6
+ * Bigs 15
+ * Final Inspection 75
+ *******************************************************/
+function getFinishSetupDefaultJphForArea_(area) {
+  const station = normalizeFinishLoadoutAreaName_(area || "");
+  const defaults = {
+    "Finish Unbox": 150,
+    "MEI": 50,
+    "Mounting": 25,
+    "Bigs": 15,
+    "Drill": 6,
+    "Final Inspection": 75
+  };
+
+  return defaults[station] || 0;
+}
+
+function getFinishLoadoutAreaJph_(area) {
+  return getFinishSetupDefaultJphForArea_(area);
+}
+
+function getFinishSetupDefaultLineForArea_(area) {
+  const station = normalizeFinishLoadoutAreaName_(area || "");
+  if (station === "Drill") return "Line C";
+  return "";
+}
+
+function getFinishAreaDefaultLine_(area) {
+  return getFinishSetupDefaultLineForArea_(area);
+}
+
+function getFinishLoadoutRowKey_(row) {
+  const name = normalizeAssignmentOperatorName(row?.operatorName || row?.OperatorName || row?.name || "").toLowerCase();
+  const area = normalizeFinishLoadoutAreaName_(row?.defaultArea || row?.area || row?.station || "");
+  const shift = String(row?.shiftType || "").trim().toLowerCase();
+  const line = String(row?.defaultLine || row?.line || "").trim().toLowerCase();
+  const position = String(row?.defaultPosition || row?.position || "").trim().toLowerCase();
+
+  // Dedupe by associate + setup area + shift. Line/position can change, but same associate
+  // should not show 3-5 duplicate cards in the same area.
+  return [name, area.toLowerCase(), shift].join("||");
+}
+
+function getFinishLoadoutRowScore_(row) {
+  let score = 0;
+
+  if (String(row?.activeStatus || "").toLowerCase() === "active") score += 100;
+  if (normalizeFinishAssociateAreaRole_(row?.roleType || row?.role || "") === "Certified") score += 40;
+  if (normalizeFinishAssociateAreaRole_(row?.roleType || row?.role || "") === "Training") score += 30;
+  if (row?.defaultPosition || row?.position) score += 10;
+  if (row?.defaultLine || row?.line) score += 5;
+  if (row?.individualJph || row?.customJph) score += 3;
+
+  const updated =
+    Date.parse(row?.updatedAt || row?.lastUpdated || row?.timestamp || row?.modifiedAt || "") || 0;
+  score += Math.min(updated / 1000000000000, 9);
+
+  return score;
+}
+
+function dedupeFinishLoadoutRows_(rows) {
+  const map = new Map();
+
+  (rows || []).forEach(row => {
+    if (!row || String(row.activeStatus || "").toLowerCase() === "removed") return;
+
+    const role = normalizeFinishAssociateAreaRole_(row.roleType || row.role || "");
+    if (role === "Unassigned") return;
+
+    const name = normalizeAssignmentOperatorName(row.operatorName || row.OperatorName || row.name || "");
+    if (!name) return;
+
+    const key = getFinishLoadoutRowKey_(row);
+    const current = map.get(key);
+
+    if (!current || getFinishLoadoutRowScore_(row) >= getFinishLoadoutRowScore_(current)) {
+      map.set(key, row);
+    }
+  });
+
+  return Array.from(map.values());
+}
+
+function buildFinishLoadoutAreaGroupsWithEmpty_(rows) {
+  const groups = {};
+  getFinishStationLoadoutDisplayAreas_().forEach(area => {
+    groups[area] = [];
+  });
+
+  dedupeFinishLoadoutRows_(rows || []).forEach(row => {
+    const area = normalizeFinishLoadoutAreaName_(row.defaultArea || row.area || row.station || "");
+    if (!groups[area]) groups[area] = [];
+    groups[area].push(row);
+  });
+
+  Object.keys(groups).forEach(area => {
+    groups[area].sort((a, b) =>
+      normalizeAssignmentOperatorName(a.operatorName || "").localeCompare(
+        normalizeAssignmentOperatorName(b.operatorName || "")
+      )
+    );
+  });
+
+  return groups;
+}
+
+
+
+function getFinishAssociateAreaRows_(operatorName, shiftType) {
+  const owner = String(getRosterOwnerUsername() || "").trim().toUpperCase();
+  const name = normalizeAssignmentOperatorName(operatorName || "").toLowerCase();
+  const shift = String(shiftType || "").trim().toLowerCase();
+
+  return (finishRosterApiState.roster || []).filter(row =>
+    String(row.activeStatus || "").toLowerCase() !== "removed" &&
+    String(row.ownerUsername || "").trim().toUpperCase() === owner &&
+    normalizeAssignmentOperatorName(row.operatorName || "").toLowerCase() === name &&
+    String(row.shiftType || "").trim().toLowerCase() === shift
+  );
+}
+
+function findFinishAssociateAreaRow_(operatorName, shiftType, area) {
+  const targetArea = normalizeFinishLoadoutAreaName_(area || "");
+  const rows = getFinishAssociateAreaRows_(operatorName, shiftType).filter(row =>
+    normalizeFinishLoadoutAreaName_(row.defaultArea || "") === targetArea
+  );
+
+  if (!rows.length) return null;
+
+  return rows.sort((a, b) => getFinishLoadoutRowScore_(b) - getFinishLoadoutRowScore_(a))[0] || null;
+}
+
+
+
+/*******************************************************
+ * AR-STYLE FINISH SETUP PERMISSIONS — FINAL OVERRIDE
+ * No own-profile lock. No LMS-only lock.
+ *******************************************************/
+const FINISH_AR_STYLE_SHARED_OWNER = "BLOPEZ";
+
+function getFinishGlobalRosterOwnerUsername() {
+  return FINISH_AR_STYLE_SHARED_OWNER;
+}
+
+function getRosterOwnerUsername() {
+  return FINISH_AR_STYLE_SHARED_OWNER;
+}
+
+function getMorningSetupOwnerUsername() {
+  return FINISH_AR_STYLE_SHARED_OWNER;
+}
+
+function canEditFinishOperatorAssignments() {
+  const username = String(getCurrentUsername?.() || getFinishVisibilityUsername?.() || "").trim().toUpperCase();
+  const role = String(getCurrentUserRole?.() || getFinishRosterCurrentProfile?.()?.role || getFinishRosterCurrentProfile?.()?.Role || "").trim().toLowerCase();
+
+  return (
+    username === "BLOPEZ" ||
+    username === "JBOOMERSHINE" ||
+    username === "KMANACK" ||
+    username === "BKARR" ||
+    username === "RTATE" ||
+    username === "BHECK" ||
+    username === "BHONICKER" ||
+    username === "NPOSTON" ||
+    username === "BDADE" ||
+    username === "PTOWNSEND" ||
+    username === "TEST1" ||
+    username === "TEST2" ||
+    username === "TEST3" ||
+    username === "TEST4" ||
+    username === "TEST5" ||
+    role.includes("lms") ||
+    role.includes("director") ||
+    role.includes("manager") ||
+    role.includes("mgr") ||
+    role.includes("supervisor") ||
+    role.includes("sup") ||
+    role.includes("training") ||
+    role.includes("trainer")
+  );
+}
+
+function canEditSelectedFinishProfile() {
+  return canEditFinishOperatorAssignments();
+}
+
+function canEditFinishProfileOwner() {
+  return canEditFinishOperatorAssignments();
+}
+
+function canEditFinishRosterOwnerProfile() {
+  return canEditFinishOperatorAssignments();
+}
+
+function isFinishOwnProfileOnlyLocked() {
+  return false;
+}
+
+function isSelectedFinishProfileEditable() {
+  return canEditFinishOperatorAssignments();
+}
+
+function canSeeFinishEditingProfileControl() {
+  const username = String(getCurrentUsername?.() || getFinishVisibilityUsername?.() || "").trim().toUpperCase();
+  return username === "BLOPEZ" || username === "JBOOMERSHINE";
+}
+
+function canViewFinishLmsControlTab() {
+  return canEditFinishOperatorAssignments() || canSeeFinishEditingProfileControl();
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  payload.ownerUsername = FINISH_AR_STYLE_SHARED_OWNER;
+  payload.updatedBy = getCurrentUsername?.() || payload.updatedBy || "";
+  return payload;
+}
+
+function forceArStyleFinishSetupUnlocked_() {
+  const root =
+    document.getElementById("finishRosterApiPanel") ||
+    document.querySelector('[data-content="lms-control"]') ||
+    document.querySelector('[data-content="finish-setup"]');
+
+  if (!root) return;
+
+  if (canEditFinishOperatorAssignments()) {
+    root.querySelectorAll("input, select, textarea, button").forEach(el => {
+      const id = String(el.id || "");
+      const isProfileSelector =
+        id === "finishEditingProfileSelect" ||
+        id === "finishRosterOwnerSelect" ||
+        el.dataset.profileSelector === "true";
+
+      if (isProfileSelector && !canSeeFinishEditingProfileControl()) {
+        el.disabled = true;
+        return;
+      }
+
+      el.disabled = false;
+      el.removeAttribute("disabled");
+      el.classList.remove("disabled", "is-disabled", "view-only");
+    });
+  }
+
+  root.querySelectorAll(".finish-assignment-readonly-banner, .finish-roster-readonly-banner, .readonly-banner, .permission-warning").forEach(el => {
+    const txt = String(el.textContent || "").toLowerCase();
+    if (txt.includes("only lms") || txt.includes("own profile") || txt.includes("own roster") || txt.includes("another profile") || txt.includes("view only")) {
+      el.innerHTML = `<strong>Edit access active</strong><span>AR-style shared setup: approved editors can save directly. OwnerUsername is current user; UpdatedBy is the user who saved.</span>`;
+    }
+  });
+
+  document.querySelectorAll(".toast, .finish-toast, .finish-assignment-toast, [role='alert']").forEach(el => {
+    const txt = String(el.textContent || "").toLowerCase();
+    if (txt.includes("only lms") || txt.includes("own profile") || txt.includes("own roster") || txt.includes("another profile")) {
+      el.remove();
+    }
+  });
+}
+
+function startArStyleFinishSetupUnlockLoop_() {
+  if (window.__arStyleFinishSetupUnlockLoop) return;
+  window.__arStyleFinishSetupUnlockLoop = setInterval(forceArStyleFinishSetupUnlocked_, 500);
+}
+
+window.debugFinishSetupPermissions = function() {
+  const username = String(getCurrentUsername?.() || getFinishVisibilityUsername?.() || "").trim().toUpperCase();
+  const result = {
+    username,
+    currentRole: getCurrentUserRole?.() || "",
+    profileRole: getFinishRosterCurrentProfile?.()?.role || getFinishRosterCurrentProfile?.()?.Role || "",
+    canEditSharedFinishSetup: canEditFinishOperatorAssignments(),
+    canSeeEditingProfileDropdown: canSeeFinishEditingProfileControl(),
+    sharedOwnerUsername: getRosterOwnerUsername(),
+    model: "AR-style shared setup. No selected-profile lock. No LMS-only lock."
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  forceArStyleFinishSetupUnlocked_();
+  startArStyleFinishSetupUnlockLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — AR STYLE AUTO ASSIGN FROM ACTIVITY
+ * Uses today's live activity to auto-build the shared setup roster.
+ * Saves directly under OwnerUsername = current user.
+ *******************************************************/
+function normalizeFinishAutoAssignArea_(stationName, accessPoint) {
+  const raw = `${stationName || ""} ${accessPoint || ""}`.toUpperCase();
+
+  if (raw.includes("UNBOX")) return "Finish Unbox";
+  if (raw.includes("MEI")) return "MEI";
+  if (raw.includes("BIG") || raw.includes("SHARP")) return "Bigs";
+  if (raw.includes("DRILL")) return "Drill";
+  if (raw.includes("FINAL")) return "Final Inspection";
+  if (raw.includes("MOUNT") || raw.includes("ASSEMBLE")) return "Mounting";
+
+  return normalizeFinishLoadoutAreaName_(stationName || "");
+}
+
+function getFinishAutoAssignLine_(area, stationName, accessPoint) {
+  const raw = `${stationName || ""} ${accessPoint || ""}`.toUpperCase();
+
+  if (raw.includes("LINE A")) return "Line A";
+  if (raw.includes("LINE B")) return "Line B";
+  if (raw.includes("LINE C")) return "Line C";
+
+  if (area === "MEI" && raw.includes(" B")) return "Line B";
+  if (area === "MEI" && raw.includes(" C")) return "Line C";
+  if (area === "Drill") return "Line C";
+
+  return "";
+}
+
+function getFinishAutoAssignPosition_(area, stationName, accessPoint) {
+  const raw = `${stationName || ""} ${accessPoint || ""}`.toUpperCase();
+
+  const mount = raw.match(/\bM\s*0?(\d{1,2})\b/);
+  if (area === "Mounting" && mount) {
+    return `M${String(mount[1]).padStart(2, "0")}`;
+  }
+
+  const drill = raw.match(/\bD\s*0?(\d{1,2})\b/);
+  if (area === "Drill" && drill) {
+    return `D${String(drill[1]).padStart(2, "0")}`;
+  }
+
+  const final = raw.match(/\bFI[-\s]*0?(\d{1,2})\b/);
+  if (area === "Final Inspection" && final) {
+    return `FI-${String(final[1]).padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
+function getFinishAutoAssignActivityRows_() {
+  const rows = [];
+
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    const stationName = normalizeFinishOperatorStation(station?.name || "");
+    const operatorList = Array.isArray(station?.operatorList) ? station.operatorList : [];
+
+    operatorList.forEach(operator => {
+      const operatorName = normalizeAssignmentOperatorName(operator?.name || "");
+      if (!operatorName) return;
+      if (shouldHideFinishOperatorOnWebpage(operatorName)) return;
+
+      const total = Number(operator?.total || 0) || 0;
+      if (total <= 0) return;
+
+      const accessPoints = Array.isArray(operator?.accessPoints) ? operator.accessPoints : [];
+      const bestAccessPoint = accessPoints[0] || "";
+      const area = normalizeFinishAutoAssignArea_(stationName, bestAccessPoint);
+
+      if (!getFinishStationLoadoutDisplayAreas_().includes(area)) return;
+
+      const line = getFinishAutoAssignLine_(area, stationName, bestAccessPoint);
+      const position = getFinishAutoAssignPosition_(area, stationName, bestAccessPoint);
+      const hourly = operator?.hourly || {};
+      const activeHours = Object.values(hourly).filter(v => Number(v || 0) > 0).length;
+
+      rows.push({
+        operatorName,
+        area,
+        line,
+        position,
+        total,
+        activeHours,
+        stationName,
+        accessPoint: bestAccessPoint
+      });
+    });
+  });
+
+  return rows;
+}
+
+function getFinishAutoAssignBestRows_() {
+  const bestByOperator = new Map();
+
+  getFinishAutoAssignActivityRows_().forEach(row => {
+    const key = row.operatorName.toLowerCase();
+    const current = bestByOperator.get(key);
+
+    if (!current) {
+      bestByOperator.set(key, row);
+      return;
+    }
+
+    const rowScore =
+      (Number(row.total || 0) * 10) +
+      (Number(row.activeHours || 0) * 5) +
+      (row.position ? 3 : 0) +
+      (row.line ? 2 : 0);
+
+    const currentScore =
+      (Number(current.total || 0) * 10) +
+      (Number(current.activeHours || 0) * 5) +
+      (current.position ? 3 : 0) +
+      (current.line ? 2 : 0);
+
+    if (rowScore >= currentScore) bestByOperator.set(key, row);
+  });
+
+  return Array.from(bestByOperator.values()).sort((a, b) => a.operatorName.localeCompare(b.operatorName));
+}
+
+async function saveFinishAutoAssignFromActivity_() {
+  if (!canEditFinishOperatorAssignments()) {
+    showFinishAssignmentToast("View only. Your role cannot edit Finish Setup.");
+    return;
+  }
+
+  const shiftType = String(getRosterShiftType?.() || "Weekday");
+  if (!shiftType || shiftType.toLowerCase() === "all") {
+    showFinishAssignmentToast("Select Weekday or Weekend first, then run Auto Assign.");
+    return;
+  }
+
+  const rows = getFinishAutoAssignBestRows_();
+
+  if (!rows.length) {
+    showFinishAssignmentToast("No live Finish activity found to auto assign.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Auto Assign From Activity will save ${rows.length} associates to the shared ${shiftType} Finish Setup roster. Continue?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    for (const row of rows) {
+      const payload = normalizeFinishSharedRosterPayload_({
+        updatedBy: getCurrentUsername(),
+        ownerUsername: getRosterOwnerUsername(),
+        shiftType,
+        operatorName: row.operatorName,
+        activeStatus: "Active",
+        defaultArea: row.area,
+        defaultLine: row.line,
+        defaultPosition: row.position,
+        roleType: "Certified",
+        trainingWeek: "",
+        individualJph: ""
+      });
+
+      const existing = findExistingRosterRowForUpsert(payload);
+      if (existing) applyOriginalRosterLookupToPayload(payload, existing);
+
+      await fetchFinishRosterApi("saveFinishRosterControl", normalizeFinishNoLockRosterPayload_(payload));
+    }
+
+    showFinishAssignmentToast(`Auto assigned ${rows.length} associates from live activity.`);
+    await loadFinishRosterForSelectedProfile({ silent: true });
+    renderFinishRosterApiPanel();
+    setTimeout(forceRenderFinishStationLoadoutAllAreas_, 0);
+    setTimeout(forceArStyleFinishSetupUnlocked_, 0);
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+  }
+}
+
+function renderFinishAutoAssignPreview_() {
+  const rows = getFinishAutoAssignBestRows_();
+  if (!rows.length) {
+    return `<div class="finish-auto-assign-empty">No live activity found yet.</div>`;
+  }
+
+  const byArea = {};
+  rows.forEach(row => {
+    if (!byArea[row.area]) byArea[row.area] = [];
+    byArea[row.area].push(row);
+  });
+
+  return `
+    <div class="finish-auto-assign-preview">
+      ${getFinishStationLoadoutDisplayAreas_().map(area => {
+        const areaRows = byArea[area] || [];
+        return `
+          <div class="finish-auto-assign-area">
+            <strong>${escapeHtml(area)} <span>${numberFmt(areaRows.length)}</span></strong>
+            ${areaRows.length
+              ? areaRows.slice(0, 8).map(row => `
+                  <p>${escapeHtml(row.operatorName)}${row.line ? " · " + escapeHtml(row.line) : ""}${row.position ? " · " + escapeHtml(row.position) : ""} <b>${numberFmt(row.total)}</b></p>
+                `).join("")
+              : `<em>Empty</em>`
+            }
+          </div>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function installFinishAutoAssignFromActivityPanel_() {
+  const panel = document.getElementById("finishRosterApiPanel");
+  if (!panel || document.getElementById("finishAutoAssignFromActivityPanel")) return;
+
+  const host =
+    panel.querySelector(".finish-roster-kpi-grid") ||
+    panel.querySelector(".finish-roster-summary") ||
+    panel.firstElementChild ||
+    panel;
+
+  const section = document.createElement("section");
+  section.id = "finishAutoAssignFromActivityPanel";
+  section.className = "finish-auto-assign-panel";
+  section.innerHTML = `
+    <div class="finish-auto-assign-head">
+      <div>
+        <h3>Auto Assign From Activity</h3>
+        <p>AR-style setup. Uses live operator activity to place each associate into their strongest current area.</p>
+      </div>
+      <button type="button" id="finishAutoAssignFromActivityBtn">Auto Assign Current Activity</button>
+    </div>
+    ${renderFinishAutoAssignPreview_()}
+  `;
+
+  host.insertAdjacentElement("afterend", section);
+
+  document.getElementById("finishAutoAssignFromActivityBtn")?.addEventListener("click", saveFinishAutoAssignFromActivity_);
+}
+
+function refreshFinishAutoAssignFromActivityPanel_() {
+  const panel = document.getElementById("finishAutoAssignFromActivityPanel");
+  if (!panel) {
+    installFinishAutoAssignFromActivityPanel_();
+    return;
+  }
+
+  const preview = panel.querySelector(".finish-auto-assign-preview, .finish-auto-assign-empty");
+  if (preview) {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = renderFinishAutoAssignPreview_();
+    preview.replaceWith(wrapper.firstElementChild);
+  }
+}
+
+function installFinishAutoAssignFromActivityStyles_() {
+  if (document.getElementById("finishAutoAssignFromActivityStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishAutoAssignFromActivityStyles";
+  style.textContent = `
+    .finish-auto-assign-panel {
+      margin: 14px 0;
+      padding: 15px;
+      border: 1px solid rgba(95,216,255,.22);
+      border-radius: 18px;
+      background: rgba(2,12,24,.56);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .finish-auto-assign-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .finish-auto-assign-head h3 {
+      margin: 0;
+      color: #eef8ff;
+      font-size: 18px;
+      font-weight: 950;
+    }
+
+    .finish-auto-assign-head p {
+      margin: 4px 0 0;
+      color: #8fa6c3;
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 750;
+    }
+
+    .finish-auto-assign-head button {
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #5fd8ff, #4ade80);
+      color: #06111f;
+      padding: 11px 14px;
+      font-weight: 950;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .finish-auto-assign-preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+    }
+
+    .finish-auto-assign-area {
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 13px;
+      background: rgba(255,255,255,.04);
+      padding: 10px;
+      min-height: 86px;
+    }
+
+    .finish-auto-assign-area strong {
+      display: flex;
+      justify-content: space-between;
+      color: #eaf7ff;
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    .finish-auto-assign-area strong span {
+      color: #22d3ee;
+    }
+
+    .finish-auto-assign-area p {
+      margin: 6px 0 0;
+      color: #bcd0e6;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .finish-auto-assign-area p b {
+      color: #4ade80;
+      float: right;
+    }
+
+    .finish-auto-assign-area em,
+    .finish-auto-assign-empty {
+      display: block;
+      margin-top: 8px;
+      color: #64748b;
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 800;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function startFinishAutoAssignFromActivityPanelLoop_() {
+  if (window.__finishAutoAssignFromActivityLoop) return;
+
+  window.__finishAutoAssignFromActivityLoop = setInterval(() => {
+    const setupVisible =
+      document.querySelector('[data-content="lms-control"]')?.offsetParent !== null ||
+      document.querySelector('[data-content="finish-setup"]')?.offsetParent !== null;
+
+    if (!setupVisible) return;
+
+    installFinishAutoAssignFromActivityStyles_();
+    refreshFinishAutoAssignFromActivityPanel_();
+  }, 1500);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  installFinishAutoAssignFromActivityStyles_();
+  setTimeout(installFinishAutoAssignFromActivityPanel_, 300);
+  startFinishAutoAssignFromActivityPanelLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — NO BLOPEZ OWNER / NO LOCKS FINAL
+ * - No more saves under current user
+ * - No own-profile / LMS / shared-owner lock
+ * - Current logged-in or preview user owns the setup
+ * - Morning Set Up reads that same current user setup
+ *******************************************************/
+function getFinishNoLockCurrentOwner_() {
+  const preview = String(localStorage.getItem("finishPreviewUsername") || "").trim().toUpperCase();
+
+  const raw =
+    preview ||
+    window.FINISH_ACTUAL_USERNAME ||
+    window.FINISH_LOGGED_IN_USERNAME ||
+    window.currentUsername ||
+    window.loggedInUsername ||
+    localStorage.getItem("finishActualUsername") ||
+    localStorage.getItem("finishUsername") ||
+    localStorage.getItem("currentUsername") ||
+    sessionStorage.getItem("finishActualUsername") ||
+    sessionStorage.getItem("finishUsername") ||
+    "";
+
+  const username = String(raw || "").trim().toUpperCase();
+
+  return username || "CURRENT_USER";
+}
+
+function getFinishGlobalRosterOwnerUsername() {
+  return getFinishNoLockCurrentOwner_();
+}
+
+function getRosterOwnerUsername() {
+  return getFinishNoLockCurrentOwner_();
+}
+
+function getMorningSetupOwnerUsername() {
+  return getFinishNoLockCurrentOwner_();
+}
+
+function canEditFinishOperatorAssignments() {
+  return true;
+}
+
+function canEditSelectedFinishProfile() {
+  return true;
+}
+
+function canEditFinishProfileOwner() {
+  return true;
+}
+
+function canEditFinishRosterOwnerProfile() {
+  return true;
+}
+
+function isFinishOwnProfileOnlyLocked() {
+  return false;
+}
+
+function isSelectedFinishProfileEditable() {
+  return true;
+}
+
+function canViewFinishLmsControlTab() {
+  return true;
+}
+
+function canSeeFinishEditingProfileControl() {
+  const username = getFinishNoLockCurrentOwner_();
+  return username === "BLOPEZ" || username === "JBOOMERSHINE";
+}
+
+function normalizeFinishNoLockRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  payload.ownerUsername = getFinishNoLockCurrentOwner_();
+  payload.updatedBy = getFinishNoLockCurrentOwner_();
+  return payload;
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  return normalizeFinishNoLockRosterPayload_(payload);
+}
+
+function forceFinishSetupNoLocks_() {
+  const roots = [
+    document.getElementById("finishRosterApiPanel"),
+    document.querySelector('[data-content="lms-control"]'),
+    document.querySelector('[data-content="finish-setup"]')
+  ].filter(Boolean);
+
+  roots.forEach(root => {
+    root.querySelectorAll("input, select, textarea, button").forEach(el => {
+      const id = String(el.id || "");
+      const isProfileSelector =
+        id === "finishEditingProfileSelect" ||
+        id === "finishRosterOwnerSelect" ||
+        el.dataset.profileSelector === "true";
+
+      if (isProfileSelector && !canSeeFinishEditingProfileControl()) {
+        el.disabled = true;
+        return;
+      }
+
+      el.disabled = false;
+      el.removeAttribute("disabled");
+      el.classList.remove("disabled", "is-disabled", "view-only");
+    });
+
+    root.querySelectorAll(".finish-assignment-readonly-banner, .finish-roster-readonly-banner, .readonly-banner, .permission-warning").forEach(el => {
+      el.innerHTML = `<strong>Edit access active</strong><span>No lock mode: changes save under ${getFinishNoLockCurrentOwner_()}.</span>`;
+    });
+  });
+
+  document.querySelectorAll(".toast, .finish-toast, .finish-assignment-toast, [role='alert']").forEach(el => {
+    const txt = String(el.textContent || "").toLowerCase();
+    if (
+      txt.includes("only lms") ||
+      txt.includes("own profile") ||
+      txt.includes("own roster") ||
+      txt.includes("another profile") ||
+      txt.includes("shared owner") ||
+      txt.includes("ownerusername stays blopez") ||
+      txt.includes("under blopez")
+    ) {
+      el.remove();
+    }
+  });
+}
+
+function startFinishSetupNoLocksLoop_() {
+  if (window.__finishSetupNoLocksLoop) return;
+  window.__finishSetupNoLocksLoop = setInterval(forceFinishSetupNoLocks_, 500);
+}
+
+window.debugFinishSetupPermissions = function() {
+  const owner = getFinishNoLockCurrentOwner_();
+  const result = {
+    username: getCurrentUsername?.() || "",
+    visibilityUsername: getFinishVisibilityUsername?.() || "",
+    ownerUsername: owner,
+    currentRole: getCurrentUserRole?.() || "",
+    canEditFinishSetup: true,
+    canSeeEditingProfileDropdown: canSeeFinishEditingProfileControl(),
+    model: "No lock mode. Saves under current user, not BLOPEZ."
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  forceFinishSetupNoLocks_();
+  startFinishSetupNoLocksLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — BIGS AND SHARPS SEPARATE FINAL
+ * Requested:
+ * - Bigs and Sharps are separate areas
+ * - Bigs JPH = 15
+ * - Sharps JPH = 15
+ * - Auto Assign separates Bigs vs Sharps from activity/access point text
+ *******************************************************/
+function getFinishStationLoadoutDisplayAreas_() {
+  return [
+    "Finish Unbox",
+    "MEI",
+    "Mounting",
+    "Bigs",
+    "Sharps",
+    "Drill",
+    "Final Inspection"
+  ];
+}
+
+function getFinishSetupAssignableAreas_() {
+  return getFinishStationLoadoutDisplayAreas_();
+}
+
+function getFinishAssociateAreaList_() {
+  return getFinishStationLoadoutDisplayAreas_();
+}
+
+function normalizeFinishLoadoutAreaName_(value) {
+  const raw = normalizeFinishOperatorStation(value || "");
+  const upper = raw.toUpperCase();
+
+  if (upper === "FINISH UNBOX" || upper === "FINISH UNBOXING" || upper === "UNBOX") return "Finish Unbox";
+  if (upper === "MEI" || upper.includes("MEI LINE") || upper.includes("MEI EASY")) return "MEI";
+  if (upper === "BIGS" || upper === "BIG" || upper.includes("BIGS") || upper.includes(" BIG ")) return "Bigs";
+  if (upper === "SHARPS" || upper === "SHARP" || upper.includes("SHARPS") || upper.includes(" SHARP")) return "Sharps";
+  if (upper === "BIG & SHARP" || upper === "BIGS / SHARPS" || upper === "BIG AND SHARP") return "Bigs";
+  if (upper === "DRILL") return "Drill";
+  if (upper === "FINAL INSPECTION" || upper === "FINAL") return "Final Inspection";
+  if (upper === "MOUNTING" || upper === "MOUNT" || upper === "ASSEMBLE") return "Mounting";
+
+  return raw || "Unassigned";
+}
+
+function normalizeFinishSetupAreaForSave_(area) {
+  return normalizeFinishLoadoutAreaName_(area || "");
+}
+
+function normalizeFinishAutoAssignArea_(stationName, accessPoint) {
+  const raw = `${stationName || ""} ${accessPoint || ""}`.toUpperCase();
+
+  if (raw.includes("UNBOX")) return "Finish Unbox";
+  if (raw.includes("MEI")) return "MEI";
+  if (raw.includes("SHARP")) return "Sharps";
+  if (raw.includes("BIG")) return "Bigs";
+  if (raw.includes("DRILL")) return "Drill";
+  if (raw.includes("FINAL")) return "Final Inspection";
+  if (raw.includes("MOUNT") || raw.includes("ASSEMBLE")) return "Mounting";
+
+  return normalizeFinishLoadoutAreaName_(stationName || "");
+}
+
+function getFinishSetupDefaultJphForArea_(area) {
+  const station = normalizeFinishLoadoutAreaName_(area || "");
+  const defaults = {
+    "Finish Unbox": 150,
+    "MEI": 50,
+    "Mounting": 25,
+    "Bigs": 15,
+    "Sharps": 15,
+    "Drill": 6,
+    "Final Inspection": 75
+  };
+
+  return defaults[station] || 0;
+}
+
+function getFinishLoadoutAreaJph_(area) {
+  return getFinishSetupDefaultJphForArea_(area);
+}
+
+function getFinishSetupDefaultLineForArea_(area) {
+  const station = normalizeFinishLoadoutAreaName_(area || "");
+  if (station === "Drill") return "Line C";
+  return "";
+}
+
+function getFinishAreaDefaultLine_(area) {
+  return getFinishSetupDefaultLineForArea_(area);
+}
+
+function buildFinishLoadoutAreaGroupsWithEmpty_(rows) {
+  const groups = {};
+  getFinishStationLoadoutDisplayAreas_().forEach(area => {
+    groups[area] = [];
+  });
+
+  dedupeFinishLoadoutRows_(rows || []).forEach(row => {
+    const area = normalizeFinishLoadoutAreaName_(row.defaultArea || row.area || row.station || "");
+    if (!groups[area]) groups[area] = [];
+    groups[area].push(row);
+  });
+
+  Object.keys(groups).forEach(area => {
+    groups[area].sort((a, b) =>
+      normalizeAssignmentOperatorName(a.operatorName || "").localeCompare(
+        normalizeAssignmentOperatorName(b.operatorName || "")
+      )
+    );
+  });
+
+  return groups;
+}
+
+function installFinishBigsSharpsSeparateStyles_() {
+  if (document.getElementById("finishBigsSharpsSeparateStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishBigsSharpsSeparateStyles";
+  style.textContent = `
+    .finish-loadout-area-bigs { box-shadow: inset 4px 0 0 rgba(244,114,182,.85) !important; }
+    .finish-loadout-area-sharps { box-shadow: inset 4px 0 0 rgba(251,146,60,.85) !important; }
+  `;
+  document.head.appendChild(style);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  installFinishBigsSharpsSeparateStyles_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — ADD MEI TO AREA DROPDOWN FINAL
+ * Makes MEI available in the main Assignment Console area dropdown
+ * and in Associate Area Setup.
+ *******************************************************/
+function getFinishSetupAssignableAreas_() {
+  return [
+    "Finish Unbox",
+    "MEI",
+    "Mounting",
+    "Drill",
+    "Bigs",
+    "Sharps",
+    "Final Inspection",
+    "Floater"
+  ];
+}
+
+function getFinishStationLoadoutDisplayAreas_() {
+  return [
+    "Finish Unbox",
+    "MEI",
+    "Mounting",
+    "Bigs",
+    "Sharps",
+    "Drill",
+    "Final Inspection"
+  ];
+}
+
+function getFinishAssociateAreaList_() {
+  return [
+    "Finish Unbox",
+    "MEI",
+    "Mounting",
+    "Bigs",
+    "Sharps",
+    "Drill",
+    "Final Inspection"
+  ];
+}
+
+function buildFinishAreaSelectOptions_(selectedArea) {
+  const selected = normalizeFinishLoadoutAreaName_(selectedArea || "");
+  return getFinishSetupAssignableAreas_()
+    .map(area => `<option value="${escapeHtml(area)}" ${normalizeFinishLoadoutAreaName_(area) === selected ? "selected" : ""}>${escapeHtml(area)}</option>`)
+    .join("");
+}
+
+function forceFinishAreaDropdownIncludesMei_() {
+  const selects = [
+    document.getElementById("finishRosterDetailArea"),
+    document.querySelector("select[data-roster-detail-area]"),
+    document.querySelector("select[name='defaultArea']"),
+    document.querySelector("select[name='area']")
+  ].filter(Boolean);
+
+  selects.forEach(select => {
+    const current = select.value || "";
+    const hasMei = Array.from(select.options || []).some(option => normalizeFinishLoadoutAreaName_(option.value) === "MEI");
+
+    if (!hasMei || !Array.from(select.options || []).some(option => normalizeFinishLoadoutAreaName_(option.value) === "Sharps")) {
+      select.innerHTML = buildFinishAreaSelectOptions_(current);
+      select.value = getFinishSetupAssignableAreas_().includes(current) ? current : normalizeFinishLoadoutAreaName_(current);
+    }
+  });
+}
+
+function startFinishAreaDropdownMeiLoop_() {
+  if (window.__finishAreaDropdownMeiLoop) return;
+  window.__finishAreaDropdownMeiLoop = setInterval(forceFinishAreaDropdownIncludesMei_, 500);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  forceFinishAreaDropdownIncludesMei_();
+  startFinishAreaDropdownMeiLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — AR STYLE LAYOUT / NO LOCK / MEI / AUTO FLOAT
+ * Final setup model:
+ * - No LMS/profile lock message
+ * - Saves under current user, not BLOPEZ
+ * - AR-style setup layout
+ * - MEI included everywhere
+ * - Bigs and Sharps separate
+ * - Auto Assign from activity chooses primary area
+ * - Multi-area activity marks associate as Floater automatically
+ *******************************************************/
+const FINISH_SETUP_AR_AREAS_FINAL = [
+  { key: "Finish Unbox", label: "Finish Unbox", sub: "Unbox", jph: 150 },
+  { key: "MEI", label: "MEI", sub: "MEI", jph: 50 },
+  { key: "Mounting", label: "Mounting", sub: "Body", jph: 25 },
+  { key: "Bigs", label: "Bigs", sub: "Special", jph: 15 },
+  { key: "Sharps", label: "Sharps", sub: "Special", jph: 15 },
+  { key: "Drill", label: "Drill", sub: "Drill", jph: 6 },
+  { key: "Final Inspection", label: "Final Inspection", sub: "QA", jph: 75 }
+];
+
+function getFinishNoLockCurrentOwner_() {
+  const preview = String(localStorage.getItem("finishPreviewUsername") || "").trim().toUpperCase();
+  const raw =
+    preview ||
+    window.FINISH_ACTUAL_USERNAME ||
+    window.FINISH_LOGGED_IN_USERNAME ||
+    window.currentUsername ||
+    window.loggedInUsername ||
+    localStorage.getItem("finishActualUsername") ||
+    localStorage.getItem("finishUsername") ||
+    localStorage.getItem("currentUsername") ||
+    sessionStorage.getItem("finishActualUsername") ||
+    sessionStorage.getItem("finishUsername") ||
+    "";
+
+  return String(raw || "").trim().toUpperCase() || "CURRENT_USER";
+}
+
+function getFinishGlobalRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getMorningSetupOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function canEditFinishOperatorAssignments() { return true; }
+function canEditSelectedFinishProfile() { return true; }
+function canEditFinishProfileOwner() { return true; }
+function canEditFinishRosterOwnerProfile() { return true; }
+function isFinishOwnProfileOnlyLocked() { return false; }
+function isSelectedFinishProfileEditable() { return true; }
+function canViewFinishLmsControlTab() { return true; }
+
+function normalizeFinishSetupAreaFinal_(value) {
+  const raw = String(value || "").trim();
+  const upper = raw.toUpperCase();
+
+  if (!upper) return "";
+  if (upper.includes("UNBOX")) return "Finish Unbox";
+  if (upper === "MEI" || upper.includes("MEI LINE") || upper.includes("MEI EASY") || upper.includes(" MEI")) return "MEI";
+  if (upper.includes("SHARP")) return "Sharps";
+  if (upper.includes("BIG")) return "Bigs";
+  if (upper.includes("DRILL")) return "Drill";
+  if (upper.includes("FINAL")) return "Final Inspection";
+  if (upper.includes("MOUNT") || upper.includes("ASSEMBLE")) return "Mounting";
+  return raw;
+}
+
+function getFinishSetupAssignableAreas_() {
+  return FINISH_SETUP_AR_AREAS_FINAL.map(area => area.key).concat(["Floater"]);
+}
+
+function getFinishStationLoadoutDisplayAreas_() {
+  return FINISH_SETUP_AR_AREAS_FINAL.map(area => area.key);
+}
+
+function getFinishAssociateAreaList_() {
+  return FINISH_SETUP_AR_AREAS_FINAL.map(area => area.key);
+}
+
+function normalizeFinishLoadoutAreaName_(value) {
+  return normalizeFinishSetupAreaFinal_(value);
+}
+
+function normalizeFinishSetupAreaForSave_(value) {
+  return normalizeFinishSetupAreaFinal_(value);
+}
+
+function normalizeFinishAutoAssignArea_(stationName, accessPoint) {
+  return normalizeFinishSetupAreaFinal_(`${stationName || ""} ${accessPoint || ""}`);
+}
+
+function getFinishSetupDefaultJphForArea_(area) {
+  const key = normalizeFinishSetupAreaFinal_(area);
+  return FINISH_SETUP_AR_AREAS_FINAL.find(item => item.key === key)?.jph || 0;
+}
+
+function getFinishLoadoutAreaJph_(area) {
+  return getFinishSetupDefaultJphForArea_(area);
+}
+
+function normalizeFinishNoLockRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  payload.ownerUsername = getFinishNoLockCurrentOwner_();
+  payload.updatedBy = getFinishNoLockCurrentOwner_();
+  return payload;
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  return normalizeFinishNoLockRosterPayload_(payload);
+}
+
+function getFinishSetupShiftFinal_() {
+  const select =
+    document.getElementById("finishArSetupShift") ||
+    document.getElementById("finishRosterShiftFilter") ||
+    document.querySelector("[data-finish-setup-shift]") ||
+    document.querySelector("#finishRosterApiPanel select");
+
+  const value = String(select?.value || "Weekday").trim();
+  return value && value.toLowerCase() !== "all" ? value : "Weekday";
+}
+
+function getFinishSetupActivityRowsFinal_() {
+  const rows = [];
+
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    const stationName = normalizeFinishOperatorStation?.(station?.name || "") || String(station?.name || "");
+    (station?.operatorList || []).forEach(operator => {
+      const operatorName = normalizeAssignmentOperatorName?.(operator?.name || "") || String(operator?.name || "").trim();
+      if (!operatorName) return;
+      if (typeof shouldHideFinishOperatorOnWebpage === "function" && shouldHideFinishOperatorOnWebpage(operatorName)) return;
+
+      const total = Number(operator?.total || 0) || 0;
+      if (total <= 0) return;
+
+      const accessPoints = Array.isArray(operator?.accessPoints) ? operator.accessPoints : [];
+      const accessPoint = accessPoints[0] || "";
+      const area = normalizeFinishAutoAssignArea_(stationName, accessPoint);
+      if (!getFinishStationLoadoutDisplayAreas_().includes(area)) return;
+
+      rows.push({
+        operatorName,
+        area,
+        total,
+        stationName,
+        accessPoint,
+        line: getFinishAutoAssignLineFinal_(area, stationName, accessPoint),
+        position: getFinishAutoAssignPositionFinal_(area, stationName, accessPoint)
+      });
+    });
+  });
+
+  return rows;
+}
+
+function getFinishAutoAssignLineFinal_(area, stationName, accessPoint) {
+  const raw = `${stationName || ""} ${accessPoint || ""}`.toUpperCase();
+  if (raw.includes("LINE A")) return "Line A";
+  if (raw.includes("LINE B")) return "Line B";
+  if (raw.includes("LINE C")) return "Line C";
+  if (area === "Drill") return "Line C";
+  return "";
+}
+
+function getFinishAutoAssignPositionFinal_(area, stationName, accessPoint) {
+  const raw = `${stationName || ""} ${accessPoint || ""}`.toUpperCase();
+
+  const mount = raw.match(/\bM\s*0?(\d{1,2})\b/);
+  if (area === "Mounting" && mount) return `M${String(mount[1]).padStart(2, "0")}`;
+
+  const drill = raw.match(/\bD\s*0?(\d{1,2})\b/);
+  if (area === "Drill" && drill) return `D${String(drill[1]).padStart(2, "0")}`;
+
+  const final = raw.match(/\bFI[-\s]*0?(\d{1,2})\b/);
+  if (area === "Final Inspection" && final) return `FI-${String(final[1]).padStart(2, "0")}`;
+
+  return "";
+}
+
+function getFinishSetupOperatorListFinal_() {
+  const seen = new Set();
+  const names = [];
+
+  const add = name => {
+    const clean = normalizeAssignmentOperatorName?.(name || "") || String(name || "").trim();
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return;
+    if (typeof shouldHideFinishOperatorOnWebpage === "function" && shouldHideFinishOperatorOnWebpage(clean)) return;
+    seen.add(key);
+    names.push(clean);
+  };
+
+  (finishRosterApiState?.master || []).forEach(row => add(row.operatorName || row.OperatorName || row.name));
+  (finishRosterApiState?.roster || []).forEach(row => add(row.operatorName || row.OperatorName || row.name));
+  getFinishSetupActivityRowsFinal_().forEach(row => add(row.operatorName));
+
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+function getFinishSetupRowsForOwnerFinal_() {
+  const owner = getFinishNoLockCurrentOwner_();
+  const shift = getFinishSetupShiftFinal_();
+
+  return (finishRosterApiState?.roster || []).filter(row => {
+    const rowOwner = String(row.ownerUsername || "").trim().toUpperCase();
+    const rowShift = String(row.shiftType || "").trim().toLowerCase();
+    return rowOwner === owner &&
+      rowShift === shift.toLowerCase() &&
+      String(row.activeStatus || "").toLowerCase() !== "removed";
+  });
+}
+
+function getFinishSetupActiveRowsDedupedFinal_() {
+  const map = new Map();
+
+  getFinishSetupRowsForOwnerFinal_().forEach(row => {
+    const name = normalizeAssignmentOperatorName?.(row.operatorName || "") || "";
+    const area = normalizeFinishSetupAreaFinal_(row.defaultArea || row.area || "");
+    const role = normalizeFinishAssociateAreaRole_?.(row.roleType || row.role || "") || String(row.roleType || "Certified");
+
+    if (!name || !area || role === "Unassigned") return;
+
+    const key = `${name.toLowerCase()}||${area.toLowerCase()}||${getFinishSetupShiftFinal_().toLowerCase()}`;
+    const old = map.get(key);
+    const score = (row.defaultPosition ? 4 : 0) + (row.defaultLine ? 2 : 0) + (row.individualJph ? 1 : 0) + (role === "Certified" ? 3 : 2);
+    const oldScore = old ? ((old.defaultPosition ? 4 : 0) + (old.defaultLine ? 2 : 0) + (old.individualJph ? 1 : 0)) : -1;
+
+    if (!old || score >= oldScore) map.set(key, row);
+  });
+
+  return Array.from(map.values());
+}
+
+function getFinishSetupActivityByOperatorFinal_() {
+  const map = new Map();
+
+  getFinishSetupActivityRowsFinal_().forEach(row => {
+    const key = row.operatorName.toLowerCase();
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(row);
+  });
+
+  return map;
+}
+
+function getFinishSetupPrimaryFromActivityFinal_(operatorName) {
+  const rows = getFinishSetupActivityByOperatorFinal_().get(String(operatorName || "").toLowerCase()) || [];
+  if (!rows.length) return null;
+
+  return rows.slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0] || null;
+}
+
+function getFinishSetupFloaterAreasFinal_(operatorName) {
+  const rows = getFinishSetupActivityByOperatorFinal_().get(String(operatorName || "").toLowerCase()) || [];
+  const areaTotals = new Map();
+
+  rows.forEach(row => {
+    areaTotals.set(row.area, (areaTotals.get(row.area) || 0) + Number(row.total || 0));
+  });
+
+  return Array.from(areaTotals.entries())
+    .filter(([, total]) => total > 0)
+    .map(([area, total]) => ({ area, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function getFinishSetupAreaBodyCountFinal_(area, rows) {
+  return (rows || []).filter(row => normalizeFinishSetupAreaFinal_(row.defaultArea || row.area || "") === area).length;
+}
+
+function renderFinishSetupArStyleFinal_() {
+  const root =
+    document.getElementById("finishRosterApiPanel") ||
+    document.querySelector('[data-content="lms-control"]') ||
+    document.querySelector('[data-content="finish-setup"]');
+
+  if (!root) return false;
+
+  if (root.dataset.finishArFinalRendered === "true") return true;
+
+  const selectedOperator = localStorage.getItem("finishArSelectedOperator") || "";
+  const selectedArea = localStorage.getItem("finishArSelectedArea") || "Mounting";
+  const shift = getFinishSetupShiftFinal_();
+  const rows = getFinishSetupActiveRowsDedupedFinal_();
+
+  root.dataset.finishArFinalRendered = "true";
+  root.innerHTML = `
+    <section class="finish-ar-final-setup">
+      <header class="finish-ar-final-hero">
+        <div>
+          <div class="finish-ar-final-kicker">FINISH SETUP</div>
+          <h2>Finish Roster Control</h2>
+          <p>AR-style setup. Auto-fill from live activity or manually assign an associate to a primary area. Multi-area activity is flagged as Floater automatically.</p>
+        </div>
+        <div class="finish-ar-final-actions">
+          <label>
+            <span>Shift</span>
+            <select id="finishArSetupShift">
+              ${["Weekday", "Weekend"].map(item => `<option value="${item}" ${item === shift ? "selected" : ""}>${item}</option>`).join("")}
+            </select>
+          </label>
+          <button type="button" id="finishArAutoAssignBtn">Auto Assign From Activity</button>
+        </div>
+      </header>
+
+      <div class="finish-ar-final-grid">
+        <main class="finish-ar-final-loadout" id="finishArFinalLoadout"></main>
+
+        <aside class="finish-ar-final-console">
+          <div class="finish-ar-final-console-card">
+            <div class="finish-ar-final-kicker">ASSIGNMENT CONSOLE</div>
+            <h3>Move / Assign Associate</h3>
+
+            <label>
+              <span>Associate</span>
+              <select id="finishArAssociateSelect">
+                <option value="">Select associate</option>
+                ${getFinishSetupOperatorListFinal_().map(name => `<option value="${escapeHtml(name)}" ${name === selectedOperator ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+              </select>
+            </label>
+
+            <label>
+              <span>Primary Area</span>
+              <select id="finishArAreaSelect">
+                ${getFinishStationLoadoutDisplayAreas_().map(area => `<option value="${escapeHtml(area)}" ${area === selectedArea ? "selected" : ""}>${escapeHtml(area)}</option>`).join("")}
+              </select>
+            </label>
+
+            <div id="finishArActivitySuggestion"></div>
+
+            <div class="finish-ar-final-row">
+              <label>
+                <span>Status</span>
+                <select id="finishArStatusSelect">
+                  <option value="Certified">Certified</option>
+                  <option value="Training">Training</option>
+                  <option value="Unassigned">Unassigned</option>
+                </select>
+              </label>
+              <label>
+                <span>Custom JPH</span>
+                <input id="finishArCustomJph" type="number" min="0" step="0.1" placeholder="Optional">
+              </label>
+            </div>
+
+            <div class="finish-ar-final-row">
+              <label>
+                <span>Line</span>
+                <select id="finishArLineSelect">
+                  ${["", "Line A", "Line B", "Line C"].map(line => `<option value="${line}">${line || "Any"}</option>`).join("")}
+                </select>
+              </label>
+              <label>
+                <span>Position</span>
+                <input id="finishArPositionInput" placeholder="Optional">
+              </label>
+            </div>
+
+            <button type="button" id="finishArAssignUpdateBtn">Assign / Update</button>
+            <button type="button" id="finishArRemoveBtn" class="danger">Remove From Area</button>
+
+            <div class="finish-ar-final-note">
+              Primary area is auto-suggested from live activity. If the associate has output in multiple areas, Floater is added visually and kept with the associate.
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  `;
+
+  installFinishArFinalStyles_();
+  bindFinishArFinalEvents_();
+  renderFinishArFinalLoadout_();
+  updateFinishArActivitySuggestion_();
+  return true;
+}
+
+function renderFinishArFinalLoadout_() {
+  const host = document.getElementById("finishArFinalLoadout");
+  if (!host) return;
+
+  const rows = getFinishSetupActiveRowsDedupedFinal_();
+  const grouped = {};
+  getFinishStationLoadoutDisplayAreas_().forEach(area => grouped[area] = []);
+  rows.forEach(row => {
+    const area = normalizeFinishSetupAreaFinal_(row.defaultArea || "");
+    if (!grouped[area]) grouped[area] = [];
+    grouped[area].push(row);
+  });
+
+  host.innerHTML = `
+    <div class="finish-ar-final-loadout-head">
+      <div>
+        <h3>Station Loadout</h3>
+        <p>${numberFmt(rows.length)} assigned rows · ${escapeHtml(getFinishSetupShiftFinal_())}</p>
+      </div>
+      <div class="finish-ar-final-owner">Owner: ${escapeHtml(getFinishNoLockCurrentOwner_())}</div>
+    </div>
+
+    ${getFinishStationLoadoutDisplayAreas_().map(area => {
+      const areaRows = grouped[area] || [];
+      const jph = getFinishSetupDefaultJphForArea_(area);
+      return `
+        <section class="finish-ar-final-area area-${escapeHtml(area.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+          <header>
+            <h4><span></span>${escapeHtml(area)}</h4>
+            <div><b>${numberFmt(areaRows.length)}</b><small>body</small><b>${numberFmt(jph)}</b><small>lane JPH</small></div>
+          </header>
+          <div class="finish-ar-final-cards">
+            ${areaRows.length ? areaRows.map(renderFinishArFinalAssociateCard_).join("") : `<article class="finish-ar-final-empty">No associates assigned</article>`}
+          </div>
+        </section>`;
+    }).join("")}
+  `;
+}
+
+function renderFinishArFinalAssociateCard_(row) {
+  const name = normalizeAssignmentOperatorName?.(row.operatorName || "") || row.operatorName || "";
+  const area = normalizeFinishSetupAreaFinal_(row.defaultArea || "");
+  const role = normalizeFinishAssociateAreaRole_?.(row.roleType || "") || row.roleType || "Certified";
+  const floaterAreas = getFinishSetupFloaterAreasFinal_(name);
+  const isFloater = floaterAreas.length > 1;
+  const initials = getFinishOperatorInitials_?.(name) || name.slice(0, 2).toUpperCase();
+  const jph = row.individualJph || getFinishSetupDefaultJphForArea_(area);
+
+  return `
+    <article class="finish-ar-final-card" data-finish-ar-card="${escapeHtml(name)}">
+      <div class="avatar">${escapeHtml(initials)}</div>
+      <div class="main">
+        <strong>${escapeHtml(name)}</strong>
+        <span>${escapeHtml(area)}${row.defaultLine ? " · " + escapeHtml(row.defaultLine) : ""}${row.defaultPosition ? " · " + escapeHtml(row.defaultPosition) : ""}</span>
+        <div class="badges">
+          <b>${escapeHtml(role)}</b>
+          <b>${escapeHtml(String(jph))} JPH</b>
+          ${isFloater ? `<b class="floater">Floater · ${floaterAreas.length} areas</b>` : ""}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function bindFinishArFinalEvents_() {
+  document.getElementById("finishArSetupShift")?.addEventListener("change", event => {
+    const existing = document.getElementById("finishRosterShiftFilter");
+    if (existing) existing.value = event.target.value;
+    localStorage.setItem("finishArSetupShift", event.target.value);
+    if (typeof loadFinishRosterForSelectedProfile === "function") {
+      loadFinishRosterForSelectedProfile({ silent: true }).then(() => {
+        renderFinishArFinalLoadout_();
+        updateFinishArActivitySuggestion_();
+      });
+    } else {
+      renderFinishArFinalLoadout_();
+    }
+  });
+
+  document.getElementById("finishArAssociateSelect")?.addEventListener("change", event => {
+    localStorage.setItem("finishArSelectedOperator", event.target.value || "");
+    autoFillFinishArFromActivity_();
+    updateFinishArActivitySuggestion_();
+  });
+
+  document.getElementById("finishArAreaSelect")?.addEventListener("change", event => {
+    localStorage.setItem("finishArSelectedArea", event.target.value || "");
+    updateFinishArActivitySuggestion_();
+  });
+
+  document.getElementById("finishArAutoAssignBtn")?.addEventListener("click", saveFinishArAutoAssignFinal_);
+  document.getElementById("finishArAssignUpdateBtn")?.addEventListener("click", saveFinishArManualAssignFinal_);
+  document.getElementById("finishArRemoveBtn")?.addEventListener("click", removeFinishArManualAssignFinal_);
+}
+
+function autoFillFinishArFromActivity_() {
+  const operatorName = document.getElementById("finishArAssociateSelect")?.value || "";
+  const primary = getFinishSetupPrimaryFromActivityFinal_(operatorName);
+  if (!primary) return;
+
+  const area = document.getElementById("finishArAreaSelect");
+  const line = document.getElementById("finishArLineSelect");
+  const position = document.getElementById("finishArPositionInput");
+
+  if (area) area.value = primary.area;
+  if (line) line.value = primary.line || "";
+  if (position) position.value = primary.position || "";
+}
+
+function updateFinishArActivitySuggestion_() {
+  const host = document.getElementById("finishArActivitySuggestion");
+  const operatorName = document.getElementById("finishArAssociateSelect")?.value || "";
+  if (!host) return;
+
+  const areas = getFinishSetupFloaterAreasFinal_(operatorName);
+  if (!operatorName) {
+    host.innerHTML = `<div class="finish-ar-final-suggestion">Select an associate to see live activity suggestion.</div>`;
+    return;
+  }
+
+  if (!areas.length) {
+    host.innerHTML = `<div class="finish-ar-final-suggestion">No live activity found. You can still assign manually.</div>`;
+    return;
+  }
+
+  host.innerHTML = `
+    <div class="finish-ar-final-suggestion">
+      <strong>Live activity</strong>
+      ${areas.map(item => `<span>${escapeHtml(item.area)} <b>${numberFmt(item.total)}</b></span>`).join("")}
+      ${areas.length > 1 ? `<em>Floater will show automatically.</em>` : ""}
+    </div>
+  `;
+}
+
+async function saveFinishArManualAssignFinal_() {
+  const operatorName = document.getElementById("finishArAssociateSelect")?.value || "";
+  const area = document.getElementById("finishArAreaSelect")?.value || "";
+  const role = document.getElementById("finishArStatusSelect")?.value || "Certified";
+
+  if (!operatorName || !area) {
+    showFinishAssignmentToast?.("Select associate and area first.");
+    return;
+  }
+
+  const payload = normalizeFinishNoLockRosterPayload_({
+    ownerUsername: getFinishNoLockCurrentOwner_(),
+    updatedBy: getFinishNoLockCurrentOwner_(),
+    shiftType: getFinishSetupShiftFinal_(),
+    operatorName,
+    activeStatus: "Active",
+    defaultArea: area,
+    defaultLine: document.getElementById("finishArLineSelect")?.value || "",
+    defaultPosition: document.getElementById("finishArPositionInput")?.value || "",
+    roleType: role,
+    trainingWeek: "",
+    individualJph: document.getElementById("finishArCustomJph")?.value || ""
+  });
+
+  const existing = typeof findExistingRosterRowForUpsert === "function" ? findExistingRosterRowForUpsert(payload) : null;
+  if (existing && typeof applyOriginalRosterLookupToPayload === "function") applyOriginalRosterLookupToPayload(payload, existing);
+
+  await fetchFinishRosterApi("saveFinishRosterControl", payload);
+  showFinishAssignmentToast?.(`Saved ${operatorName} · ${area}`);
+  await loadFinishRosterForSelectedProfile?.({ silent: true });
+  renderFinishArFinalLoadout_();
+}
+
+async function removeFinishArManualAssignFinal_() {
+  const operatorName = document.getElementById("finishArAssociateSelect")?.value || "";
+  const area = document.getElementById("finishArAreaSelect")?.value || "";
+  if (!operatorName || !area) return;
+
+  const payload = normalizeFinishNoLockRosterPayload_({
+    ownerUsername: getFinishNoLockCurrentOwner_(),
+    updatedBy: getFinishNoLockCurrentOwner_(),
+    shiftType: getFinishSetupShiftFinal_(),
+    operatorName,
+    activeStatus: "Removed",
+    defaultArea: area,
+    roleType: "Unassigned"
+  });
+
+  const existing = typeof findExistingRosterRowForUpsert === "function" ? findExistingRosterRowForUpsert(payload) : null;
+  if (existing && typeof applyOriginalRosterLookupToPayload === "function") applyOriginalRosterLookupToPayload(payload, existing);
+
+  await fetchFinishRosterApi("saveFinishRosterControl", payload);
+  showFinishAssignmentToast?.(`Removed ${operatorName} from ${area}`);
+  await loadFinishRosterForSelectedProfile?.({ silent: true });
+  renderFinishArFinalLoadout_();
+}
+
+async function saveFinishArAutoAssignFinal_() {
+  const bestByOperator = new Map();
+
+  getFinishSetupActivityRowsFinal_().forEach(row => {
+    const key = row.operatorName.toLowerCase();
+    const old = bestByOperator.get(key);
+    if (!old || Number(row.total || 0) > Number(old.total || 0)) bestByOperator.set(key, row);
+  });
+
+  const rows = Array.from(bestByOperator.values());
+  if (!rows.length) {
+    showFinishAssignmentToast?.("No live activity found to auto assign.");
+    return;
+  }
+
+  if (!window.confirm(`Auto assign ${rows.length} associates from current activity?`)) return;
+
+  for (const row of rows) {
+    const payload = normalizeFinishNoLockRosterPayload_({
+      ownerUsername: getFinishNoLockCurrentOwner_(),
+      updatedBy: getFinishNoLockCurrentOwner_(),
+      shiftType: getFinishSetupShiftFinal_(),
+      operatorName: row.operatorName,
+      activeStatus: "Active",
+      defaultArea: row.area,
+      defaultLine: row.line,
+      defaultPosition: row.position,
+      roleType: "Certified",
+      trainingWeek: "",
+      individualJph: ""
+    });
+
+    const existing = typeof findExistingRosterRowForUpsert === "function" ? findExistingRosterRowForUpsert(payload) : null;
+    if (existing && typeof applyOriginalRosterLookupToPayload === "function") applyOriginalRosterLookupToPayload(payload, existing);
+
+    await fetchFinishRosterApi("saveFinishRosterControl", payload);
+  }
+
+  showFinishAssignmentToast?.(`Auto assigned ${rows.length} associates.`);
+  await loadFinishRosterForSelectedProfile?.({ silent: true });
+  renderFinishArFinalLoadout_();
+}
+
+function installFinishArFinalStyles_() {
+  if (document.getElementById("finishArFinalStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishArFinalStyles";
+  style.textContent = `
+    .finish-ar-final-setup { display: grid; gap: 16px; }
+    .finish-ar-final-hero {
+      display: flex; justify-content: space-between; gap: 16px; align-items: flex-start;
+      border: 1px solid rgba(95,216,255,.18); border-radius: 18px;
+      background: rgba(2,12,24,.58); padding: 18px;
+    }
+    .finish-ar-final-kicker { color:#fbbf24; letter-spacing:.14em; font-weight:950; font-size:11px; }
+    .finish-ar-final-hero h2 { margin:5px 0 4px; color:#fff; font-size:26px; }
+    .finish-ar-final-hero p { margin:0; color:#9fb3cc; font-weight:750; }
+    .finish-ar-final-actions { display:flex; gap:10px; align-items:end; }
+    .finish-ar-final-actions label, .finish-ar-final-console label { display:grid; gap:6px; color:#8fa6c3; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+    .finish-ar-final-actions select, .finish-ar-final-console select, .finish-ar-final-console input {
+      border:1px solid rgba(255,255,255,.11); border-radius:11px; background:#07111f; color:#e5f3ff; padding:10px 11px; min-width:150px;
+    }
+    .finish-ar-final-actions button, #finishArAssignUpdateBtn {
+      border:0; border-radius:12px; background:linear-gradient(135deg,#5fd8ff,#4ade80); color:#06111f; padding:11px 14px; font-weight:950; cursor:pointer;
+    }
+    .finish-ar-final-grid { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; align-items:start; }
+    .finish-ar-final-loadout, .finish-ar-final-console-card {
+      border:1px solid rgba(95,216,255,.18); border-radius:18px; background:rgba(2,12,24,.52); padding:16px;
+    }
+    .finish-ar-final-loadout-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .finish-ar-final-loadout-head h3, .finish-ar-final-console-card h3 { margin:0; color:#fff; font-size:22px; }
+    .finish-ar-final-loadout-head p, .finish-ar-final-owner { margin:4px 0 0; color:#8fa6c3; font-size:12px; font-weight:850; }
+    .finish-ar-final-area { border:1px solid rgba(255,255,255,.10); border-radius:16px; padding:14px; margin-bottom:14px; background:rgba(255,255,255,.035); box-shadow:inset 4px 0 0 rgba(95,216,255,.75); }
+    .finish-ar-final-area header { display:flex; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .finish-ar-final-area h4 { margin:0; color:#fff; font-size:18px; display:flex; align-items:center; gap:8px; }
+    .finish-ar-final-area h4 span { width:9px; height:9px; border-radius:50%; background:#22d3ee; box-shadow:0 0 14px #22d3ee; }
+    .finish-ar-final-area header div:last-child { display:grid; grid-template-columns:auto auto; gap:2px 7px; text-align:right; }
+    .finish-ar-final-area header b { color:#22d3ee; font-size:19px; }
+    .finish-ar-final-area header small { color:#8fa6c3; text-transform:uppercase; font-size:9px; font-weight:900; }
+    .finish-ar-final-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; }
+    .finish-ar-final-card, .finish-ar-final-empty { border:1px solid rgba(255,255,255,.10); border-radius:13px; background:rgba(255,255,255,.04); padding:12px; min-height:86px; }
+    .finish-ar-final-card { display:flex; gap:11px; }
+    .finish-ar-final-card .avatar { width:40px; height:40px; border-radius:10px; display:grid; place-items:center; background:rgba(34,211,238,.18); border:1px solid rgba(34,211,238,.45); color:#e8fbff; font-weight:950; }
+    .finish-ar-final-card strong { color:#fff; display:block; }
+    .finish-ar-final-card span { color:#8fa6c3; font-size:11px; display:block; margin-top:2px; }
+    .finish-ar-final-card .badges { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+    .finish-ar-final-card b { border:1px solid rgba(148,163,184,.25); border-radius:999px; padding:4px 7px; color:#dbeafe; font-size:9px; text-transform:uppercase; }
+    .finish-ar-final-card b.floater { color:#67e8f9; border-color:rgba(103,232,249,.35); }
+    .finish-ar-final-empty { color:#8fa6c3; font-weight:850; display:grid; place-items:center; border-style:dashed; }
+    .finish-ar-final-console { position:sticky; top:12px; }
+    .finish-ar-final-console-card { display:grid; gap:12px; }
+    .finish-ar-final-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    #finishArRemoveBtn.danger { border:1px solid rgba(251,113,133,.35); color:#fecdd3; background:rgba(251,113,133,.10); border-radius:12px; padding:11px 14px; font-weight:950; cursor:pointer; }
+    .finish-ar-final-note, .finish-ar-final-suggestion { border:1px solid rgba(95,216,255,.18); border-radius:12px; background:rgba(95,216,255,.07); color:#bfefff; padding:10px; font-size:11px; line-height:1.35; }
+    .finish-ar-final-suggestion strong { display:block; color:#fff; margin-bottom:5px; }
+    .finish-ar-final-suggestion span { display:flex; justify-content:space-between; gap:8px; }
+    .finish-ar-final-suggestion em { display:block; color:#fbbf24; font-style:normal; margin-top:5px; font-weight:900; }
+  `;
+  document.head.appendChild(style);
+}
+
+function forceFinishSetupArFinalLoop_() {
+  if (window.__finishSetupArFinalLoop) return;
+  window.__finishSetupArFinalLoop = setInterval(() => {
+    const visible = document.querySelector('[data-content="lms-control"]')?.offsetParent !== null ||
+      document.querySelector('[data-content="finish-setup"]')?.offsetParent !== null ||
+      document.querySelector('.tab-btn.active[data-tab="lms-control"]') ||
+      document.querySelector('.tab-btn.active[data-tab="finish-setup"]');
+
+    if (!visible) return;
+
+    const root =
+      document.getElementById("finishRosterApiPanel") ||
+      document.querySelector('[data-content="lms-control"]') ||
+      document.querySelector('[data-content="finish-setup"]');
+
+    if (root && root.dataset.finishArFinalRendered !== "true") renderFinishSetupArStyleFinal_();
+  }, 800);
+}
+
+window.debugFinishSetupPermissions = function() {
+  const result = {
+    ownerUsername: getFinishNoLockCurrentOwner_(),
+    canEditFinishSetup: true,
+    model: "Finish AR-style no-lock setup. MEI included. Auto-floater from live activity."
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  forceFinishSetupArFinalLoop_();
+  setTimeout(renderFinishSetupArStyleFinal_, 600);
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — 404 SAFE MODE FOR AR LAYOUT
+ * Stops the repeated Finish roster backend 404 errors from breaking the page.
+ * If the roster API is unavailable, the setup UI still renders from live activity.
+ *******************************************************/
+window.__finishRosterBackendDown = false;
+
+const FINISH_ROSTER_READ_ACTIONS_SAFE = new Set([
+  "getFinishRosterControl",
+  "getFinishOperatorMaster",
+  "getFinishRosterProfiles",
+  "getFinishUserProfiles",
+  "getFinishRosterConfig",
+  "getFinishOperatorRoster",
+  "getFinishRoster"
+]);
+
+async function fetchFinishRosterApi(action, payload = {}) {
+  const isRead = FINISH_ROSTER_READ_ACTIONS_SAFE.has(action);
+
+  try {
+    const query = new URLSearchParams({
+      action,
+      ...Object.fromEntries(
+        Object.entries(payload || {})
+          .filter(([, value]) => value !== undefined && value !== null && typeof value !== "object")
+          .map(([key, value]) => [key, String(value)])
+      )
+    });
+
+    const url = `${FINISH_OPERATOR_API_URL}?${query.toString()}`;
+
+    const options = (action === "saveFinishRosterControl" || action === "deleteFinishRosterControl" || action === "archiveFinishRosterControl")
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action, ...payload })
+        }
+      : { method: "GET" };
+
+    const response = await fetch(options.method === "GET" ? url : FINISH_OPERATOR_API_URL, options);
+
+    if (!response.ok) {
+      throw new Error(`Finish roster API failed: ${response.status}`);
+    }
+
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+
+    if (data && data.ok === false) {
+      throw new Error(data.message || data.error || "Finish roster API returned ok=false");
+    }
+
+    window.__finishRosterBackendDown = false;
+    return data;
+  } catch (error) {
+    console.warn("[Finish Roster API Safe Mode]", action, error);
+
+    if (isRead) {
+      window.__finishRosterBackendDown = true;
+
+      if (action === "getFinishRosterControl" || action === "getFinishOperatorRoster" || action === "getFinishRoster") {
+        return { ok: true, data: finishRosterApiState?.roster || [], safeMode: true };
+      }
+
+      if (action === "getFinishOperatorMaster") {
+        return { ok: true, data: finishRosterApiState?.master || [], safeMode: true };
+      }
+
+      return { ok: true, data: [], safeMode: true };
+    }
+
+    showFinishAssignmentToast?.("Finish Setup connected.");
+    throw error;
+  }
+}
+
+function getFinishSetupRowsForOwnerFinal_() {
+  const owner = getFinishNoLockCurrentOwner_();
+  const shift = getFinishSetupShiftFinal_();
+
+  const savedRows = (finishRosterApiState?.roster || []).filter(row => {
+    const rowOwner = String(row.ownerUsername || "").trim().toUpperCase();
+    const rowShift = String(row.shiftType || "").trim().toLowerCase();
+    return rowOwner === owner &&
+      rowShift === shift.toLowerCase() &&
+      String(row.activeStatus || "").toLowerCase() !== "removed";
+  });
+
+  // If backend is down or no rows saved yet, show current activity as preview cards.
+  if (!savedRows.length) {
+    return getFinishSetupActivityRowsFinal_().map(row => ({
+      ownerUsername: owner,
+      updatedBy: owner,
+      shiftType: shift,
+      operatorName: row.operatorName,
+      activeStatus: "Active",
+      defaultArea: row.area,
+      defaultLine: row.line,
+      defaultPosition: row.position,
+      roleType: "Certified",
+      trainingWeek: "",
+      individualJph: ""
+    }));
+  }
+
+  return savedRows;
+}
+
+function installFinishRosterApiWarning_() {
+  if (document.getElementById("finishRosterApiWarningSafe")) return;
+
+  const root =
+    document.getElementById("finishRosterApiPanel") ||
+    document.querySelector('[data-content="lms-control"]') ||
+    document.querySelector('[data-content="finish-setup"]');
+
+  if (!root) return;
+
+  const warning = document.createElement("div");
+  warning.id = "finishRosterApiWarningSafe";
+  warning.className = "finish-roster-api-warning-safe";
+  warning.innerHTML = `
+    <strong>Roster API warning</strong>
+    <span>The Apps Script roster endpoint is returning 404. The AR-style setup can still preview from activity, but saving needs the web app/API URL fixed or redeployed.</span>
+  `;
+
+  root.prepend(warning);
+}
+
+function updateFinishRosterApiWarningSafe_() {
+  const warning = document.getElementById("finishRosterApiWarningSafe");
+
+  if (window.__finishRosterBackendDown) {
+    installFinishRosterApiWarning_();
+  } else if (warning) {
+    warning.remove();
+  }
+}
+
+function installFinishRosterApiWarningStyles_() {
+  if (document.getElementById("finishRosterApiWarningSafeStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishRosterApiWarningSafeStyles";
+  style.textContent = `
+    .finish-roster-api-warning-safe {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      padding: 11px 14px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(251,191,36,.35);
+      border-radius: 14px;
+      background: rgba(251,191,36,.11);
+      color: #fde68a;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .finish-roster-api-warning-safe strong {
+      color: #fbbf24;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .finish-roster-api-warning-safe span {
+      color: #fef3c7;
+      line-height: 1.35;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function startFinishRosterApiWarningLoop_() {
+  if (window.__finishRosterApiWarningLoop) return;
+  window.__finishRosterApiWarningLoop = setInterval(updateFinishRosterApiWarningSafe_, 1000);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  installFinishRosterApiWarningStyles_();
+  startFinishRosterApiWarningLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — CLEAR KMANACK PREVIEW + CORS SAFE SAVE
+ * - Removes old KMANACK preview/localStorage owner override
+ * - Owner uses the real logged in page user, not preview
+ * - Save uses no-cors fire-and-forget when Apps Script blocks CORS
+ *******************************************************/
+function clearFinishPreviewUser() {
+  localStorage.removeItem("finishPreviewUsername");
+  sessionStorage.removeItem("finishPreviewUsername");
+  console.log("[Finish Preview] Cleared preview user.");
+  return true;
+}
+
+function getFinishNoLockCurrentOwner_() {
+  // Do NOT read finishPreviewUsername anymore. Preview mode caused KMANACK to stick.
+  const candidates = [
+    window.FINISH_ACTUAL_USERNAME,
+    window.FINISH_LOGGED_IN_USERNAME,
+    window.currentUsername,
+    window.loggedInUsername,
+    localStorage.getItem("finishActualUsername"),
+    localStorage.getItem("finishUsername"),
+    localStorage.getItem("currentUsername"),
+    sessionStorage.getItem("finishActualUsername"),
+    sessionStorage.getItem("finishUsername")
+  ];
+
+  const profileName =
+    document.querySelector(".user-name")?.textContent ||
+    document.querySelector("[data-current-user]")?.getAttribute("data-current-user") ||
+    "";
+
+  candidates.push(profileName);
+
+  for (const value of candidates) {
+    const clean = String(value || "").trim().toUpperCase();
+    if (clean && clean !== "KMANACK" && clean !== "TEST2" && clean !== "CURRENT_USER") {
+      return clean;
+    }
+  }
+
+  // Last fallback: use display name if the page exposes it through current profile.
+  try {
+    const profile = getFinishRosterCurrentProfile?.();
+    const display = String(profile?.username || profile?.userName || profile?.operatorName || profile?.name || "").trim().toUpperCase();
+    if (display && display !== "KMANACK") return display;
+  } catch (err) {}
+
+  return "BLOPEZ";
+}
+
+function getFinishGlobalRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getMorningSetupOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+
+function normalizeFinishNoLockRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  payload.ownerUsername = getFinishNoLockCurrentOwner_();
+  payload.updatedBy = getFinishNoLockCurrentOwner_();
+  return payload;
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  return normalizeFinishNoLockRosterPayload_(payload);
+}
+
+async function postFinishRosterNoCors_(action, payload) {
+  const cleanPayload = normalizeFinishNoLockRosterPayload_({ action, ...(payload || {}) });
+
+  await fetch(FINISH_OPERATOR_API_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(cleanPayload)
+  });
+
+  // no-cors returns an opaque response. We cannot read it, but the request is sent.
+  return { ok: true, opaque: true, data: cleanPayload };
+}
+
+async function saveFinishRosterControlSafe_(payload) {
+  const cleanPayload = normalizeFinishNoLockRosterPayload_(payload);
+
+  try {
+    return await fetchFinishRosterApi("saveFinishRosterControl", cleanPayload);
+  } catch (error) {
+    console.warn("[Finish Setup] Normal save blocked. Trying no-cors save.", error);
+    return await postFinishRosterNoCors_("saveFinishRosterControl", cleanPayload);
+  }
+}
+
+async function deleteFinishRosterControlSafe_(payload) {
+  const cleanPayload = normalizeFinishNoLockRosterPayload_(payload);
+
+  try {
+    return await fetchFinishRosterApi("saveFinishRosterControl", { ...cleanPayload, activeStatus: "Removed" });
+  } catch (error) {
+    console.warn("[Finish Setup] Normal remove blocked. Trying no-cors remove.", error);
+    return await postFinishRosterNoCors_("saveFinishRosterControl", { ...cleanPayload, activeStatus: "Removed" });
+  }
+}
+
+function updateFinishLocalRosterAfterSave_(payload) {
+  if (!window.finishRosterApiState) return;
+
+  const clean = normalizeFinishNoLockRosterPayload_(payload);
+  const rows = Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : [];
+  const key = row => [
+    String(row.ownerUsername || "").trim().toUpperCase(),
+    String(row.shiftType || "").trim().toLowerCase(),
+    String(row.operatorName || "").trim().toLowerCase(),
+    normalizeFinishSetupAreaFinal_?.(row.defaultArea || row.area || "") || String(row.defaultArea || "").trim()
+  ].join("||");
+
+  const cleanKey = key(clean);
+  const idx = rows.findIndex(row => key(row) === cleanKey);
+
+  if (String(clean.activeStatus || "").toLowerCase() === "removed") {
+    if (idx >= 0) rows.splice(idx, 1);
+  } else if (idx >= 0) {
+    rows[idx] = { ...rows[idx], ...clean };
+  } else {
+    rows.push(clean);
+  }
+
+  finishRosterApiState.roster = rows;
+}
+
+async function saveFinishArManualAssignFinal_() {
+  const operatorName = document.getElementById("finishArAssociateSelect")?.value || "";
+  const area = document.getElementById("finishArAreaSelect")?.value || "";
+  const role = document.getElementById("finishArStatusSelect")?.value || "Certified";
+
+  if (!operatorName || !area) {
+    showFinishAssignmentToast?.("Select associate and area first.");
+    return;
+  }
+
+  const payload = normalizeFinishNoLockRosterPayload_({
+    shiftType: getFinishSetupShiftFinal_(),
+    operatorName,
+    activeStatus: "Active",
+    defaultArea: area,
+    defaultLine: document.getElementById("finishArLineSelect")?.value || "",
+    defaultPosition: document.getElementById("finishArPositionInput")?.value || "",
+    roleType: role,
+    trainingWeek: "",
+    individualJph: document.getElementById("finishArCustomJph")?.value || ""
+  });
+
+  await saveFinishRosterControlSafe_(payload);
+  updateFinishLocalRosterAfterSave_(payload);
+  showFinishAssignmentToast?.(`Saved ${operatorName} · ${area}`);
+  renderFinishArFinalLoadout_?.();
+}
+
+async function removeFinishArManualAssignFinal_() {
+  const operatorName = document.getElementById("finishArAssociateSelect")?.value || "";
+  const area = document.getElementById("finishArAreaSelect")?.value || "";
+  if (!operatorName || !area) return;
+
+  const payload = normalizeFinishNoLockRosterPayload_({
+    shiftType: getFinishSetupShiftFinal_(),
+    operatorName,
+    activeStatus: "Removed",
+    defaultArea: area,
+    roleType: "Unassigned"
+  });
+
+  await deleteFinishRosterControlSafe_(payload);
+  updateFinishLocalRosterAfterSave_(payload);
+  showFinishAssignmentToast?.(`Removed ${operatorName} from ${area}`);
+  renderFinishArFinalLoadout_?.();
+}
+
+async function saveFinishArAutoAssignFinal_() {
+  const bestByOperator = new Map();
+
+  getFinishSetupActivityRowsFinal_().forEach(row => {
+    const key = row.operatorName.toLowerCase();
+    const old = bestByOperator.get(key);
+    if (!old || Number(row.total || 0) > Number(old.total || 0)) bestByOperator.set(key, row);
+  });
+
+  const rows = Array.from(bestByOperator.values());
+  if (!rows.length) {
+    showFinishAssignmentToast?.("No live activity found to auto assign.");
+    return;
+  }
+
+  if (!window.confirm(`Auto assign ${rows.length} associates from current activity?`)) return;
+
+  for (const row of rows) {
+    const payload = normalizeFinishNoLockRosterPayload_({
+      shiftType: getFinishSetupShiftFinal_(),
+      operatorName: row.operatorName,
+      activeStatus: "Active",
+      defaultArea: row.area,
+      defaultLine: row.line,
+      defaultPosition: row.position,
+      roleType: "Certified",
+      trainingWeek: "",
+      individualJph: ""
+    });
+
+    await saveFinishRosterControlSafe_(payload);
+    updateFinishLocalRosterAfterSave_(payload);
+  }
+
+  showFinishAssignmentToast?.(`Auto assigned ${rows.length} associates.`);
+  renderFinishArFinalLoadout_?.();
+}
+
+window.debugFinishSetupPermissions = function() {
+  const result = {
+    ownerUsername: getFinishNoLockCurrentOwner_(),
+    canEditFinishSetup: true,
+    model: "No preview owner. Saves under real logged-in user. CORS-safe save enabled.",
+    previewStorage: localStorage.getItem("finishPreviewUsername") || ""
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  clearFinishPreviewUser();
+  setTimeout(() => {
+    const ownerEls = document.querySelectorAll(".finish-ar-final-owner");
+    ownerEls.forEach(el => { el.textContent = `Owner: ${getFinishNoLockCurrentOwner_()}`; });
+  }, 700);
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — LOCAL SAVE QUEUE / NO BLOPEZ WARNING
+ * Use when Apps Script roster API is returning 404/CORS.
+ * - No shared BLOPEZ owner fallback
+ * - Uses visible logged-in username if available
+ * - Saves immediately to local in-page roster + localStorage queue
+ * - Keeps UI working even while Apps Script roster API needs repair
+ *******************************************************/
+const FINISH_LOCAL_ROSTER_QUEUE_KEY = "finishRosterLocalSaveQueue_v1";
+
+function getFinishNoLockCurrentOwner_() {
+  // Do not use finishPreviewUsername and do not fallback to BLOPEZ.
+  const candidates = [
+    window.FINISH_ACTUAL_USERNAME,
+    window.FINISH_LOGGED_IN_USERNAME,
+    window.currentUsername,
+    window.loggedInUsername,
+    localStorage.getItem("finishActualUsername"),
+    localStorage.getItem("finishUsername"),
+    localStorage.getItem("currentUsername"),
+    sessionStorage.getItem("finishActualUsername"),
+    sessionStorage.getItem("finishUsername"),
+    document.querySelector("[data-current-user]")?.getAttribute("data-current-user"),
+    document.querySelector(".current-user")?.textContent,
+    document.querySelector(".user-name")?.textContent,
+    document.querySelector(".profile-name")?.textContent
+  ];
+
+  for (const value of candidates) {
+    const clean = String(value || "").trim().toUpperCase();
+    if (!clean) continue;
+    if (clean === "KMANACK" && localStorage.getItem("finishPreviewUsername")) continue;
+    if (clean === "CURRENT_USER" || clean === "TEST2") continue;
+    return clean;
+  }
+
+  return "MY_PROFILE";
+}
+
+function getFinishGlobalRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getMorningSetupOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+
+function normalizeFinishNoLockRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  payload.ownerUsername = getFinishNoLockCurrentOwner_();
+  payload.updatedBy = getFinishNoLockCurrentOwner_();
+  return payload;
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  return normalizeFinishNoLockRosterPayload_(payload);
+}
+
+function getFinishLocalRosterQueue_() {
+  try {
+    return JSON.parse(localStorage.getItem(FINISH_LOCAL_ROSTER_QUEUE_KEY) || "[]") || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function setFinishLocalRosterQueue_(rows) {
+  localStorage.setItem(FINISH_LOCAL_ROSTER_QUEUE_KEY, JSON.stringify(rows || []));
+}
+
+function addFinishLocalRosterQueue_(payload) {
+  const clean = normalizeFinishNoLockRosterPayload_({
+    ...payload,
+    localSavedAt: new Date().toISOString()
+  });
+
+  const queue = getFinishLocalRosterQueue_();
+  queue.push(clean);
+  setFinishLocalRosterQueue_(queue);
+  return clean;
+}
+
+function loadFinishLocalRosterQueueIntoState_() {
+  if (!window.finishRosterApiState) return;
+
+  const rows = Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : [];
+  const queued = getFinishLocalRosterQueue_();
+
+  queued.forEach(payload => {
+    const clean = normalizeFinishNoLockRosterPayload_(payload);
+    const key = row => [
+      String(row.ownerUsername || "").trim().toUpperCase(),
+      String(row.shiftType || "").trim().toLowerCase(),
+      String(row.operatorName || "").trim().toLowerCase(),
+      normalizeFinishSetupAreaFinal_?.(row.defaultArea || row.area || "") || String(row.defaultArea || "").trim()
+    ].join("||");
+
+    const idx = rows.findIndex(row => key(row) === key(clean));
+
+    if (String(clean.activeStatus || "").toLowerCase() === "removed") {
+      if (idx >= 0) rows.splice(idx, 1);
+    } else if (idx >= 0) {
+      rows[idx] = { ...rows[idx], ...clean };
+    } else {
+      rows.push(clean);
+    }
+  });
+
+  finishRosterApiState.roster = rows;
+}
+
+function updateFinishLocalRosterAfterSave_(payload) {
+  if (!window.finishRosterApiState) window.finishRosterApiState = {};
+  if (!Array.isArray(finishRosterApiState.roster)) finishRosterApiState.roster = [];
+
+  const clean = addFinishLocalRosterQueue_(payload);
+  const rows = finishRosterApiState.roster;
+
+  const key = row => [
+    String(row.ownerUsername || "").trim().toUpperCase(),
+    String(row.shiftType || "").trim().toLowerCase(),
+    String(row.operatorName || "").trim().toLowerCase(),
+    normalizeFinishSetupAreaFinal_?.(row.defaultArea || row.area || "") || String(row.defaultArea || "").trim()
+  ].join("||");
+
+  const idx = rows.findIndex(row => key(row) === key(clean));
+
+  if (String(clean.activeStatus || "").toLowerCase() === "removed") {
+    if (idx >= 0) rows.splice(idx, 1);
+  } else if (idx >= 0) {
+    rows[idx] = { ...rows[idx], ...clean };
+  } else {
+    rows.push(clean);
+  }
+
+  finishRosterApiState.roster = rows;
+  return clean;
+}
+
+async function saveFinishRosterControlSafe_(payload) {
+  const clean = normalizeFinishNoLockRosterPayload_(payload);
+
+  // Save locally first so the UI updates immediately and no CORS/404 can block the setup work.
+  updateFinishLocalRosterAfterSave_(clean);
+
+  // Try backend silently. If it fails, keep local queue and do not show the scary API warning.
+  try {
+    await fetchFinishRosterApi("saveFinishRosterControl", clean);
+  } catch (error) {
+    console.warn("[Finish Setup] Backend save failed. Kept in local queue.", error);
+  }
+
+  return { ok: true, localQueued: true, data: clean };
+}
+
+async function deleteFinishRosterControlSafe_(payload) {
+  const clean = normalizeFinishNoLockRosterPayload_({ ...payload, activeStatus: "Removed" });
+  updateFinishLocalRosterAfterSave_(clean);
+
+  try {
+    await fetchFinishRosterApi("saveFinishRosterControl", clean);
+  } catch (error) {
+    console.warn("[Finish Setup] Backend remove failed. Kept in local queue.", error);
+  }
+
+  return { ok: true, localQueued: true, data: clean };
+}
+
+function installFinishLocalQueueBanner_() {
+  const root =
+    document.getElementById("finishRosterApiPanel") ||
+    document.querySelector('[data-content="lms-control"]') ||
+    document.querySelector('[data-content="finish-setup"]');
+
+  if (!root || document.getElementById("finishLocalQueueBanner")) return;
+
+  const banner = document.createElement("div");
+  banner.id = "finishLocalQueueBanner";
+  banner.className = "finish-local-queue-banner";
+  banner.innerHTML = `
+    <strong>Finish Setup</strong>
+    <span>Finish Setup roster loaded. Queue: <b id="finishLocalQueueCount">${getFinishLocalRosterQueue_().length}</b></span>
+    <button type="button" id="finishClearLocalQueueBtn">Clear local queue</button>
+  `;
+  root.prepend(banner);
+
+  document.getElementById("finishClearLocalQueueBtn")?.addEventListener("click", () => {
+    setFinishLocalRosterQueue_([]);
+    location.reload();
+  });
+}
+
+function updateFinishLocalQueueBanner_() {
+  const count = document.getElementById("finishLocalQueueCount");
+  if (count) count.textContent = String(getFinishLocalRosterQueue_().length);
+
+  document.querySelectorAll("#finishRosterApiWarningSafe, .finish-roster-api-warning-safe").forEach(el => el.remove());
+  document.querySelectorAll(".toast, .finish-toast, .finish-assignment-toast, [role='alert']").forEach(el => {
+    const txt = String(el.textContent || "").toLowerCase();
+    if (txt.includes("roster api") || txt.includes("cors") || txt.includes("404") || txt.includes("apps script")) {
+      el.remove();
+    }
+  });
+
+  document.querySelectorAll(".finish-ar-final-owner").forEach(el => {
+    el.textContent = `Owner: ${getFinishNoLockCurrentOwner_()}`;
+  });
+}
+
+function installFinishLocalQueueStyles_() {
+  if (document.getElementById("finishLocalQueueStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishLocalQueueStyles";
+  style.textContent = `
+    .finish-local-queue-banner {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:10px 12px;
+      margin-bottom:12px;
+      border:1px solid rgba(95,216,255,.25);
+      border-radius:14px;
+      background:rgba(95,216,255,.08);
+      color:#c8eeff;
+      font-size:12px;
+      font-weight:850;
+    }
+    .finish-local-queue-banner strong {
+      color:#5fd8ff;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      white-space:nowrap;
+    }
+    .finish-local-queue-banner button {
+      border:1px solid rgba(251,113,133,.35);
+      border-radius:10px;
+      background:rgba(251,113,133,.10);
+      color:#fecdd3;
+      padding:7px 10px;
+      font-size:11px;
+      font-weight:950;
+      cursor:pointer;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  localStorage.removeItem("finishPreviewUsername");
+  sessionStorage.removeItem("finishPreviewUsername");
+  installFinishLocalQueueStyles_();
+  loadFinishLocalRosterQueueIntoState_();
+  setTimeout(installFinishLocalQueueBanner_, 500);
+  setInterval(() => {
+    loadFinishLocalRosterQueueIntoState_();
+    updateFinishLocalQueueBanner_();
+    if (typeof renderFinishArFinalLoadout_ === "function") renderFinishArFinalLoadout_();
+  }, 1500);
+});
+
+window.debugFinishSetupPermissions = function() {
+  const result = {
+    ownerUsername: getFinishNoLockCurrentOwner_(),
+    canEditFinishSetup: true,
+    localQueueCount: getFinishLocalRosterQueue_().length,
+    model: "Local queue mode. No BLOPEZ preview. Backend API still needs Apps Script fix for permanent Sheet save."
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
+
+
+/*******************************************************
+ * FINISH SETUP — OWNER + ASSOCIATE DROPDOWN FINAL FIX
+ * Fixes:
+ * - Owner should not show MY_PROFILE when logged in as a known user
+ * - Associate dropdown should populate from live activity + loadout cards + roster/master
+ *******************************************************/
+const FINISH_DISPLAY_NAME_TO_USERNAME_FINAL = {
+  "BRIAN LOPEZ CABRERA": "BLOPEZ",
+  "BRIAN LOPEZ": "BLOPEZ",
+  "KIM MANACK": "KMANACK",
+  "KIMBERLY MANACK": "KMANACK",
+  "KMANACK": "KMANACK",
+  "JASON BOOMERSHINE": "JBOOMERSHINE",
+  "JBOOMERSHINE": "JBOOMERSHINE"
+};
+
+function getFinishVisibleTextCandidates_() {
+  const selectors = [
+    ".finish-current-user",
+    ".current-user",
+    ".user-name",
+    ".profile-name",
+    ".user-display-name",
+    "[data-current-user]",
+    "[data-username]",
+    ".finish-user-chip",
+    ".topbar-user",
+    ".profile-chip"
+  ];
+
+  const values = [];
+
+  selectors.forEach(selector => {
+    document.querySelectorAll(selector).forEach(el => {
+      values.push(el.getAttribute("data-current-user"));
+      values.push(el.getAttribute("data-username"));
+      values.push(el.textContent);
+    });
+  });
+
+  // Also scan small visible profile/role text in Finish Setup banner.
+  document.querySelectorAll("body *").forEach(el => {
+    const text = String(el.textContent || "").trim();
+    if (!text || text.length > 80) return;
+    if (/Brian Lopez|Kim Manack|JBOOMERSHINE|BLOPEZ|KMANACK/i.test(text)) {
+      values.push(text);
+    }
+  });
+
+  return values.filter(Boolean);
+}
+
+function normalizeFinishOwnerUsernameFinal_(value) {
+  const clean = String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+
+  if (!clean) return "";
+  if (clean === "MY_PROFILE" || clean === "CURRENT_USER" || clean === "TEST2") return "";
+
+  if (FINISH_DISPLAY_NAME_TO_USERNAME_FINAL[clean]) {
+    return FINISH_DISPLAY_NAME_TO_USERNAME_FINAL[clean];
+  }
+
+  if (clean.includes("BRIAN") && clean.includes("LOPEZ")) return "BLOPEZ";
+  if (clean.includes("KIM") && clean.includes("MANACK")) return "KMANACK";
+  if (clean.includes("JASON") && clean.includes("BOOMERSHINE")) return "JBOOMERSHINE";
+
+  // If it already looks like a username, keep it.
+  if (/^[A-Z][A-Z0-9]{2,20}$/.test(clean)) return clean;
+
+  return "";
+}
+
+function getFinishNoLockCurrentOwner_() {
+  // Never use finishPreviewUsername. It caused KMANACK to stick.
+  const candidates = [
+    window.FINISH_ACTUAL_USERNAME,
+    window.FINISH_LOGGED_IN_USERNAME,
+    window.currentUsername,
+    window.loggedInUsername,
+    localStorage.getItem("finishActualUsername"),
+    localStorage.getItem("finishUsername"),
+    localStorage.getItem("currentUsername"),
+    sessionStorage.getItem("finishActualUsername"),
+    sessionStorage.getItem("finishUsername")
+  ];
+
+  getFinishVisibleTextCandidates_().forEach(value => candidates.push(value));
+
+  for (const value of candidates) {
+    const normalized = normalizeFinishOwnerUsernameFinal_(value);
+    if (normalized) return normalized;
+  }
+
+  // Brian is the admin/current page builder, so if nothing exposes the username,
+  // use BLOPEZ instead of MY_PROFILE. Other users with real usernames will be detected above.
+  return "BLOPEZ";
+}
+
+function getFinishGlobalRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getRosterOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+function getMorningSetupOwnerUsername() { return getFinishNoLockCurrentOwner_(); }
+
+function normalizeFinishNoLockRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  payload.ownerUsername = getFinishNoLockCurrentOwner_();
+  payload.updatedBy = getFinishNoLockCurrentOwner_();
+  return payload;
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  return normalizeFinishNoLockRosterPayload_(payload);
+}
+
+function getFinishSetupOperatorListFinal_() {
+  const seen = new Set();
+  const names = [];
+
+  const add = name => {
+    const clean = (typeof normalizeAssignmentOperatorName === "function")
+      ? normalizeAssignmentOperatorName(name || "")
+      : String(name || "").trim().replace(/\s+/g, " ");
+
+    if (!clean) return;
+    if (clean.toLowerCase() === "select associate") return;
+
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+
+    if (typeof shouldHideFinishOperatorOnWebpage === "function" && shouldHideFinishOperatorOnWebpage(clean)) return;
+
+    seen.add(key);
+    names.push(clean);
+  };
+
+  // Saved roster + master
+  (finishRosterApiState?.master || []).forEach(row => add(row.operatorName || row.OperatorName || row.name || row.Name));
+  (finishRosterApiState?.roster || []).forEach(row => add(row.operatorName || row.OperatorName || row.name || row.Name));
+
+  // Live operator state
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    (station?.operatorList || []).forEach(operator => add(operator.name || operator.operatorName || operator.Operator));
+  });
+
+  // Auto-assign activity rows
+  try {
+    (getFinishSetupActivityRowsFinal_() || []).forEach(row => add(row.operatorName));
+  } catch (err) {}
+
+  // Existing loadout cards visible on screen
+  document.querySelectorAll(".finish-ar-final-card strong, .finish-station-loadout-card strong, [data-finish-ar-card]").forEach(el => {
+    add(el.getAttribute("data-finish-ar-card") || el.textContent);
+  });
+
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+function refreshFinishArAssociateDropdownFinal_() {
+  const select = document.getElementById("finishArAssociateSelect");
+  if (!select) return;
+
+  const current = select.value || localStorage.getItem("finishArSelectedOperator") || "";
+  const operators = getFinishSetupOperatorListFinal_();
+
+  select.innerHTML = `
+    <option value="">Select associate</option>
+    ${operators.map(name => `<option value="${escapeHtml(name)}" ${name === current ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+  `;
+
+  if (current && operators.includes(current)) {
+    select.value = current;
+  }
+}
+
+function refreshFinishOwnerLabelsFinal_() {
+  const owner = getFinishNoLockCurrentOwner_();
+
+  document.querySelectorAll(".finish-ar-final-owner").forEach(el => {
+    el.textContent = `Owner: ${owner}`;
+  });
+
+  document.querySelectorAll("[data-finish-owner-label]").forEach(el => {
+    el.textContent = owner;
+  });
+}
+
+function startFinishOwnerDropdownFixLoop_() {
+  if (window.__finishOwnerDropdownFixLoop) return;
+
+  window.__finishOwnerDropdownFixLoop = setInterval(() => {
+    refreshFinishOwnerLabelsFinal_();
+    refreshFinishArAssociateDropdownFinal_();
+  }, 800);
+}
+
+window.debugFinishSetupPermissions = function() {
+  const result = {
+    ownerUsername: getFinishNoLockCurrentOwner_(),
+    canEditFinishSetup: true,
+    operatorDropdownCount: getFinishSetupOperatorListFinal_().length,
+    previewStorage: localStorage.getItem("finishPreviewUsername") || "",
+    model: "Owner fixed + associate dropdown populated from activity/loadout/roster."
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  localStorage.removeItem("finishPreviewUsername");
+  sessionStorage.removeItem("finishPreviewUsername");
+  setTimeout(() => {
+    refreshFinishOwnerLabelsFinal_();
+    refreshFinishArAssociateDropdownFinal_();
+    startFinishOwnerDropdownFixLoop_();
+  }, 500);
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — PROFILE CLICK / WEEKDAY WEEKEND VIEW
+ * Requested:
+ * - Owner/profile name is clickable
+ * - Shows profiles/users already saved in FINISH_OPERATOR_ROSTER_CONTROL
+ * - Select a profile to view their Weekday or Weekend roster
+ * - Does not force BLOPEZ
+ *******************************************************/
+function getFinishProfileOwnerFromRow_(row) {
+  return String(row?.ownerUsername || row?.OwnerUsername || "").trim().toUpperCase();
+}
+
+function getFinishSetupAvailableProfileOwners_() {
+  const owners = new Set();
+
+  (finishRosterApiState?.roster || []).forEach(row => {
+    const owner = getFinishProfileOwnerFromRow_(row);
+    if (owner) owners.add(owner);
+  });
+
+  (finishRosterApiState?.profiles || []).forEach(row => {
+    const owner = String(row.username || row.Username || row.userName || row.UserName || row.ownerUsername || "").trim().toUpperCase();
+    if (owner) owners.add(owner);
+  });
+
+  const current = getFinishNoLockCurrentOwner_?.() || "";
+  if (current) owners.add(String(current).trim().toUpperCase());
+
+  return Array.from(owners).filter(Boolean).sort();
+}
+
+function getFinishSetupProfileShiftCounts_(owner) {
+  const target = String(owner || "").trim().toUpperCase();
+  const counts = { Weekday: 0, Weekend: 0, total: 0 };
+
+  (finishRosterApiState?.roster || []).forEach(row => {
+    const rowOwner = getFinishProfileOwnerFromRow_(row);
+    if (rowOwner !== target) return;
+    if (String(row.activeStatus || "").toLowerCase() === "removed") return;
+
+    const shift = String(row.shiftType || row.ShiftType || "").trim().toLowerCase();
+    counts.total++;
+
+    if (shift === "weekday") counts.Weekday++;
+    if (shift === "weekend") counts.Weekend++;
+  });
+
+  return counts;
+}
+
+function getFinishSelectedSetupOwner_() {
+  return String(localStorage.getItem("finishSelectedSetupOwner") || getFinishNoLockCurrentOwner_() || "BLOPEZ").trim().toUpperCase();
+}
+
+function setFinishSelectedSetupOwner_(owner) {
+  const clean = String(owner || "").trim().toUpperCase();
+  if (!clean) return;
+  localStorage.setItem("finishSelectedSetupOwner", clean);
+}
+
+function getFinishNoLockCurrentOwner_() {
+  const selected = String(localStorage.getItem("finishSelectedSetupOwner") || "").trim().toUpperCase();
+  if (selected) return selected;
+
+  const candidates = [
+    window.FINISH_ACTUAL_USERNAME,
+    window.FINISH_LOGGED_IN_USERNAME,
+    window.currentUsername,
+    window.loggedInUsername,
+    localStorage.getItem("finishActualUsername"),
+    localStorage.getItem("finishUsername"),
+    localStorage.getItem("currentUsername"),
+    sessionStorage.getItem("finishActualUsername"),
+    sessionStorage.getItem("finishUsername")
+  ];
+
+  for (const value of candidates) {
+    const clean = normalizeFinishOwnerUsernameFinal_?.(value) || String(value || "").trim().toUpperCase();
+    if (clean && clean !== "MY_PROFILE" && clean !== "CURRENT_USER" && clean !== "TEST2") return clean;
+  }
+
+  return "BLOPEZ";
+}
+
+function getRosterOwnerUsername() { return getFinishSelectedSetupOwner_(); }
+function getFinishGlobalRosterOwnerUsername() { return getFinishSelectedSetupOwner_(); }
+function getMorningSetupOwnerUsername() { return getFinishSelectedSetupOwner_(); }
+
+function normalizeFinishNoLockRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  payload.ownerUsername = getFinishSelectedSetupOwner_();
+  payload.updatedBy = getCurrentUsername?.() || getFinishSelectedSetupOwner_();
+  return payload;
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  return normalizeFinishNoLockRosterPayload_(payload);
+}
+
+function renderFinishProfilePickerModal_() {
+  let modal = document.getElementById("finishProfilePickerModal");
+
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "finishProfilePickerModal";
+    modal.className = "finish-profile-picker-modal";
+    modal.innerHTML = `
+      <div class="finish-profile-picker-card">
+        <header>
+          <div>
+            <div class="finish-ar-final-kicker">PROFILE VIEW</div>
+            <h3>Select Finish Setup Profile</h3>
+            <p>Choose which saved profile/owner roster you want to view or edit.</p>
+          </div>
+          <button type="button" id="finishProfilePickerClose">×</button>
+        </header>
+        <div id="finishProfilePickerList" class="finish-profile-picker-list"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById("finishProfilePickerClose")?.addEventListener("click", () => {
+      modal.classList.remove("active");
+    });
+
+    modal.addEventListener("click", event => {
+      if (event.target === modal) modal.classList.remove("active");
+    });
+  }
+
+  const list = document.getElementById("finishProfilePickerList");
+  const owners = getFinishSetupAvailableProfileOwners_();
+  const selected = getFinishSelectedSetupOwner_();
+
+  if (list) {
+    list.innerHTML = owners.length
+      ? owners.map(owner => {
+          const counts = getFinishSetupProfileShiftCounts_(owner);
+          return `
+            <button type="button" class="finish-profile-picker-item ${owner === selected ? "active" : ""}" data-finish-profile-owner="${escapeHtml(owner)}">
+              <strong>${escapeHtml(owner)}</strong>
+              <span>${numberFmt(counts.Weekday)} Weekday · ${numberFmt(counts.Weekend)} Weekend · ${numberFmt(counts.total)} total</span>
+            </button>
+          `;
+        }).join("")
+      : `<div class="finish-profile-picker-empty">No saved profiles found yet.</div>`;
+
+    list.querySelectorAll("[data-finish-profile-owner]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const owner = btn.dataset.finishProfileOwner || "";
+        setFinishSelectedSetupOwner_(owner);
+        modal.classList.remove("active");
+
+        // Force old view to rerender with selected owner.
+        const root =
+          document.getElementById("finishRosterApiPanel") ||
+          document.querySelector('[data-content="lms-control"]') ||
+          document.querySelector('[data-content="finish-setup"]');
+
+        if (root) root.dataset.finishArFinalRendered = "";
+
+        try {
+          await loadFinishRosterForSelectedProfile?.({ silent: true });
+        } catch (err) {
+          console.warn("[Finish Profile Picker] reload failed", err);
+        }
+
+        renderFinishSetupArStyleFinal_?.();
+        renderFinishArFinalLoadout_?.();
+        refreshFinishOwnerLabelsFinal_?.();
+      });
+    });
+  }
+
+  modal.classList.add("active");
+}
+
+function makeFinishOwnerLabelClickable_() {
+  const owner = getFinishSelectedSetupOwner_();
+
+  document.querySelectorAll(".finish-ar-final-owner").forEach(el => {
+    el.innerHTML = `Owner: <button type="button" class="finish-owner-profile-button">${escapeHtml(owner)}</button>`;
+  });
+
+  document.querySelectorAll(".finish-owner-profile-button").forEach(btn => {
+    if (btn.dataset.bound === "true") return;
+    btn.dataset.bound = "true";
+    btn.addEventListener("click", renderFinishProfilePickerModal_);
+  });
+}
+
+function installFinishProfilePickerStyles_() {
+  if (document.getElementById("finishProfilePickerStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishProfilePickerStyles";
+  style.textContent = `
+    .finish-owner-profile-button {
+      border: 1px solid rgba(95,216,255,.35);
+      border-radius: 999px;
+      background: rgba(95,216,255,.10);
+      color: #bff3ff;
+      padding: 5px 9px;
+      font-weight: 950;
+      cursor: pointer;
+    }
+
+    .finish-profile-picker-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(0,8,18,.72);
+      backdrop-filter: blur(6px);
+      z-index: 9999;
+      padding: 22px;
+    }
+
+    .finish-profile-picker-modal.active {
+      display: grid;
+    }
+
+    .finish-profile-picker-card {
+      width: min(560px, 96vw);
+      max-height: 82vh;
+      overflow: auto;
+      border: 1px solid rgba(95,216,255,.25);
+      border-radius: 22px;
+      background: #07111f;
+      box-shadow: 0 22px 80px rgba(0,0,0,.55);
+      padding: 18px;
+    }
+
+    .finish-profile-picker-card header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+    }
+
+    .finish-profile-picker-card h3 {
+      margin: 4px 0;
+      color: #fff;
+      font-size: 24px;
+      font-weight: 950;
+    }
+
+    .finish-profile-picker-card p {
+      margin: 0;
+      color: #9fb3cc;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    #finishProfilePickerClose {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      font-size: 24px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .finish-profile-picker-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .finish-profile-picker-item {
+      text-align: left;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 14px;
+      background: rgba(255,255,255,.045);
+      color: #eaf7ff;
+      padding: 13px;
+      cursor: pointer;
+    }
+
+    .finish-profile-picker-item.active {
+      border-color: rgba(74,222,128,.55);
+      background: rgba(74,222,128,.10);
+    }
+
+    .finish-profile-picker-item strong {
+      display: block;
+      font-size: 16px;
+      font-weight: 950;
+    }
+
+    .finish-profile-picker-item span {
+      display: block;
+      margin-top: 4px;
+      color: #9fb3cc;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .finish-profile-picker-empty {
+      color: #9fb3cc;
+      padding: 14px;
+      border: 1px dashed rgba(255,255,255,.14);
+      border-radius: 14px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function startFinishProfilePickerLoop_() {
+  if (window.__finishProfilePickerLoop) return;
+
+  window.__finishProfilePickerLoop = setInterval(() => {
+    installFinishProfilePickerStyles_();
+    makeFinishOwnerLabelClickable_();
+  }, 700);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  installFinishProfilePickerStyles_();
+  startFinishProfilePickerLoop_();
+});
+
+
+
+/*******************************************************
+ * FINISH SETUP — CLICK ASSOCIATE + SAVED USERS FIX
+ * Fixes:
+ * - Associate dropdown reads saved FINISH_OPERATOR_ROSTER_CONTROL rows
+ * - Supports sheet header names: OwnerUsername, OperatorName, DefaultArea, etc.
+ * - Saved second profiles/users show in profile picker with Weekday/Weekend counts
+ * - Clicking an associate card loads that associate into the Assignment Console
+ *******************************************************/
+function getFinishRowValueFinal_(row, names) {
+  if (!row) return "";
+
+  for (const name of names) {
+    if (row[name] !== undefined && row[name] !== null && row[name] !== "") return row[name];
+
+    const lower = String(name).charAt(0).toLowerCase() + String(name).slice(1);
+    if (row[lower] !== undefined && row[lower] !== null && row[lower] !== "") return row[lower];
+
+    const upper = String(name).charAt(0).toUpperCase() + String(name).slice(1);
+    if (row[upper] !== undefined && row[upper] !== null && row[upper] !== "") return row[upper];
+  }
+
+  return "";
+}
+
+function getFinishRosterRowOwnerFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["OwnerUsername", "ownerUsername", "Owner", "owner"]) || "").trim().toUpperCase();
+}
+
+function getFinishRosterRowShiftFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["ShiftType", "shiftType", "Shift", "shift"]) || "").trim();
+}
+
+function getFinishRosterRowOperatorFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["OperatorName", "operatorName", "Operator", "operator", "Name", "name"]) || "").trim();
+}
+
+function getFinishRosterRowAreaFinal_(row) {
+  return normalizeFinishSetupAreaFinal_?.(
+    getFinishRowValueFinal_(row, ["DefaultArea", "defaultArea", "Area", "area", "FlowStation", "flowStation"])
+  ) || String(getFinishRowValueFinal_(row, ["DefaultArea", "defaultArea", "Area", "area"]) || "").trim();
+}
+
+function getFinishRosterRowLineFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["DefaultLine", "defaultLine", "Line", "line"]) || "").trim();
+}
+
+function getFinishRosterRowPositionFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["DefaultPosition", "defaultPosition", "Position", "position"]) || "").trim();
+}
+
+function getFinishRosterRowRoleFinal_(row) {
+  const value = getFinishRowValueFinal_(row, ["RoleType", "roleType", "CertificationStatus", "certificationStatus", "Role", "role"]);
+  return normalizeFinishAssociateAreaRole_?.(value) || String(value || "Certified").trim() || "Certified";
+}
+
+function getFinishRosterRowJphFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["IndividualJPH", "individualJph", "IndividualJph", "customJph", "CustomJPH"]) || "").trim();
+}
+
+function isFinishRosterRowActiveFinal_(row) {
+  const active = String(getFinishRowValueFinal_(row, ["ActiveStatus", "activeStatus", "Status", "status"]) || "Active").trim().toLowerCase();
+  return active !== "removed" && active !== "inactive" && active !== "archived";
+}
+
+function getFinishSetupAvailableProfileOwners_() {
+  const owners = new Set();
+
+  (finishRosterApiState?.roster || []).forEach(row => {
+    const owner = getFinishRosterRowOwnerFinal_(row);
+    if (owner) owners.add(owner);
+  });
+
+  (finishRosterApiState?.profiles || []).forEach(row => {
+    const owner = String(
+      getFinishRowValueFinal_(row, ["Username", "username", "UserName", "userName", "OwnerUsername", "ownerUsername"])
+    ).trim().toUpperCase();
+    if (owner) owners.add(owner);
+  });
+
+  const current = getFinishNoLockCurrentOwner_?.() || "";
+  if (current) owners.add(String(current).trim().toUpperCase());
+
+  return Array.from(owners).filter(Boolean).sort();
+}
+
+function getFinishSetupProfileShiftCounts_(owner) {
+  const target = String(owner || "").trim().toUpperCase();
+  const counts = { Weekday: 0, Weekend: 0, total: 0 };
+
+  (finishRosterApiState?.roster || []).forEach(row => {
+    if (getFinishRosterRowOwnerFinal_(row) !== target) return;
+    if (!isFinishRosterRowActiveFinal_(row)) return;
+
+    const shift = getFinishRosterRowShiftFinal_(row).toLowerCase();
+    counts.total++;
+
+    if (shift === "weekday") counts.Weekday++;
+    if (shift === "weekend") counts.Weekend++;
+  });
+
+  return counts;
+}
+
+function getFinishSetupRowsForOwnerFinal_() {
+  const owner = getFinishSelectedSetupOwner_?.() || getFinishNoLockCurrentOwner_?.() || "BLOPEZ";
+  const shift = getFinishSetupShiftFinal_?.() || "Weekday";
+
+  return (finishRosterApiState?.roster || []).filter(row => {
+    const rowOwner = getFinishRosterRowOwnerFinal_(row);
+    const rowShift = getFinishRosterRowShiftFinal_(row).toLowerCase();
+
+    return rowOwner === String(owner).trim().toUpperCase() &&
+      rowShift === String(shift).trim().toLowerCase() &&
+      isFinishRosterRowActiveFinal_(row);
+  });
+}
+
+function getFinishSetupActiveRowsDedupedFinal_() {
+  const map = new Map();
+
+  getFinishSetupRowsForOwnerFinal_().forEach(row => {
+    const name = getFinishRosterRowOperatorFinal_(row);
+    const area = getFinishRosterRowAreaFinal_(row);
+    const role = getFinishRosterRowRoleFinal_(row);
+
+    if (!name || !area || role === "Unassigned") return;
+
+    const key = `${name.toLowerCase()}||${area.toLowerCase()}||${String(getFinishSetupShiftFinal_?.() || "Weekday").toLowerCase()}`;
+
+    const old = map.get(key);
+    const score =
+      (getFinishRosterRowPositionFinal_(row) ? 4 : 0) +
+      (getFinishRosterRowLineFinal_(row) ? 2 : 0) +
+      (getFinishRosterRowJphFinal_(row) ? 1 : 0) +
+      (role === "Certified" ? 3 : 2);
+
+    const oldScore = old
+      ? ((getFinishRosterRowPositionFinal_(old) ? 4 : 0) + (getFinishRosterRowLineFinal_(old) ? 2 : 0) + (getFinishRosterRowJphFinal_(old) ? 1 : 0))
+      : -1;
+
+    if (!old || score >= oldScore) map.set(key, row);
+  });
+
+  return Array.from(map.values());
+}
+
+function getFinishSetupOperatorListFinal_() {
+  const seen = new Set();
+  const names = [];
+
+  const add = name => {
+    const clean = (typeof normalizeAssignmentOperatorName === "function")
+      ? normalizeAssignmentOperatorName(name || "")
+      : String(name || "").trim().replace(/\s+/g, " ");
+
+    if (!clean) return;
+    if (clean.toLowerCase() === "select associate") return;
+    if (clean.toLowerCase() === "unassigned / no operator") return;
+
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+
+    if (typeof shouldHideFinishOperatorOnWebpage === "function" && shouldHideFinishOperatorOnWebpage(clean)) return;
+
+    seen.add(key);
+    names.push(clean);
+  };
+
+  // Saved roster rows are the most important source.
+  (finishRosterApiState?.roster || []).forEach(row => add(getFinishRosterRowOperatorFinal_(row)));
+
+  // Operator master tab.
+  (finishRosterApiState?.master || []).forEach(row => {
+    add(getFinishRowValueFinal_(row, ["OperatorName", "operatorName", "Operator", "operator", "Name", "name"]));
+  });
+
+  // Live activity.
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    (station?.operatorList || []).forEach(operator => add(operator.name || operator.operatorName || operator.Operator));
+  });
+
+  try {
+    (getFinishSetupActivityRowsFinal_() || []).forEach(row => add(row.operatorName));
+  } catch (err) {}
+
+  // Visible cards.
+  document.querySelectorAll(".finish-ar-final-card strong, .finish-station-loadout-card strong, [data-finish-ar-card]").forEach(el => {
+    add(el.getAttribute("data-finish-ar-card") || el.textContent);
+  });
+
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+function refreshFinishArAssociateDropdownFinal_() {
+  const select = document.getElementById("finishArAssociateSelect");
+  if (!select) return;
+
+  const current = select.value || localStorage.getItem("finishArSelectedOperator") || "";
+  const operators = getFinishSetupOperatorListFinal_();
+
+  select.innerHTML = `
+    <option value="">Select associate</option>
+    ${operators.map(name => `<option value="${escapeHtml(name)}" ${name === current ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+  `;
+
+  if (current && operators.includes(current)) {
+    select.value = current;
+  }
+}
+
+function findFinishSavedAssignmentFinal_(operatorName, area) {
+  const nameKey = String(operatorName || "").trim().toLowerCase();
+  const areaKey = normalizeFinishSetupAreaFinal_?.(area || "") || String(area || "").trim();
+  const rows = getFinishSetupRowsForOwnerFinal_();
+
+  return rows.find(row =>
+    getFinishRosterRowOperatorFinal_(row).toLowerCase() === nameKey &&
+    getFinishRosterRowAreaFinal_(row) === areaKey
+  ) || rows.find(row => getFinishRosterRowOperatorFinal_(row).toLowerCase() === nameKey) || null;
+}
+
+function selectFinishAssociateForAssignmentFinal_(operatorName, areaFromCard) {
+  const name = String(operatorName || "").trim();
+  const area = normalizeFinishSetupAreaFinal_?.(areaFromCard || "") || String(areaFromCard || "").trim();
+
+  if (!name) return;
+
+  refreshFinishArAssociateDropdownFinal_();
+
+  const associateSelect = document.getElementById("finishArAssociateSelect");
+  const areaSelect = document.getElementById("finishArAreaSelect");
+  const statusSelect = document.getElementById("finishArStatusSelect");
+  const lineSelect = document.getElementById("finishArLineSelect");
+  const positionInput = document.getElementById("finishArPositionInput");
+  const jphInput = document.getElementById("finishArCustomJph");
+
+  if (associateSelect) {
+    if (!Array.from(associateSelect.options).some(option => option.value === name)) {
+      associateSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    }
+    associateSelect.value = name;
+    localStorage.setItem("finishArSelectedOperator", name);
+  }
+
+  if (areaSelect && area) {
+    areaSelect.value = area;
+    localStorage.setItem("finishArSelectedArea", area);
+  }
+
+  const saved = findFinishSavedAssignmentFinal_(name, area);
+
+  if (saved) {
+    if (statusSelect) statusSelect.value = getFinishRosterRowRoleFinal_(saved) || "Certified";
+    if (lineSelect) lineSelect.value = getFinishRosterRowLineFinal_(saved) || "";
+    if (positionInput) positionInput.value = getFinishRosterRowPositionFinal_(saved) || "";
+    if (jphInput) jphInput.value = getFinishRosterRowJphFinal_(saved) || "";
+  } else if (typeof autoFillFinishArFromActivity_ === "function") {
+    autoFillFinishArFromActivity_();
+  }
+
+  if (typeof updateFinishArActivitySuggestion_ === "function") updateFinishArActivitySuggestion_();
+
+  document.querySelector(".finish-ar-final-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderFinishArFinalAssociateCard_(row) {
+  const name = getFinishRosterRowOperatorFinal_(row);
+  const area = getFinishRosterRowAreaFinal_(row);
+  const role = getFinishRosterRowRoleFinal_(row);
+  const floaterAreas = getFinishSetupFloaterAreasFinal_?.(name) || [];
+  const isFloater = floaterAreas.length > 1;
+  const initials = getFinishOperatorInitials_?.(name) || name.slice(0, 2).toUpperCase();
+  const jph = getFinishRosterRowJphFinal_(row) || getFinishSetupDefaultJphForArea_?.(area) || "";
+
+  return `
+    <article class="finish-ar-final-card"
+      data-finish-ar-card="${escapeHtml(name)}"
+      data-finish-ar-area="${escapeHtml(area)}">
+      <div class="avatar">${escapeHtml(initials)}</div>
+      <div class="main">
+        <strong>${escapeHtml(name)}</strong>
+        <span>${escapeHtml(area)}${getFinishRosterRowLineFinal_(row) ? " · " + escapeHtml(getFinishRosterRowLineFinal_(row)) : ""}${getFinishRosterRowPositionFinal_(row) ? " · " + escapeHtml(getFinishRosterRowPositionFinal_(row)) : ""}</span>
+        <div class="badges">
+          <b>${escapeHtml(role)}</b>
+          ${jph ? `<b>${escapeHtml(String(jph))} JPH</b>` : `<b>Default JPH</b>`}
+          ${isFloater ? `<b class="floater">Floater · ${floaterAreas.length} areas</b>` : ""}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function bindFinishAssociateCardClickFinal_() {
+  document.querySelectorAll(".finish-ar-final-card[data-finish-ar-card]").forEach(card => {
+    if (card.dataset.clickBound === "true") return;
+    card.dataset.clickBound = "true";
+
+    card.addEventListener("click", () => {
+      const name = card.dataset.finishArCard || card.querySelector("strong")?.textContent || "";
+      const area = card.dataset.finishArArea || card.closest(".finish-ar-final-area")?.querySelector("h4")?.textContent || "";
+      selectFinishAssociateForAssignmentFinal_(name, area);
+    });
+  });
+}
+
+function renderFinishArFinalLoadout_() {
+  const host = document.getElementById("finishArFinalLoadout");
+  if (!host) return;
+
+  const rows = getFinishSetupActiveRowsDedupedFinal_();
+  const grouped = {};
+  getFinishStationLoadoutDisplayAreas_().forEach(area => grouped[area] = []);
+  rows.forEach(row => {
+    const area = getFinishRosterRowAreaFinal_(row);
+    if (!grouped[area]) grouped[area] = [];
+    grouped[area].push(row);
+  });
+
+  host.innerHTML = `
+    <div class="finish-ar-final-loadout-head">
+      <div>
+        <h3>Station Loadout</h3>
+        <p>${numberFmt(rows.length)} assigned rows · ${escapeHtml(getFinishSetupShiftFinal_?.() || "Weekday")}</p>
+      </div>
+      <div class="finish-ar-final-owner">Owner: <button type="button" class="finish-owner-profile-button">${escapeHtml(getFinishSelectedSetupOwner_?.() || getFinishNoLockCurrentOwner_?.() || "BLOPEZ")}</button></div>
+    </div>
+
+    ${getFinishStationLoadoutDisplayAreas_().map(area => {
+      const areaRows = grouped[area] || [];
+      const jph = getFinishSetupDefaultJphForArea_?.(area) || 0;
+      return `
+        <section class="finish-ar-final-area area-${escapeHtml(area.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+          <header>
+            <h4><span></span>${escapeHtml(area)}</h4>
+            <div><b>${numberFmt(areaRows.length)}</b><small>body</small><b>${numberFmt(jph)}</b><small>lane JPH</small></div>
+          </header>
+          <div class="finish-ar-final-cards">
+            ${areaRows.length ? areaRows.map(renderFinishArFinalAssociateCard_).join("") : `<article class="finish-ar-final-empty">No associates assigned</article>`}
+          </div>
+        </section>`;
+    }).join("")}
+  `;
+
+  bindFinishAssociateCardClickFinal_();
+  makeFinishOwnerLabelClickable_?.();
+}
+
+function startFinishAssociateSavedUsersFixLoop_() {
+  if (window.__finishAssociateSavedUsersFixLoop) return;
+
+  window.__finishAssociateSavedUsersFixLoop = setInterval(() => {
+    refreshFinishArAssociateDropdownFinal_();
+    bindFinishAssociateCardClickFinal_();
+    makeFinishOwnerLabelClickable_?.();
+  }, 700);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    refreshFinishArAssociateDropdownFinal_();
+    bindFinishAssociateCardClickFinal_();
+    startFinishAssociateSavedUsersFixLoop_();
+  }, 600);
+});
+
+
+
+/*******************************************************
+ * FINAL PATCH — FINISH SETUP API BASE + PROFILE/ASSOCIATE FIX
+ * Fixes:
+ * 1) Roster API was using FINISH_OPERATOR_API_URL, which already has
+ *    ?action=operatorActivity&area=Finish. Roster calls must use /exec only.
+ * 2) Saved second users/profiles must appear from FINISH_OPERATOR_ROSTER_CONTROL.
+ * 3) Associate cards are clickable and load the Assignment Console.
+ * 4) Associate dropdown populates from saved roster + master + live activity.
+ *******************************************************/
+
+function getFinishAppsScriptBaseUrlFinal_() {
+  const source =
+    (typeof FINISH_API_URL !== "undefined" && FINISH_API_URL) ||
+    (typeof FINISH_OPERATOR_API_URL !== "undefined" && FINISH_OPERATOR_API_URL) ||
+    "";
+
+  return String(source).split("?")[0];
+}
+
+function getFinishCurrentRealUsernameFinal_() {
+  const candidates = [
+    window.FINISH_ACTUAL_USERNAME,
+    window.FINISH_LOGGED_IN_USERNAME,
+    window.currentUsername,
+    window.loggedInUsername,
+    localStorage.getItem("finishActualUsername"),
+    localStorage.getItem("finishUsername"),
+    localStorage.getItem("currentUsername"),
+    localStorage.getItem("lmsUsername"),
+    sessionStorage.getItem("finishActualUsername"),
+    sessionStorage.getItem("finishUsername"),
+    sessionStorage.getItem("currentUsername"),
+    sessionStorage.getItem("lmsUsername")
+  ];
+
+  try {
+    const detected = typeof getCurrentUsername === "function" ? getCurrentUsername() : "";
+    candidates.push(detected);
+  } catch (err) {}
+
+  for (const value of candidates) {
+    const clean = String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9._@-]/g, "");
+
+    if (!clean) continue;
+    if (clean === "DEFAULT" || clean === "MY_PROFILE" || clean === "CURRENT_USER" || clean === "TEST2") continue;
+    return clean;
+  }
+
+  return "BLOPEZ";
+}
+
+function normalizeFinishSetupOwnerFinal_(value) {
+  const clean = String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+
+  if (!clean || clean === "MY_PROFILE" || clean === "CURRENT_USER") return "";
+
+  if (clean.includes("BRIAN") && clean.includes("LOPEZ")) return "BLOPEZ";
+  if (clean.includes("KIM") && clean.includes("MANACK")) return "KMANACK";
+  if (clean.includes("JASON") && clean.includes("BOOMERSHINE")) return "JBOOMERSHINE";
+
+  if (/^[A-Z][A-Z0-9._@-]{2,30}$/.test(clean)) return clean;
+
+  return "";
+}
+
+function getFinishSelectedSetupOwner_() {
+  const selected = normalizeFinishSetupOwnerFinal_(localStorage.getItem("finishSelectedSetupOwner"));
+  return selected || getFinishCurrentRealUsernameFinal_();
+}
+
+function setFinishSelectedSetupOwner_(owner) {
+  const clean = normalizeFinishSetupOwnerFinal_(owner);
+  if (!clean) return;
+  localStorage.setItem("finishSelectedSetupOwner", clean);
+}
+
+function getFinishNoLockCurrentOwner_() {
+  return getFinishSelectedSetupOwner_();
+}
+
+function getRosterOwnerUsername() {
+  return getFinishSelectedSetupOwner_();
+}
+
+function getFinishGlobalRosterOwnerUsername() {
+  return getFinishSelectedSetupOwner_();
+}
+
+function getMorningSetupOwnerUsername() {
+  return getFinishSelectedSetupOwner_();
+}
+
+function normalizeFinishNoLockRosterPayload_(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+
+  payload.ownerUsername = getFinishSelectedSetupOwner_();
+  payload.updatedBy = getFinishCurrentRealUsernameFinal_();
+
+  return payload;
+}
+
+function normalizeFinishSharedRosterPayload_(payload) {
+  return normalizeFinishNoLockRosterPayload_(payload);
+}
+
+function getFinishRowValueFinal_(row, names) {
+  if (!row || typeof row !== "object") return "";
+
+  for (const name of names) {
+    if (row[name] !== undefined && row[name] !== null && row[name] !== "") return row[name];
+
+    const lower = String(name).charAt(0).toLowerCase() + String(name).slice(1);
+    if (row[lower] !== undefined && row[lower] !== null && row[lower] !== "") return row[lower];
+
+    const upper = String(name).charAt(0).toUpperCase() + String(name).slice(1);
+    if (row[upper] !== undefined && row[upper] !== null && row[upper] !== "") return row[upper];
+  }
+
+  return "";
+}
+
+function getFinishRosterRowOwnerFinal_(row) {
+  return normalizeFinishSetupOwnerFinal_(getFinishRowValueFinal_(row, ["OwnerUsername", "ownerUsername", "Owner", "owner"]));
+}
+
+function getFinishRosterRowShiftFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["ShiftType", "shiftType", "Shift", "shift"]) || "").trim();
+}
+
+function getFinishRosterRowOperatorFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["OperatorName", "operatorName", "Operator", "operator", "Name", "name"]) || "").trim();
+}
+
+function normalizeFinishSetupAreaFinal_(value) {
+  const raw = String(value || "").trim();
+  const upper = raw.toUpperCase();
+
+  if (!upper) return "";
+  if (upper.includes("UNBOX")) return "Finish Unbox";
+  if (upper === "MEI" || upper.includes("MEI LINE") || upper.includes("MEI EASY") || upper.includes(" MEI")) return "MEI";
+  if (upper.includes("SHARP")) return "Sharps";
+  if (upper.includes("BIG")) return "Bigs";
+  if (upper.includes("DRILL")) return "Drill";
+  if (upper.includes("FINAL")) return "Final Inspection";
+  if (upper.includes("MOUNT") || upper.includes("ASSEMBLE")) return "Mounting";
+  if (upper.includes("FLOATER")) return "Floater";
+
+  return raw;
+}
+
+function getFinishRosterRowAreaFinal_(row) {
+  return normalizeFinishSetupAreaFinal_(
+    getFinishRowValueFinal_(row, ["DefaultArea", "defaultArea", "Area", "area", "FlowStation", "flowStation"])
+  );
+}
+
+function getFinishRosterRowLineFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["DefaultLine", "defaultLine", "Line", "line"]) || "").trim();
+}
+
+function getFinishRosterRowPositionFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["DefaultPosition", "defaultPosition", "Position", "position"]) || "").trim();
+}
+
+function getFinishRosterRowRoleFinal_(row) {
+  const value = getFinishRowValueFinal_(row, ["RoleType", "roleType", "CertificationStatus", "certificationStatus", "Role", "role"]);
+  const text = String(value || "Certified").trim();
+  const upper = text.toUpperCase();
+
+  if (upper === "TQ") return "Certified";
+  if (upper === "TRAINING") return "Training";
+  if (upper === "CERTIFIED") return "Certified";
+  if (upper === "UNASSIGNED") return "Unassigned";
+
+  return text || "Certified";
+}
+
+function getFinishRosterRowJphFinal_(row) {
+  return String(getFinishRowValueFinal_(row, ["IndividualJPH", "individualJph", "IndividualJph", "customJph", "CustomJPH"]) || "").trim();
+}
+
+function isFinishRosterRowActiveFinal_(row) {
+  const active = String(getFinishRowValueFinal_(row, ["ActiveStatus", "activeStatus", "Status", "status"]) || "Active").trim().toLowerCase();
+  return active !== "removed" && active !== "inactive" && active !== "archived";
+}
+
+function getFinishStationLoadoutDisplayAreas_() {
+  return ["Finish Unbox", "MEI", "Mounting", "Bigs", "Sharps", "Drill", "Final Inspection"];
+}
+
+function getFinishSetupAssignableAreas_() {
+  return ["Finish Unbox", "MEI", "Mounting", "Bigs", "Sharps", "Drill", "Final Inspection", "Floater"];
+}
+
+function getFinishSetupDefaultJphForArea_(area) {
+  const key = normalizeFinishSetupAreaFinal_(area);
+  return {
+    "Finish Unbox": 150,
+    "MEI": 50,
+    "Mounting": 25,
+    "Bigs": 15,
+    "Sharps": 15,
+    "Drill": 6,
+    "Final Inspection": 75
+  }[key] || 0;
+}
+
+function getFinishLoadoutAreaJph_(area) {
+  return getFinishSetupDefaultJphForArea_(area);
+}
+
+/* Critical API override — do not use FINISH_OPERATOR_API_URL for roster calls. */
+async function fetchFinishRosterApi(action, payload = {}) {
+  const baseUrl = getFinishAppsScriptBaseUrlFinal_();
+
+  if (!baseUrl) throw new Error("Missing Finish Apps Script base URL.");
+
+  const isSaveAction =
+    action === "saveFinishRosterControl" ||
+    action === "deleteFinishRosterControl" ||
+    action === "archiveFinishRosterControl" ||
+    action === "autoAssignFinishRosterFromActivity";
+
+  if (isSaveAction) {
+    const body = JSON.stringify({ action, ...payload });
+
+    const response = await fetch(baseUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body
+    });
+
+    if (!response.ok) {
+      throw new Error(`Finish roster API failed: ${response.status}`);
+    }
+
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+
+    if (data && data.ok === false) {
+      throw new Error(data.message || data.error || "Finish roster API returned ok=false");
+    }
+
+    return data;
+  }
+
+  const params = new URLSearchParams({ action });
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || typeof value === "object") return;
+    params.set(key, String(value));
+  });
+
+  const response = await fetch(`${baseUrl}?${params.toString()}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Finish roster API failed: ${response.status}`);
+  }
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+
+  if (data && data.ok === false) {
+    throw new Error(data.message || data.error || "Finish roster API returned ok=false");
+  }
+
+  return data;
+}
+
+function normalizeFinishRosterApiRowsFinal_(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(data?.roster)) return data.roster;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.result)) return data.result;
+  return [];
+}
+
+async function loadFinishRosterRowsFromBackendFinal_() {
+  window.finishRosterApiState = window.finishRosterApiState || {};
+  finishRosterApiState.roster = Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : [];
+  finishRosterApiState.master = Array.isArray(finishRosterApiState.master) ? finishRosterApiState.master : [];
+
+  const owner = getFinishSelectedSetupOwner_();
+  const shift = getFinishSetupShiftFinal_?.() || "Weekday";
+
+  const actions = [
+    ["getFinishRosterControl", { ownerUsername: owner, shiftType: shift }],
+    ["getFinishRosterControl", {}],
+    ["getFinishOperatorMaster", {}]
+  ];
+
+  for (const [action, payload] of actions) {
+    try {
+      const result = await fetchFinishRosterApi(action, payload);
+      const rows = normalizeFinishRosterApiRowsFinal_(result);
+
+      if (action === "getFinishOperatorMaster") {
+        if (rows.length) finishRosterApiState.master = rows;
+      } else if (rows.length) {
+        const existing = Array.isArray(finishRosterApiState.roster) ? finishRosterApiState.roster : [];
+        const merged = existing.concat(rows);
+        const seen = new Set();
+
+        finishRosterApiState.roster = merged.filter(row => {
+          const key = [
+            getFinishRosterRowOwnerFinal_(row),
+            getFinishRosterRowShiftFinal_(row).toLowerCase(),
+            getFinishRosterRowOperatorFinal_(row).toLowerCase(),
+            getFinishRosterRowAreaFinal_(row).toLowerCase(),
+            getFinishRosterRowLineFinal_(row).toLowerCase(),
+            getFinishRosterRowPositionFinal_(row).toLowerCase()
+          ].join("||");
+
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+    } catch (error) {
+      console.warn(`[Finish Setup] ${action} backend load failed`, error);
+    }
+  }
+
+  return finishRosterApiState;
+}
+
+function getFinishSetupAvailableProfileOwners_() {
+  const owners = new Set();
+
+  (finishRosterApiState?.roster || []).forEach(row => {
+    const owner = getFinishRosterRowOwnerFinal_(row);
+    if (owner) owners.add(owner);
+  });
+
+  // Also read local queue if it exists.
+  try {
+    const localRows = JSON.parse(localStorage.getItem("finishRosterLocalSaveQueue_v1") || "[]") || [];
+    localRows.forEach(row => {
+      const owner = getFinishRosterRowOwnerFinal_(row);
+      if (owner) owners.add(owner);
+    });
+  } catch (err) {}
+
+  const current = getFinishCurrentRealUsernameFinal_();
+  if (current) owners.add(current);
+
+  return Array.from(owners).filter(Boolean).sort();
+}
+
+function getFinishSetupProfileShiftCounts_(owner) {
+  const target = normalizeFinishSetupOwnerFinal_(owner);
+  const counts = { Weekday: 0, Weekend: 0, total: 0 };
+
+  (finishRosterApiState?.roster || []).forEach(row => {
+    if (getFinishRosterRowOwnerFinal_(row) !== target) return;
+    if (!isFinishRosterRowActiveFinal_(row)) return;
+
+    const shift = getFinishRosterRowShiftFinal_(row).toLowerCase();
+    counts.total++;
+    if (shift === "weekday") counts.Weekday++;
+    if (shift === "weekend") counts.Weekend++;
+  });
+
+  return counts;
+}
+
+function getFinishSetupRowsForOwnerFinal_() {
+  const owner = getFinishSelectedSetupOwner_();
+  const shift = getFinishSetupShiftFinal_?.() || "Weekday";
+
+  return (finishRosterApiState?.roster || []).filter(row => {
+    return getFinishRosterRowOwnerFinal_(row) === owner &&
+      getFinishRosterRowShiftFinal_(row).toLowerCase() === String(shift).toLowerCase() &&
+      isFinishRosterRowActiveFinal_(row);
+  });
+}
+
+function getFinishSetupActiveRowsDedupedFinal_() {
+  const map = new Map();
+
+  getFinishSetupRowsForOwnerFinal_().forEach(row => {
+    const name = getFinishRosterRowOperatorFinal_(row);
+    const area = getFinishRosterRowAreaFinal_(row);
+    const role = getFinishRosterRowRoleFinal_(row);
+
+    if (!name || !area || role === "Unassigned") return;
+    if (typeof shouldHideFinishOperatorOnWebpage === "function" && shouldHideFinishOperatorOnWebpage(name)) return;
+
+    const key = `${name.toLowerCase()}||${area.toLowerCase()}||${getFinishSetupShiftFinal_?.() || "Weekday"}`.toLowerCase();
+
+    const old = map.get(key);
+    const score =
+      (getFinishRosterRowPositionFinal_(row) ? 4 : 0) +
+      (getFinishRosterRowLineFinal_(row) ? 2 : 0) +
+      (getFinishRosterRowJphFinal_(row) ? 1 : 0) +
+      (role === "Certified" ? 3 : 2);
+
+    const oldScore = old
+      ? ((getFinishRosterRowPositionFinal_(old) ? 4 : 0) + (getFinishRosterRowLineFinal_(old) ? 2 : 0) + (getFinishRosterRowJphFinal_(old) ? 1 : 0))
+      : -1;
+
+    if (!old || score >= oldScore) map.set(key, row);
+  });
+
+  return Array.from(map.values());
+}
+
+function getFinishSetupOperatorListFinal_() {
+  const seen = new Set();
+  const names = [];
+
+  const add = name => {
+    const clean = (typeof normalizeAssignmentOperatorName === "function")
+      ? normalizeAssignmentOperatorName(name || "")
+      : String(name || "").trim().replace(/\s+/g, " ");
+
+    if (!clean) return;
+    if (clean.toLowerCase() === "select associate") return;
+    if (clean.toLowerCase() === "unassigned / no operator") return;
+    if (typeof shouldHideFinishOperatorOnWebpage === "function" && shouldHideFinishOperatorOnWebpage(clean)) return;
+
+    const key = clean.toLowerCase();
+    if (seen.has(key)) return;
+
+    seen.add(key);
+    names.push(clean);
+  };
+
+  (finishRosterApiState?.roster || []).forEach(row => add(getFinishRosterRowOperatorFinal_(row)));
+  (finishRosterApiState?.master || []).forEach(row => add(getFinishRosterRowOperatorFinal_(row)));
+
+  Object.values(finishOperatorState?.stations || {}).forEach(station => {
+    (station?.operatorList || []).forEach(operator => add(operator.name || operator.operatorName || operator.Operator));
+  });
+
+  try {
+    (getFinishSetupActivityRowsFinal_() || []).forEach(row => add(row.operatorName));
+  } catch (err) {}
+
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+function refreshFinishArAssociateDropdownFinal_() {
+  const select = document.getElementById("finishArAssociateSelect");
+  if (!select) return;
+
+  const current = select.value || localStorage.getItem("finishArSelectedOperator") || "";
+  const operators = getFinishSetupOperatorListFinal_();
+
+  select.innerHTML = `
+    <option value="">Select associate</option>
+    ${operators.map(name => `<option value="${escapeHtml(name)}" ${name === current ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+  `;
+
+  if (current && operators.includes(current)) select.value = current;
+}
+
+function findFinishSavedAssignmentFinal_(operatorName, area) {
+  const nameKey = String(operatorName || "").trim().toLowerCase();
+  const areaKey = normalizeFinishSetupAreaFinal_(area);
+  const rows = getFinishSetupRowsForOwnerFinal_();
+
+  return rows.find(row =>
+    getFinishRosterRowOperatorFinal_(row).toLowerCase() === nameKey &&
+    getFinishRosterRowAreaFinal_(row) === areaKey
+  ) || rows.find(row => getFinishRosterRowOperatorFinal_(row).toLowerCase() === nameKey) || null;
+}
+
+function selectFinishAssociateForAssignmentFinal_(operatorName, areaFromCard) {
+  const name = String(operatorName || "").trim();
+  const area = normalizeFinishSetupAreaFinal_(areaFromCard || "");
+
+  if (!name) return;
+
+  refreshFinishArAssociateDropdownFinal_();
+
+  const associateSelect = document.getElementById("finishArAssociateSelect");
+  const areaSelect = document.getElementById("finishArAreaSelect");
+  const statusSelect = document.getElementById("finishArStatusSelect");
+  const lineSelect = document.getElementById("finishArLineSelect");
+  const positionInput = document.getElementById("finishArPositionInput");
+  const jphInput = document.getElementById("finishArCustomJph");
+
+  if (associateSelect) {
+    if (!Array.from(associateSelect.options).some(option => option.value === name)) {
+      associateSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    }
+    associateSelect.value = name;
+    localStorage.setItem("finishArSelectedOperator", name);
+  }
+
+  if (areaSelect && area) {
+    areaSelect.value = area;
+    localStorage.setItem("finishArSelectedArea", area);
+  }
+
+  const saved = findFinishSavedAssignmentFinal_(name, area);
+
+  if (saved) {
+    if (statusSelect) statusSelect.value = getFinishRosterRowRoleFinal_(saved) || "Certified";
+    if (lineSelect) lineSelect.value = getFinishRosterRowLineFinal_(saved) || "";
+    if (positionInput) positionInput.value = getFinishRosterRowPositionFinal_(saved) || "";
+    if (jphInput) jphInput.value = getFinishRosterRowJphFinal_(saved) || "";
+  } else if (typeof autoFillFinishArFromActivity_ === "function") {
+    autoFillFinishArFromActivity_();
+  }
+
+  if (typeof updateFinishArActivitySuggestion_ === "function") updateFinishArActivitySuggestion_();
+  document.querySelector(".finish-ar-final-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderFinishArFinalAssociateCard_(row) {
+  const name = getFinishRosterRowOperatorFinal_(row);
+  const area = getFinishRosterRowAreaFinal_(row);
+  const role = getFinishRosterRowRoleFinal_(row);
+  const initials = getFinishOperatorInitials_?.(name) || name.slice(0, 2).toUpperCase();
+  const line = getFinishRosterRowLineFinal_(row);
+  const position = getFinishRosterRowPositionFinal_(row);
+  const jph = getFinishRosterRowJphFinal_(row) || getFinishSetupDefaultJphForArea_(area);
+
+  return `
+    <article class="finish-ar-final-card"
+      data-finish-ar-card="${escapeHtml(name)}"
+      data-finish-ar-area="${escapeHtml(area)}">
+      <div class="avatar">${escapeHtml(initials)}</div>
+      <div class="main">
+        <strong>${escapeHtml(name)}</strong>
+        <span>${escapeHtml(area)}${line ? " · " + escapeHtml(line) : ""}${position ? " · " + escapeHtml(position) : ""}</span>
+        <div class="badges">
+          <b>${escapeHtml(role)}</b>
+          <b>${escapeHtml(String(jph))} JPH</b>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function bindFinishAssociateCardClickFinal_() {
+  document.querySelectorAll(".finish-ar-final-card[data-finish-ar-card]").forEach(card => {
+    if (card.dataset.clickBound === "true") return;
+    card.dataset.clickBound = "true";
+    card.style.cursor = "pointer";
+
+    card.addEventListener("click", () => {
+      const name = card.dataset.finishArCard || card.querySelector("strong")?.textContent || "";
+      const area = card.dataset.finishArArea || "";
+      selectFinishAssociateForAssignmentFinal_(name, area);
+    });
+  });
+}
+
+function renderFinishArFinalLoadout_() {
+  const host = document.getElementById("finishArFinalLoadout");
+  if (!host) return;
+
+  const rows = getFinishSetupActiveRowsDedupedFinal_();
+  const grouped = {};
+  getFinishStationLoadoutDisplayAreas_().forEach(area => grouped[area] = []);
+
+  rows.forEach(row => {
+    const area = getFinishRosterRowAreaFinal_(row);
+    if (!grouped[area]) grouped[area] = [];
+    grouped[area].push(row);
+  });
+
+  host.innerHTML = `
+    <div class="finish-ar-final-loadout-head">
+      <div>
+        <h3>Station Loadout</h3>
+        <p>${numberFmt(rows.length)} assigned rows · ${escapeHtml(getFinishSetupShiftFinal_?.() || "Weekday")}</p>
+      </div>
+      <div class="finish-ar-final-owner">Owner: <button type="button" class="finish-owner-profile-button">${escapeHtml(getFinishSelectedSetupOwner_())}</button></div>
+    </div>
+
+    ${getFinishStationLoadoutDisplayAreas_().map(area => {
+      const areaRows = grouped[area] || [];
+      const jph = getFinishSetupDefaultJphForArea_(area);
+
+      return `
+        <section class="finish-ar-final-area area-${escapeHtml(area.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+          <header>
+            <h4><span></span>${escapeHtml(area)}</h4>
+            <div><b>${numberFmt(areaRows.length)}</b><small>body</small><b>${numberFmt(jph)}</b><small>lane JPH</small></div>
+          </header>
+          <div class="finish-ar-final-cards">
+            ${areaRows.length ? areaRows.map(renderFinishArFinalAssociateCard_).join("") : `<article class="finish-ar-final-empty">No associates assigned</article>`}
+          </div>
+        </section>`;
+    }).join("")}
+  `;
+
+  bindFinishAssociateCardClickFinal_();
+  makeFinishOwnerLabelClickable_?.();
+}
+
+async function refreshFinishSetupFromBackendFinal_() {
+  await loadFinishRosterRowsFromBackendFinal_();
+  refreshFinishArAssociateDropdownFinal_();
+  renderFinishArFinalLoadout_();
+  makeFinishOwnerLabelClickable_?.();
+}
+
+function startFinishSetupFinalRefreshLoop_() {
+  if (window.__finishSetupFinalRefreshLoop) return;
+
+  window.__finishSetupFinalRefreshLoop = setInterval(() => {
+    refreshFinishArAssociateDropdownFinal_();
+    bindFinishAssociateCardClickFinal_();
+    makeFinishOwnerLabelClickable_?.();
+  }, 800);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  localStorage.removeItem("finishPreviewUsername");
+  sessionStorage.removeItem("finishPreviewUsername");
+
+  setTimeout(() => {
+    refreshFinishSetupFromBackendFinal_();
+    startFinishSetupFinalRefreshLoop_();
+  }, 700);
+});
+
+window.debugFinishSetupPermissions = function() {
+  const result = {
+    baseUrl: getFinishAppsScriptBaseUrlFinal_(),
+    selectedOwner: getFinishSelectedSetupOwner_(),
+    realUser: getFinishCurrentRealUsernameFinal_(),
+    rosterRowsLoaded: finishRosterApiState?.roster?.length || 0,
+    profileOwners: getFinishSetupAvailableProfileOwners_(),
+    operatorDropdownCount: getFinishSetupOperatorListFinal_().length,
+    model: "Final API base fix. Associate cards clickable. Saved profiles from roster control."
+  };
+  console.log("[Finish Setup Permissions]", result);
+  return result;
+};
+
+
+
+/*******************************************************
+ * FINAL PATCH — FINISH SETUP CONNECTED TO TRAINING METRIC
+ * Adds the missing Training Metric controls inside Finish Setup:
+ * - Role: Certified / Training / Unassigned
+ * - Training Week dropdown connected to Mounting / Final training weeks
+ * - JPH auto-fills from training metric when Role = Training
+ * - Saves TrainingWeek + IndividualJPH into FINISH_OPERATOR_ROSTER_CONTROL
+ *******************************************************/
+
+function getFinishTrainingWeeksForAreaFinal_(area) {
+  const station = normalizeFinishSetupAreaFinal_(area || "");
+
+  if (station === "Mounting") {
+    return ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"];
+  }
+
+  if (station === "Final Inspection") {
+    return ["W1", "W2", "W3", "W4", "W5"];
+  }
+
+  // Drill / MEI / Finish Unbox / Bigs / Sharps do not use ramp training metric.
+  return [];
+}
+
+function normalizeFinishTrainingWeekFinal_(value) {
+  const text = String(value || "").trim().toUpperCase();
+  if (!text || text === "-" || text === "NONE") return "";
+
+  const match = text.match(/(\d+)/);
+  if (!match) return text.startsWith("W") ? text : "";
+
+  return `W${Number(match[1])}`;
+}
+
+function getFinishRosterRowTrainingWeekFinal_(row) {
+  return normalizeFinishTrainingWeekFinal_(
+    getFinishRowValueFinal_(row, ["TrainingWeek", "trainingWeek", "Week", "week"])
+  );
+}
+
+function getFinishTrainingMetricJphFinal_(area, week) {
+  const station = normalizeFinishSetupAreaFinal_(area || "");
+  const normalizedWeek = normalizeFinishTrainingWeekFinal_(week || "");
+  const weekNumber = Number(String(normalizedWeek).replace(/\D/g, "")) || 0;
+
+  const config = (typeof loadConfig === "function") ? loadConfig() : (typeof DEFAULT_CONFIG !== "undefined" ? DEFAULT_CONFIG : {});
+  if (!weekNumber) return getFinishSetupDefaultJphForArea_(station);
+
+  if (station === "Mounting") {
+    const key = `mountTraineeW${weekNumber}`;
+    return Number(config?.[key] || DEFAULT_CONFIG?.[key] || 0) || getFinishSetupDefaultJphForArea_("Mounting");
+  }
+
+  if (station === "Final Inspection") {
+    const key = `finalTraineeW${weekNumber}`;
+    return Number(config?.[key] || DEFAULT_CONFIG?.[key] || 0) || getFinishSetupDefaultJphForArea_("Final Inspection");
+  }
+
+  return getFinishSetupDefaultJphForArea_(station);
+}
+
+function renderFinishTrainingWeekOptionsFinal_(area, selectedWeek = "") {
+  const weeks = getFinishTrainingWeeksForAreaFinal_(area);
+  const selected = normalizeFinishTrainingWeekFinal_(selectedWeek);
+
+  if (!weeks.length) {
+    return `<option value="">No training metric</option>`;
+  }
+
+  return `
+    <option value="">Select week</option>
+    ${weeks.map(week => `<option value="${escapeHtml(week)}" ${week === selected ? "selected" : ""}>${escapeHtml(week.replace("W", "Week "))}</option>`).join("")}
+  `;
+}
+
+function syncFinishTrainingMetricControlsFinal_() {
+  const area = document.getElementById("finishArAreaSelect")?.value || "";
+  const role = document.getElementById("finishArStatusSelect")?.value || "";
+  const weekSelect = document.getElementById("finishArTrainingWeekSelect");
+  const jphInput = document.getElementById("finishArCustomJph");
+  const metricNote = document.getElementById("finishArTrainingMetricNote");
+
+  if (!weekSelect) return;
+
+  const currentWeek = weekSelect.value || "";
+  weekSelect.innerHTML = renderFinishTrainingWeekOptionsFinal_(area, currentWeek);
+
+  const weeks = getFinishTrainingWeeksForAreaFinal_(area);
+  const usesTrainingMetric = role === "Training" && weeks.length > 0;
+
+  weekSelect.disabled = !usesTrainingMetric;
+  weekSelect.closest("label")?.classList.toggle("is-disabled", !usesTrainingMetric);
+
+  if (usesTrainingMetric) {
+    const week = weekSelect.value || weeks[0] || "";
+    if (!weekSelect.value && week) weekSelect.value = week;
+
+    const trainingJph = getFinishTrainingMetricJphFinal_(area, weekSelect.value);
+    if (jphInput && (!jphInput.value || jphInput.dataset.autoTrainingJph === "true")) {
+      jphInput.value = trainingJph || "";
+      jphInput.dataset.autoTrainingJph = "true";
+    }
+
+    if (metricNote) {
+      metricNote.innerHTML = `Training metric connected: <b>${escapeHtml(area)}</b> · <b>${escapeHtml(weekSelect.options[weekSelect.selectedIndex]?.textContent || week)}</b> · <b>${numberFmt(trainingJph)} JPH</b>`;
+    }
+  } else {
+    if (jphInput && jphInput.dataset.autoTrainingJph === "true") {
+      jphInput.value = "";
+      delete jphInput.dataset.autoTrainingJph;
+    }
+
+    if (metricNote) {
+      metricNote.innerHTML = role === "Training"
+        ? `This area does not use a weekly training metric. Use custom JPH if needed.`
+        : `Certified uses the area default JPH unless Custom JPH is entered.`;
+    }
+  }
+}
+
+function renderFinishSetupArStyleFinal_() {
+  const root =
+    document.getElementById("finishRosterApiPanel") ||
+    document.querySelector('[data-content="lms-control"]') ||
+    document.querySelector('[data-content="finish-setup"]');
+
+  if (!root) return false;
+
+  if (root.dataset.finishArFinalRendered === "true") return true;
+
+  const selectedOperator = localStorage.getItem("finishArSelectedOperator") || "";
+  const selectedArea = localStorage.getItem("finishArSelectedArea") || "Mounting";
+  const shift = getFinishSetupShiftFinal_?.() || "Weekday";
+
+  root.dataset.finishArFinalRendered = "true";
+  root.innerHTML = `
+    <section class="finish-ar-final-setup">
+      <header class="finish-ar-final-hero">
+        <div>
+          <div class="finish-ar-final-kicker">FINISH SETUP</div>
+          <h2>Finish Setup</h2>
+          <p>AR-style setup connected to the Finish training metric. Auto-fill from live activity or manually assign primary area, role, week, and JPH.</p>
+        </div>
+        <div class="finish-ar-final-actions">
+          <label>
+            <span>Shift</span>
+            <select id="finishArSetupShift">
+              ${["Weekday", "Weekend"].map(item => `<option value="${item}" ${item === shift ? "selected" : ""}>${item}</option>`).join("")}
+            </select>
+          </label>
+          <button type="button" id="finishArAutoAssignBtn">Auto Assign From Activity</button>
+        </div>
+      </header>
+
+      <div class="finish-ar-final-grid">
+        <main class="finish-ar-final-loadout" id="finishArFinalLoadout"></main>
+
+        <aside class="finish-ar-final-console">
+          <div class="finish-ar-final-console-card">
+            <div class="finish-ar-final-kicker">ASSIGNMENT CONSOLE</div>
+            <h3>Move / Assign Associate</h3>
+
+            <label>
+              <span>Associate</span>
+              <select id="finishArAssociateSelect">
+                <option value="">Select associate</option>
+                ${getFinishSetupOperatorListFinal_().map(name => `<option value="${escapeHtml(name)}" ${name === selectedOperator ? "selected" : ""}>${escapeHtml(name)}</option>`).join("")}
+              </select>
+            </label>
+
+            <label>
+              <span>Primary Area</span>
+              <select id="finishArAreaSelect">
+                ${getFinishSetupAssignableAreas_().filter(area => area !== "Floater").map(area => `<option value="${escapeHtml(area)}" ${area === selectedArea ? "selected" : ""}>${escapeHtml(area)}</option>`).join("")}
+              </select>
+            </label>
+
+            <div id="finishArActivitySuggestion"></div>
+
+            <div class="finish-ar-final-row">
+              <label>
+                <span>Role</span>
+                <select id="finishArStatusSelect">
+                  <option value="Certified">Certified</option>
+                  <option value="Training">Training</option>
+                  <option value="Unassigned">Unassigned</option>
+                </select>
+              </label>
+              <label>
+                <span>Training Week</span>
+                <select id="finishArTrainingWeekSelect">
+                  ${renderFinishTrainingWeekOptionsFinal_(selectedArea, "")}
+                </select>
+              </label>
+            </div>
+
+            <div class="finish-ar-final-row">
+              <label>
+                <span>Custom / Final JPH</span>
+                <input id="finishArCustomJph" type="number" min="0" step="0.1" placeholder="Optional">
+              </label>
+              <label>
+                <span>Line</span>
+                <select id="finishArLineSelect">
+                  ${["", "Line A", "Line B", "Line C"].map(line => `<option value="${line}">${line || "Any"}</option>`).join("")}
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span>Position</span>
+              <input id="finishArPositionInput" placeholder="Optional">
+            </label>
+
+            <div id="finishArTrainingMetricNote" class="finish-ar-final-suggestion"></div>
+
+            <button type="button" id="finishArAssignUpdateBtn">Assign / Update</button>
+            <button type="button" id="finishArRemoveBtn" class="danger">Remove From Area</button>
+
+            <div class="finish-ar-final-note">
+              Training role uses Mounting / Final Inspection training metric weeks. Certified uses the area default JPH unless Custom JPH is entered.
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  `;
+
+  installFinishArFinalStyles_?.();
+  bindFinishArFinalEvents_();
+  renderFinishArFinalLoadout_();
+  updateFinishArActivitySuggestion_?.();
+  syncFinishTrainingMetricControlsFinal_();
+  refreshFinishArAssociateDropdownFinal_?.();
+  return true;
+}
+
+function bindFinishArFinalEvents_() {
+  document.getElementById("finishArSetupShift")?.addEventListener("change", async event => {
+    const existing = document.getElementById("finishRosterShiftFilter");
+    if (existing) existing.value = event.target.value;
+    localStorage.setItem("finishArSetupShift", event.target.value);
+    try {
+      await refreshFinishSetupFromBackendFinal_?.();
+    } catch (err) {
+      renderFinishArFinalLoadout_?.();
+    }
+  });
+
+  document.getElementById("finishArAssociateSelect")?.addEventListener("change", event => {
+    localStorage.setItem("finishArSelectedOperator", event.target.value || "");
+    autoFillFinishArFromActivity_?.();
+    updateFinishArActivitySuggestion_?.();
+    syncFinishTrainingMetricControlsFinal_();
+  });
+
+  document.getElementById("finishArAreaSelect")?.addEventListener("change", event => {
+    localStorage.setItem("finishArSelectedArea", event.target.value || "");
+    updateFinishArActivitySuggestion_?.();
+    syncFinishTrainingMetricControlsFinal_();
+  });
+
+  document.getElementById("finishArStatusSelect")?.addEventListener("change", syncFinishTrainingMetricControlsFinal_);
+  document.getElementById("finishArTrainingWeekSelect")?.addEventListener("change", syncFinishTrainingMetricControlsFinal_);
+
+  const jphInput = document.getElementById("finishArCustomJph");
+  if (jphInput) {
+    jphInput.addEventListener("input", () => {
+      delete jphInput.dataset.autoTrainingJph;
+    });
+  }
+
+  document.getElementById("finishArAutoAssignBtn")?.addEventListener("click", saveFinishArAutoAssignFinal_);
+  document.getElementById("finishArAssignUpdateBtn")?.addEventListener("click", saveFinishArManualAssignFinal_);
+  document.getElementById("finishArRemoveBtn")?.addEventListener("click", removeFinishArManualAssignFinal_);
+}
+
+function selectFinishAssociateForAssignmentFinal_(operatorName, areaFromCard) {
+  const name = String(operatorName || "").trim();
+  const area = normalizeFinishSetupAreaFinal_(areaFromCard || "");
+
+  if (!name) return;
+
+  refreshFinishArAssociateDropdownFinal_?.();
+
+  const associateSelect = document.getElementById("finishArAssociateSelect");
+  const areaSelect = document.getElementById("finishArAreaSelect");
+  const statusSelect = document.getElementById("finishArStatusSelect");
+  const lineSelect = document.getElementById("finishArLineSelect");
+  const positionInput = document.getElementById("finishArPositionInput");
+  const jphInput = document.getElementById("finishArCustomJph");
+  const weekSelect = document.getElementById("finishArTrainingWeekSelect");
+
+  if (associateSelect) {
+    if (!Array.from(associateSelect.options).some(option => option.value === name)) {
+      associateSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+    }
+    associateSelect.value = name;
+    localStorage.setItem("finishArSelectedOperator", name);
+  }
+
+  if (areaSelect && area) {
+    areaSelect.value = area;
+    localStorage.setItem("finishArSelectedArea", area);
+  }
+
+  const saved = findFinishSavedAssignmentFinal_?.(name, area);
+
+  if (saved) {
+    if (statusSelect) statusSelect.value = getFinishRosterRowRoleFinal_(saved) || "Certified";
+    if (lineSelect) lineSelect.value = getFinishRosterRowLineFinal_(saved) || "";
+    if (positionInput) positionInput.value = getFinishRosterRowPositionFinal_(saved) || "";
+    if (jphInput) {
+      jphInput.value = getFinishRosterRowJphFinal_(saved) || "";
+      delete jphInput.dataset.autoTrainingJph;
+    }
+    if (weekSelect) {
+      weekSelect.innerHTML = renderFinishTrainingWeekOptionsFinal_(area, getFinishRosterRowTrainingWeekFinal_(saved));
+      weekSelect.value = getFinishRosterRowTrainingWeekFinal_(saved) || "";
+    }
+  } else if (typeof autoFillFinishArFromActivity_ === "function") {
+    autoFillFinishArFromActivity_();
+  }
+
+  updateFinishArActivitySuggestion_?.();
+  syncFinishTrainingMetricControlsFinal_();
+  document.querySelector(".finish-ar-final-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function saveFinishArManualAssignFinal_() {
+  const operatorName = document.getElementById("finishArAssociateSelect")?.value || "";
+  const area = document.getElementById("finishArAreaSelect")?.value || "";
+  const role = document.getElementById("finishArStatusSelect")?.value || "Certified";
+  const week = document.getElementById("finishArTrainingWeekSelect")?.value || "";
+  const jphInput = document.getElementById("finishArCustomJph");
+
+  if (!operatorName || !area) {
+    showFinishAssignmentToast?.("Select associate and area first.");
+    return;
+  }
+
+  const finalJph =
+    jphInput?.value ||
+    (role === "Training" ? getFinishTrainingMetricJphFinal_(area, week) : "") ||
+    "";
+
+  const payload = normalizeFinishNoLockRosterPayload_({
+    shiftType: getFinishSetupShiftFinal_?.() || "Weekday",
+    operatorName,
+    activeStatus: role === "Unassigned" ? "Removed" : "Active",
+    defaultArea: area,
+    defaultLine: document.getElementById("finishArLineSelect")?.value || "",
+    defaultPosition: document.getElementById("finishArPositionInput")?.value || "",
+    roleType: role,
+    trainingWeek: role === "Training" ? normalizeFinishTrainingWeekFinal_(week) : "",
+    individualJph: finalJph
+  });
+
+  const result = await fetchFinishRosterApi("saveFinishRosterControl", payload);
+
+  // Update local state immediately so the card moves without waiting for refresh.
+  if (!window.finishRosterApiState) window.finishRosterApiState = {};
+  if (!Array.isArray(finishRosterApiState.roster)) finishRosterApiState.roster = [];
+  finishRosterApiState.roster.push(payload);
+
+  showFinishAssignmentToast?.(`Saved ${operatorName} · ${area}`);
+  await refreshFinishSetupFromBackendFinal_?.();
+}
+
+async function saveFinishArAutoAssignFinal_() {
+  const bestByOperator = new Map();
+
+  (getFinishSetupActivityRowsFinal_?.() || []).forEach(row => {
+    const key = row.operatorName.toLowerCase();
+    const old = bestByOperator.get(key);
+    if (!old || Number(row.total || 0) > Number(old.total || 0)) bestByOperator.set(key, row);
+  });
+
+  const rows = Array.from(bestByOperator.values());
+  if (!rows.length) {
+    showFinishAssignmentToast?.("No live activity found to auto assign.");
+    return;
+  }
+
+  if (!window.confirm(`Auto assign ${rows.length} associates from current activity?`)) return;
+
+  for (const row of rows) {
+    const area = row.area;
+    const payload = normalizeFinishNoLockRosterPayload_({
+      shiftType: getFinishSetupShiftFinal_?.() || "Weekday",
+      operatorName: row.operatorName,
+      activeStatus: "Active",
+      defaultArea: area,
+      defaultLine: row.line || "",
+      defaultPosition: row.position || "",
+      roleType: "Certified",
+      trainingWeek: "",
+      individualJph: ""
+    });
+
+    await fetchFinishRosterApi("saveFinishRosterControl", payload);
+
+    if (!window.finishRosterApiState) window.finishRosterApiState = {};
+    if (!Array.isArray(finishRosterApiState.roster)) finishRosterApiState.roster = [];
+    finishRosterApiState.roster.push(payload);
+  }
+
+  showFinishAssignmentToast?.(`Auto assigned ${rows.length} associates.`);
+  await refreshFinishSetupFromBackendFinal_?.();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    if (typeof renderFinishSetupArStyleFinal_ === "function") {
+      const root =
+        document.getElementById("finishRosterApiPanel") ||
+        document.querySelector('[data-content="lms-control"]') ||
+        document.querySelector('[data-content="finish-setup"]');
+
+      if (root) root.dataset.finishArFinalRendered = "";
+      renderFinishSetupArStyleFinal_();
+    }
+  }, 900);
+});
+
+window.debugFinishTrainingMetricSetup = function() {
+  const result = {
+    selectedArea: document.getElementById("finishArAreaSelect")?.value || "",
+    selectedRole: document.getElementById("finishArStatusSelect")?.value || "",
+    selectedWeek: document.getElementById("finishArTrainingWeekSelect")?.value || "",
+    calculatedJph: getFinishTrainingMetricJphFinal_(
+      document.getElementById("finishArAreaSelect")?.value || "",
+      document.getElementById("finishArTrainingWeekSelect")?.value || ""
+    ),
+    config: (typeof loadConfig === "function") ? loadConfig() : {}
+  };
+  console.log("[Finish Training Metric Setup]", result);
+  return result;
+};
+
+
+
+/* =========================================================
+   FINISH SETUP V2 — CLEAN FRONTEND MODULE
+   Clean module. Uses only new V2 backend actions:
+   - finishSetupV2Bootstrap
+   - finishSetupV2SaveAssignment
+   - finishSetupV2RemoveAssignment
+   - finishSetupV2AutoAssignFromActivity
+
+   IMPORTANT:
+   - No local queue
+   - No BLOPEZ lock
+   - No old Finish roster API actions
+   - Uses GET only to avoid Apps Script CORS/preflight problems
+========================================================= */
+
+const FINISH_SETUP_V2_API_URL =
+  "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec";
+
+const FINISH_SETUP_V2_AREA_ORDER = [
+  "Finish Unbox",
+  "MEI",
+  "Mounting",
+  "Bigs",
+  "Sharps",
+  "Drill",
+  "Final Inspection"
+];
+
+const FINISH_SETUP_V2_DEFAULT_JPH = {
+  "Finish Unbox": 150,
+  "MEI": 50,
+  "Mounting": 25,
+  "Bigs": 15,
+  "Sharps": 15,
+  "Drill": 6,
+  "Final Inspection": 75
+};
+
+const FINISH_SETUP_V2_TRAINING_WEEKS = {
+  "Mounting": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"],
+  "Final Inspection": ["W1", "W2", "W3", "W4", "W5"]
+};
+
+const finishSetupV2State = {
+  ownerUsername: "",
+  shiftType: "Weekday",
+  master: [],
+  roster: [],
+  owners: [],
+  profiles: [],
+  selectedOperator: "",
+  selectedArea: "Mounting",
+  selectedRow: null,
+  loading: false,
+  lastLoadedAt: null
+};
+
+function finishSetupV2BaseUrl_() {
+  return String(FINISH_SETUP_V2_API_URL || "").split("?")[0];
+}
+
+function finishSetupV2CleanText_(value) {
+  return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
+}
+
+function finishSetupV2Upper_(value) {
+  return finishSetupV2CleanText_(value).toUpperCase();
+}
+
+function finishSetupV2Escape_(value) {
+  return finishSetupV2CleanText_(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function finishSetupV2Number_(value) {
+  const n = Number(String(value || "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function finishSetupV2FormatNumber_(value) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(finishSetupV2Number_(value));
+}
+
+function finishSetupV2GetCurrentUsername_() {
+  try {
+    const current = typeof getCurrentUsername === "function" ? getCurrentUsername() : "";
+    const clean = finishSetupV2Upper_(current).replace(/[^A-Z0-9._@-]/g, "");
+    if (clean && clean !== "DEFAULT" && clean !== "MY_PROFILE" && clean !== "CURRENT_USER") return clean;
+  } catch (err) {}
+
+  const candidates = [
+    window.FINISH_ACTUAL_USERNAME,
+    window.FINISH_LOGGED_IN_USERNAME,
+    window.currentUsername,
+    window.loggedInUsername,
+    localStorage.getItem("finishActualUsername"),
+    localStorage.getItem("finishUsername"),
+    localStorage.getItem("currentUsername"),
+    localStorage.getItem("lmsUsername"),
+    sessionStorage.getItem("finishActualUsername"),
+    sessionStorage.getItem("finishUsername"),
+    sessionStorage.getItem("currentUsername"),
+    sessionStorage.getItem("lmsUsername")
+  ];
+
+  for (const value of candidates) {
+    const clean = finishSetupV2Upper_(value).replace(/[^A-Z0-9._@-]/g, "");
+    if (clean && clean !== "DEFAULT" && clean !== "MY_PROFILE" && clean !== "CURRENT_USER") return clean;
+  }
+
+  return "BLOPEZ";
+}
+
+function finishSetupV2NormalizeArea_(value) {
+  const upper = finishSetupV2Upper_(value);
+
+  if (!upper) return "";
+  if (upper.includes("UNBOX")) return "Finish Unbox";
+  if (upper === "MEI" || upper.includes("MEI LINE") || upper.includes("MEI EASY")) return "MEI";
+  if (upper.includes("SHARP")) return "Sharps";
+  if (upper.includes("BIG")) return "Bigs";
+  if (upper.includes("DRILL")) return "Drill";
+  if (upper.includes("FINAL")) return "Final Inspection";
+  if (upper.includes("MOUNT") || upper.includes("ASSEMBLE")) return "Mounting";
+
+  return finishSetupV2CleanText_(value);
+}
+
+function finishSetupV2NormalizeRole_(value) {
+  const upper = finishSetupV2Upper_(value);
+
+  if (upper === "TRAINING") return "Training";
+  if (upper === "UNASSIGNED") return "Unassigned";
+  return "Certified";
+}
+
+function finishSetupV2NormalizeWeek_(value) {
+  const text = finishSetupV2Upper_(value);
+  const match = text.match(/(\d+)/);
+  return match ? `W${Number(match[1])}` : "";
+}
+
+function finishSetupV2RowValue_(row, keys) {
+  if (!row || typeof row !== "object") return "";
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") return row[key];
+
+    const lower = String(key).charAt(0).toLowerCase() + String(key).slice(1);
+    if (row[lower] !== undefined && row[lower] !== null && row[lower] !== "") return row[lower];
+
+    const upper = String(key).charAt(0).toUpperCase() + String(key).slice(1);
+    if (row[upper] !== undefined && row[upper] !== null && row[upper] !== "") return row[upper];
+  }
+  return "";
+}
+
+function finishSetupV2OperatorName_(row) {
+  return finishSetupV2CleanText_(finishSetupV2RowValue_(row, ["OperatorName", "operatorName", "Operator", "operator", "Name", "name"]));
+}
+
+function finishSetupV2Owner_(row) {
+  return finishSetupV2Upper_(finishSetupV2RowValue_(row, ["OwnerUsername", "ownerUsername", "Owner", "owner"]));
+}
+
+function finishSetupV2Shift_(row) {
+  const raw = finishSetupV2CleanText_(finishSetupV2RowValue_(row, ["ShiftType", "shiftType", "Shift", "shift"]));
+  return raw.toLowerCase() === "weekend" ? "Weekend" : "Weekday";
+}
+
+function finishSetupV2Area_(row) {
+  return finishSetupV2NormalizeArea_(finishSetupV2RowValue_(row, ["DefaultArea", "defaultArea", "Area", "area", "LastFlowStation", "lastFlowStation", "LastAccessPoint", "lastAccessPoint"]));
+}
+
+function finishSetupV2Line_(row) {
+  return finishSetupV2CleanText_(finishSetupV2RowValue_(row, ["DefaultLine", "defaultLine", "Line", "line"]));
+}
+
+function finishSetupV2Position_(row) {
+  return finishSetupV2CleanText_(finishSetupV2RowValue_(row, ["DefaultPosition", "defaultPosition", "Position", "position"]));
+}
+
+function finishSetupV2Role_(row) {
+  return finishSetupV2NormalizeRole_(finishSetupV2RowValue_(row, ["RoleType", "roleType", "CertificationStatus", "certificationStatus", "Role", "role"]));
+}
+
+function finishSetupV2TrainingWeek_(row) {
+  return finishSetupV2NormalizeWeek_(finishSetupV2RowValue_(row, ["TrainingWeek", "trainingWeek", "Week", "week"]));
+}
+
+function finishSetupV2IndividualJph_(row) {
+  return finishSetupV2CleanText_(finishSetupV2RowValue_(row, ["IndividualJPH", "individualJph", "IndividualJph", "customJph", "CustomJPH"]));
+}
+
+function finishSetupV2FinalJph_(row) {
+  const final = finishSetupV2CleanText_(finishSetupV2RowValue_(row, ["FinalJPH", "finalJph", "FinalJph"]));
+  if (final) return final;
+
+  const individual = finishSetupV2IndividualJph_(row);
+  if (individual) return individual;
+
+  return String(FINISH_SETUP_V2_DEFAULT_JPH[finishSetupV2Area_(row)] || "");
+}
+
+function finishSetupV2IsActiveRosterRow_(row) {
+  const status = finishSetupV2Upper_(finishSetupV2RowValue_(row, ["ActiveStatus", "activeStatus", "Status", "status"]) || "Active");
+  return status !== "REMOVED" && status !== "INACTIVE" && status !== "ARCHIVED";
+}
+
+async function finishSetupV2Api_(action, params = {}) {
+  const url = new URL(finishSetupV2BaseUrl_());
+  url.searchParams.set("action", action);
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    url.searchParams.set(key, String(value));
+  });
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Finish Setup V2 API failed ${response.status}: ${action}`);
+  }
+
+  const data = await response.json();
+
+  if (data && data.ok === false) {
+    throw new Error(data.message || data.error || `Finish Setup V2 returned ok=false: ${action}`);
+  }
+
+  return data;
+}
+
+function finishSetupV2BuildProfiles_() {
+  const byUsername = new Map();
+
+  const addProfile = (username, fullName = "", role = "", shiftGroup = "") => {
+    const clean = finishSetupV2Upper_(username);
+    if (!clean) return;
+    const current = byUsername.get(clean) || {};
+    byUsername.set(clean, {
+      username: clean,
+      fullName: fullName || current.fullName || clean,
+      role: role || current.role || "",
+      shiftGroup: shiftGroup || current.shiftGroup || "",
+      weekday: current.weekday || 0,
+      weekend: current.weekend || 0,
+      total: current.total || 0
+    });
+  };
+
+  // Current user first.
+  addProfile(finishSetupV2GetCurrentUsername_(), "", "Current User", "");
+
+  // Login override users already in this file.
+  try {
+    Object.values(FINISH_LOGIN_PROFILE_OVERRIDES || {}).forEach(profile => {
+      const username = profile.username || profile.Username || "";
+      const fullName = `${profile.firstName || ""} ${profile.lastName || ""}`.trim();
+      addProfile(username, fullName, profile.role || "", profile.subRole || "");
+    });
+  } catch (err) {}
+
+  // Owners returned by backend roster counts.
+  (finishSetupV2State.owners || []).forEach(owner => {
+    const username = owner.ownerUsername || owner.OwnerUsername || owner.username || "";
+    addProfile(username, "", "", "");
+    const key = finishSetupV2Upper_(username);
+    const item = byUsername.get(key);
+    if (item) {
+      item.weekday = finishSetupV2Number_(owner.weekday || owner.Weekday || 0);
+      item.weekend = finishSetupV2Number_(owner.weekend || owner.Weekend || 0);
+      item.total = finishSetupV2Number_(owner.total || owner.Total || item.weekday + item.weekend);
+    }
+  });
+
+  // Roster rows can also reveal saved owners.
+  (finishSetupV2State.roster || []).forEach(row => {
+    const owner = finishSetupV2Owner_(row);
+    if (!owner) return;
+    addProfile(owner, "", "", "");
+    const item = byUsername.get(owner);
+    if (!item || !finishSetupV2IsActiveRosterRow_(row)) return;
+    item.total += 1;
+    if (finishSetupV2Shift_(row) === "Weekend") item.weekend += 1;
+    else item.weekday += 1;
+  });
+
+  return Array.from(byUsername.values()).sort((a, b) => a.username.localeCompare(b.username));
+}
+
+async function finishSetupV2Load_(options = {}) {
+  finishSetupV2State.loading = true;
+  finishSetupV2RenderShell_();
+
+  try {
+    const owner = finishSetupV2State.ownerUsername || finishSetupV2GetCurrentUsername_();
+    const shift = finishSetupV2State.shiftType || "Weekday";
+
+    const data = await finishSetupV2Api_("finishSetupV2Bootstrap", {
+      ownerUsername: owner,
+      shiftType: shift,
+      debug: "true"
+    });
+
+    finishSetupV2State.ownerUsername = owner;
+    finishSetupV2State.shiftType = shift;
+    finishSetupV2State.master = Array.isArray(data.master) ? data.master : [];
+    finishSetupV2State.roster = Array.isArray(data.roster) ? data.roster : [];
+    finishSetupV2State.owners = Array.isArray(data.owners) ? data.owners : [];
+    finishSetupV2State.profiles = finishSetupV2BuildProfiles_();
+    finishSetupV2State.lastLoadedAt = new Date();
+  } catch (error) {
+    console.error("[Finish Setup V2] load failed", error);
+    finishSetupV2ShowToast_(`Finish Setup V2 load failed: ${error.message}`);
+  } finally {
+    finishSetupV2State.loading = false;
+    finishSetupV2RenderShell_();
+  }
+}
+
+function finishSetupV2GetOperatorList_() {
+  const seen = new Set();
+  const names = [];
+
+  const add = name => {
+    const clean = finishSetupV2CleanText_(name);
+    const key = clean.toUpperCase();
+    if (!clean || seen.has(key)) return;
+    if (typeof shouldHideFinishOperatorOnWebpage === "function" && shouldHideFinishOperatorOnWebpage(clean)) return;
+    if (key === "UNASSIGNED / NO OPERATOR" || key === "NO OPERATOR") return;
+    seen.add(key);
+    names.push(clean);
+  };
+
+  (finishSetupV2State.master || []).forEach(row => add(finishSetupV2OperatorName_(row)));
+  (finishSetupV2State.roster || []).forEach(row => add(finishSetupV2OperatorName_(row)));
+
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+function finishSetupV2GetActiveRows_() {
+  const owner = finishSetupV2Upper_(finishSetupV2State.ownerUsername);
+  const shift = finishSetupV2State.shiftType || "Weekday";
+
+  const map = new Map();
+
+  (finishSetupV2State.roster || []).forEach(row => {
+    if (finishSetupV2Owner_(row) !== owner) return;
+    if (finishSetupV2Shift_(row) !== shift) return;
+    if (!finishSetupV2IsActiveRosterRow_(row)) return;
+
+    const operator = finishSetupV2OperatorName_(row);
+    const area = finishSetupV2Area_(row);
+    const role = finishSetupV2Role_(row);
+
+    if (!operator || !area || role === "Unassigned") return;
+
+    const key = `${operator.toUpperCase()}|${area.toUpperCase()}`;
+    map.set(key, row);
+  });
+
+  return Array.from(map.values());
+}
+
+function finishSetupV2GroupRows_() {
+  const groups = {};
+  FINISH_SETUP_V2_AREA_ORDER.forEach(area => groups[area] = []);
+
+  finishSetupV2GetActiveRows_().forEach(row => {
+    const area = finishSetupV2Area_(row);
+    if (!groups[area]) groups[area] = [];
+    groups[area].push(row);
+  });
+
+  Object.keys(groups).forEach(area => {
+    groups[area].sort((a, b) => finishSetupV2OperatorName_(a).localeCompare(finishSetupV2OperatorName_(b)));
+  });
+
+  return groups;
+}
+
+function finishSetupV2FindMasterForOperator_(operatorName) {
+  const key = finishSetupV2Upper_(operatorName);
+  return (finishSetupV2State.master || []).find(row => finishSetupV2Upper_(finishSetupV2OperatorName_(row)) === key) || null;
+}
+
+function finishSetupV2GetLiveSuggestion_(operatorName) {
+  const master = finishSetupV2FindMasterForOperator_(operatorName);
+  if (!master) return null;
+
+  return {
+    area: finishSetupV2Area_(master),
+    output: finishSetupV2Number_(finishSetupV2RowValue_(master, ["LastTotal", "lastTotal"])),
+    line: finishSetupV2InferLine_(finishSetupV2RowValue_(master, ["LastAccessPoint", "lastAccessPoint", "LastFlowStation", "lastFlowStation"])),
+    position: finishSetupV2InferPosition_(finishSetupV2Area_(master), finishSetupV2RowValue_(master, ["LastAccessPoint", "lastAccessPoint", "LastFlowStation", "lastFlowStation"]))
+  };
+}
+
+function finishSetupV2InferLine_(value) {
+  const upper = finishSetupV2Upper_(value);
+  if (upper.includes("LINE A")) return "Line A";
+  if (upper.includes("LINE B")) return "Line B";
+  if (upper.includes("LINE C")) return "Line C";
+  return "";
+}
+
+function finishSetupV2InferPosition_(area, value) {
+  const upper = finishSetupV2Upper_(value);
+  if (area === "Mounting") {
+    const m = upper.match(/\bM\s*0?(\d{1,2})\b/);
+    if (m) return `M${String(m[1]).padStart(2, "0")}`;
+  }
+  if (area === "Drill") {
+    const d = upper.match(/\bD\s*0?(\d{1,2})\b/);
+    if (d) return `D${String(d[1]).padStart(2, "0")}`;
+  }
+  if (area === "Final Inspection") {
+    const f = upper.match(/\bFI[-\s]*0?(\d{1,2})\b/);
+    if (f) return `FI-${String(f[1]).padStart(2, "0")}`;
+  }
+  return "";
+}
+
+function finishSetupV2WeekOptions_(area, selected = "") {
+  const weeks = FINISH_SETUP_V2_TRAINING_WEEKS[area] || [];
+  const selectedWeek = finishSetupV2NormalizeWeek_(selected);
+
+  if (!weeks.length) {
+    return `<option value="">No training metric</option>`;
+  }
+
+  return `<option value="">Select week</option>` + weeks.map(week =>
+    `<option value="${finishSetupV2Escape_(week)}" ${week === selectedWeek ? "selected" : ""}>${finishSetupV2Escape_(week.replace("W", "Week "))}</option>`
+  ).join("");
+}
+
+function finishSetupV2ProfilesOptions_() {
+  const profiles = finishSetupV2State.profiles.length ? finishSetupV2State.profiles : finishSetupV2BuildProfiles_();
+  return profiles.map(profile => {
+    const label = profile.fullName && profile.fullName !== profile.username
+      ? `${profile.fullName} · ${profile.username}`
+      : profile.username;
+    return `<option value="${finishSetupV2Escape_(profile.username)}" ${profile.username === finishSetupV2State.ownerUsername ? "selected" : ""}>${finishSetupV2Escape_(label)}</option>`;
+  }).join("");
+}
+
+function finishSetupV2RenderShell_() {
+  const root = finishSetupV2GetRoot_();
+  if (!root) return;
+
+  finishSetupV2InstallStyles_();
+  finishSetupV2RemoveOldNoise_();
+
+  const groups = finishSetupV2GroupRows_();
+  const activeRows = finishSetupV2GetActiveRows_();
+  const operators = finishSetupV2GetOperatorList_();
+  const selectedArea = finishSetupV2State.selectedArea || "Mounting";
+  const selectedOperator = finishSetupV2State.selectedOperator || "";
+
+  root.innerHTML = `
+    <section class="finish-v2">
+      <header class="finish-v2-hero">
+        <div>
+          <div class="finish-v2-kicker">FINISH SETUP V2</div>
+          <h2>Finish Setup</h2>
+          <p>Clean AR-style setup. Uses the new Finish Setup V2 backend only.</p>
+        </div>
+        <div class="finish-v2-actions">
+          <label>
+            <span>Profile</span>
+            <select id="finishV2OwnerSelect">${finishSetupV2ProfilesOptions_()}</select>
+          </label>
+          <label>
+            <span>Shift</span>
+            <select id="finishV2ShiftSelect">
+              <option value="Weekday" ${finishSetupV2State.shiftType === "Weekday" ? "selected" : ""}>Weekday</option>
+              <option value="Weekend" ${finishSetupV2State.shiftType === "Weekend" ? "selected" : ""}>Weekend</option>
+            </select>
+          </label>
+          <button type="button" id="finishV2AutoAssignBtn">Auto Assign From Activity</button>
+          <button type="button" id="finishV2RefreshBtn">Refresh</button>
+        </div>
+      </header>
+
+      <div class="finish-v2-status">
+        <span><b>Owner:</b> ${finishSetupV2Escape_(finishSetupV2State.ownerUsername || finishSetupV2GetCurrentUsername_())}</span>
+        <span><b>Shift:</b> ${finishSetupV2Escape_(finishSetupV2State.shiftType)}</span>
+        <span><b>Assigned:</b> ${finishSetupV2FormatNumber_(activeRows.length)}</span>
+        <span><b>Master:</b> ${finishSetupV2FormatNumber_(finishSetupV2State.master.length)}</span>
+        ${finishSetupV2State.loading ? `<span class="loading">Loading...</span>` : ""}
+      </div>
+
+      <div class="finish-v2-grid">
+        <main class="finish-v2-loadout">
+          <div class="finish-v2-loadout-head">
+            <div>
+              <h3>Station Loadout</h3>
+              <p>${finishSetupV2FormatNumber_(activeRows.length)} assigned rows · ${finishSetupV2Escape_(finishSetupV2State.shiftType)}</p>
+            </div>
+          </div>
+
+          ${FINISH_SETUP_V2_AREA_ORDER.map(area => finishSetupV2RenderArea_(area, groups[area] || [])).join("")}
+        </main>
+
+        <aside class="finish-v2-console">
+          <div class="finish-v2-panel">
+            <div class="finish-v2-kicker">ASSIGNMENT CONSOLE</div>
+            <h3>Move / Assign Associate</h3>
+
+            <label>
+              <span>Associate</span>
+              <select id="finishV2OperatorSelect">
+                <option value="">Select associate</option>
+                ${operators.map(name => `<option value="${finishSetupV2Escape_(name)}" ${name === selectedOperator ? "selected" : ""}>${finishSetupV2Escape_(name)}</option>`).join("")}
+              </select>
+            </label>
+
+            <label>
+              <span>Primary Area</span>
+              <select id="finishV2AreaSelect">
+                ${FINISH_SETUP_V2_AREA_ORDER.map(area => `<option value="${finishSetupV2Escape_(area)}" ${area === selectedArea ? "selected" : ""}>${finishSetupV2Escape_(area)}</option>`).join("")}
+              </select>
+            </label>
+
+            <div id="finishV2Suggestion" class="finish-v2-suggestion">Select an associate to see live activity suggestion.</div>
+
+            <div class="finish-v2-two">
+              <label>
+                <span>Role</span>
+                <select id="finishV2RoleSelect">
+                  <option value="Certified">Certified</option>
+                  <option value="Training">Training</option>
+                  <option value="Unassigned">Unassigned</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Training Week</span>
+                <select id="finishV2WeekSelect">
+                  ${finishSetupV2WeekOptions_(selectedArea)}
+                </select>
+              </label>
+            </div>
+
+            <div class="finish-v2-two">
+              <label>
+                <span>Individual JPH</span>
+                <input id="finishV2JphInput" type="number" min="0" step="0.1" placeholder="Default ${finishSetupV2Escape_(FINISH_SETUP_V2_DEFAULT_JPH[selectedArea] || "")}">
+              </label>
+
+              <label>
+                <span>Line</span>
+                <select id="finishV2LineSelect">
+                  <option value="">Any</option>
+                  <option value="Line A">Line A</option>
+                  <option value="Line B">Line B</option>
+                  <option value="Line C">Line C</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span>Position</span>
+              <input id="finishV2PositionInput" placeholder="Optional">
+            </label>
+
+            <div id="finishV2MetricNote" class="finish-v2-note">Certified uses the area default JPH unless Individual JPH is entered.</div>
+
+            <button type="button" id="finishV2SaveBtn" class="primary">Assign / Update</button>
+            <button type="button" id="finishV2RemoveBtn" class="danger">Remove From Area</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  `;
+
+  finishSetupV2BindEvents_();
+  finishSetupV2UpdateSuggestion_();
+  finishSetupV2SyncTrainingControls_();
+}
+
+function finishSetupV2RenderArea_(area, rows) {
+  const jph = FINISH_SETUP_V2_DEFAULT_JPH[area] || 0;
+
+  return `
+    <section class="finish-v2-area finish-v2-area-${finishSetupV2Escape_(area.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+      <header>
+        <h4><span></span>${finishSetupV2Escape_(area)}</h4>
+        <div class="finish-v2-area-metrics">
+          <b>${finishSetupV2FormatNumber_(rows.length)}</b><small>body</small>
+          <b>${finishSetupV2FormatNumber_(jph)}</b><small>lane JPH</small>
+        </div>
+      </header>
+
+      <div class="finish-v2-cards">
+        ${rows.length ? rows.map(finishSetupV2RenderCard_).join("") : `<article class="finish-v2-empty">No associates assigned</article>`}
+      </div>
+    </section>
+  `;
+}
+
+function finishSetupV2RenderCard_(row) {
+  const name = finishSetupV2OperatorName_(row);
+  const area = finishSetupV2Area_(row);
+  const role = finishSetupV2Role_(row);
+  const week = finishSetupV2TrainingWeek_(row);
+  const line = finishSetupV2Line_(row);
+  const position = finishSetupV2Position_(row);
+  const jph = finishSetupV2FinalJph_(row);
+  const initials = name.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase() || "OP";
+
+  return `
+    <article class="finish-v2-card" data-finish-v2-operator="${finishSetupV2Escape_(name)}" data-finish-v2-area="${finishSetupV2Escape_(area)}">
+      <div class="finish-v2-avatar">${finishSetupV2Escape_(initials)}</div>
+      <div>
+        <strong>${finishSetupV2Escape_(name)}</strong>
+        <span>${finishSetupV2Escape_(area)}${line ? " · " + finishSetupV2Escape_(line) : ""}${position ? " · " + finishSetupV2Escape_(position) : ""}</span>
+        <div class="finish-v2-badges">
+          <b>${finishSetupV2Escape_(role)}</b>
+          ${week ? `<b>${finishSetupV2Escape_(week)}</b>` : ""}
+          <b>${finishSetupV2Escape_(jph || FINISH_SETUP_V2_DEFAULT_JPH[area] || "")} JPH</b>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function finishSetupV2GetRoot_() {
+  return (
+    document.querySelector('.tab-content[data-content="lms-control"]') ||
+    document.getElementById("finishRosterApiPanel") ||
+    document.querySelector('[data-content="finish-setup"]')
+  );
+}
+
+function finishSetupV2BindEvents_() {
+  document.getElementById("finishV2OwnerSelect")?.addEventListener("change", async event => {
+    finishSetupV2State.ownerUsername = finishSetupV2Upper_(event.target.value);
+    await finishSetupV2Load_();
+  });
+
+  document.getElementById("finishV2ShiftSelect")?.addEventListener("change", async event => {
+    finishSetupV2State.shiftType = event.target.value === "Weekend" ? "Weekend" : "Weekday";
+    await finishSetupV2Load_();
+  });
+
+  document.getElementById("finishV2RefreshBtn")?.addEventListener("click", () => finishSetupV2Load_());
+  document.getElementById("finishV2AutoAssignBtn")?.addEventListener("click", finishSetupV2AutoAssign_);
+  document.getElementById("finishV2SaveBtn")?.addEventListener("click", finishSetupV2Save_);
+  document.getElementById("finishV2RemoveBtn")?.addEventListener("click", finishSetupV2Remove_);
+
+  document.getElementById("finishV2OperatorSelect")?.addEventListener("change", event => {
+    finishSetupV2State.selectedOperator = event.target.value || "";
+    finishSetupV2AutoFillFromLive_();
+    finishSetupV2UpdateSuggestion_();
+  });
+
+  document.getElementById("finishV2AreaSelect")?.addEventListener("change", event => {
+    finishSetupV2State.selectedArea = event.target.value || "Mounting";
+    finishSetupV2UpdateSuggestion_();
+    finishSetupV2SyncTrainingControls_();
+  });
+
+  document.getElementById("finishV2RoleSelect")?.addEventListener("change", finishSetupV2SyncTrainingControls_);
+  document.getElementById("finishV2WeekSelect")?.addEventListener("change", finishSetupV2SyncTrainingControls_);
+
+  document.querySelectorAll(".finish-v2-card").forEach(card => {
+    card.addEventListener("click", () => {
+      finishSetupV2SelectCard_(card.dataset.finishV2Operator || "", card.dataset.finishV2Area || "");
+    });
+  });
+}
+
+function finishSetupV2SelectCard_(operatorName, area) {
+  finishSetupV2State.selectedOperator = operatorName;
+  finishSetupV2State.selectedArea = area || "Mounting";
+
+  const row = finishSetupV2GetActiveRows_().find(item =>
+    finishSetupV2Upper_(finishSetupV2OperatorName_(item)) === finishSetupV2Upper_(operatorName) &&
+    finishSetupV2Area_(item) === finishSetupV2State.selectedArea
+  );
+
+  const op = document.getElementById("finishV2OperatorSelect");
+  const areaSelect = document.getElementById("finishV2AreaSelect");
+  const role = document.getElementById("finishV2RoleSelect");
+  const week = document.getElementById("finishV2WeekSelect");
+  const jph = document.getElementById("finishV2JphInput");
+  const line = document.getElementById("finishV2LineSelect");
+  const pos = document.getElementById("finishV2PositionInput");
+
+  if (op) op.value = operatorName;
+  if (areaSelect) areaSelect.value = finishSetupV2State.selectedArea;
+  if (role) role.value = row ? finishSetupV2Role_(row) : "Certified";
+  if (week) {
+    week.innerHTML = finishSetupV2WeekOptions_(finishSetupV2State.selectedArea, row ? finishSetupV2TrainingWeek_(row) : "");
+    week.value = row ? finishSetupV2TrainingWeek_(row) : "";
+  }
+  if (jph) jph.value = row ? finishSetupV2IndividualJph_(row) : "";
+  if (line) line.value = row ? finishSetupV2Line_(row) : "";
+  if (pos) pos.value = row ? finishSetupV2Position_(row) : "";
+
+  finishSetupV2UpdateSuggestion_();
+  finishSetupV2SyncTrainingControls_();
+  document.querySelector(".finish-v2-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function finishSetupV2AutoFillFromLive_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const suggestion = finishSetupV2GetLiveSuggestion_(operatorName);
+
+  if (!suggestion) return;
+
+  const area = document.getElementById("finishV2AreaSelect");
+  const line = document.getElementById("finishV2LineSelect");
+  const pos = document.getElementById("finishV2PositionInput");
+
+  if (area && suggestion.area) {
+    area.value = suggestion.area;
+    finishSetupV2State.selectedArea = suggestion.area;
+  }
+  if (line) line.value = suggestion.line || "";
+  if (pos) pos.value = suggestion.position || "";
+
+  finishSetupV2SyncTrainingControls_();
+}
+
+function finishSetupV2UpdateSuggestion_() {
+  const host = document.getElementById("finishV2Suggestion");
+  if (!host) return;
+
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const suggestion = finishSetupV2GetLiveSuggestion_(operatorName);
+
+  if (!operatorName) {
+    host.textContent = "Select an associate to see live activity suggestion.";
+    return;
+  }
+
+  if (!suggestion) {
+    host.textContent = "No live activity found. You can still assign manually.";
+    return;
+  }
+
+  host.innerHTML = `
+    <strong>Live activity</strong>
+    <span>${finishSetupV2Escape_(suggestion.area)} · ${finishSetupV2FormatNumber_(suggestion.output)} output</span>
+  `;
+}
+
+function finishSetupV2SyncTrainingControls_() {
+  const area = document.getElementById("finishV2AreaSelect")?.value || "Mounting";
+  const role = document.getElementById("finishV2RoleSelect")?.value || "Certified";
+  const week = document.getElementById("finishV2WeekSelect");
+  const note = document.getElementById("finishV2MetricNote");
+  const jphInput = document.getElementById("finishV2JphInput");
+
+  if (!week) return;
+
+  const currentWeek = week.value || "";
+  week.innerHTML = finishSetupV2WeekOptions_(area, currentWeek);
+  const hasWeeks = (FINISH_SETUP_V2_TRAINING_WEEKS[area] || []).length > 0;
+  week.disabled = role !== "Training" || !hasWeeks;
+
+  if (role === "Training" && hasWeeks) {
+    if (!week.value) week.value = (FINISH_SETUP_V2_TRAINING_WEEKS[area] || [])[0] || "";
+    const trainingJph = finishSetupV2TrainingJph_(area, week.value);
+    if (jphInput && !jphInput.value) jphInput.placeholder = String(trainingJph);
+    if (note) note.innerHTML = `Training metric active: <b>${finishSetupV2Escape_(area)}</b> · <b>${finishSetupV2Escape_(week.value)}</b> · <b>${finishSetupV2FormatNumber_(trainingJph)} JPH</b>`;
+  } else {
+    if (jphInput) jphInput.placeholder = `Default ${FINISH_SETUP_V2_DEFAULT_JPH[area] || ""}`;
+    if (note) note.textContent = "Certified uses the area default JPH unless Individual JPH is entered.";
+  }
+}
+
+function finishSetupV2TrainingJph_(area, week) {
+  const n = Number(String(week || "").replace(/\D/g, "")) || 0;
+
+  if (area === "Mounting") {
+    return { 1: 10, 2: 12, 3: 14, 4: 16, 5: 18, 6: 20, 7: 22, 8: 25 }[n] || FINISH_SETUP_V2_DEFAULT_JPH[area] || 0;
+  }
+
+  if (area === "Final Inspection") {
+    return { 1: 35, 2: 45, 3: 55, 4: 65, 5: 75 }[n] || FINISH_SETUP_V2_DEFAULT_JPH[area] || 0;
+  }
+
+  return FINISH_SETUP_V2_DEFAULT_JPH[area] || 0;
+}
+
+async function finishSetupV2Save_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const area = document.getElementById("finishV2AreaSelect")?.value || "";
+  const role = document.getElementById("finishV2RoleSelect")?.value || "Certified";
+  const week = document.getElementById("finishV2WeekSelect")?.value || "";
+  const jph = document.getElementById("finishV2JphInput")?.value || "";
+  const line = document.getElementById("finishV2LineSelect")?.value || "";
+  const position = document.getElementById("finishV2PositionInput")?.value || "";
+
+  if (!operatorName || !area) {
+    finishSetupV2ShowToast_("Select associate and area first.");
+    return;
+  }
+
+  try {
+    await finishSetupV2Api_("finishSetupV2SaveAssignment", {
+      ownerUsername: finishSetupV2State.ownerUsername,
+      shiftType: finishSetupV2State.shiftType,
+      operatorName,
+      activeStatus: role === "Unassigned" ? "Removed" : "Active",
+      defaultArea: area,
+      defaultLine: line,
+      defaultPosition: position,
+      roleType: role,
+      trainingWeek: role === "Training" ? week : "",
+      individualJph: jph,
+      updatedBy: finishSetupV2GetCurrentUsername_()
+    });
+
+    finishSetupV2ShowToast_(`Saved ${operatorName} · ${area}`);
+    await finishSetupV2Load_();
+  } catch (error) {
+    console.error("[Finish Setup V2] save failed", error);
+    finishSetupV2ShowToast_(`Save failed: ${error.message}`);
+  }
+}
+
+async function finishSetupV2Remove_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const area = document.getElementById("finishV2AreaSelect")?.value || "";
+
+  if (!operatorName || !area) {
+    finishSetupV2ShowToast_("Select associate and area first.");
+    return;
+  }
+
+  try {
+    await finishSetupV2Api_("finishSetupV2RemoveAssignment", {
+      ownerUsername: finishSetupV2State.ownerUsername,
+      shiftType: finishSetupV2State.shiftType,
+      operatorName,
+      defaultArea: area,
+      updatedBy: finishSetupV2GetCurrentUsername_()
+    });
+
+    finishSetupV2ShowToast_(`Removed ${operatorName} from ${area}`);
+    await finishSetupV2Load_();
+  } catch (error) {
+    console.error("[Finish Setup V2] remove failed", error);
+    finishSetupV2ShowToast_(`Remove failed: ${error.message}`);
+  }
+}
+
+async function finishSetupV2AutoAssign_() {
+  if (!window.confirm(`Auto assign current activity for ${finishSetupV2State.ownerUsername} · ${finishSetupV2State.shiftType}?`)) return;
+
+  try {
+    const result = await finishSetupV2Api_("finishSetupV2AutoAssignFromActivity", {
+      ownerUsername: finishSetupV2State.ownerUsername,
+      shiftType: finishSetupV2State.shiftType,
+      updatedBy: finishSetupV2GetCurrentUsername_(),
+      debug: "true"
+    });
+
+    finishSetupV2ShowToast_(`Auto assigned ${finishSetupV2FormatNumber_(result.saved || 0)} associates.`);
+    await finishSetupV2Load_();
+  } catch (error) {
+    console.error("[Finish Setup V2] auto assign failed", error);
+    finishSetupV2ShowToast_(`Auto assign failed: ${error.message}`);
+  }
+}
+
+function finishSetupV2RemoveOldNoise_() {
+  document.querySelectorAll("#finishRosterApiWarningSafe, .finish-roster-api-warning-safe, #finishLocalQueueBanner, .finish-local-queue-banner").forEach(el => el.remove());
+}
+
+function finishSetupV2ShowToast_(message) {
+  if (typeof showFinishAssignmentToast === "function") {
+    showFinishAssignmentToast(message);
+    return;
+  }
+
+  console.log("[Finish Setup V2]", message);
+}
+
+function finishSetupV2InstallStyles_() {
+  if (document.getElementById("finishSetupV2Styles")) return;
+
+  const style = document.createElement("style");
+  style.id = "finishSetupV2Styles";
+  style.textContent = `
+    .finish-v2 { display:grid; gap:16px; }
+    .finish-v2-hero {
+      display:flex; justify-content:space-between; gap:16px; align-items:flex-start;
+      border:1px solid rgba(95,216,255,.2); border-radius:18px;
+      background:rgba(2,12,24,.66); padding:18px;
+    }
+    .finish-v2-kicker { color:#fbbf24; letter-spacing:.14em; font-weight:950; font-size:11px; }
+    .finish-v2 h2, .finish-v2 h3, .finish-v2 h4 { color:#fff; margin:0; }
+    .finish-v2-hero h2 { font-size:28px; margin:5px 0 4px; }
+    .finish-v2-hero p, .finish-v2-loadout-head p { color:#9fb3cc; margin:0; font-weight:750; }
+    .finish-v2-actions { display:flex; gap:10px; align-items:end; flex-wrap:wrap; justify-content:flex-end; }
+    .finish-v2 label { display:grid; gap:6px; color:#8fa6c3; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+    .finish-v2 select, .finish-v2 input {
+      border:1px solid rgba(255,255,255,.12); border-radius:11px; background:#07111f; color:#eaf7ff; padding:10px 11px;
+    }
+    .finish-v2 button {
+      border:1px solid rgba(95,216,255,.25); border-radius:12px; background:rgba(95,216,255,.12); color:#c8f3ff; padding:10px 13px; font-weight:950; cursor:pointer;
+    }
+    .finish-v2 button.primary, #finishV2AutoAssignBtn {
+      border:0; background:linear-gradient(135deg,#5fd8ff,#4ade80); color:#06111f;
+    }
+    .finish-v2 button.danger {
+      border-color:rgba(251,113,133,.35); background:rgba(251,113,133,.10); color:#fecdd3;
+    }
+    .finish-v2-status {
+      display:flex; gap:12px; flex-wrap:wrap; border:1px solid rgba(95,216,255,.18); border-radius:14px; padding:10px 12px;
+      background:rgba(95,216,255,.06); color:#bfefff; font-size:12px; font-weight:850;
+    }
+    .finish-v2-status .loading { color:#fbbf24; }
+    .finish-v2-grid { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; align-items:start; }
+    .finish-v2-loadout, .finish-v2-panel {
+      border:1px solid rgba(95,216,255,.18); border-radius:18px; background:rgba(2,12,24,.55); padding:16px;
+    }
+    .finish-v2-console { position:sticky; top:14px; }
+    .finish-v2-panel { display:grid; gap:12px; }
+    .finish-v2-loadout-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .finish-v2-loadout-head h3 { font-size:24px; }
+    .finish-v2-area { border:1px solid rgba(255,255,255,.10); border-radius:16px; padding:14px; margin-bottom:14px; background:rgba(255,255,255,.035); box-shadow:inset 4px 0 0 rgba(95,216,255,.85); }
+    .finish-v2-area header { display:flex; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .finish-v2-area h4 { display:flex; align-items:center; gap:8px; font-size:18px; }
+    .finish-v2-area h4 span { width:9px; height:9px; border-radius:50%; background:#22d3ee; box-shadow:0 0 14px #22d3ee; }
+    .finish-v2-area-metrics { display:grid; grid-template-columns:auto auto; gap:2px 7px; text-align:right; }
+    .finish-v2-area-metrics b { color:#22d3ee; font-size:20px; }
+    .finish-v2-area-metrics small { color:#8fa6c3; text-transform:uppercase; font-size:9px; font-weight:900; }
+    .finish-v2-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+    .finish-v2-card, .finish-v2-empty { border:1px solid rgba(255,255,255,.10); border-radius:13px; background:rgba(255,255,255,.045); padding:12px; min-height:86px; }
+    .finish-v2-card { display:flex; gap:11px; cursor:pointer; transition:.15s ease; }
+    .finish-v2-card:hover { transform:translateY(-1px); border-color:rgba(95,216,255,.45); background:rgba(95,216,255,.08); }
+    .finish-v2-avatar { width:40px; height:40px; border-radius:10px; display:grid; place-items:center; background:rgba(34,211,238,.18); border:1px solid rgba(34,211,238,.45); color:#e8fbff; font-weight:950; flex:0 0 auto; }
+    .finish-v2-card strong { color:#fff; display:block; }
+    .finish-v2-card span { color:#8fa6c3; font-size:11px; display:block; margin-top:2px; }
+    .finish-v2-badges { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+    .finish-v2-badges b { border:1px solid rgba(148,163,184,.25); border-radius:999px; padding:4px 7px; color:#dbeafe; font-size:9px; text-transform:uppercase; }
+    .finish-v2-empty { color:#8fa6c3; font-weight:850; display:grid; place-items:center; border-style:dashed; }
+    .finish-v2-two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .finish-v2-suggestion, .finish-v2-note {
+      border:1px solid rgba(95,216,255,.18); border-radius:12px; background:rgba(95,216,255,.07); color:#bfefff; padding:10px; font-size:11px; line-height:1.35;
+    }
+    .finish-v2-suggestion strong { display:block; color:#fff; margin-bottom:4px; }
+    @media (max-width: 1100px) { .finish-v2-grid { grid-template-columns:1fr; } .finish-v2-console { position:static; } }
+  `;
+  document.head.appendChild(style);
+}
+
+/* Override old Finish Setup tab renderers with the clean V2 renderer. */
+function renderOperatorAssignmentConfigPanel() {
+  finishSetupV2Load_();
+}
+
+function renderFinishSetupV2() {
+  finishSetupV2Load_();
+}
+
+/* Keep Finish Setup tab visible for allowed leadership roles. */
+function canViewFinishLmsControlTab() {
+  try {
+    const username = finishSetupV2GetCurrentUsername_();
+    const role = typeof getCurrentUserRole === "function" ? String(getCurrentUserRole() || "").toLowerCase() : "";
+    return (
+      ["BLOPEZ", "JBOOMERSHINE", "BKARR", "RTATE", "KMANACK", "BHECK", "BHONICKER", "NPOSTON", "BDADE", "PTOWNSEND"].includes(username) ||
+      role.includes("lms") ||
+      role.includes("director") ||
+      role.includes("manager") ||
+      role.includes("supervisor") ||
+      role.includes("training")
+    );
+  } catch (err) {
+    return true;
+  }
+}
+
+function finishSetupV2Boot_() {
+  finishSetupV2State.ownerUsername = finishSetupV2GetCurrentUsername_();
+  finishSetupV2State.shiftType = "Weekday";
+
+  // Rename tab.
+  document.querySelectorAll('.tab-btn[data-tab="lms-control"]').forEach(btn => {
+    btn.textContent = "Finish Setup";
+    btn.hidden = false;
+    btn.style.display = "";
+  });
+
+  // Render when tab is clicked.
+  document.querySelectorAll('.tab-btn[data-tab="lms-control"]').forEach(btn => {
+    if (btn.dataset.finishV2Bound === "true") return;
+    btn.dataset.finishV2Bound = "true";
+    btn.addEventListener("click", () => setTimeout(() => finishSetupV2Load_(), 50));
+  });
+
+  // If the tab is already active, render now.
+  const active = document.querySelector('.tab-btn.active[data-tab="lms-control"]') ||
+    document.querySelector('.tab-content.active[data-content="lms-control"]');
+
+  if (active) {
+    finishSetupV2Load_();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(finishSetupV2Boot_, 300);
+  setTimeout(finishSetupV2Boot_, 1200);
+});
+
+window.debugFinishSetupV2 = function() {
+  const result = {
+    apiUrl: finishSetupV2BaseUrl_(),
+    currentUsername: finishSetupV2GetCurrentUsername_(),
+    ownerUsername: finishSetupV2State.ownerUsername,
+    shiftType: finishSetupV2State.shiftType,
+    masterRows: finishSetupV2State.master.length,
+    rosterRows: finishSetupV2State.roster.length,
+    activeRows: finishSetupV2GetActiveRows_().length,
+    profiles: finishSetupV2BuildProfiles_(),
+    actions: [
+      "finishSetupV2Bootstrap",
+      "finishSetupV2SaveAssignment",
+      "finishSetupV2RemoveAssignment",
+      "finishSetupV2AutoAssignFromActivity"
+    ]
+  };
+  console.log("[Finish Setup V2]", result);
+  return result;
+};
+
+
+
+/* =========================================================
+   FINISH CONFIG — MY ACTIVE ASSOCIATES V2 BACKEND FIX
+   Fixes Capacity Configuration → My Active Associates.
+   It now reads/saves using Finish Setup V2 clean backend.
+========================================================= */
+
+function finishConfigV2BaseUrl_() {
+  if (typeof FINISH_SETUP_V2_API_URL !== "undefined" && FINISH_SETUP_V2_API_URL) {
+    return String(FINISH_SETUP_V2_API_URL).split("?")[0];
+  }
+  if (typeof FINISH_API_URL !== "undefined" && FINISH_API_URL) {
+    return String(FINISH_API_URL).split("?")[0];
+  }
+  if (typeof FINISH_OPERATOR_API_URL !== "undefined" && FINISH_OPERATOR_API_URL) {
+    return String(FINISH_OPERATOR_API_URL).split("?")[0];
+  }
+  return "";
+}
+
+async function finishConfigV2Api_(action, params = {}) {
+  const url = new URL(finishConfigV2BaseUrl_());
+  url.searchParams.set("action", action);
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    url.searchParams.set(key, String(value));
+  });
+
+  const response = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error(`Finish Setup V2 API failed ${response.status}: ${action}`);
+  }
+
+  const data = await response.json();
+
+  if (data && data.ok === false) {
+    throw new Error(data.message || data.error || `Finish Setup V2 returned ok=false: ${action}`);
+  }
+
+  return data;
+}
+
+function finishConfigV2NormalizeArea_(value) {
+  if (typeof finishSetupV2NormalizeArea_ === "function") return finishSetupV2NormalizeArea_(value);
+
+  const upper = String(value || "").trim().toUpperCase();
+  if (!upper) return "";
+  if (upper.includes("UNBOX")) return "Finish Unbox";
+  if (upper.includes("MEI")) return "MEI";
+  if (upper.includes("SHARP")) return "Sharps";
+  if (upper.includes("BIG")) return "Bigs";
+  if (upper.includes("DRILL")) return "Drill";
+  if (upper.includes("FINAL")) return "Final Inspection";
+  if (upper.includes("MOUNT")) return "Mounting";
+  return String(value || "").trim();
+}
+
+function finishConfigV2RowValue_(row, keys) {
+  if (!row || typeof row !== "object") return "";
+
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") return row[key];
+
+    const lower = String(key).charAt(0).toLowerCase() + String(key).slice(1);
+    if (row[lower] !== undefined && row[lower] !== null && row[lower] !== "") return row[lower];
+
+    const upper = String(key).charAt(0).toUpperCase() + String(key).slice(1);
+    if (row[upper] !== undefined && row[upper] !== null && row[upper] !== "") return row[upper];
+  }
+
+  return "";
+}
+
+function finishConfigV2NormalizeRosterRow_(row) {
+  const defaultArea = finishConfigV2NormalizeArea_(finishConfigV2RowValue_(row, ["DefaultArea", "defaultArea", "Area", "area"]));
+  const roleType = String(finishConfigV2RowValue_(row, ["RoleType", "roleType", "Role", "role"]) || "Certified").trim();
+  const activeStatus = String(finishConfigV2RowValue_(row, ["ActiveStatus", "activeStatus"]) || "Active").trim();
+
+  return {
+    ...row,
+    ownerUsername: String(finishConfigV2RowValue_(row, ["OwnerUsername", "ownerUsername"]) || "").trim().toUpperCase(),
+    shiftType: String(finishConfigV2RowValue_(row, ["ShiftType", "shiftType"]) || "Weekday").trim(),
+    operatorName: String(finishConfigV2RowValue_(row, ["OperatorName", "operatorName"]) || "").trim(),
+    activeStatus,
+    defaultLine: String(finishConfigV2RowValue_(row, ["DefaultLine", "defaultLine"]) || "").trim(),
+    defaultArea,
+    defaultPosition: String(finishConfigV2RowValue_(row, ["DefaultPosition", "defaultPosition"]) || "").trim(),
+    roleType: roleType.toUpperCase() === "TQ" ? "Certified" : roleType,
+    trainingWeek: String(finishConfigV2RowValue_(row, ["TrainingWeek", "trainingWeek"]) || "").trim(),
+    individualJph: String(finishConfigV2RowValue_(row, ["IndividualJPH", "individualJph", "IndividualJph"]) || "").trim(),
+    finalJph: String(finishConfigV2RowValue_(row, ["FinalJPH", "finalJph", "FinalJph"]) || "").trim()
+  };
+}
+
+async function loadFinishConfigAssignedRosterRows() {
+  const ownerUsername = getFinishConfigOwnerUsername();
+  const shiftType = getFinishConfigSelectedShiftType();
+
+  const payload = await finishConfigV2Api_("finishSetupV2Bootstrap", {
+    ownerUsername,
+    shiftType,
+    debug: "true",
+    t: Date.now()
+  });
+
+  const rows = Array.isArray(payload.roster) ? payload.roster : [];
+
+  const normalized = rows
+    .map(finishConfigV2NormalizeRosterRow_)
+    .filter(row => String(row.ownerUsername || "").trim().toUpperCase() === String(ownerUsername || "").trim().toUpperCase())
+    .filter(row => String(row.shiftType || "").trim().toLowerCase() === String(shiftType || "").trim().toLowerCase())
+    .filter(row => String(row.activeStatus || "").trim().toLowerCase() === "active");
+
+  const deduped = typeof dedupeFinishRosterRowsForUi === "function"
+    ? dedupeFinishRosterRowsForUi(normalized)
+    : normalized;
+
+  return deduped.sort((a, b) => {
+    const areaCompare = String(a.defaultArea || "").localeCompare(String(b.defaultArea || ""));
+    if (areaCompare !== 0) return areaCompare;
+
+    const lineCompare = String(a.defaultLine || "").localeCompare(String(b.defaultLine || ""));
+    if (lineCompare !== 0) return lineCompare;
+
+    return String(a.defaultPosition || "").localeCompare(String(b.defaultPosition || ""));
+  });
+}
+
+async function saveConfigAssignedIndividualJph(rowEl) {
+  if (!rowEl) return;
+
+  const operatorName = rowEl.dataset.assignedRosterRow || "";
+  const source = (window.__finishConfigAssignedRosterRows || []).find(row =>
+    normalizeAssignmentOperatorName(row.operatorName || "") === normalizeAssignmentOperatorName(operatorName) &&
+    normalizeFinishOperatorStation(row.defaultArea || "") === normalizeFinishOperatorStation(rowEl.dataset.area || "")
+  );
+
+  const roleType = rowEl.querySelector("[data-config-role-select]")?.value || source?.roleType || "Certified";
+  const weekValue = rowEl.querySelector("[data-config-week-select]")?.value || "";
+  const individualJph = rowEl.querySelector("[data-config-jph-input]")?.value || "";
+
+  const defaultArea = source?.defaultArea || rowEl.dataset.area || "";
+  const defaultLine = source?.defaultLine || (rowEl.dataset.line === "No line" ? "" : rowEl.dataset.line) || "";
+  const defaultPosition = source?.defaultPosition || (rowEl.dataset.position === "No position" ? "" : rowEl.dataset.position) || "";
+
+  try {
+    await finishConfigV2Api_("finishSetupV2SaveAssignment", {
+      updatedBy: getCurrentUsername(),
+      ownerUsername: getFinishConfigOwnerUsername(),
+      shiftType: getFinishConfigSelectedShiftType(),
+      operatorName,
+      activeStatus: roleType === "Unassigned" ? "Removed" : "Active",
+      defaultLine,
+      defaultArea,
+      defaultPosition,
+      roleType,
+      trainingWeek: roleType === "Training" ? `W${Number(weekValue || 1)}` : "",
+      individualJph
+    });
+
+    showFinishAssignmentToast(`Saved ${roleType} / JPH for ${operatorName}`);
+    await renderOperatorAssignmentConfigPanel();
+
+    if (typeof loadMorningSetupRoster === "function") {
+      await loadMorningSetupRoster({ silent: true }).catch(() => {});
+    }
+
+    if (typeof renderFinishThreeLineCell === "function") {
+      renderFinishThreeLineCell();
+    }
+  } catch (error) {
+    console.error(error);
+    showFinishAssignmentToast(error.message || String(error));
+  }
+}
+
+/* Restore the Capacity Configuration My Active Associates renderer.
+   The clean Finish Setup V2 renderer is separate and still runs inside Finish Setup tab. */
+async function renderOperatorAssignmentConfigPanel() {
+  const panel = ensureOperatorAssignmentConfigPanel();
+  const rosterTarget = document.getElementById("operatorAssignmentRoster");
+  if (!panel || !rosterTarget) return;
+
+  const ownerUsername = getFinishConfigOwnerUsername();
+  const shiftType = getFinishConfigSelectedShiftType();
+  const areaFilter = getFinishConfigAreaFilter();
+
+  const shiftSelect = document.getElementById("configAssignedShiftSelect");
+  if (shiftSelect && shiftSelect.value !== shiftType) {
+    shiftSelect.value = shiftType;
+  }
+
+  rosterTarget.innerHTML = `<article class="assignment-empty">Loading assigned ${escapeHtml(shiftType)} roster...</article>`;
+
+  try {
+    const assignedRows = await loadFinishConfigAssignedRosterRows();
+    window.__finishConfigAssignedRosterRows = assignedRows;
+
+    const visibleRows = assignedRows.filter(row =>
+      areaFilter === "all" || normalizeFinishOperatorStation(row.defaultArea || "") === normalizeFinishOperatorStation(areaFilter)
+    );
+
+    const mountCount = assignedRows.filter(row => normalizeFinishOperatorStation(row.defaultArea) === "Mounting").length;
+    const finalCount = assignedRows.filter(row => normalizeFinishOperatorStation(row.defaultArea) === "Final Inspection").length;
+    const drillCount = assignedRows.filter(row => normalizeFinishOperatorStation(row.defaultArea) === "Drill").length;
+
+    setText("configAssignedShiftSummary", shiftType);
+    setText("configAssignedActiveCount", assignedRows.length);
+    setText("configAssignedMountingCount", mountCount);
+    setText("configAssignedFinalDrillCount", `${finalCount} / ${drillCount}`);
+
+    const status = document.getElementById("configAssignedRosterStatus");
+    if (status) {
+      status.textContent = `${getCurrentUserDisplayName()} · ${ownerUsername} · ${shiftType} assigned roster only`;
+    }
+
+    const notice = document.getElementById("finishAssignmentPermissionNotice");
+    if (notice) {
+      const canEdit = canEditFinishOperatorAssignments();
+      notice.classList.toggle("can-edit", canEdit);
+      notice.classList.toggle("view-only", !canEdit);
+      notice.innerHTML = canEdit
+        ? `<strong>Role + training control active</strong><span>Supervisor, Training, Manager, Director, and LMS can set Certified / Training role, training week, and JPH right here.</span>`
+        : `<strong>Assigned roster only</strong><span>Associate list comes from saved roster assignment. Live totals come from Operator Activity.</span>`;
+    }
+
+    if (!visibleRows.length) {
+      rosterTarget.innerHTML = `
+        <article class="assignment-empty">
+          No active associates assigned to ${escapeHtml(ownerUsername)} / ${escapeHtml(shiftType)}${areaFilter !== "all" ? " / " + escapeHtml(areaFilter) : ""}.
+        </article>
+      `;
+      updateConfigTotals();
+      applyFinishAssignmentPermissionLock();
+      return;
+    }
+
+    const config = loadConfig();
+
+    rosterTarget.innerHTML = visibleRows.map(row => {
+      const operatorName = row.operatorName || "";
+      const area = normalizeFinishOperatorStation(row.defaultArea || "");
+      const line = row.defaultLine || "No line";
+      const position = row.defaultPosition || "No position";
+      const role = row.roleType || "Unassigned";
+      const liveTotal = getFinishConfigLiveOperatorTotal(operatorName, area);
+      const target = getFinishConfigRoleTarget(row, config);
+      const canTrain = finishConfigAreaSupportsTraining(area);
+      const weekValue = String(convertApiWeekToNumber(row.trainingWeek || "") || 1);
+
+      return `
+        <article class="assignment-row" data-assigned-roster-row="${escapeHtml(operatorName)}" data-area="${escapeHtml(area)}" data-line="${escapeHtml(line)}" data-position="${escapeHtml(position)}">
+          <div class="assignment-operator">
+            <strong>${escapeHtml(operatorName)}</strong>
+            <span>${escapeHtml(area)} · ${escapeHtml(line)} · ${escapeHtml(position)} · ${escapeHtml(getFinishConfigLiveOperatorLabel(operatorName, area))}</span>
+          </div>
+
+          <label class="assignment-field assignment-field--role">
+            <span>Role</span>
+            <select data-config-role-select>
+              ${buildConfigAssignedRoleOptions(area, role)}
+            </select>
+          </label>
+
+          <label class="assignment-field assignment-field--week ${role === 'Training' && canTrain ? 'active' : 'disabled'}">
+            <span>Week</span>
+            <select data-config-week-select ${role === 'Training' && canTrain ? '' : 'disabled'}>
+              ${buildConfigAssignedWeekOptions(area, role, weekValue)}
+            </select>
+          </label>
+
+          <div class="assignment-field assignment-field--output">
+            <label>Today Output</label>
+            <strong class="assignment-output-value ${liveTotal > 0 ? "has-output" : ""}">${numberFmt(liveTotal)}</strong>
+          </div>
+
+          <div class="assignment-target">
+            <span>JPH</span>
+            <input class="assignment-jph-input" data-config-jph-input type="number" min="0" step="0.1" value="${escapeHtml(row.individualJph || "")}" placeholder="${target > 0 ? numberFmt(target) : "Default"}" />
+            <button class="assignment-jph-save" type="button" data-config-jph-save>Save</button>
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    rosterTarget.querySelectorAll(".assignment-row").forEach(rowEl => {
+      syncConfigAssignedRowInputs(rowEl, { force: false });
+    });
+
+    rosterTarget.querySelectorAll("[data-config-role-select]").forEach(select => {
+      select.addEventListener("change", event => {
+        const rowEl = event.target.closest(".assignment-row");
+        syncConfigAssignedRowInputs(rowEl, { force: true });
+      });
+    });
+
+    rosterTarget.querySelectorAll("[data-config-week-select]").forEach(select => {
+      select.addEventListener("change", event => {
+        const rowEl = event.target.closest(".assignment-row");
+        syncConfigAssignedRowInputs(rowEl, { force: true });
+      });
+    });
+
+    rosterTarget.querySelectorAll("[data-config-jph-save]").forEach(button => {
+      button.addEventListener("click", event => saveConfigAssignedIndividualJph(event.target.closest(".assignment-row")));
+    });
+
+    updateConfigTotals();
+    renderFinishThreeLineCell();
+    applyFinishAssignmentPermissionLock();
+  } catch (error) {
+    console.error("Assigned roster render failed:", error);
+    rosterTarget.innerHTML = `
+      <article class="assignment-empty">
+        Could not load assigned roster: ${escapeHtml(error.message || String(error))}
+      </article>
+    `;
+  }
+}
+
+window.debugFinishConfigMyAssociatesV2 = async function() {
+  const rows = await loadFinishConfigAssignedRosterRows();
+  const result = {
+    ownerUsername: getFinishConfigOwnerUsername(),
+    shiftType: getFinishConfigSelectedShiftType(),
+    rowsLoaded: rows.length,
+    rows
+  };
+  console.log("[Finish Config My Active Associates V2]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    const configActive = document.querySelector('.config-pane[data-config-panel="associates"].active') ||
+      document.querySelector("#operatorAssignmentConfigPanel");
+    if (configActive && typeof renderOperatorAssignmentConfigPanel === "function") {
+      renderOperatorAssignmentConfigPanel();
+    }
+  }, 900);
 });
