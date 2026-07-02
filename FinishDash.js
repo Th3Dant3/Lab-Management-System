@@ -1,4 +1,4 @@
-const FINISH_API_URL =
+ const FINISH_API_URL =
   "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Finish";
 
 const FINISH_OPERATOR_API_URL =
@@ -25,9 +25,9 @@ const FINISH_WEBPAGE_HIDE_OPERATORS = new Set([
   "MARIA MITCHELL",
   "OHIOUSER3",
   "OHIOUSER5",
-  "Hannah Quansah",
+  "HANNAH QUANSAH",
   "SARAH MCCARTNEY",
-  "Matt Little",
+  "MATT LITTLE",
   "ESTENFANIA MONTENEGRO",
   "CARLY WOOD",
   "PRINCESS HENRY"
@@ -51,13 +51,9 @@ function normalizeFinishHiddenOperatorName_(value) {
 function shouldHideFinishOperatorOnWebpage(name) {
   const clean = normalizeFinishHiddenOperatorName_(name);
 
-  return (
-    FINISH_WEBPAGE_HIDE_OPERATORS.has(clean) ||
-    clean === "MEI" ||
-    clean.startsWith("MEI ") ||
-    clean.startsWith("MEI0") ||
-    clean.startsWith("MEI-")
-  );
+  // Hide ONLY the exact associate names requested above.
+  // Do NOT hide Product / PROD / temp-style names here.
+  return FINISH_WEBPAGE_HIDE_OPERATORS.has(clean);
 }
 
 function getFinishOperatorNameFromAnyRow_(row) {
@@ -9920,6 +9916,7 @@ function normalizeFinishInactivityStatus(row) {
 function finishInactivityExtractLatestRows(payload) {
   return (
     Array.isArray(payload?.latestRows) ? payload.latestRows :
+    Array.isArray(payload?.operators) ? payload.operators :
     Array.isArray(payload?.liveRows) ? payload.liveRows :
     Array.isArray(payload?.currentRows) ? payload.currentRows :
     []
@@ -9929,6 +9926,8 @@ function finishInactivityExtractLatestRows(payload) {
 function finishInactivityExtractLogRows(payload) {
   return (
     Array.isArray(payload?.logRows) ? payload.logRows :
+    Array.isArray(payload?.gapLog) ? payload.gapLog :
+    Array.isArray(payload?.multiScanEvents) ? payload.multiScanEvents :
     Array.isArray(payload?.rows) ? payload.rows :
     Array.isArray(payload?.data) ? payload.data :
     []
@@ -10944,11 +10943,12 @@ async function loadFinishMorningInactivityLog() {
   }
 
   try {
-    const payload = await fetchFinishInactivityApiSafe("getfinishinactivitylog", {
+    const payload = await fetchFinishScanActivityApi("getfinishscanactivity", {
       ownerUsername,
       shiftType,
       todayOnly: true,
-      limit: 250
+      limit: 250,
+      debug: true
     });
 
     finishMorningInactivityState.summary = {
@@ -10985,11 +10985,12 @@ async function runFinishMorningInactivitySnapshot() {
   }
 
   try {
-    await fetchFinishInactivityApiSafe("runfinishinactivitysnapshotnow", {
+    await fetchFinishScanActivityApi("runfinishscanactivityautorefresh", {
       ownerUsername,
       shiftType,
       thresholdSnapshots,
-      appendAll: true
+      appendAll: true,
+      debug: true
     });
 
     await loadFinishMorningInactivityLog();
@@ -11050,1640 +11051,36 @@ setTimeout(() => {
   startFinishInactivityFrontendAutoRefresh();
 }, 1800);
 
-/* =========================================================
-   FINAL OVERRIDE — ASSOCIATE DOWNTIME LOG ADVANCED UI
-   Purpose:
-   - Uses the separate Finish Scan Activity Tracker API.
-   - Keeps current Finish Dashboard HTML; rebuilds only the downtime tab.
-   - Adds cleaner list, filters, selected associate profile, gap history,
-     multi-scan grouping, and a compact mini graph.
-========================================================= */
-(function installFinishScanDowntimeAdvancedUI() {
-  const API_URL = "https://script.google.com/macros/s/AKfycbx7TAoSeBugvJWbYyRMzNpjgktge9NuTF3oqFYisqUt5RWvYJCGPiRaW21w44Ze8jw_/exec";
 
-  const state = window.finishScanDowntimeState = window.finishScanDowntimeState || {};
-  Object.assign(state, {
-    loading: false,
-    activeAccess: state.activeAccess || "Mounting",
-    statusFilter: state.statusFilter || "ALL",
-    sortBy: state.sortBy || "currentGap",
-    search: state.search || "",
-    selectedKey: state.selectedKey || "",
-    selectedDetailTab: state.selectedDetailTab || "overview",
-    payload: state.payload || null,
-    operators: state.operators || [],
-    gapLog: state.gapLog || [],
-    multiScanEvents: state.multiScanEvents || [],
-    downtimeDaily: state.downtimeDaily || [],
-    lastSync: state.lastSync || ""
+/* =====================================================
+   FINISH DOWNTIME / SCAN ACTIVITY API
+   Clean version: uses the SAME main Finish Apps Script URL.
+   No second web-app URL. No old AR/LMS-only logic.
+===================================================== */
+async function fetchFinishScanActivityApi(action = "getfinishscanactivity", params = {}) {
+  const url = new URL(FINISH_API_URL);
+  url.searchParams.set("action", String(action || "getfinishscanactivity").toLowerCase());
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value) !== "") {
+      url.searchParams.set(key, value);
+    }
   });
 
-  function esc(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function clean(value) {
-    return String(value || "").trim();
-  }
-
-  function cleanKey(value) {
-    return clean(value).toUpperCase().replace(/\s+/g, " ");
-  }
-
-  function cleanAccess(value) {
-    const text = clean(value).toLowerCase();
-
-    // Drill comes in through the Mounting side of the scan report,
-    // but it must still be recognized as its own access point so we can
-    // combine it cleanly with Mounting when needed.
-    if (text.includes("mount") && text.includes("drill")) return "Mounting / Drill";
-    if (text.includes("final")) return "Final Inspection";
-    if (text.includes("drill")) return "Drill";
-    if (text.includes("mount")) return "Mounting";
-
-    return clean(value) || "Unknown";
-  }
-
-  function operatorName(row) {
-    return clean(row.OperatorName || row.operatorName || row.Operator || row.operator || "Unknown Operator");
-  }
-
-  function rowAccess(row) {
-    return cleanAccess(row.AccessPoint || row.accessPoint || row.ScanStage || row.scanStage || "");
-  }
-
-  function rowKey(row) {
-    if (row && row.__rowKey) return String(row.__rowKey);
-    return `${cleanKey(operatorName(row))}||${cleanKey(rowAccess(row))}`;
-  }
-
-  function baseRowKey(row) {
-    return `${cleanKey(operatorName(row))}||${cleanKey(rowAccess(row))}`;
-  }
-
-  function rowSourceKeys(row) {
-    if (row && Array.isArray(row.__sourceKeys) && row.__sourceKeys.length) {
-      return row.__sourceKeys.map(String);
-    }
-    return [baseRowKey(row)];
-  }
-
-  function isMountingFamilyAccess(value) {
-    const access = cleanAccess(value);
-    return access === "Mounting" || access === "Drill" || access === "Mounting / Drill";
-  }
-
-  function rowMatchesAccess(row, access) {
-    const selected = cleanAccess(access);
-    const rowAp = rowAccess(row);
-
-    // The Mounting tab is intentionally Mounting + Drill.
-    // If an associate scans both, they should show once as Mounting / Drill.
-    if (selected === "Mounting" || selected === "Mounting / Drill") {
-      return isMountingFamilyAccess(rowAp);
-    }
-
-    return rowAp === selected;
-  }
-
-  function statusFromGapMinutes(minutes) {
-    const n = Number(minutes) || 0;
-    if (n >= 10) return "INACTIVE";
-    if (n >= 5) return "WATCH";
-    return "ACTIVE";
-  }
-
-  function combineMountingDrillRows(rows) {
-    const groups = new Map();
-
-    (rows || []).forEach(row => {
-      const name = operatorName(row);
-      const key = cleanKey(name);
-      const access = rowAccess(row);
-      const existing = groups.get(key);
-
-      if (!existing) {
-        groups.set(key, {
-          ...row,
-          __rowKey: `${key}||MOUNTING_DRILL`,
-          __sourceKeys: [baseRowKey(row)],
-          __accessList: [access],
-          AccessPoint: access,
-          accessPoint: access
-        });
-        return;
-      }
-
-      const currentKeys = new Set(existing.__sourceKeys || []);
-      currentKeys.add(baseRowKey(row));
-      existing.__sourceKeys = Array.from(currentKeys);
-
-      const accessSet = new Set(existing.__accessList || []);
-      accessSet.add(access);
-      existing.__accessList = Array.from(accessSet);
-
-      existing.AccessPoint = existing.__accessList.length > 1 ? "Mounting / Drill" : existing.__accessList[0];
-      existing.accessPoint = existing.AccessPoint;
-
-      existing.TotalScans = metric(existing, "TotalScans", "totalScans") + metric(row, "TotalScans", "totalScans");
-      existing.totalScans = existing.TotalScans;
-
-      existing.ScansThisHour = metric(existing, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour") + metric(row, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour");
-      existing.scansThisHour = existing.ScansThisHour;
-
-      existing.MultiScanSeconds = metric(existing, "MultiScanSeconds", "multiScanSeconds") + metric(row, "MultiScanSeconds", "multiScanSeconds");
-      existing.multiScanSeconds = existing.MultiScanSeconds;
-
-      existing.LongestGapMinutes = Math.max(metric(existing, "LongestGapMinutes", "longestGapMinutes"), metric(row, "LongestGapMinutes", "longestGapMinutes"));
-      existing.longestGapMinutes = existing.LongestGapMinutes;
-
-      const existingAvg = metric(existing, "AverageGapMinutes", "averageGapMinutes");
-      const rowAvg = metric(row, "AverageGapMinutes", "averageGapMinutes");
-      existing.AverageGapMinutes = Math.round(((existingAvg + rowAvg) / 2) * 100) / 100;
-      existing.averageGapMinutes = existing.AverageGapMinutes;
-
-      // Current status is based on the most recent scan across Mounting + Drill.
-      // This prevents someone from looking inactive on Drill after they moved to Mounting.
-      const existingLast = dateMs(existing.LastScanAt || existing.lastScanAt);
-      const rowLast = dateMs(row.LastScanAt || row.lastScanAt);
-      if (rowLast > existingLast) {
-        existing.LastScanAt = row.LastScanAt || row.lastScanAt;
-        existing.lastScanAt = existing.LastScanAt;
-        existing.CurrentGapMinutes = metric(row, "CurrentGapMinutes", "currentGapMinutes");
-        existing.currentGapMinutes = existing.CurrentGapMinutes;
-        existing.CurrentStatus = normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status);
-        existing.currentStatus = existing.CurrentStatus;
-      }
-    });
-
-    return Array.from(groups.values()).map(row => {
-      if ((row.__accessList || []).length > 1) {
-        row.AccessPoint = "Mounting / Drill";
-        row.accessPoint = "Mounting / Drill";
-      }
-      const gap = metric(row, "CurrentGapMinutes", "currentGapMinutes");
-      row.CurrentStatus = statusFromGapMinutes(gap);
-      row.currentStatus = row.CurrentStatus;
-      return row;
-    });
-  }
-
-  function normalizeStatus(value) {
-    const status = clean(value).toUpperCase();
-    if (status === "INACTIVE" || status === "OPEN") return "INACTIVE";
-    if (status === "WATCH" || status === "IDLE") return "WATCH";
-    if (status === "RESOLVED") return "ACTIVE";
-    return status || "ACTIVE";
-  }
-
-  function dateMs(value) {
-    if (!value) return 0;
-    if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) return value.getTime();
-    const date = new Date(value);
-    return isNaN(date.getTime()) ? 0 : date.getTime();
-  }
-
-  function toDate(value) {
-    const ms = dateMs(value);
-    return ms ? new Date(ms) : null;
-  }
-
-  function formatTime(value) {
-    const date = toDate(value);
-    if (!date) return "--";
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  }
-
-  function formatDateShort(value) {
-    const date = toDate(value);
-    if (!date) return "--";
-    return date.toLocaleDateString([], { month: "numeric", day: "numeric" });
-  }
-
-  function formatDateTime(value) {
-    const date = toDate(value);
-    if (!date) return "--";
-    return `${date.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-  }
-
-  function formatMinutes(value) {
-    const total = Math.max(0, Math.round(Number(value) || 0));
-    const h = Math.floor(total / 60);
-    const m = total % 60;
-    if (h && m) return `${h}h ${m}m`;
-    if (h) return `${h}h`;
-    return `${m}m`;
-  }
-
-  function numberFmt(value) {
-    return Number(value || 0).toLocaleString();
-  }
-
-  function setTextSafe(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = value;
-  }
-
-  function metric(row, ...keys) {
-    for (const key of keys) {
-      const value = row?.[key];
-      if (value !== undefined && value !== null && value !== "") return Number(value) || 0;
-    }
-    return 0;
-  }
-
-  async function fetchFinishScanActivityApi(action = "getfinishscanactivity", params = {}) {
-    const url = new URL(API_URL);
-    url.searchParams.set("action", action);
-    Object.entries(params || {}).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === "") return;
-      url.searchParams.set(key, String(value));
-    });
-
-    const response = await fetch(url.toString(), { method: "GET", cache: "no-store" });
-    if (!response.ok) throw new Error(`Finish Scan Tracker API failed: ${response.status}`);
-
-    const payload = await response.json();
-    const status = clean(payload.status || payload.Status).toLowerCase();
-    const success = payload.success === true || payload.Success === true || status === "success" || status === "ok" || (!payload.error && !String(payload.message || "").toLowerCase().includes("error"));
-    if (!success && (payload.message || payload.error)) throw new Error(payload.message || payload.error);
-    return payload;
-  }
-
-  function getPayloadArray(payload, keys) {
-    for (const key of keys) {
-      if (Array.isArray(payload?.[key])) return payload[key];
-      if (Array.isArray(payload?.data?.[key])) return payload.data[key];
-      if (Array.isArray(payload?.payload?.[key])) return payload.payload[key];
-    }
-    return [];
-  }
-
-  function applyPayload(payload) {
-    state.payload = payload || {};
-    state.operators = getPayloadArray(payload, ["operators", "operatorTimeline", "timeline", "rows", "data"]);
-    state.gapLog = getPayloadArray(payload, ["gapLog", "gaps", "gapRows"]);
-    state.multiScanEvents = getPayloadArray(payload, ["multiScanEvents", "multiScan", "multiRows"]);
-    state.downtimeDaily = getPayloadArray(payload, ["downtimeDaily", "daily", "downtimeRows"]);
-    state.lastSync = payload?.generatedAt || payload?.lastUpdated || new Date().toISOString();
-    renderPanel();
-  }
-
-  function dailyForRow(row) {
-    const keys = new Set(rowSourceKeys(row));
-    const matches = (state.downtimeDaily || []).filter(d => keys.has(baseRowKey(d)));
-
-    if (!matches.length) return {};
-    if (matches.length === 1) return matches[0];
-
-    const firstScan = matches
-      .map(d => d.FirstScanAt || d.firstScanAt)
-      .filter(Boolean)
-      .sort((a, b) => dateMs(a) - dateMs(b))[0] || "";
-
-    const lastScan = matches
-      .map(d => d.LastScanAt || d.lastScanAt)
-      .filter(Boolean)
-      .sort((a, b) => dateMs(b) - dateMs(a))[0] || "";
-
-    return {
-      ...matches[0],
-      AccessPoint: "Mounting / Drill",
-      accessPoint: "Mounting / Drill",
-      FirstScanAt: firstScan,
-      LastScanAt: lastScan,
-      TotalScans: matches.reduce((sum, d) => sum + metric(d, "TotalScans", "totalScans"), 0),
-      TotalDowntimeMinutes: matches.reduce((sum, d) => sum + metric(d, "TotalDowntimeMinutes", "totalDowntimeMinutes", "InactiveMinutes", "inactiveMinutes"), 0),
-      InactiveMinutes: matches.reduce((sum, d) => sum + metric(d, "InactiveMinutes", "inactiveMinutes"), 0),
-      WatchMinutes: matches.reduce((sum, d) => sum + metric(d, "WatchMinutes", "watchMinutes"), 0),
-      InactiveSessions: matches.reduce((sum, d) => sum + metric(d, "InactiveSessions", "inactiveSessions"), 0),
-      MultiScanEvents: matches.reduce((sum, d) => sum + metric(d, "MultiScanEvents", "multiScanEvents"), 0),
-      LongestGapMinutes: Math.max(...matches.map(d => metric(d, "LongestGapMinutes", "longestGapMinutes")), 0),
-      CurrentGapMinutes: Math.min(...matches.map(d => metric(d, "CurrentGapMinutes", "currentGapMinutes")).filter(n => n >= 0))
-    };
-  }
-
-  function rowsForAccess(access, options = {}) {
-    const key = cleanAccess(access);
-    let rows = (state.operators || []).filter(row => rowMatchesAccess(row, key));
-
-    if (key === "Mounting" || key === "Mounting / Drill") {
-      rows = combineMountingDrillRows(rows);
-    }
-
-    const status = cleanKey(options.statusFilter ?? state.statusFilter ?? "ALL");
-    if (status && status !== "ALL") {
-      rows = rows.filter(row => normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status) === status);
-    }
-
-    const search = clean(options.search ?? state.search).toLowerCase();
-    if (search) {
-      rows = rows.filter(row => `${operatorName(row)} ${rowAccess(row)}`.toLowerCase().includes(search));
-    }
-
-    const sortBy = options.sortBy || state.sortBy || "currentGap";
-    rows.sort((a, b) => {
-      const statusOrder = { INACTIVE: 0, WATCH: 1, ACTIVE: 2 };
-      if (sortBy === "status") {
-        const sa = statusOrder[normalizeStatus(a.CurrentStatus || a.currentStatus)] ?? 9;
-        const sb = statusOrder[normalizeStatus(b.CurrentStatus || b.currentStatus)] ?? 9;
-        if (sa !== sb) return sa - sb;
-      }
-      if (sortBy === "longestGap") return metric(b, "LongestGapMinutes", "longestGapMinutes") - metric(a, "LongestGapMinutes", "longestGapMinutes");
-      if (sortBy === "multiScan") return metric(b, "MultiScanSeconds", "multiScanSeconds") - metric(a, "MultiScanSeconds", "multiScanSeconds");
-      if (sortBy === "totalScans") return metric(b, "TotalScans", "totalScans") - metric(a, "TotalScans", "totalScans");
-      if (sortBy === "name") return operatorName(a).localeCompare(operatorName(b));
-      const currentGapDiff = metric(b, "CurrentGapMinutes", "currentGapMinutes") - metric(a, "CurrentGapMinutes", "currentGapMinutes");
-      if (currentGapDiff !== 0) return currentGapDiff;
-      const sa = statusOrder[normalizeStatus(a.CurrentStatus || a.currentStatus)] ?? 9;
-      const sb = statusOrder[normalizeStatus(b.CurrentStatus || b.currentStatus)] ?? 9;
-      if (sa !== sb) return sa - sb;
-      return operatorName(a).localeCompare(operatorName(b));
-    });
-
-    return rows;
-  }
-
-  function allRowsForAccess(access) {
-    const key = cleanAccess(access);
-    let rows = (state.operators || []).filter(row => rowMatchesAccess(row, key));
-    if (key === "Mounting" || key === "Mounting / Drill") rows = combineMountingDrillRows(rows);
-    return rows;
-  }
-
-  function accessSummary(access) {
-    const rows = allRowsForAccess(access);
-    return {
-      tracked: rows.length,
-      watch: rows.filter(row => normalizeStatus(row.CurrentStatus || row.currentStatus) === "WATCH").length,
-      inactive: rows.filter(row => normalizeStatus(row.CurrentStatus || row.currentStatus) === "INACTIVE").length,
-      totalScans: rows.reduce((sum, row) => sum + metric(row, "TotalScans", "totalScans"), 0),
-      multiScan: rows.reduce((sum, row) => sum + metric(row, "MultiScanSeconds", "multiScanSeconds"), 0),
-      downtime: rows.reduce((sum, row) => sum + metric(dailyForRow(row), "TotalDowntimeMinutes", "totalDowntimeMinutes", "InactiveMinutes", "inactiveMinutes"), 0)
-    };
-  }
-
-  function isRealDisplayGap(g) {
-    const minutes = metric(g, "GapMinutes", "gapMinutes");
-    const status = normalizeStatus(g.Status || g.status);
-
-    // Do not show 0m / normal ACTIVE rows in the Gap History.
-    // The scan report can create same-minute/duplicate timestamp rows; those are not downtime gaps.
-    if (minutes < 5) return false;
-    if (status === "ACTIVE" && minutes < 5) return false;
-
-    return true;
-  }
-
-  function operatorGapRows(row) {
-    const keys = new Set(rowSourceKeys(row));
-    return (state.gapLog || [])
-      .filter(g => keys.has(baseRowKey(g)))
-      .filter(isRealDisplayGap)
-      .sort((a, b) => dateMs(b.GapStartAt || b.PreviousScanTime) - dateMs(a.GapStartAt || a.PreviousScanTime));
-  }
-
-  function operatorMultiRows(row) {
-    const keys = new Set(rowSourceKeys(row));
-    return (state.multiScanEvents || [])
-      .filter(g => keys.has(baseRowKey(g)))
-      .sort((a, b) => dateMs(b.ScanTime || b.scanTime) - dateMs(a.ScanTime || a.scanTime));
-  }
-
-  function getSelectedRow(rows) {
-    if (!rows.length) return null;
-    if (state.selectedKey) {
-      const found = rows.find(row => rowKey(row) === state.selectedKey);
-      if (found) return found;
-    }
-    state.selectedKey = rowKey(rows[0]);
-    return rows[0];
-  }
-
-  function cleanupFinishDowntimeSnapshotRuleCards() {
-    const mount = document.getElementById("finishInactivityTabMount");
-    if (!mount) return;
-
-    // Remove the old top hero/banner completely. The useful content starts at Associate Downtime Log.
-    mount.querySelectorAll(".scan-advanced-hero").forEach(el => el.remove());
-
-    // The snapshot rule cards belong to the old ME/snapshot tracker, not the scan-gap downtime view.
-    mount.querySelectorAll(".scan-advanced-rule-card").forEach(el => el.remove());
-
-    // Extra protection: remove any remaining top banner/card that says Snapshot Rule / 3 Checks.
-    mount.querySelectorAll("header, section, article, div").forEach(el => {
-      const text = String(el.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
-      if (!text) return;
-      const hasSnapshotRule = text.includes("SNAPSHOT RULE") || text.includes("3 CHECKS");
-      const isSafePanel = el.id === "finishScanDowntimePanel" || el.closest("#finishScanDowntimePanel .scan-advanced-panel");
-      if (hasSnapshotRule && !isSafePanel) el.remove();
-    });
-
-    const advancedPanel = mount.querySelector("#finishScanDowntimePanel");
-
-    // Remove duplicated old downtime hero blocks if the legacy inactivity renderer runs before/after this UI.
-    Array.from(mount.children).forEach(child => {
-      if (child === advancedPanel) return;
-      const text = String(child.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
-      const isOldDowntimeHero = text.includes("ASSOCIATE DOWNTIME TRACKING") && text.includes("SNAPSHOT RULE");
-      const isOldInactivityPanel = child.id === "finishMorningInactivityPanel";
-      if (isOldDowntimeHero || isOldInactivityPanel) child.remove();
-    });
-  }
-
-  function statusClass(status) {
-    return `status-${normalizeStatus(status).toLowerCase()}`;
-  }
-
-  function initials(name) {
-    const parts = clean(name).split(/\s+/).filter(Boolean);
-    return ((parts[0]?.[0] || "?") + (parts[1]?.[0] || "")).toUpperCase();
-  }
-
-  function ensurePanel() {
-    const mount = document.getElementById("finishInactivityTabMount");
-    if (!mount) return null;
-
-    if (!document.getElementById("finishScanDowntimePanel")) {
-      mount.innerHTML = `
-        <section id="finishScanDowntimePanel" class="scan-advanced-shell">
-          <section class="scan-advanced-panel">
-            <div class="scan-advanced-panel-head">
-              <div>
-                <span class="scan-advanced-eyebrow">Scan Activity Tracker</span>
-                <h3>Associate Downtime Log</h3>                
-              </div>
-              <div class="scan-advanced-actions">
-                <div class="scan-rule-card"><span>Watch / Inactive</span><strong>5m / 10m</strong></div>
-                <button id="finishRunInactivitySnapshotBtn" type="button">Run Scan Refresh</button>
-                <button id="finishRefreshInactivityLogBtn" type="button">Refresh Log</button>
-              </div>
-            </div>
-
-            <div class="scan-advanced-kpis">
-              <article><span>Tracked</span><strong id="finishInactivityTrackedCount">0</strong><small>Operators log on/small></article>
-              <article class="watch"><span>Watch</span><strong id="finishInactivityWatchCount">0</strong><small>5+ minutes no scan</small></article>
-              <article class="danger"><span>Inactive</span><strong id="finishInactivityInactiveCount">0</strong><small>10+ minutes no scan</small></article>              
-            </div>
-
-            <div class="scan-filter-bar">
-              <div class="scan-filter-group">
-                <span>Access Point</span>
-                <div class="scan-segmented">
-                  <button class="scan-downtime-tab active" type="button" data-scan-access="Mounting">Mounting / Drill</button>
-                  <button class="scan-downtime-tab" type="button" data-scan-access="Final Inspection">Final Inspection</button>
-                </div>
-              </div>
-              <div class="scan-filter-group">
-                <span>Status Filter</span>
-                <div class="scan-status-filters">
-                  <button type="button" data-scan-status="ALL" class="active">All</button>
-                  <button type="button" data-scan-status="ACTIVE">Active</button>
-                  <button type="button" data-scan-status="WATCH">Watch</button>
-                  <button type="button" data-scan-status="INACTIVE">Inactive</button>
-                </div>
-              </div>
-              <label class="scan-filter-field">
-                <span>Sort By</span>
-                <select id="finishScanSortSelect">
-                  <option value="currentGap">Current Gap</option>
-                  <option value="longestGap">Longest Gap</option>
-                  <option value="multiScan">Most Multi-Scan</option>
-                  <option value="totalScans">Most Scans</option>
-                  <option value="name">Name A-Z</option>
-                  <option value="status">Status</option>
-                </select>
-              </label>
-              <label class="scan-filter-search">
-                <span>Search</span>
-                <input id="finishScanSearchInput" type="search" placeholder="Search associate..." autocomplete="off" />
-              </label>
-            </div>
-
-            <div class="scan-advanced-list-card">
-              <div class="scan-advanced-list-head">
-                <div>
-                  <span>Live Associate List</span>                  
-                </div>
-                <small id="finishScanListCount">0 visible</small>
-              </div>
-              <div class="scan-advanced-table-wrap">
-                <div class="scan-advanced-table-head">
-                  <span>Associate</span><span>Access / Last Scan</span><span>Total</span><span>This Hour</span><span>Current Gap</span><span>Longest</span><span>Avg</span><span>Multi</span><span>Status</span><span>Action</span>
-                </div>
-                <div id="finishInactivityList" class="scan-advanced-table-body">
-                  <article class="finish-inactivity-empty">Loading scan tracker data...</article>
-                </div>
-              </div>
-            </div>
-
-            <section id="finishInactivityProfilePanel" class="scan-profile-panel">
-              <div class="associate-profile-empty">Click an associate to open their scan-gap profile.</div>
-            </section>
-          </section>
-        </section>`;
-
-      wirePanel();
-    }
-
-    return mount;
-  }
-
-  function wirePanel() {
-    document.querySelectorAll(".scan-downtime-tab[data-scan-access]").forEach(btn => {
-      if (btn.dataset.wired) return;
-      btn.dataset.wired = "true";
-      btn.addEventListener("click", () => {
-        state.activeAccess = btn.dataset.scanAccess || "Mounting";
-        state.selectedKey = "";
-        renderPanel();
-      });
-    });
-
-    document.querySelectorAll("[data-scan-status]").forEach(btn => {
-      if (btn.dataset.wired) return;
-      btn.dataset.wired = "true";
-      btn.addEventListener("click", () => {
-        state.statusFilter = cleanKey(btn.dataset.scanStatus || "ALL");
-        renderPanel();
-      });
-    });
-
-    const sortSelect = document.getElementById("finishScanSortSelect");
-    if (sortSelect && !sortSelect.dataset.wired) {
-      sortSelect.dataset.wired = "true";
-      sortSelect.value = state.sortBy || "currentGap";
-      sortSelect.addEventListener("change", () => {
-        state.sortBy = sortSelect.value || "currentGap";
-        renderPanel();
-      });
-    }
-
-    const searchInput = document.getElementById("finishScanSearchInput");
-    if (searchInput && !searchInput.dataset.wired) {
-      searchInput.dataset.wired = "true";
-      searchInput.value = state.search || "";
-      searchInput.addEventListener("input", () => {
-        state.search = searchInput.value || "";
-        renderPanel();
-      });
-    }
-
-    const runBtn = document.getElementById("finishRunInactivitySnapshotBtn");
-    if (runBtn && !runBtn.dataset.scanWired) {
-      runBtn.dataset.scanWired = "true";
-      runBtn.addEventListener("click", runFinishMorningInactivitySnapshot);
-    }
-
-    const refreshBtn = document.getElementById("finishRefreshInactivityLogBtn");
-    if (refreshBtn && !refreshBtn.dataset.scanWired) {
-      refreshBtn.dataset.scanWired = "true";
-      refreshBtn.addEventListener("click", loadFinishMorningInactivityLog);
-    }
-  }
-
-  function renderPanel() {
-    ensurePanel();
-    wirePanel();
-
-    document.querySelectorAll(".scan-downtime-tab[data-scan-access]").forEach(btn => {
-      btn.classList.toggle("active", cleanAccess(btn.dataset.scanAccess) === cleanAccess(state.activeAccess));
-    });
-    document.querySelectorAll("[data-scan-status]").forEach(btn => {
-      btn.classList.toggle("active", cleanKey(btn.dataset.scanStatus) === cleanKey(state.statusFilter || "ALL"));
-    });
-
-    const access = cleanAccess(state.activeAccess || "Mounting");
-    const rows = rowsForAccess(access);
-    const summary = accessSummary(access);
-
-    setTextSafe("finishInactivityTrackedCount", numberFmt(summary.tracked));
-    setTextSafe("finishInactivityWatchCount", numberFmt(summary.watch));
-    setTextSafe("finishInactivityInactiveCount", numberFmt(summary.inactive));
-    setTextSafe("finishInactivityLastSync", formatTime(state.lastSync));
-    setTextSafe("finishScanListCount", `${rows.length} visible`);
-
-    const list = document.getElementById("finishInactivityList");
-    if (!list) return;
-
-    if (!rows.length) {
-      list.innerHTML = `<article class="finish-inactivity-empty">No ${esc(access)} scan rows match the current filters.</article>`;
-      const profile = document.getElementById("finishInactivityProfilePanel");
-      if (profile) profile.innerHTML = `<div class="associate-profile-empty">No selected associate profile.</div>`;
-      return;
-    }
-
-    const selected = getSelectedRow(rows);
-    list.innerHTML = rows.map(row => renderRow(row, rowKey(row) === rowKey(selected))).join("");
-    list.querySelectorAll("[data-scan-key]").forEach(el => {
-      el.addEventListener("click", () => {
-        state.selectedKey = el.dataset.scanKey || "";
-        renderPanel();
-      });
-    });
-
-    openProfile(selected);
-  }
-
-  function renderRow(row, selected) {
-    const name = operatorName(row);
-    const access = rowAccess(row);
-    const status = normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status);
-    const totalScans = metric(row, "TotalScans", "totalScans");
-    const scansThisHour = metric(row, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour");
-    const currentGap = metric(row, "CurrentGapMinutes", "currentGapMinutes");
-    const longestGap = metric(row, "LongestGapMinutes", "longestGapMinutes");
-    const avgGap = metric(row, "AverageGapMinutes", "averageGapMinutes");
-    const multiSeconds = metric(row, "MultiScanSeconds", "multiScanSeconds");
-
-    return `
-      <button class="scan-operator-row ${statusClass(status)} ${selected ? "selected" : ""}" type="button" data-scan-key="${esc(rowKey(row))}">
-        <span class="scan-row-name"><i></i><strong>${esc(name)}</strong></span>
-        <span><b>${esc(access)}</b><small>${esc(formatTime(row.LastScanAt || row.lastScanAt))}</small></span>
-        <span>${esc(numberFmt(totalScans))}</span>
-        <span>${esc(numberFmt(scansThisHour))}</span>
-        <span class="scan-gap-value">${esc(formatMinutes(currentGap))}</span>
-        <span>${esc(formatMinutes(longestGap))}</span>
-        <span>${esc(formatMinutes(avgGap))}</span>
-        <span>${esc(numberFmt(multiSeconds))}</span>
-        <span><em class="scan-status-pill">${esc(status)}</em></span>
-        <span><em class="scan-open-pill">Open</em></span>
-      </button>`;
-  }
-
-  function statusPercent(currentGap) {
-    const n = Math.max(0, Number(currentGap) || 0);
-    return Math.min(100, Math.round((n / 20) * 100));
-  }
-
-  function gapClass(minutes) {
-    const n = Number(minutes) || 0;
-    if (n >= 10) return "inactive";
-    if (n >= 5) return "watch";
-    return "active";
-  }
-
-  function openProfile(row) {
-    const panel = document.getElementById("finishInactivityProfilePanel");
-    if (!panel || !row) return;
-
-    const name = operatorName(row);
-    const access = rowAccess(row);
-    const status = normalizeStatus(row.CurrentStatus || row.currentStatus || row.Status || row.status);
-    const daily = dailyForRow(row);
-    const totalScans = metric(row, "TotalScans", "totalScans");
-    const scansThisHour = metric(row, "ScansThisHour", "scansThisHour", "ThisHour", "thisHour");
-    const currentGap = metric(row, "CurrentGapMinutes", "currentGapMinutes");
-    const longestGap = metric(row, "LongestGapMinutes", "longestGapMinutes");
-    const avgGap = metric(row, "AverageGapMinutes", "averageGapMinutes");
-    const multiSeconds = metric(row, "MultiScanSeconds", "multiScanSeconds");
-    const downtime = metric(daily, "TotalDowntimeMinutes", "totalDowntimeMinutes", "InactiveMinutes", "inactiveMinutes");
-    const barPct = statusPercent(currentGap);
-
-    panel.innerHTML = `
-      <article class="scan-profile-card ${statusClass(status)}">
-        <header class="scan-profile-top">
-          <div class="scan-profile-id">
-            <div class="scan-avatar">${esc(initials(name))}</div>
-            <div>
-              <span>Associate Profile</span>
-              <h3>${esc(name)}</h3>
-              <p>Finish Department · ${esc(access)}</p>
-            </div>
-          </div>
-          <em class="scan-status-pill">${esc(status)}</em>
-        </header>
-
-        <div class="scan-profile-metrics-strip">
-          <article><span>Last Scan</span><strong>${esc(formatTime(row.LastScanAt || row.lastScanAt))}</strong></article>
-          <article><span>Total Scans</span><strong>${esc(numberFmt(totalScans))}</strong></article>
-          <article><span>This Hour</span><strong>${esc(numberFmt(scansThisHour))}</strong></article>
-          <article><span>Current Gap</span><strong>${esc(formatMinutes(currentGap))}</strong></article>
-          <article><span>Longest Gap</span><strong>${esc(formatMinutes(longestGap))}</strong></article>
-          <article><span>Downtime Today</span><strong>${esc(formatMinutes(downtime))}</strong></article>
-          <article><span>Multi-Scan</span><strong>${esc(numberFmt(multiSeconds))}</strong></article>
-        </div>
-
-        <div class="scan-gap-meter">
-          <div class="scan-gap-meter-labels"><span>0m</span><span>5m Watch</span><span>10m Inactive</span><span>20m+</span></div>
-          <div class="scan-gap-meter-track"><i style="width:${barPct}%"></i><b style="left:${Math.min(100, barPct)}%"></b></div>
-        </div>
-
-        <nav class="scan-profile-tabs">
-          ${["overview", "gaps", "multi", "hourly"].map(tab => `
-            <button type="button" class="${state.selectedDetailTab === tab ? "active" : ""}" data-profile-tab="${tab}">${tab === "overview" ? "Overview" : tab === "gaps" ? "Gap History" : tab === "multi" ? "Multi-Scan Events" : "Hourly Timeline"}</button>
-          `).join("")}
-        </nav>
-
-        <div class="scan-profile-tab-body">
-          ${renderDetailTab(row, state.selectedDetailTab || "overview", { avgGap, downtime, currentGap, longestGap, multiSeconds })}
-        </div>
-      </article>`;
-
-    panel.querySelectorAll("[data-profile-tab]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.selectedDetailTab = btn.dataset.profileTab || "overview";
-        openProfile(row);
-      });
-    });
-  }
-
-  function renderDetailTab(row, tab, extras) {
-    if (tab === "gaps") return renderGapHistory(row, 12);
-    if (tab === "multi") return renderMultiHistory(row, 18);
-    if (tab === "hourly") return renderHourlyTimeline(row);
-    return renderOverview(row, extras);
-  }
-
-  function renderOverview(row, extras) {
-    const gaps = operatorGapRows(row);
-    const multi = operatorMultiRows(row);
-    const recentGaps = gaps.slice(0, 4);
-    const recentMulti = multi.slice(0, 3);
-    return `
-      <div class="scan-overview-grid">
-        <section class="scan-mini-panel">
-          <div class="scan-mini-head"><span>Gap Snapshot</span><strong>${esc(gaps.length)} 5m+ gaps</strong></div>
-          <div class="scan-mini-bars">
-            <div><span>Average Gap</span><b>${esc(formatMinutes(extras.avgGap))}</b></div>
-            <div><span>Longest Gap</span><b>${esc(formatMinutes(extras.longestGap))}</b></div>
-            <div><span>Downtime Today</span><b>${esc(formatMinutes(extras.downtime))}</b></div>
-          </div>
-        </section>
-        <section class="scan-mini-panel">
-          <div class="scan-mini-head"><span>Recent Gaps</span><strong>${esc(recentGaps.length)}</strong></div>
-          <div class="scan-compact-list">
-            ${recentGaps.length ? recentGaps.map(g => renderCompactGapRow(g)).join("") : `<p>No 5m+ gaps yet.</p>`}
-          </div>
-        </section>
-        <section class="scan-mini-panel">
-          <div class="scan-mini-head"><span>Multi-Scan</span><strong>${esc(multi.length)} events</strong></div>
-          <div class="scan-mini-multi-row">
-            ${recentMulti.length ? recentMulti.map(renderSmallMultiCard).join("") : `<p>No same-second events.</p>`}
-          </div>
-        </section>
-      </div>`;
-  }
-
-  function renderGapHistory(row, limit = 30) {
-    const gaps = operatorGapRows(row).slice(0, limit);
-    if (!gaps.length) {
-      return `<section class="scan-history-panel"><div class="scan-section-head"><span>Gap History</span><strong>No 5+ minute gaps yet</strong></div><article class="associate-session-empty">This associate has no watch/inactive scan gaps in the current tracker data.</article></section>`;
-    }
-
-    return `
-      <section class="scan-history-panel">
-        <div class="scan-section-head"><span>Gap History</span><strong>${esc(gaps.length)} 5m+ records</strong></div>
-        <div class="scan-gap-table">
-          <div class="scan-gap-table-head"><span>Start</span><span>End</span><span>Duration</span><span>Status</span><span>Movement</span></div>
-          ${gaps.map(g => renderGapTableRow(g)).join("")}
-        </div>
-      </section>`;
-  }
-
-  function renderGapTableRow(g) {
-    const status = normalizeStatus(g.Status || g.status);
-    const start = g.GapStartAt || g.gapStartAt || g.PreviousScanTime || g.previousScanTime;
-    const end = g.GapEndAt || g.gapEndAt || g.NextScanTime || g.nextScanTime || "";
-    const minutes = metric(g, "GapMinutes", "gapMinutes");
-    return `
-      <article class="scan-gap-line ${statusClass(status)}">
-        <span>${esc(formatTime(start))}</span>
-        <span>${esc(end ? formatTime(end) : "Open")}</span>
-        <span>${esc(formatMinutes(minutes))}</span>
-        <span><em class="scan-status-pill">${esc(status)}</em></span>
-        <span>${esc(formatTime(g.PreviousScanTime || g.previousScanTime))} → ${esc(g.NextScanTime || g.nextScanTime ? formatTime(g.NextScanTime || g.nextScanTime) : "Open")}</span>
-      </article>`;
-  }
-
-  function renderCompactGapRow(g) {
-    const status = normalizeStatus(g.Status || g.status);
-    const start = g.GapStartAt || g.gapStartAt || g.PreviousScanTime || g.previousScanTime;
-    const end = g.GapEndAt || g.gapEndAt || g.NextScanTime || g.nextScanTime || "";
-    const minutes = metric(g, "GapMinutes", "gapMinutes");
-    return `<div class="scan-compact-row ${statusClass(status)}"><span>${esc(formatTime(start))} → ${esc(end ? formatTime(end) : "Open")}</span><b>${esc(formatMinutes(minutes))}</b><em>${esc(status)}</em></div>`;
-  }
-
-  function renderMultiHistory(row, limit = 30) {
-    const events = operatorMultiRows(row).slice(0, limit);
-    if (!events.length) {
-      return `<section class="scan-history-panel"><div class="scan-section-head"><span>Multi-Scan Events</span><strong>0 same-second events</strong></div><article class="associate-session-empty">No same-second multi-scan events for this associate.</article></section>`;
-    }
-
-    return `
-      <section class="scan-history-panel">
-        <div class="scan-section-head"><span>Multi-Scan Events</span><strong>${esc(events.length)} same-second events</strong></div>
-        <div class="scan-multi-grid advanced">
-          ${events.map(renderSmallMultiCard).join("")}
-        </div>
-      </section>`;
-  }
-
-  function renderSmallMultiCard(ev) {
-    const count = ev.ScanCount || ev.scanCount || 0;
-    return `
-      <article class="scan-small-multi-card">
-        <span>${esc(formatTime(ev.ScanTime || ev.scanTime))}</span>
-        <strong>${esc(count)} jobs</strong>
-        <small>${esc(cleanAccess(ev.AccessPoint || ev.accessPoint))}</small>
-      </article>`;
-  }
-
-  function getScanTimelineShiftHours(row, rawRows = []) {
-    const dateSource =
-      row?.LastScanAt ||
-      row?.lastScanAt ||
-      rawRows.find(g => g.GapStartAt || g.PreviousScanTime || g.NextScanTime)?.GapStartAt ||
-      rawRows.find(g => g.GapStartAt || g.PreviousScanTime || g.NextScanTime)?.PreviousScanTime ||
-      rawRows.find(g => g.GapStartAt || g.PreviousScanTime || g.NextScanTime)?.NextScanTime ||
-      new Date();
-
-    const date = toDate(dateSource) || new Date();
-    const day = date.getDay();
-    const isWeekend = day === 0 || day === 6;
-
-    // Weekday Finish = 7 AM start.
-    // Weekend Finish = 6 AM start.
-    return isWeekend
-      ? [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
-      : [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
-  }
-
-  function getOperatorRawGapRows(row) {
-    const keys = new Set(rowSourceKeys(row));
-
-    // Use raw gapLog here, NOT operatorGapRows().
-    // operatorGapRows() filters out normal ACTIVE gaps under 5 minutes.
-    // The hourly timeline must still show those hours, especially 7 AM.
-    return (state.gapLog || [])
-      .filter(g => keys.has(baseRowKey(g)))
-      .sort((a, b) => dateMs(a.GapStartAt || a.PreviousScanTime) - dateMs(b.GapStartAt || b.PreviousScanTime));
-  }
-
-  function renderHourlyTimeline(row) {
-    const rawGaps = getOperatorRawGapRows(row);
-    const multi = operatorMultiRows(row);
-    const shiftHours = getScanTimelineShiftHours(row, rawGaps);
-    const buckets = new Map();
-
-    function bucketForHour(hour) {
-      if (!buckets.has(hour)) {
-        buckets.set(hour, {
-          hour,
-          gaps: [],
-          watchGaps: [],
-          multi: 0,
-          scansEstimate: 0
-        });
-      }
-      return buckets.get(hour);
-    }
-
-    // Build every shift hour first so 7 AM does not disappear when it only has normal gaps.
-    shiftHours.forEach(hour => bucketForHour(hour));
-
-    rawGaps.forEach(g => {
-      const d = toDate(g.GapStartAt || g.PreviousScanTime || g.NextScanTime);
-      if (!d) return;
-
-      const hour = d.getHours();
-      if (!shiftHours.includes(hour)) return;
-
-      const gapMinutes = metric(g, "GapMinutes", "gapMinutes");
-      const b = bucketForHour(hour);
-
-      b.gaps.push(gapMinutes);
-      b.scansEstimate += 1;
-
-      if (isRealDisplayGap(g)) {
-        b.watchGaps.push(gapMinutes);
-      }
-    });
-
-    multi.forEach(m => {
-      const d = toDate(m.ScanTime || m.scanTime);
-      if (!d) return;
-
-      const hour = d.getHours();
-      if (!shiftHours.includes(hour)) return;
-
-      const b = bucketForHour(hour);
-      b.multi += 1;
-    });
-
-    const rows = shiftHours.map(hour => buckets.get(hour));
-
-    return `
-      <section class="scan-history-panel">
-        <div class="scan-section-head">
-          <span>Hourly Timeline</span>
-          <strong>Full shift · gap / multi-scan pattern</strong>
-        </div>
-        <div class="scan-hourly-graph">
-          ${rows.map(b => {
-            const largest = b.gaps.length ? Math.max(...b.gaps) : 0;
-            const avg = b.gaps.length ? Math.round((b.gaps.reduce((a, c) => a + c, 0) / b.gaps.length) * 10) / 10 : 0;
-            const watchCount = b.watchGaps.length;
-            const width = b.gaps.length
-              ? Math.min(100, Math.max(8, (largest / 20) * 100))
-              : 4;
-
-            return `
-              <div class="scan-hour-row ${gapClass(largest)}">
-                <span>${esc(formatHourLabel(b.hour))}</span>
-                <div class="scan-hour-bar"><i style="width:${width}%"></i></div>
-                <b>${esc(formatMinutes(largest))}</b>
-                <em>${esc(formatMinutes(avg))} avg · ${esc(numberFmt(b.scansEstimate))} scans</em>
-                <strong>${esc(b.multi)} multi${watchCount ? ` · ${esc(watchCount)} watch` : ""}</strong>
-              </div>`;
-          }).join("")}
-        </div>
-      </section>`;
-  }
-
-  function formatHourLabel(hour24) {
-    const suffix = hour24 >= 12 ? "PM" : "AM";
-    let hour = hour24 % 12;
-    if (!hour) hour = 12;
-    return `${hour} ${suffix}`;
-  }
-
-  async function loadFinishMorningInactivityLog() {
-    ensurePanel();
-    const btn = document.getElementById("finishRefreshInactivityLogBtn");
-    if (btn) { btn.disabled = true; btn.textContent = "Refreshing..."; }
-    try {
-      const payload = await fetchFinishScanActivityApi("getfinishscanactivity", { debug: true, cacheBust: Date.now() });
-      applyPayload(payload);
-    } catch (error) {
-      console.error("Finish Scan Activity Tracker load failed:", error);
-      const list = document.getElementById("finishInactivityList");
-      if (list) list.innerHTML = `<article class="finish-inactivity-empty">Scan Tracker API failed: ${esc(error.message || String(error))}</article>`;
-      if (typeof showFinishAssignmentToast === "function") showFinishAssignmentToast(error.message || String(error));
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = "Refresh Log"; }
-    }
-  }
-
-  async function runFinishMorningInactivitySnapshot() {
-    ensurePanel();
-    if (state.loading) return;
-    const btn = document.getElementById("finishRunInactivitySnapshotBtn");
-    state.loading = true;
-    if (btn) { btn.disabled = true; btn.textContent = "Running..."; }
-    try {
-      await fetchFinishScanActivityApi("runfinishscanactivityautorefresh", { cacheBust: Date.now() });
-      const payload = await fetchFinishScanActivityApi("getfinishscanactivity", { debug: true, cacheBust: Date.now() });
-      applyPayload(payload);
-      if (typeof showFinishAssignmentToast === "function") showFinishAssignmentToast("Scan tracker refreshed.");
-    } catch (error) {
-      console.error("Finish Scan Activity refresh failed:", error);
-      if (typeof showFinishAssignmentToast === "function") showFinishAssignmentToast(error.message || String(error));
-      await loadFinishMorningInactivityLog();
-    } finally {
-      state.loading = false;
-      if (btn) { btn.disabled = false; btn.textContent = "Run Scan Refresh"; }
-    }
-  }
-
-  function refreshFinishInactivityAutomationStatus() {
-    ensurePanel();
-    return Promise.resolve({ success: true, enabled: true, source: "scan-tracker" });
-  }
-
-  function toggleFinishInactivityAutomationFromPage() {
-    if (typeof showFinishAssignmentToast === "function") {
-      showFinishAssignmentToast("Scan tracker uses its own backend refresh. Use Run Scan Refresh here.");
-    }
-    return Promise.resolve({ success: true });
-  }
-
-  function startFinishInactivityFrontendAutoRefresh() {
-    if (window.finishInactivityAutoRefreshTimerFinal) clearInterval(window.finishInactivityAutoRefreshTimerFinal);
-    if (window.finishInactivityAutoRefreshTimer) clearInterval(window.finishInactivityAutoRefreshTimer);
-    loadFinishMorningInactivityLog();
-    window.finishInactivityAutoRefreshTimerFinal = setInterval(loadFinishMorningInactivityLog, 120000);
-  }
-
-  function resetFinishInactivityButtons() {
-    const runBtn = document.getElementById("finishRunInactivitySnapshotBtn");
-    const refreshBtn = document.getElementById("finishRefreshInactivityLogBtn");
-    if (runBtn) { runBtn.disabled = false; runBtn.textContent = "Run Scan Refresh"; }
-    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.textContent = "Refresh Log"; }
-  }
-
-  window.fetchFinishScanActivityApi = fetchFinishScanActivityApi;
-  window.finishScanEscapeHtml = esc;
-  window.finishScanApplyPayload = applyPayload;
-  window.loadFinishMorningInactivityLog = loadFinishMorningInactivityLog;
-  window.runFinishMorningInactivitySnapshot = runFinishMorningInactivitySnapshot;
-  window.refreshFinishInactivityAutomationStatus = refreshFinishInactivityAutomationStatus;
-  window.toggleFinishInactivityAutomationFromPage = toggleFinishInactivityAutomationFromPage;
-  window.startFinishInactivityFrontendAutoRefresh = startFinishInactivityFrontendAutoRefresh;
-  window.resetFinishInactivityButtons = resetFinishInactivityButtons;
-  window.cleanupFinishDowntimeSnapshotRuleCards = cleanupFinishDowntimeSnapshotRuleCards;
-
-  const finishDowntimeCleanupObserver = new MutationObserver(() => cleanupFinishDowntimeSnapshotRuleCards());
-  setTimeout(() => {
-    const mount = document.getElementById("finishInactivityTabMount");
-    if (mount) {
-      finishDowntimeCleanupObserver.observe(mount, { childList: true, subtree: true });
-      cleanupFinishDowntimeSnapshotRuleCards();
-    }
-  }, 500);
-
-  try { eval("loadFinishMorningInactivityLog = window.loadFinishMorningInactivityLog"); } catch (e) {}
-  try { eval("runFinishMorningInactivitySnapshot = window.runFinishMorningInactivitySnapshot"); } catch (e) {}
-  try { eval("refreshFinishInactivityAutomationStatus = window.refreshFinishInactivityAutomationStatus"); } catch (e) {}
-  try { eval("toggleFinishInactivityAutomationFromPage = window.toggleFinishInactivityAutomationFromPage"); } catch (e) {}
-  try { eval("startFinishInactivityFrontendAutoRefresh = window.startFinishInactivityFrontendAutoRefresh"); } catch (e) {}
-
-  window.addEventListener("error", resetFinishInactivityButtons);
-  window.addEventListener("unhandledrejection", resetFinishInactivityButtons);
-
-  setTimeout(() => {
-    ensurePanel();
-    wirePanel();
-    cleanupFinishDowntimeSnapshotRuleCards();
-    startFinishInactivityFrontendAutoRefresh();
-  }, 250);
-})();
-
-
-/* =========================================================
-   HOTFIX — HIDE ME SNAPSHOT RULE FROM FINISH DOWNTIME VIEW
-========================================================= */
-(function installFinishDowntimeSnapshotRuleHideStyle() {
-  if (document.getElementById("finishDowntimeSnapshotRuleHideStyle")) return;
-  const style = document.createElement("style");
-  style.id = "finishDowntimeSnapshotRuleHideStyle";
-  style.textContent = `
-    #finishInactivityTabMount .scan-advanced-rule-card { display: none !important; }
-    #finishInactivityTabMount #finishMorningInactivityPanel { display: none !important; }
-  `;
-  document.head.appendChild(style);
-})();
-
-
-/* =========================================================
-   HOTFIX — REMOVE TOP ASSOCIATE DOWNTIME SNAPSHOT BANNER
-========================================================= */
-(function installFinishDowntimeTopBannerRemoveHotfix() {
-  function removeTopBanner() {
-    const mount = document.getElementById("finishInactivityTabMount");
-    if (!mount) return;
-
-    mount.querySelectorAll(".scan-advanced-hero").forEach(el => el.remove());
-
-    mount.querySelectorAll("header, section, article, div").forEach(el => {
-      const text = String(el.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
-      if (!text) return;
-      const hasOldSnapshot = text.includes("SNAPSHOT RULE") || text.includes("3 CHECKS");
-      const insideMainLog = !!el.closest("#finishScanDowntimePanel .scan-advanced-panel");
-      if (hasOldSnapshot && !insideMainLog) el.remove();
-    });
-  }
-
-  if (!document.getElementById("finishDowntimeTopBannerRemoveStyle")) {
-    const style = document.createElement("style");
-    style.id = "finishDowntimeTopBannerRemoveStyle";
-    style.textContent = `
-      #finishInactivityTabMount .scan-advanced-hero { display: none !important; }
-      #finishInactivityTabMount .scan-advanced-rule-card { display: none !important; }
-    `;
-    document.head.appendChild(style);
-  }
-
-  document.addEventListener("DOMContentLoaded", removeTopBanner);
-  window.addEventListener("load", removeTopBanner);
-  setTimeout(removeTopBanner, 100);
-  setTimeout(removeTopBanner, 500);
-  setTimeout(removeTopBanner, 1500);
-
-  const observer = new MutationObserver(removeTopBanner);
-  document.addEventListener("DOMContentLoaded", () => {
-    const mount = document.getElementById("finishInactivityTabMount");
-    if (mount) observer.observe(mount, { childList: true, subtree: true });
-  });
-
-  window.removeFinishDowntimeTopBanner = removeTopBanner;
-})();
-
-
-/*******************************************************
- * FINISH DOWNTIME STATUS EVENTS — STOP COUNTING / NOTES
- *
- * Adds supervisor/LMS note events to Associate Downtime Log:
- * - Moved
- * - Left for day
- * - No WIP
- * - Machine issue
- * - Training / coaching
- * - Break / lunch
- * - Support another area
- * - Other
- *
- * This does NOT edit raw scan data.
- * It adds an exception/status window and shows:
- * - Raw downtime
- * - Excluded time
- * - Adjusted downtime
- *******************************************************/
-(function installFinishDowntimeStatusEvents() {
-  const EVENT_ACTION_GET = "getfinishassociatestatusevents";
-  const EVENT_ACTION_SAVE = "savefinishassociatestatusevent";
-  const EVENT_ACTION_CLOSE = "closefinishassociatestatusevent";
-
-  const state = window.finishScanDowntimeState = window.finishScanDowntimeState || {};
-  state.statusEvents = Array.isArray(state.statusEvents) ? state.statusEvents : [];
-  state.statusEventsLoadedAt = state.statusEventsLoadedAt || "";
-
-  function esc(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function clean(value) {
-    return String(value || "").trim();
-  }
-
-  function cleanKey(value) {
-    return clean(value).toUpperCase().replace(/\s+/g, " ");
-  }
-
-  function cleanAccess(value) {
-    const text = clean(value).toLowerCase();
-    if (text.includes("mount") && text.includes("drill")) return "Mounting / Drill";
-    if (text.includes("final")) return "Final Inspection";
-    if (text.includes("drill")) return "Drill";
-    if (text.includes("mount")) return "Mounting";
-    return clean(value) || "Unknown";
-  }
-
-  function operatorName(row) {
-    return clean(row?.OperatorName || row?.operatorName || row?.Operator || row?.operator || "Unknown Operator");
-  }
-
-  function rowAccess(row) {
-    return cleanAccess(row?.AccessPoint || row?.accessPoint || row?.ScanStage || row?.scanStage || "");
-  }
-
-  function profileFromDom() {
-    const panel = document.getElementById("finishInactivityProfilePanel");
-    if (!panel) return null;
-
-    const name = clean(panel.querySelector(".scan-profile-id h3")?.textContent || "");
-    const profileText = clean(panel.querySelector(".scan-profile-id p")?.textContent || "");
-    let access = profileText.split("·").pop() || "";
-    access = cleanAccess(access);
-
-    if (!name) return null;
-    return { operatorName: name, accessPoint: access };
-  }
-
-  function todayIso() {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function timeValueNow() {
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  }
-
-  function toMinutes(timeText) {
-    const text = clean(timeText);
-    if (!text || text.toUpperCase() === "EOS") return null;
-
-    // Accept HH:MM, H:MM AM, or Google date strings.
-    const dateTry = new Date(text);
-    if (!Number.isNaN(dateTry.getTime()) && /AM|PM|\/|-/.test(text)) {
-      return dateTry.getHours() * 60 + dateTry.getMinutes();
-    }
-
-    const match = text.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
-    if (!match) return null;
-
-    let hour = Number(match[1]);
-    const minute = Number(match[2]);
-    const ampm = String(match[3] || "").toUpperCase();
-
-    if (ampm === "PM" && hour < 12) hour += 12;
-    if (ampm === "AM" && hour === 12) hour = 0;
+  url.searchParams.set("cacheBust", Date.now());
 
-    return hour * 60 + minute;
-  }
-
-  function minutesToLabel(total) {
-    if (total == null || !Number.isFinite(total)) return "";
-    const hour24 = Math.floor(total / 60);
-    const minute = total % 60;
-    const suffix = hour24 >= 12 ? "PM" : "AM";
-    let h = hour24 % 12;
-    if (!h) h = 12;
-    return `${h}:${String(minute).padStart(2, "0")} ${suffix}`;
-  }
-
-  function formatMinutes(value) {
-    const n = Math.max(0, Math.round(Number(value) || 0));
-    if (n >= 60) {
-      const h = Math.floor(n / 60);
-      const m = n % 60;
-      return `${h}h ${m}m`;
-    }
-    return `${n}m`;
-  }
-
-  function eventMatchesProfile(event, profile) {
-    if (!event || !profile) return false;
-    const evName = cleanKey(event.OperatorName || event.operatorName);
-    const evAccess = cleanAccess(event.AccessPoint || event.accessPoint || event.Area || event.area);
-    const profileName = cleanKey(profile.operatorName);
-    const profileAccess = cleanAccess(profile.accessPoint);
-
-    if (evName !== profileName) return false;
-
-    // Mounting view intentionally includes Drill/Mounting.
-    if (profileAccess === "Mounting" || profileAccess === "Mounting / Drill") {
-      return evAccess === "Mounting" || evAccess === "Drill" || evAccess === "Mounting / Drill";
-    }
-
-    return evAccess === profileAccess;
-  }
-
-  function getProfileEvents(profile) {
-    return (state.statusEvents || [])
-      .filter(event => eventMatchesProfile(event, profile))
-      .sort((a, b) => String(b.EnteredAt || b.enteredAt || "").localeCompare(String(a.EnteredAt || a.enteredAt || "")));
-  }
-
-  function isOpenEvent(event) {
-    const status = clean(event.Status || event.status || "Open").toUpperCase();
-    const end = clean(event.EndTime || event.endTime);
-    return status !== "CLOSED" && (!end || end.toUpperCase() === "EOS");
-  }
-
-  function calculateExcludedMinutes(events) {
-    const now = new Date();
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-
-    return (events || []).reduce((sum, event) => {
-      const start = toMinutes(event.StartTime || event.startTime);
-      let end = toMinutes(event.EndTime || event.endTime);
-
-      if (start == null) return sum;
-      if (end == null) end = nowMins;
-      if (end < start) return sum;
-
-      return sum + Math.max(0, end - start);
-    }, 0);
-  }
-
-  function readRawDowntimeFromProfile() {
-    const cards = Array.from(document.querySelectorAll("#finishInactivityProfilePanel .scan-profile-metrics-strip article"));
-    for (const card of cards) {
-      const label = clean(card.querySelector("span")?.textContent || "").toLowerCase();
-      if (!label.includes("downtime")) continue;
-
-      const text = clean(card.querySelector("strong")?.textContent || "");
-      let total = 0;
-
-      const h = text.match(/(\d+)\s*h/i);
-      const m = text.match(/(\d+)\s*m/i);
-
-      if (h) total += Number(h[1]) * 60;
-      if (m) total += Number(m[1]);
-      if (!h && !m && /^\d+/.test(text)) total = Number(text.match(/^\d+/)[0]);
-
-      return total;
-    }
-
-    return 0;
-  }
-
-  async function fetchStatusEvents() {
-    if (typeof window.fetchFinishScanActivityApi !== "function") return [];
-
-    try {
-      const payload = await window.fetchFinishScanActivityApi(EVENT_ACTION_GET, {
-        date: todayIso(),
-        cacheBust: Date.now()
-      });
-
-      const rows =
-        payload.statusEvents ||
-        payload.events ||
-        payload.data ||
-        payload.payload?.statusEvents ||
-        [];
-
-      state.statusEvents = Array.isArray(rows) ? rows : [];
-      state.statusEventsLoadedAt = new Date().toISOString();
-
-      renderStatusEventEnhancement();
-      return state.statusEvents;
-    } catch (error) {
-      console.warn("Could not load Finish status events:", error);
-      return state.statusEvents || [];
-    }
-  }
-
-  async function saveStatusEvent(profile, data) {
-    if (typeof window.fetchFinishScanActivityApi !== "function") {
-      throw new Error("Finish Scan Activity API helper is not available.");
-    }
-
-    const enteredBy = typeof getCurrentUsername === "function" ? getCurrentUsername() : "SYSTEM";
-
-    await window.fetchFinishScanActivityApi(EVENT_ACTION_SAVE, {
-      date: todayIso(),
-      operatorName: profile.operatorName,
-      accessPoint: profile.accessPoint,
-      eventType: data.eventType,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      reason: data.reason || data.eventType,
-      notes: data.notes,
-      enteredBy,
-      cacheBust: Date.now()
-    });
-
-    await fetchStatusEvents();
-  }
-
-  async function closeStatusEvent(eventId) {
-    if (typeof window.fetchFinishScanActivityApi !== "function") {
-      throw new Error("Finish Scan Activity API helper is not available.");
-    }
-
-    const enteredBy = typeof getCurrentUsername === "function" ? getCurrentUsername() : "SYSTEM";
-
-    await window.fetchFinishScanActivityApi(EVENT_ACTION_CLOSE, {
-      eventId,
-      endTime: timeValueNow(),
-      updatedBy: enteredBy,
-      cacheBust: Date.now()
-    });
-
-    await fetchStatusEvents();
-  }
-
-  function ensureStatusModal() {
-    let modal = document.getElementById("finishStatusEventModal");
-    if (modal) return modal;
-
-    modal = document.createElement("div");
-    modal.id = "finishStatusEventModal";
-    modal.className = "finish-status-modal";
-    modal.innerHTML = `
-      <div class="finish-status-modal-card">
-        <header>
-          <div>
-            <span>Downtime Exception</span>
-            <h3 id="finishStatusModalTitle">Stop Counting</h3>
-            <p id="finishStatusModalSub">Add a status event. Raw scan data will not be changed.</p>
-          </div>
-          <button type="button" data-status-modal-close>×</button>
-        </header>
-
-        <div class="finish-status-grid">
-          <label>
-            Event Type
-            <select id="finishStatusEventType">
-              <option value="Moved">Moved</option>
-              <option value="Left for day">Left for day</option>
-              <option value="No WIP">No WIP</option>
-              <option value="Machine issue">Machine issue</option>
-              <option value="Training / coaching">Training / coaching</option>
-              <option value="Break / lunch">Break / lunch</option>
-              <option value="Support another area">Support another area</option>
-              <option value="Other">Other</option>
-            </select>
-          </label>
-
-          <label>
-            Start Time
-            <input id="finishStatusStartTime" type="time" />
-          </label>
-
-          <label>
-            End Time
-            <input id="finishStatusEndTime" type="time" />
-          </label>
-
-          <label class="wide">
-            Reason / Notes
-            <textarea id="finishStatusNotes" rows="4" placeholder="Example: moved to Final Inspection, left early, no WIP, machine issue..."></textarea>
-          </label>
-        </div>
-
-        <footer>
-          <button type="button" class="ghost" data-status-modal-close>Cancel</button>
-          <button type="button" id="finishSaveStatusEventBtn">Save Event</button>
-        </footer>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    modal.querySelectorAll("[data-status-modal-close]").forEach(btn => {
-      btn.addEventListener("click", () => modal.classList.remove("open"));
-    });
-
-    modal.addEventListener("click", event => {
-      if (event.target === modal) modal.classList.remove("open");
-    });
-
-    return modal;
-  }
-
-  function openStatusModal(profile) {
-    const modal = ensureStatusModal();
-
-    modal.dataset.operatorName = profile.operatorName;
-    modal.dataset.accessPoint = profile.accessPoint;
-
-    const title = modal.querySelector("#finishStatusModalTitle");
-    const sub = modal.querySelector("#finishStatusModalSub");
-    const start = modal.querySelector("#finishStatusStartTime");
-    const end = modal.querySelector("#finishStatusEndTime");
-    const notes = modal.querySelector("#finishStatusNotes");
-    const eventType = modal.querySelector("#finishStatusEventType");
-    const saveBtn = modal.querySelector("#finishSaveStatusEventBtn");
-
-    if (title) title.textContent = `Stop Counting · ${profile.operatorName}`;
-    if (sub) sub.textContent = `${profile.accessPoint} · Add reason and time window.`;
-    if (start) start.value = timeValueNow();
-    if (end) end.value = "";
-    if (notes) notes.value = "";
-    if (eventType) eventType.value = "Moved";
-
-    if (saveBtn) {
-      saveBtn.onclick = async () => {
-        saveBtn.disabled = true;
-        saveBtn.textContent = "Saving...";
-
-        try {
-          await saveStatusEvent(profile, {
-            eventType: eventType?.value || "Moved",
-            startTime: start?.value || timeValueNow(),
-            endTime: end?.value || "",
-            reason: eventType?.value || "Moved",
-            notes: notes?.value || ""
-          });
-
-          modal.classList.remove("open");
-          if (typeof showFinishAssignmentToast === "function") {
-            showFinishAssignmentToast("Status event saved. Downtime adjusted.");
-          }
-        } catch (error) {
-          console.error(error);
-          if (typeof showFinishAssignmentToast === "function") {
-            showFinishAssignmentToast(error.message || String(error));
-          }
-        } finally {
-          saveBtn.disabled = false;
-          saveBtn.textContent = "Save Event";
-        }
-      };
-    }
+  const response = await fetch(url.toString(), { cache: "no-store" });
+  if (!response.ok) throw new Error(`Finish Scan Activity Tracker API failed: ${response.status}`);
 
-    modal.classList.add("open");
+  const payload = await response.json();
+  if (!payload || payload.success === false || payload.ok === false || String(payload.status || "").toLowerCase() === "error") {
+    throw new Error(payload?.message || payload?.error || "Finish Scan Activity Tracker API returned an error.");
   }
-
-  function renderStatusEventEnhancement() {
-    const panel = document.getElementById("finishInactivityProfilePanel");
-    const card = panel?.querySelector(".scan-profile-card");
-    if (!panel || !card) return;
-
-    const profile = profileFromDom();
-    if (!profile) return;
-
-    card.querySelectorAll(".finish-status-event-enhancement, .finish-status-event-actions, .finish-status-event-list").forEach(el => el.remove());
-
-    const events = getProfileEvents(profile);
-    const openEvents = events.filter(isOpenEvent);
-    const excluded = calculateExcludedMinutes(events);
-    const rawDowntime = readRawDowntimeFromProfile();
-    const adjusted = Math.max(0, rawDowntime - excluded);
-
-    const metrics = card.querySelector(".scan-profile-metrics-strip");
-    if (metrics) {
-      metrics.insertAdjacentHTML("beforeend", `
-        <article class="finish-status-event-enhancement"><span>Excluded Time</span><strong>${esc(formatMinutes(excluded))}</strong></article>
-        <article class="finish-status-event-enhancement"><span>Adjusted Downtime</span><strong>${esc(formatMinutes(adjusted))}</strong></article>
-      `);
-    }
-
-    const top = card.querySelector(".scan-profile-top");
-    if (top) {
-      const activeBadge = openEvents.length
-        ? `<em class="finish-status-active-badge">Excluded · ${esc(openEvents[0].EventType || openEvents[0].eventType || "Open")}</em>`
-        : "";
-
-      top.insertAdjacentHTML("beforeend", `
-        <div class="finish-status-event-actions">
-          ${activeBadge}
-          <button type="button" id="finishAddStatusEventBtn">Stop Counting / Add Note</button>
-          ${openEvents.length ? `<button type="button" id="finishCloseStatusEventBtn" data-event-id="${esc(openEvents[0].EventId || openEvents[0].eventId || "")}">Resume Counting</button>` : ""}
-        </div>
-      `);
-
-      card.querySelector("#finishAddStatusEventBtn")?.addEventListener("click", () => openStatusModal(profile));
-      card.querySelector("#finishCloseStatusEventBtn")?.addEventListener("click", async event => {
-        const eventId = event.currentTarget.dataset.eventId || "";
-        if (!eventId) return openStatusModal(profile);
-
-        event.currentTarget.disabled = true;
-        event.currentTarget.textContent = "Closing...";
-
-        try {
-          await closeStatusEvent(eventId);
-          if (typeof showFinishAssignmentToast === "function") {
-            showFinishAssignmentToast("Counting resumed.");
-          }
-        } catch (error) {
-          console.error(error);
-          if (typeof showFinishAssignmentToast === "function") {
-            showFinishAssignmentToast(error.message || String(error));
-          }
-        }
-      });
-    }
-
-    if (events.length) {
-      const body = card.querySelector(".scan-profile-tab-body") || card;
-      body.insertAdjacentHTML("beforebegin", `
-        <section class="finish-status-event-list">
-          <div class="scan-section-head">
-            <span>Status Events</span>
-            <strong>${esc(events.length)} note${events.length === 1 ? "" : "s"}</strong>
-          </div>
-          ${events.slice(0, 4).map(event => {
-            const start = event.StartTime || event.startTime || "";
-            const end = event.EndTime || event.endTime || (isOpenEvent(event) ? "Open" : "");
-            const type = event.EventType || event.eventType || "Event";
-            const notes = event.Notes || event.notes || "";
-            const enteredBy = event.EnteredBy || event.enteredBy || "";
-            return `
-              <article class="finish-status-event-row ${isOpenEvent(event) ? "open" : "closed"}">
-                <b>${esc(type)}</b>
-                <span>${esc(start)}${end ? ` → ${esc(end)}` : ""}</span>
-                <em>${esc(notes || "No notes")}</em>
-                <small>${esc(enteredBy)}</small>
-              </article>`;
-          }).join("")}
-        </section>
-      `);
-    }
-  }
-
-  function installObserver() {
-    const target = document.getElementById("finishInactivityProfilePanel");
-    if (!target || target.dataset.statusObserverReady) return;
-
-    target.dataset.statusObserverReady = "true";
-    const observer = new MutationObserver(() => {
-      window.clearTimeout(installObserver._timer);
-      installObserver._timer = window.setTimeout(renderStatusEventEnhancement, 80);
-    });
-
-    observer.observe(target, { childList: true, subtree: true });
-  }
-
-  function bootStatusEvents() {
-    installObserver();
-    fetchStatusEvents();
-    renderStatusEventEnhancement();
-  }
-
-  document.addEventListener("DOMContentLoaded", () => {
-    window.setTimeout(bootStatusEvents, 1200);
-    window.setInterval(fetchStatusEvents, 120000);
-  });
-
-  document.addEventListener("click", event => {
-    const tab = event.target.closest?.('.tab-btn[data-tab="inactivity"]');
-    if (!tab) return;
-    window.setTimeout(bootStatusEvents, 500);
-  });
-
-  window.refreshFinishDowntimeStatusEvents = fetchStatusEvents;
-})();
 
+  return payload;
+}
 
+window.fetchFinishScanActivityApi = fetchFinishScanActivityApi;
 
 
 function cleanFinishTqRoleOptionsOnce_() {
@@ -12998,8 +11395,10 @@ function renderFinishStationLoadoutAssociateCard_(row) {
   const jph = row.individualJph || row.customJph || "";
   const initials = getFinishOperatorInitials_(name);
 
+  const missingSlot = isLineSlotStation(area) && !position;
+
   return `
-    <article class="finish-station-loadout-card">
+    <article class="finish-station-loadout-card${missingSlot ? " finish-loadout-card-incomplete" : ""}">
       <div class="finish-loadout-avatar">${escapeHtml(initials)}</div>
       <div class="finish-loadout-card-main">
         <strong>${escapeHtml(name || "Unnamed Associate")}</strong>
@@ -13009,6 +11408,7 @@ function renderFinishStationLoadoutAssociateCard_(row) {
           <b>${escapeHtml(role)}</b>
           <b>${jph ? escapeHtml(jph) + " JPH" : "Default JPH"}</b>
         </div>
+        ${missingSlot ? `<div class="finish-loadout-card-warning">⚠ No floor slot assigned — won't appear on Morning Setup</div>` : ""}
       </div>
     </article>
   `;
@@ -13232,6 +11632,19 @@ function installFinishStationLoadoutAllAreasStyles_() {
       display: grid;
       align-content: center;
       color: #8fa6c3;
+    }
+
+    .finish-loadout-card-incomplete {
+      border-color: rgba(251,191,36,.45);
+      background: rgba(251,191,36,.06);
+    }
+
+    .finish-loadout-card-warning {
+      margin-top: 8px;
+      color: #fbbf24;
+      font-size: 10px;
+      font-weight: 850;
+      letter-spacing: .02em;
     }
   `;
   document.head.appendChild(style);
@@ -17916,32 +16329,11 @@ function finishSetupV2IsActiveRosterRow_(row) {
   return status !== "REMOVED" && status !== "INACTIVE" && status !== "ARCHIVED";
 }
 
-async function finishSetupV2Api_(action, params = {}) {
-  const url = new URL(finishSetupV2BaseUrl_());
-  url.searchParams.set("action", action);
+/* finishSetupV2Api_ is defined once, further down in the file, right after
+   the rest of the Finish Setup V2 loaders. Removed the duplicate that used
+   to live here — two functions with the same name silently shadowing each
+   other is exactly the kind of thing that makes a bug like this hard to find. */
 
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value === undefined || value === null) return;
-    url.searchParams.set(key, String(value));
-  });
-
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store"
-  });
-
-  if (!response.ok) {
-    throw new Error(`Finish Setup V2 API failed ${response.status}: ${action}`);
-  }
-
-  const data = await response.json();
-
-  if (data && data.ok === false) {
-    throw new Error(data.message || data.error || `Finish Setup V2 returned ok=false: ${action}`);
-  }
-
-  return data;
-}
 
 function finishSetupV2BuildProfiles_() {
   const byUsername = new Map();
@@ -19088,3 +17480,1514 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 900);
 });
+
+
+/* =========================================================
+   FINISH SETUP V2 — MOUNTING STATION BY LINE PATCH
+   Adds station layout inside Finish Setup:
+   - Mounting separated by Line A / Line B / Line C / No Line
+   - Shows M01-M10 station slots by line
+   - Clicking a station slot loads Assignment Console
+   - Assignment Console station dropdown changes by area/line
+========================================================= */
+
+function finishSetupV2NormalizeLine_(value) {
+  const text = finishSetupV2CleanText_(value);
+  const upper = text.toUpperCase();
+  if (upper.includes("LINE A") || upper === "A") return "Line A";
+  if (upper.includes("LINE B") || upper === "B") return "Line B";
+  if (upper.includes("LINE C") || upper === "C") return "Line C";
+  return "";
+}
+
+function finishSetupV2Line_(row) {
+  return finishSetupV2NormalizeLine_(finishSetupV2RowValue_(row, ["DefaultLine", "defaultLine", "Line", "line"]));
+}
+
+function finishSetupV2MountingStations_() {
+  return ["M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10"];
+}
+
+function finishSetupV2FinalStations_() {
+  return ["FI-01", "FI-02", "FI-03", "FI-04"];
+}
+
+function finishSetupV2DrillStations_() {
+  return ["D07", "D09"];
+}
+
+function finishSetupV2PositionOptions_(area, line, selected = "") {
+  const cleanArea = finishSetupV2NormalizeArea_(area);
+  const cleanSelected = finishSetupV2CleanText_(selected);
+  let options = [];
+
+  if (cleanArea === "Mounting") options = finishSetupV2MountingStations_();
+  else if (cleanArea === "Final Inspection") options = finishSetupV2FinalStations_();
+  else if (cleanArea === "Drill") options = finishSetupV2DrillStations_();
+
+  if (!options.length) return `<option value="">Optional</option>`;
+
+  return `<option value="">Select</option>` + options.map(pos =>
+    `<option value="${finishSetupV2Escape_(pos)}" ${pos === cleanSelected ? "selected" : ""}>${finishSetupV2Escape_(pos)}</option>`
+  ).join("");
+}
+
+function finishSetupV2RenderPositionControl_(area, line, selected = "") {
+  return `
+    <label>
+      <span>Position / Station</span>
+      <select id="finishV2PositionInput">
+        ${finishSetupV2PositionOptions_(area, line, selected)}
+      </select>
+    </label>
+  `;
+}
+
+function finishSetupV2GetRowsByArea_(area) {
+  return finishSetupV2GetActiveRows_().filter(row => finishSetupV2Area_(row) === area);
+}
+
+function finishSetupV2FindByPosition_(rows, line, position) {
+  const cleanLine = finishSetupV2NormalizeLine_(line);
+  const cleanPos = finishSetupV2CleanText_(position).toUpperCase();
+  return rows.find(row =>
+    finishSetupV2Line_(row) === cleanLine &&
+    finishSetupV2CleanText_(finishSetupV2Position_(row)).toUpperCase() === cleanPos
+  );
+}
+
+function finishSetupV2RenderMountingByLine_() {
+  const allRows = finishSetupV2GetRowsByArea_("Mounting");
+  const lines = ["Line A", "Line B", "Line C", "No Line"];
+
+  return `
+    <section class="finish-v2-area finish-v2-area-mounting finish-v2-mounting-line-layout">
+      <header>
+        <h4><span></span>Mounting Station Layout</h4>
+        <div class="finish-v2-area-metrics">
+          <b>${finishSetupV2FormatNumber_(allRows.length)}</b><small>body</small>
+          <b>25</b><small>lane JPH</small>
+        </div>
+      </header>
+      <div class="finish-v2-line-grid">
+        ${lines.map(line => finishSetupV2RenderMountingLine_(line, allRows)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function finishSetupV2RenderMountingLine_(line, allRows) {
+  const isNoLine = line === "No Line";
+  const lineRows = allRows.filter(row => {
+    const rowLine = finishSetupV2Line_(row);
+    return isNoLine ? !rowLine : rowLine === line;
+  });
+
+  if (isNoLine) {
+    return `
+      <div class="finish-v2-line-card finish-v2-line-card-emptyline">
+        <div class="finish-v2-line-title">
+          <strong>No Line Assigned</strong>
+          <span>${finishSetupV2FormatNumber_(lineRows.length)} associates</span>
+        </div>
+        <div class="finish-v2-cards finish-v2-no-line-cards">
+          ${lineRows.length ? lineRows.map(finishSetupV2RenderCard_).join("") : `<article class="finish-v2-empty">No unassigned line associates</article>`}
+        </div>
+      </div>
+    `;
+  }
+
+  const stations = finishSetupV2MountingStations_();
+  return `
+    <div class="finish-v2-line-card">
+      <div class="finish-v2-line-title">
+        <strong>${finishSetupV2Escape_(line)}</strong>
+        <span>${finishSetupV2FormatNumber_(lineRows.length)} / ${stations.length} stations</span>
+      </div>
+      <div class="finish-v2-station-grid">
+        ${stations.map(pos => finishSetupV2RenderMountingSlot_(line, pos, finishSetupV2FindByPosition_(allRows, line, pos))).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function finishSetupV2RenderMountingSlot_(line, position, row) {
+  if (!row) {
+    return `
+      <button type="button" class="finish-v2-slot empty"
+        data-finish-v2-slot-line="${finishSetupV2Escape_(line)}"
+        data-finish-v2-slot-position="${finishSetupV2Escape_(position)}"
+        data-finish-v2-slot-area="Mounting">
+        <b>${finishSetupV2Escape_(position)}</b>
+        <span>Click to assign</span>
+      </button>
+    `;
+  }
+
+  const name = finishSetupV2OperatorName_(row);
+  const role = finishSetupV2Role_(row);
+  const jph = finishSetupV2FinalJph_(row) || 25;
+  return `
+    <button type="button" class="finish-v2-slot filled"
+      data-finish-v2-operator="${finishSetupV2Escape_(name)}"
+      data-finish-v2-area="Mounting"
+      data-finish-v2-slot-line="${finishSetupV2Escape_(line)}"
+      data-finish-v2-slot-position="${finishSetupV2Escape_(position)}">
+      <b>${finishSetupV2Escape_(position)}</b>
+      <strong>${finishSetupV2Escape_(name)}</strong>
+      <small>${finishSetupV2Escape_(role)} · ${finishSetupV2Escape_(jph)} JPH</small>
+    </button>
+  `;
+}
+
+function finishSetupV2RenderArea_(area, rows) {
+  if (area === "Mounting") return finishSetupV2RenderMountingByLine_();
+
+  const jph = FINISH_SETUP_V2_DEFAULT_JPH[area] || 0;
+  return `
+    <section class="finish-v2-area finish-v2-area-${finishSetupV2Escape_(area.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+      <header>
+        <h4><span></span>${finishSetupV2Escape_(area)}</h4>
+        <div class="finish-v2-area-metrics">
+          <b>${finishSetupV2FormatNumber_(rows.length)}</b><small>body</small>
+          <b>${finishSetupV2FormatNumber_(jph)}</b><small>lane JPH</small>
+        </div>
+      </header>
+      <div class="finish-v2-cards">
+        ${rows.length ? rows.map(finishSetupV2RenderCard_).join("") : `<article class="finish-v2-empty">No associates assigned</article>`}
+      </div>
+    </section>
+  `;
+}
+
+function finishSetupV2RenderShell_() {
+  const root = finishSetupV2GetRoot_();
+  if (!root) return;
+
+  finishSetupV2InstallStyles_();
+  finishSetupV2InstallMountingLineStyles_();
+  finishSetupV2RemoveOldNoise_();
+
+  const groups = finishSetupV2GroupRows_();
+  const activeRows = finishSetupV2GetActiveRows_();
+  const operators = finishSetupV2GetOperatorList_();
+  const selectedArea = finishSetupV2State.selectedArea || "Mounting";
+  const selectedOperator = finishSetupV2State.selectedOperator || "";
+  const selectedLine = finishSetupV2State.selectedLine || "";
+  const selectedPosition = finishSetupV2State.selectedPosition || "";
+
+  root.innerHTML = `
+    <section class="finish-v2">
+      <header class="finish-v2-hero">
+        <div>
+          <div class="finish-v2-kicker">FINISH SETUP V2</div>
+          <h2>Finish Setup</h2>
+          <p>Clean AR-style setup. Mounting is now built by line and station so supervisors can build the floor setup here.</p>
+        </div>
+        <div class="finish-v2-actions">
+          <label><span>Profile</span><select id="finishV2OwnerSelect">${finishSetupV2ProfilesOptions_()}</select></label>
+          <label><span>Shift</span><select id="finishV2ShiftSelect"><option value="Weekday" ${finishSetupV2State.shiftType === "Weekday" ? "selected" : ""}>Weekday</option><option value="Weekend" ${finishSetupV2State.shiftType === "Weekend" ? "selected" : ""}>Weekend</option></select></label>
+          <button type="button" id="finishV2AutoAssignBtn">Auto Assign From Activity</button>
+          <button type="button" id="finishV2RefreshBtn">Refresh</button>
+        </div>
+      </header>
+
+      <div class="finish-v2-status">
+        <span><b>Owner:</b> ${finishSetupV2Escape_(finishSetupV2State.ownerUsername || finishSetupV2GetCurrentUsername_())}</span>
+        <span><b>Shift:</b> ${finishSetupV2Escape_(finishSetupV2State.shiftType)}</span>
+        <span><b>Assigned:</b> ${finishSetupV2FormatNumber_(activeRows.length)}</span>
+        <span><b>Master:</b> ${finishSetupV2FormatNumber_(finishSetupV2State.master.length)}</span>
+        ${finishSetupV2State.loading ? `<span class="loading">Loading...</span>` : ""}
+      </div>
+
+      <div class="finish-v2-grid">
+        <main class="finish-v2-loadout">
+          <div class="finish-v2-loadout-head"><div><h3>Station Loadout</h3><p>${finishSetupV2FormatNumber_(activeRows.length)} assigned rows · ${finishSetupV2Escape_(finishSetupV2State.shiftType)}</p></div></div>
+          ${FINISH_SETUP_V2_AREA_ORDER.map(area => finishSetupV2RenderArea_(area, groups[area] || [])).join("")}
+        </main>
+
+        <aside class="finish-v2-console">
+          <div class="finish-v2-panel">
+            <div class="finish-v2-kicker">ASSIGNMENT CONSOLE</div>
+            <h3>Move / Assign Associate</h3>
+            <label><span>Associate</span><select id="finishV2OperatorSelect"><option value="">Select associate</option>${operators.map(name => `<option value="${finishSetupV2Escape_(name)}" ${name === selectedOperator ? "selected" : ""}>${finishSetupV2Escape_(name)}</option>`).join("")}</select></label>
+            <label><span>Primary Area</span><select id="finishV2AreaSelect">${FINISH_SETUP_V2_AREA_ORDER.map(area => `<option value="${finishSetupV2Escape_(area)}" ${area === selectedArea ? "selected" : ""}>${finishSetupV2Escape_(area)}</option>`).join("")}</select></label>
+            <div id="finishV2Suggestion" class="finish-v2-suggestion">Select an associate to see live activity suggestion.</div>
+            <div class="finish-v2-two"><label><span>Role</span><select id="finishV2RoleSelect"><option value="Certified">Certified</option><option value="Training">Training</option><option value="Unassigned">Unassigned</option></select></label><label><span>Training Week</span><select id="finishV2WeekSelect">${finishSetupV2WeekOptions_(selectedArea)}</select></label></div>
+            <div class="finish-v2-two"><label><span>Individual JPH</span><input id="finishV2JphInput" type="number" min="0" step="0.1" placeholder="Default ${finishSetupV2Escape_(FINISH_SETUP_V2_DEFAULT_JPH[selectedArea] || "")}"></label><label><span>Line</span><select id="finishV2LineSelect"><option value="">Any</option><option value="Line A" ${selectedLine === "Line A" ? "selected" : ""}>Line A</option><option value="Line B" ${selectedLine === "Line B" ? "selected" : ""}>Line B</option><option value="Line C" ${selectedLine === "Line C" ? "selected" : ""}>Line C</option></select></label></div>
+            <div id="finishV2PositionHost">${finishSetupV2RenderPositionControl_(selectedArea, selectedLine, selectedPosition)}</div>
+            <div id="finishV2MetricNote" class="finish-v2-note">Certified uses the area default JPH unless Individual JPH is entered.</div>
+            <button type="button" id="finishV2SaveBtn" class="primary">Assign / Update</button>
+            <button type="button" id="finishV2RemoveBtn" class="danger">Remove From Area</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  `;
+
+  finishSetupV2BindEvents_();
+  finishSetupV2UpdateSuggestion_();
+  finishSetupV2SyncTrainingControls_();
+  finishSetupV2SyncPositionControl_();
+}
+
+function finishSetupV2BindEvents_() {
+  document.getElementById("finishV2OwnerSelect")?.addEventListener("change", async event => { finishSetupV2State.ownerUsername = finishSetupV2Upper_(event.target.value); await finishSetupV2Load_(); });
+  document.getElementById("finishV2ShiftSelect")?.addEventListener("change", async event => { finishSetupV2State.shiftType = event.target.value === "Weekend" ? "Weekend" : "Weekday"; await finishSetupV2Load_(); });
+  document.getElementById("finishV2RefreshBtn")?.addEventListener("click", () => finishSetupV2Load_());
+  document.getElementById("finishV2AutoAssignBtn")?.addEventListener("click", finishSetupV2AutoAssign_);
+  document.getElementById("finishV2SaveBtn")?.addEventListener("click", finishSetupV2Save_);
+  document.getElementById("finishV2RemoveBtn")?.addEventListener("click", finishSetupV2Remove_);
+  document.getElementById("finishV2OperatorSelect")?.addEventListener("change", event => { finishSetupV2State.selectedOperator = event.target.value || ""; finishSetupV2AutoFillFromLive_(); finishSetupV2UpdateSuggestion_(); });
+  document.getElementById("finishV2AreaSelect")?.addEventListener("change", event => { finishSetupV2State.selectedArea = event.target.value || "Mounting"; finishSetupV2UpdateSuggestion_(); finishSetupV2SyncTrainingControls_(); finishSetupV2SyncPositionControl_(); });
+  document.getElementById("finishV2LineSelect")?.addEventListener("change", event => { finishSetupV2State.selectedLine = finishSetupV2NormalizeLine_(event.target.value); finishSetupV2SyncPositionControl_(); });
+  document.getElementById("finishV2RoleSelect")?.addEventListener("change", finishSetupV2SyncTrainingControls_);
+  document.getElementById("finishV2WeekSelect")?.addEventListener("change", finishSetupV2SyncTrainingControls_);
+  document.querySelectorAll(".finish-v2-card").forEach(card => card.addEventListener("click", () => finishSetupV2SelectCard_(card.dataset.finishV2Operator || "", card.dataset.finishV2Area || "")));
+  document.querySelectorAll(".finish-v2-slot").forEach(slot => slot.addEventListener("click", () => {
+    const operatorName = slot.dataset.finishV2Operator || "";
+    const area = slot.dataset.finishV2Area || slot.dataset.finishV2SlotArea || "Mounting";
+    const line = slot.dataset.finishV2SlotLine || "";
+    const position = slot.dataset.finishV2SlotPosition || "";
+    if (operatorName) finishSetupV2SelectCard_(operatorName, area);
+    else {
+      finishSetupV2State.selectedArea = area;
+      finishSetupV2State.selectedLine = finishSetupV2NormalizeLine_(line);
+      finishSetupV2State.selectedPosition = position;
+      const areaSelect = document.getElementById("finishV2AreaSelect");
+      const lineSelect = document.getElementById("finishV2LineSelect");
+      if (areaSelect) areaSelect.value = area;
+      if (lineSelect) lineSelect.value = finishSetupV2State.selectedLine;
+      finishSetupV2SyncPositionControl_();
+      document.querySelector(".finish-v2-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }));
+}
+
+function finishSetupV2SelectCard_(operatorName, area) {
+  finishSetupV2State.selectedOperator = operatorName;
+  finishSetupV2State.selectedArea = area || "Mounting";
+  const row = finishSetupV2GetActiveRows_().find(item => finishSetupV2Upper_(finishSetupV2OperatorName_(item)) === finishSetupV2Upper_(operatorName) && finishSetupV2Area_(item) === finishSetupV2State.selectedArea);
+  finishSetupV2State.selectedLine = row ? finishSetupV2Line_(row) : "";
+  finishSetupV2State.selectedPosition = row ? finishSetupV2Position_(row) : "";
+  const op = document.getElementById("finishV2OperatorSelect");
+  const areaSelect = document.getElementById("finishV2AreaSelect");
+  const role = document.getElementById("finishV2RoleSelect");
+  const week = document.getElementById("finishV2WeekSelect");
+  const jph = document.getElementById("finishV2JphInput");
+  const line = document.getElementById("finishV2LineSelect");
+  if (op) op.value = operatorName;
+  if (areaSelect) areaSelect.value = finishSetupV2State.selectedArea;
+  if (role) role.value = row ? finishSetupV2Role_(row) : "Certified";
+  if (week) { week.innerHTML = finishSetupV2WeekOptions_(finishSetupV2State.selectedArea, row ? finishSetupV2TrainingWeek_(row) : ""); week.value = row ? finishSetupV2TrainingWeek_(row) : ""; }
+  if (jph) jph.value = row ? finishSetupV2IndividualJph_(row) : "";
+  if (line) line.value = finishSetupV2State.selectedLine || "";
+  finishSetupV2SyncPositionControl_();
+  finishSetupV2UpdateSuggestion_();
+  finishSetupV2SyncTrainingControls_();
+  document.querySelector(".finish-v2-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function finishSetupV2SyncPositionControl_() {
+  const area = document.getElementById("finishV2AreaSelect")?.value || finishSetupV2State.selectedArea || "Mounting";
+  const line = document.getElementById("finishV2LineSelect")?.value || finishSetupV2State.selectedLine || "";
+  const current = finishSetupV2State.selectedPosition || document.getElementById("finishV2PositionInput")?.value || "";
+  const host = document.getElementById("finishV2PositionHost");
+  if (!host) return;
+  host.innerHTML = finishSetupV2RenderPositionControl_(area, line, current);
+  document.getElementById("finishV2PositionInput")?.addEventListener("change", event => { finishSetupV2State.selectedPosition = event.target.value || ""; });
+}
+
+function finishSetupV2AutoFillFromLive_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const suggestion = finishSetupV2GetLiveSuggestion_(operatorName);
+  if (!suggestion) return;
+  const area = document.getElementById("finishV2AreaSelect");
+  const line = document.getElementById("finishV2LineSelect");
+  if (area && suggestion.area) { area.value = suggestion.area; finishSetupV2State.selectedArea = suggestion.area; }
+  if (line && suggestion.line) { line.value = suggestion.line || ""; finishSetupV2State.selectedLine = suggestion.line || ""; }
+  finishSetupV2State.selectedPosition = suggestion.position || "";
+  finishSetupV2SyncTrainingControls_();
+  finishSetupV2SyncPositionControl_();
+}
+
+async function finishSetupV2Save_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const area = document.getElementById("finishV2AreaSelect")?.value || "";
+  const role = document.getElementById("finishV2RoleSelect")?.value || "Certified";
+  const week = document.getElementById("finishV2WeekSelect")?.value || "";
+  const jph = document.getElementById("finishV2JphInput")?.value || "";
+  const line = document.getElementById("finishV2LineSelect")?.value || "";
+  const position = document.getElementById("finishV2PositionInput")?.value || "";
+  if (!operatorName || !area) { finishSetupV2ShowToast_("Select associate and area first."); return; }
+  if (isLineSlotStation(area) && (!line || !position)) {
+    if (!window.confirm(`${area} needs a Line and Slot to appear on Morning Setup. Save without one anyway?`)) return;
+  }
+  try {
+    await finishSetupV2Api_("finishSetupV2SaveAssignment", { ownerUsername: finishSetupV2State.ownerUsername, shiftType: finishSetupV2State.shiftType, operatorName, activeStatus: role === "Unassigned" ? "Removed" : "Active", defaultArea: area, defaultLine: line, defaultPosition: position, roleType: role, trainingWeek: role === "Training" ? week : "", individualJph: jph, updatedBy: finishSetupV2GetCurrentUsername_() });
+    finishSetupV2ShowToast_(`Saved ${operatorName} · ${area}${line ? " · " + line : ""}${position ? " · " + position : ""}`);
+    await finishSetupV2Load_();
+    await finishSetupV2RefreshMorningSetup_();
+  } catch (error) {
+    console.error("[Finish Setup V2] save failed", error);
+    finishSetupV2ShowToast_(`Save failed: ${error.message}`);
+  }
+}
+
+function finishSetupV2InstallMountingLineStyles_() {
+  if (document.getElementById("finishSetupV2MountingLineStyles")) return;
+  const style = document.createElement("style");
+  style.id = "finishSetupV2MountingLineStyles";
+  style.textContent = `
+    .finish-v2-line-grid { display:grid; gap:14px; }
+    .finish-v2-line-card { border:1px solid rgba(255,255,255,.10); border-radius:15px; background:rgba(255,255,255,.035); padding:12px; }
+    .finish-v2-line-title { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+    .finish-v2-line-title strong { color:#fff; font-size:15px; font-weight:950; }
+    .finish-v2-line-title span { color:#8fa6c3; font-size:11px; font-weight:850; text-transform:uppercase; letter-spacing:.06em; }
+    .finish-v2-station-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(145px,1fr)); gap:9px; }
+    .finish-v2-slot { min-height:78px; border-radius:12px; border:1px dashed rgba(251,191,36,.42); background:rgba(251,191,36,.055); color:#fef3c7; padding:10px; text-align:left; display:grid; gap:4px; cursor:pointer; }
+    .finish-v2-slot b { color:#fbbf24; font-size:16px; letter-spacing:.05em; }
+    .finish-v2-slot span, .finish-v2-slot small { color:#a9bbd2; font-size:10px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; }
+    .finish-v2-slot strong { color:#fff; font-size:13px; font-weight:950; }
+    .finish-v2-slot.filled { border-style:solid; border-color:rgba(74,222,128,.45); background:rgba(74,222,128,.08); }
+    .finish-v2-slot.filled b { color:#4ade80; }
+    .finish-v2-slot:hover { transform:translateY(-1px); border-color:rgba(95,216,255,.65); background:rgba(95,216,255,.09); }
+    .finish-v2-line-card-emptyline .finish-v2-no-line-cards { grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }
+  `;
+  document.head.appendChild(style);
+}
+
+window.debugFinishSetupV2MountingLines = function() {
+  const rows = finishSetupV2GetRowsByArea_("Mounting");
+  const result = {
+    totalMounting: rows.length,
+    lineA: rows.filter(r => finishSetupV2Line_(r) === "Line A").length,
+    lineB: rows.filter(r => finishSetupV2Line_(r) === "Line B").length,
+    lineC: rows.filter(r => finishSetupV2Line_(r) === "Line C").length,
+    noLine: rows.filter(r => !finishSetupV2Line_(r)).length,
+    positions: rows.map(r => ({ operator: finishSetupV2OperatorName_(r), line: finishSetupV2Line_(r), position: finishSetupV2Position_(r) }))
+  };
+  console.log("[Finish Setup V2 Mounting Lines]", result);
+  return result;
+};
+
+
+
+/* =========================================================
+   FINISH SETUP V2 — SIMPLE ASSIGN + AUTO MORNING SETUP PATCH
+   What this changes:
+   - Removes Mounting station grid from Finish Setup V2
+   - Finish Setup only assigns associate + area + line + position
+   - Morning Setup automatically reads those assigned rows
+   - Morning Setup slots populate from FINISH_OPERATOR_ROSTER_CONTROL V2
+   - No old roster API/local queue
+========================================================= */
+
+function finishSetupV2RenderArea_(area, rows) {
+  const jph = FINISH_SETUP_V2_DEFAULT_JPH[area] || 0;
+
+  return `
+    <section class="finish-v2-area finish-v2-area-${finishSetupV2Escape_(area.toLowerCase().replace(/[^a-z0-9]+/g, "-"))}">
+      <header>
+        <h4><span></span>${finishSetupV2Escape_(area)}</h4>
+        <div class="finish-v2-area-metrics">
+          <b>${finishSetupV2FormatNumber_(rows.length)}</b><small>assigned</small>
+          <b>${finishSetupV2FormatNumber_(jph)}</b><small>JPH</small>
+        </div>
+      </header>
+
+      <div class="finish-v2-cards">
+        ${rows.length ? rows.map(finishSetupV2RenderCard_).join("") : `<article class="finish-v2-empty">No associates assigned</article>`}
+      </div>
+    </section>
+  `;
+}
+
+function finishSetupV2RenderShell_() {
+  const root = finishSetupV2GetRoot_();
+  if (!root) return;
+
+  finishSetupV2InstallStyles_();
+  finishSetupV2RemoveOldNoise_();
+
+  const groups = finishSetupV2GroupRows_();
+  const activeRows = finishSetupV2GetActiveRows_();
+  const operators = finishSetupV2GetOperatorList_();
+  const selectedArea = finishSetupV2State.selectedArea || "Mounting";
+  const selectedOperator = finishSetupV2State.selectedOperator || "";
+  const selectedLine = finishSetupV2State.selectedLine || "";
+  const selectedPosition = finishSetupV2State.selectedPosition || "";
+
+  root.innerHTML = `
+    <section class="finish-v2">
+      <header class="finish-v2-hero">
+        <div>
+          <div class="finish-v2-kicker">FINISH SETUP V2</div>
+          <h2>Finish Setup</h2>
+          <p>Assign the associate here. Morning Set Up will automatically populate from the saved line and station.</p>
+        </div>
+        <div class="finish-v2-actions">
+          <label>
+            <span>Profile</span>
+            <select id="finishV2OwnerSelect">${finishSetupV2ProfilesOptions_()}</select>
+          </label>
+          <label>
+            <span>Shift</span>
+            <select id="finishV2ShiftSelect">
+              <option value="Weekday" ${finishSetupV2State.shiftType === "Weekday" ? "selected" : ""}>Weekday</option>
+              <option value="Weekend" ${finishSetupV2State.shiftType === "Weekend" ? "selected" : ""}>Weekend</option>
+            </select>
+          </label>
+          <button type="button" id="finishV2AutoAssignBtn">Auto Assign From Activity</button>
+          <button type="button" id="finishV2RefreshBtn">Refresh</button>
+        </div>
+      </header>
+
+      <div class="finish-v2-status">
+        <span><b>Owner:</b> ${finishSetupV2Escape_(finishSetupV2State.ownerUsername || finishSetupV2GetCurrentUsername_())}</span>
+        <span><b>Shift:</b> ${finishSetupV2Escape_(finishSetupV2State.shiftType)}</span>
+        <span><b>Assigned:</b> ${finishSetupV2FormatNumber_(activeRows.length)}</span>
+        <span><b>Master:</b> ${finishSetupV2FormatNumber_(finishSetupV2State.master.length)}</span>
+        ${finishSetupV2State.loading ? `<span class="loading">Loading...</span>` : ""}
+      </div>
+
+      <div class="finish-v2-grid">
+        <main class="finish-v2-loadout">
+          <div class="finish-v2-loadout-head">
+            <div>
+              <h3>Assigned Roster</h3>
+              <p>${finishSetupV2FormatNumber_(activeRows.length)} saved rows · Morning Set Up uses these line/station assignments automatically.</p>
+            </div>
+          </div>
+
+          ${FINISH_SETUP_V2_AREA_ORDER.map(area => finishSetupV2RenderArea_(area, groups[area] || [])).join("")}
+        </main>
+
+        <aside class="finish-v2-console">
+          <div class="finish-v2-panel">
+            <div class="finish-v2-kicker">ASSIGNMENT CONSOLE</div>
+            <h3>Assign Associate</h3>
+
+            <label>
+              <span>Associate</span>
+              <select id="finishV2OperatorSelect">
+                <option value="">Select associate</option>
+                ${operators.map(name => `<option value="${finishSetupV2Escape_(name)}" ${name === selectedOperator ? "selected" : ""}>${finishSetupV2Escape_(name)}</option>`).join("")}
+              </select>
+            </label>
+
+            <label>
+              <span>Primary Area</span>
+              <select id="finishV2AreaSelect">
+                ${FINISH_SETUP_V2_AREA_ORDER.map(area => `<option value="${finishSetupV2Escape_(area)}" ${area === selectedArea ? "selected" : ""}>${finishSetupV2Escape_(area)}</option>`).join("")}
+              </select>
+            </label>
+
+            <div id="finishV2Suggestion" class="finish-v2-suggestion">Select an associate to see live activity suggestion.</div>
+
+            <div class="finish-v2-two">
+              <label>
+                <span>Role</span>
+                <select id="finishV2RoleSelect">
+                  <option value="Certified">Certified</option>
+                  <option value="Training">Training</option>
+                  <option value="Unassigned">Unassigned</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Training Week</span>
+                <select id="finishV2WeekSelect">
+                  ${finishSetupV2WeekOptions_(selectedArea)}
+                </select>
+              </label>
+            </div>
+
+            <div class="finish-v2-two">
+              <label>
+                <span>Individual JPH</span>
+                <input id="finishV2JphInput" type="number" min="0" step="0.1" placeholder="Default ${finishSetupV2Escape_(FINISH_SETUP_V2_DEFAULT_JPH[selectedArea] || "")}">
+              </label>
+
+              <label>
+                <span>Line</span>
+                <select id="finishV2LineSelect">
+                  <option value="">Any</option>
+                  <option value="Line A" ${selectedLine === "Line A" ? "selected" : ""}>Line A</option>
+                  <option value="Line B" ${selectedLine === "Line B" ? "selected" : ""}>Line B</option>
+                  <option value="Line C" ${selectedLine === "Line C" ? "selected" : ""}>Line C</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="finishV2PositionHost">
+              ${finishSetupV2RenderPositionControl_(selectedArea, selectedLine, selectedPosition)}
+            </div>
+
+            <div id="finishV2MetricNote" class="finish-v2-note">
+              Save with Line + Station and it will automatically show in Morning Set Up.
+            </div>
+
+            <button type="button" id="finishV2SaveBtn" class="primary">Assign / Update</button>
+            <button type="button" id="finishV2RemoveBtn" class="danger">Remove From Area</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  `;
+
+  finishSetupV2BindEvents_();
+  finishSetupV2UpdateSuggestion_();
+  finishSetupV2SyncTrainingControls_();
+  finishSetupV2SyncPositionControl_();
+}
+
+function finishSetupV2RenderPositionControl_(area, line, selected = "") {
+  return `
+    <label>
+      <span>Position / Station</span>
+      <select id="finishV2PositionInput">
+        ${finishSetupV2PositionOptions_(area, line, selected)}
+      </select>
+    </label>
+  `;
+}
+
+function finishSetupV2PositionOptions_(area, line, selected = "") {
+  const cleanArea = finishSetupV2NormalizeArea_(area);
+  const cleanSelected = finishSetupV2CleanText_(selected);
+
+  let options = [];
+
+  if (cleanArea === "Mounting") {
+    options = ["M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10"];
+  } else if (cleanArea === "Final Inspection") {
+    options = ["FI-01", "FI-02", "FI-03", "FI-04"];
+  } else if (cleanArea === "Drill") {
+    options = ["D07", "D09"];
+  }
+
+  if (!options.length) {
+    return `<option value="">Optional</option>`;
+  }
+
+  return `<option value="">Select</option>` + options.map(pos =>
+    `<option value="${finishSetupV2Escape_(pos)}" ${pos === cleanSelected ? "selected" : ""}>${finishSetupV2Escape_(pos)}</option>`
+  ).join("");
+}
+
+function finishSetupV2NormalizeLine_(value) {
+  const text = finishSetupV2CleanText_(value);
+  const upper = text.toUpperCase();
+
+  if (upper.includes("LINE A") || upper === "A") return "Line A";
+  if (upper.includes("LINE B") || upper === "B") return "Line B";
+  if (upper.includes("LINE C") || upper === "C") return "Line C";
+
+  return "";
+}
+
+function finishSetupV2Line_(row) {
+  return finishSetupV2NormalizeLine_(finishSetupV2RowValue_(row, ["DefaultLine", "defaultLine", "Line", "line"]));
+}
+
+function finishSetupV2BindEvents_() {
+  document.getElementById("finishV2OwnerSelect")?.addEventListener("change", async event => {
+    finishSetupV2State.ownerUsername = finishSetupV2Upper_(event.target.value);
+    await finishSetupV2Load_();
+    await finishSetupV2RefreshMorningSetup_();
+  });
+
+  document.getElementById("finishV2ShiftSelect")?.addEventListener("change", async event => {
+    finishSetupV2State.shiftType = event.target.value === "Weekend" ? "Weekend" : "Weekday";
+    await finishSetupV2Load_();
+    await finishSetupV2RefreshMorningSetup_();
+  });
+
+  document.getElementById("finishV2RefreshBtn")?.addEventListener("click", async () => {
+    await finishSetupV2Load_();
+    await finishSetupV2RefreshMorningSetup_();
+  });
+
+  document.getElementById("finishV2AutoAssignBtn")?.addEventListener("click", finishSetupV2AutoAssign_);
+  document.getElementById("finishV2SaveBtn")?.addEventListener("click", finishSetupV2Save_);
+  document.getElementById("finishV2RemoveBtn")?.addEventListener("click", finishSetupV2Remove_);
+
+  document.getElementById("finishV2OperatorSelect")?.addEventListener("change", event => {
+    finishSetupV2State.selectedOperator = event.target.value || "";
+    finishSetupV2AutoFillFromLive_();
+    finishSetupV2UpdateSuggestion_();
+  });
+
+  document.getElementById("finishV2AreaSelect")?.addEventListener("change", event => {
+    finishSetupV2State.selectedArea = event.target.value || "Mounting";
+    finishSetupV2UpdateSuggestion_();
+    finishSetupV2SyncTrainingControls_();
+    finishSetupV2SyncPositionControl_();
+  });
+
+  document.getElementById("finishV2LineSelect")?.addEventListener("change", event => {
+    finishSetupV2State.selectedLine = finishSetupV2NormalizeLine_(event.target.value);
+    finishSetupV2SyncPositionControl_();
+  });
+
+  document.getElementById("finishV2RoleSelect")?.addEventListener("change", finishSetupV2SyncTrainingControls_);
+  document.getElementById("finishV2WeekSelect")?.addEventListener("change", finishSetupV2SyncTrainingControls_);
+
+  document.querySelectorAll(".finish-v2-card").forEach(card => {
+    card.addEventListener("click", () => {
+      finishSetupV2SelectCard_(card.dataset.finishV2Operator || "", card.dataset.finishV2Area || "");
+    });
+  });
+}
+
+function finishSetupV2SelectCard_(operatorName, area) {
+  finishSetupV2State.selectedOperator = operatorName;
+  finishSetupV2State.selectedArea = area || "Mounting";
+
+  const row = finishSetupV2GetActiveRows_().find(item =>
+    finishSetupV2Upper_(finishSetupV2OperatorName_(item)) === finishSetupV2Upper_(operatorName) &&
+    finishSetupV2Area_(item) === finishSetupV2State.selectedArea
+  );
+
+  finishSetupV2State.selectedLine = row ? finishSetupV2Line_(row) : "";
+  finishSetupV2State.selectedPosition = row ? finishSetupV2Position_(row) : "";
+
+  const op = document.getElementById("finishV2OperatorSelect");
+  const areaSelect = document.getElementById("finishV2AreaSelect");
+  const role = document.getElementById("finishV2RoleSelect");
+  const week = document.getElementById("finishV2WeekSelect");
+  const jph = document.getElementById("finishV2JphInput");
+  const line = document.getElementById("finishV2LineSelect");
+
+  if (op) op.value = operatorName;
+  if (areaSelect) areaSelect.value = finishSetupV2State.selectedArea;
+  if (role) role.value = row ? finishSetupV2Role_(row) : "Certified";
+  if (week) {
+    week.innerHTML = finishSetupV2WeekOptions_(finishSetupV2State.selectedArea, row ? finishSetupV2TrainingWeek_(row) : "");
+    week.value = row ? finishSetupV2TrainingWeek_(row) : "";
+  }
+  if (jph) jph.value = row ? finishSetupV2IndividualJph_(row) : "";
+  if (line) line.value = finishSetupV2State.selectedLine || "";
+
+  finishSetupV2SyncPositionControl_();
+  finishSetupV2UpdateSuggestion_();
+  finishSetupV2SyncTrainingControls_();
+  document.querySelector(".finish-v2-console")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function finishSetupV2SyncPositionControl_() {
+  const area = document.getElementById("finishV2AreaSelect")?.value || finishSetupV2State.selectedArea || "Mounting";
+  const line = document.getElementById("finishV2LineSelect")?.value || finishSetupV2State.selectedLine || "";
+  const current = finishSetupV2State.selectedPosition || document.getElementById("finishV2PositionInput")?.value || "";
+  const host = document.getElementById("finishV2PositionHost");
+  if (!host) return;
+
+  host.innerHTML = finishSetupV2RenderPositionControl_(area, line, current);
+
+  document.getElementById("finishV2PositionInput")?.addEventListener("change", event => {
+    finishSetupV2State.selectedPosition = event.target.value || "";
+  });
+}
+
+function finishSetupV2AutoFillFromLive_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const suggestion = finishSetupV2GetLiveSuggestion_(operatorName);
+
+  if (!suggestion) return;
+
+  const area = document.getElementById("finishV2AreaSelect");
+  const line = document.getElementById("finishV2LineSelect");
+
+  if (area && suggestion.area) {
+    area.value = suggestion.area;
+    finishSetupV2State.selectedArea = suggestion.area;
+  }
+
+  if (line && suggestion.line) {
+    line.value = suggestion.line || "";
+    finishSetupV2State.selectedLine = suggestion.line || "";
+  }
+
+  finishSetupV2State.selectedPosition = suggestion.position || "";
+  finishSetupV2SyncTrainingControls_();
+  finishSetupV2SyncPositionControl_();
+}
+
+async function finishSetupV2Save_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const area = document.getElementById("finishV2AreaSelect")?.value || "";
+  const role = document.getElementById("finishV2RoleSelect")?.value || "Certified";
+  const week = document.getElementById("finishV2WeekSelect")?.value || "";
+  const jph = document.getElementById("finishV2JphInput")?.value || "";
+  const line = document.getElementById("finishV2LineSelect")?.value || "";
+  const position = document.getElementById("finishV2PositionInput")?.value || "";
+
+  if (!operatorName || !area) {
+    finishSetupV2ShowToast_("Select associate and area first.");
+    return;
+  }
+
+  try {
+    await finishSetupV2Api_("finishSetupV2SaveAssignment", {
+      ownerUsername: finishSetupV2State.ownerUsername,
+      shiftType: finishSetupV2State.shiftType,
+      operatorName,
+      activeStatus: role === "Unassigned" ? "Removed" : "Active",
+      defaultArea: area,
+      defaultLine: line,
+      defaultPosition: position,
+      roleType: role,
+      trainingWeek: role === "Training" ? week : "",
+      individualJph: jph,
+      updatedBy: finishSetupV2GetCurrentUsername_()
+    });
+
+    finishSetupV2ShowToast_(`Saved ${operatorName}${line ? " · " + line : ""}${position ? " · " + position : ""}. Morning Set Up updated.`);
+    await finishSetupV2Load_();
+    await finishSetupV2RefreshMorningSetup_();
+  } catch (error) {
+    console.error("[Finish Setup V2] save failed", error);
+    finishSetupV2ShowToast_(`Save failed: ${error.message}`);
+  }
+}
+
+async function finishSetupV2Remove_() {
+  const operatorName = document.getElementById("finishV2OperatorSelect")?.value || "";
+  const area = document.getElementById("finishV2AreaSelect")?.value || "";
+
+  if (!operatorName || !area) {
+    finishSetupV2ShowToast_("Select associate and area first.");
+    return;
+  }
+
+  try {
+    await finishSetupV2Api_("finishSetupV2RemoveAssignment", {
+      ownerUsername: finishSetupV2State.ownerUsername,
+      shiftType: finishSetupV2State.shiftType,
+      operatorName,
+      defaultArea: area,
+      updatedBy: finishSetupV2GetCurrentUsername_()
+    });
+
+    finishSetupV2ShowToast_(`Removed ${operatorName} from ${area}. Morning Set Up updated.`);
+    await finishSetupV2Load_();
+    await finishSetupV2RefreshMorningSetup_();
+  } catch (error) {
+    console.error("[Finish Setup V2] remove failed", error);
+    finishSetupV2ShowToast_(`Remove failed: ${error.message}`);
+  }
+}
+
+async function finishSetupV2AutoAssign_() {
+  if (!window.confirm(`Auto assign current activity for ${finishSetupV2State.ownerUsername} · ${finishSetupV2State.shiftType}?`)) return;
+
+  try {
+    const result = await finishSetupV2Api_("finishSetupV2AutoAssignFromActivity", {
+      ownerUsername: finishSetupV2State.ownerUsername,
+      shiftType: finishSetupV2State.shiftType,
+      updatedBy: finishSetupV2GetCurrentUsername_(),
+      debug: "true"
+    });
+
+    finishSetupV2ShowToast_(`Auto assigned ${finishSetupV2FormatNumber_(result.saved || 0)} associates. Morning Set Up updated.`);
+    await finishSetupV2Load_();
+    await finishSetupV2RefreshMorningSetup_();
+  } catch (error) {
+    console.error("[Finish Setup V2] auto assign failed", error);
+    finishSetupV2ShowToast_(`Auto assign failed: ${error.message}`);
+  }
+}
+
+/* -------------------------
+   Morning Set Up reads V2
+------------------------- */
+
+function getMorningSetupOwnerUsername() {
+  return finishSetupV2State.ownerUsername || finishSetupV2GetCurrentUsername_();
+}
+
+async function loadMorningSetupRoster(options = {}) {
+  const ownerUsername = getMorningSetupOwnerUsername();
+  const shiftType = getMorningSetupShiftType();
+
+  finishRosterApiState.morningOwnerUsername = ownerUsername;
+  finishRosterApiState.morningShiftType = shiftType;
+
+  try {
+    const data = await finishSetupV2Api_("finishSetupV2Bootstrap", {
+      ownerUsername,
+      shiftType,
+      debug: "true"
+    });
+
+    const rows = Array.isArray(data.roster) ? data.roster : [];
+
+    finishRosterApiState.morningRoster = rows
+      .map(finishSetupV2ConvertRosterRowToMorning_)
+      .filter(row => String(row.ownerUsername || "").toUpperCase() === String(ownerUsername || "").toUpperCase())
+      .filter(row => String(row.shiftType || "").toLowerCase() === String(shiftType || "").toLowerCase())
+      .filter(row => String(row.activeStatus || "").toLowerCase() !== "removed");
+
+    console.log("[Finish Morning Setup V2] Loaded roster", {
+      ownerUsername,
+      shiftType,
+      rows: finishRosterApiState.morningRoster.length
+    });
+
+    if (!options.silent) {
+      renderFinishThreeLineCell();
+      renderMorningSetupRosterSummary();
+    }
+
+    return finishRosterApiState.morningRoster;
+  } catch (error) {
+    console.error("Morning Set Up V2 roster load failed:", error);
+
+    if (!options.silent) {
+      showFinishAssignmentToast(error.message || String(error));
+      renderFinishThreeLineCell();
+      renderMorningSetupRosterSummary();
+    }
+
+    return finishRosterApiState.morningRoster || [];
+  }
+}
+
+function finishSetupV2ConvertRosterRowToMorning_(row) {
+  return {
+    ownerUsername: finishSetupV2Owner_(row),
+    shiftType: finishSetupV2Shift_(row),
+    operatorName: finishSetupV2OperatorName_(row),
+    activeStatus: String(finishSetupV2RowValue_(row, ["ActiveStatus", "activeStatus"]) || "Active"),
+    defaultLine: finishSetupV2Line_(row),
+    defaultArea: finishSetupV2Area_(row),
+    defaultPosition: finishSetupV2Position_(row),
+    roleType: finishSetupV2Role_(row),
+    trainingWeek: finishSetupV2TrainingWeek_(row),
+    individualJph: finishSetupV2IndividualJph_(row),
+    finalJph: finishSetupV2FinalJph_(row),
+    updatedBy: finishSetupV2RowValue_(row, ["UpdatedBy", "updatedBy"]),
+    updatedAt: finishSetupV2RowValue_(row, ["UpdatedAt", "updatedAt"])
+  };
+}
+
+function getAssignedLineSlots(config = loadConfig(), rosterRows = null) {
+  const sourceRows = Array.isArray(rosterRows)
+    ? rosterRows
+    : (finishRosterApiState.morningRoster || []);
+
+  const map = {};
+
+  sourceRows
+    .filter(row => String(row.activeStatus || "").toLowerCase() !== "removed")
+    .forEach(row => {
+      const line = finishSetupV2NormalizeLine_(row.defaultLine || row.DefaultLine || "");
+      const station = normalizeFinishOperatorStation(row.defaultArea || row.DefaultArea || "");
+      const slot = String(row.defaultPosition || row.DefaultPosition || "").trim();
+
+      if (!line || !station || !slot) return;
+      if (!isLineSlotStation(station)) return;
+
+      const operator = normalizeAssignmentOperatorName(row.operatorName || row.OperatorName || "");
+      if (!operator) return;
+
+      const key = makeLineSlotKey(line, station, slot);
+      const live = getLiveOperatorForStation(operator, station);
+
+      map[key] = {
+        operator,
+        station,
+        line,
+        slot,
+        role: row.roleType || row.RoleType || "Certified",
+        trainingWeek: row.trainingWeek || row.TrainingWeek || "",
+        individualJph: row.individualJph || row.IndividualJPH || row.finalJph || row.FinalJPH || "",
+        total: live?.total ?? 0,
+        hourly: live?.hourly || {},
+        liveNow: !!live
+      };
+    });
+
+  return map;
+}
+
+async function finishSetupV2RefreshMorningSetup_() {
+  await loadMorningSetupRoster({ silent: true }).catch(() => {});
+  if (typeof renderFinishThreeLineCell === "function") renderFinishThreeLineCell();
+  if (typeof renderMorningSetupRosterSummary === "function") renderMorningSetupRosterSummary();
+}
+
+window.debugFinishSetupV2MorningAuto = function() {
+  const assignmentMap = getAssignedLineSlots(loadConfig(), finishRosterApiState.morningRoster || []);
+  const result = {
+    ownerUsername: getMorningSetupOwnerUsername(),
+    shiftType: getMorningSetupShiftType(),
+    morningRows: (finishRosterApiState.morningRoster || []).length,
+    slotsAssigned: Object.keys(assignmentMap).length,
+    assignments: Object.values(assignmentMap).map(a => ({
+      operator: a.operator,
+      line: a.line,
+      station: a.station,
+      slot: a.slot,
+      role: a.role,
+      jph: a.individualJph
+    }))
+  };
+  console.log("[Finish Setup V2 → Morning Auto]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    loadMorningSetupRoster({ silent: true })
+      .then(() => {
+        if (typeof renderFinishThreeLineCell === "function") renderFinishThreeLineCell();
+      })
+      .catch(() => {});
+  }, 1600);
+});
+
+
+
+/* =========================================================
+   FINISH V2 — STOP OLD 404 CALLS / ROUTE OLD NAMES TO V2
+   Fixes console errors:
+   - getFinishRosterControl 404
+   - finishConfigV2Bootstrap 404
+   - old Assigned roster render failed
+   Everything now routes to clean Finish Setup V2 actions.
+========================================================= */
+
+function finishV2ApiBaseFinal_() {
+  return "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec";
+}
+
+async function finishV2GetFinal_(action, params = {}) {
+  const url = new URL(finishV2ApiBaseFinal_());
+  url.searchParams.set("action", action);
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    url.searchParams.set(key, String(value));
+  });
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`Finish V2 API failed ${response.status}: ${action}`);
+  }
+
+  const data = await response.json();
+
+  if (data && data.ok === false) {
+    throw new Error(data.message || data.error || `Finish V2 returned ok=false: ${action}`);
+  }
+
+  return data;
+}
+
+/* Route the old roster API function into the new V2 backend so old parts stop 404. */
+async function fetchFinishRosterApi(action, payload = {}) {
+  const oldAction = String(action || "").trim();
+
+  if (oldAction === "getFinishRosterControl") {
+    const data = await finishV2GetFinal_("finishSetupV2Bootstrap", {
+      ownerUsername: payload.ownerUsername || payload.owner || finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ",
+      shiftType: payload.shiftType || payload.shift || finishSetupV2State?.shiftType || "Weekday",
+      debug: "true"
+    });
+
+    return {
+      ok: true,
+      data: Array.isArray(data.roster) ? data.roster : [],
+      rows: Array.isArray(data.roster) ? data.roster : [],
+      roster: Array.isArray(data.roster) ? data.roster : [],
+      master: Array.isArray(data.master) ? data.master : [],
+      owners: Array.isArray(data.owners) ? data.owners : []
+    };
+  }
+
+  if (oldAction === "saveFinishRosterControl") {
+    const data = await finishV2GetFinal_("finishSetupV2SaveAssignment", {
+      ownerUsername: payload.ownerUsername || payload.owner || finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ",
+      shiftType: payload.shiftType || payload.shift || finishSetupV2State?.shiftType || "Weekday",
+      operatorName: payload.operatorName || "",
+      activeStatus: payload.activeStatus || "Active",
+      defaultArea: payload.defaultArea || "",
+      defaultLine: payload.defaultLine || "",
+      defaultPosition: payload.defaultPosition || "",
+      roleType: payload.roleType || "Certified",
+      trainingWeek: payload.trainingWeek || "",
+      individualJph: payload.individualJph || payload.individualJPH || "",
+      updatedBy: payload.updatedBy || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ",
+      debug: "true"
+    });
+
+    return {
+      ok: true,
+      data: data.record || data,
+      record: data.record || data
+    };
+  }
+
+  if (oldAction === "deleteFinishRosterControl" || oldAction === "removeFinishRosterControl") {
+    const data = await finishV2GetFinal_("finishSetupV2RemoveAssignment", {
+      ownerUsername: payload.ownerUsername || payload.owner || finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ",
+      shiftType: payload.shiftType || payload.shift || finishSetupV2State?.shiftType || "Weekday",
+      operatorName: payload.operatorName || "",
+      defaultArea: payload.defaultArea || "",
+      updatedBy: payload.updatedBy || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ",
+      debug: "true"
+    });
+
+    return {
+      ok: true,
+      data
+    };
+  }
+
+  if (oldAction === "getFinishOperatorMaster") {
+    const data = await finishV2GetFinal_("finishSetupV2Bootstrap", {
+      ownerUsername: finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ",
+      shiftType: finishSetupV2State?.shiftType || "Weekday",
+      debug: "true"
+    });
+
+    return {
+      ok: true,
+      data: Array.isArray(data.master) ? data.master : [],
+      rows: Array.isArray(data.master) ? data.master : []
+    };
+  }
+
+  return finishV2GetFinal_(oldAction, payload);
+}
+
+/* Some old config panels call finishConfigV2Bootstrap. Route it safely to Finish Setup V2. */
+async function finishConfigV2Api(action, payload = {}) {
+  const oldAction = String(action || "").trim();
+
+  if (oldAction === "finishConfigV2Bootstrap") {
+    const data = await finishV2GetFinal_("finishSetupV2Bootstrap", {
+      ownerUsername: payload.ownerUsername || finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ",
+      shiftType: payload.shiftType || finishSetupV2State?.shiftType || "Weekday",
+      debug: "true"
+    });
+
+    return {
+      ok: true,
+      roster: Array.isArray(data.roster) ? data.roster : [],
+      rows: Array.isArray(data.roster) ? data.roster : [],
+      master: Array.isArray(data.master) ? data.master : [],
+      owners: Array.isArray(data.owners) ? data.owners : []
+    };
+  }
+
+  return finishV2GetFinal_(oldAction, payload);
+}
+
+async function finishConfigV2Bootstrap(payload = {}) {
+  return finishConfigV2Api("finishConfigV2Bootstrap", payload);
+}
+
+/* Make old My Active Associates loaders read from V2 instead of throwing 404. */
+async function loadFinishConfigAssignedRosterRows(options = {}) {
+  const ownerUsername = finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ";
+  const shiftType = options.shiftType || finishSetupV2State?.shiftType || document.getElementById("finishV2ShiftSelect")?.value || "Weekday";
+
+  const data = await finishV2GetFinal_("finishSetupV2Bootstrap", {
+    ownerUsername,
+    shiftType,
+    debug: "true"
+  });
+
+  const rows = (Array.isArray(data.roster) ? data.roster : [])
+    .filter(row => String(row.OwnerUsername || row.ownerUsername || "").toUpperCase() === String(ownerUsername).toUpperCase())
+    .filter(row => String(row.ShiftType || row.shiftType || "").toLowerCase() === String(shiftType).toLowerCase())
+    .filter(row => String(row.ActiveStatus || row.activeStatus || "Active").toLowerCase() !== "removed");
+
+  if (window.finishRosterApiState) {
+    finishRosterApiState.morningRoster = rows.map(finishSetupV2ConvertRosterRowToMorning_);
+    finishRosterApiState.roster = rows;
+  }
+
+  return rows;
+}
+
+async function renderOperatorAssignmentConfigPanel() {
+  // This is the old My Active Associates/assignment panel entry point.
+  // Force it to render the clean V2 Finish Setup instead of old API widgets.
+  await finishSetupV2Load_();
+}
+
+async function renderFinishConfigAssignedRosterRows() {
+  await finishSetupV2Load_();
+}
+
+async function finishSetupV2RefreshMorningSetup_() {
+  await loadMorningSetupRoster({ silent: true }).catch(err => console.warn("[Morning V2] silent load failed", err));
+  if (typeof renderFinishThreeLineCell === "function") renderFinishThreeLineCell();
+  if (typeof renderMorningSetupRosterSummary === "function") renderMorningSetupRosterSummary();
+}
+
+/* Keep the old console errors from showing warnings after V2 is loaded. */
+window.debugFinishV2ApiRouting = async function() {
+  const ownerUsername = finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ";
+  const shiftType = finishSetupV2State?.shiftType || "Weekday";
+  const data = await finishV2GetFinal_("finishSetupV2Bootstrap", {
+    ownerUsername,
+    shiftType,
+    debug: "true"
+  });
+
+  const result = {
+    baseUrl: finishV2ApiBaseFinal_(),
+    ownerUsername,
+    shiftType,
+    master: Array.isArray(data.master) ? data.master.length : 0,
+    roster: Array.isArray(data.roster) ? data.roster.length : 0,
+    owners: Array.isArray(data.owners) ? data.owners.length : 0,
+    routedOldActions: [
+      "getFinishRosterControl",
+      "saveFinishRosterControl",
+      "finishConfigV2Bootstrap"
+    ]
+  };
+
+  console.log("[Finish V2 API Routing]", result);
+  return result;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    finishSetupV2Load_?.();
+    finishSetupV2RefreshMorningSetup_?.();
+  }, 900);
+});
+
+
+
+/* =========================================================
+   FINISH SETUP V2 — DIRECT FETCH
+   JSONP was removed: CORS is fixed at the deployment level
+   (Web App access = Anyone), so the script-tag/JSONP workaround
+   is unnecessary. It was also actively failing — the live
+   backend returns application/json, which Chrome's CORB blocks
+   from loading into a <script> tag, firing script.onerror on
+   every single call before falling back to this same fetch.
+   GET-only, no custom headers, no preflight.
+========================================================= */
+
+async function finishSetupV2Api_(action, params = {}) {
+  const baseUrl = (typeof finishV2ApiBaseFinal_ === "function")
+    ? finishV2ApiBaseFinal_()
+    : (typeof finishSetupV2BaseUrl_ === "function" ? finishSetupV2BaseUrl_() : FINISH_SETUP_V2_API_URL);
+
+  const url = new URL(String(baseUrl).split("?")[0]);
+  url.searchParams.set("action", action);
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    url.searchParams.set(key, String(value));
+  });
+
+  const response = await fetch(url.toString(), { method: "GET", cache: "no-store" });
+  if (!response.ok) throw new Error(`Finish Setup V2 API failed ${response.status}: ${action}`);
+
+  const data = await response.json();
+  if (data && data.ok === false) {
+    throw new Error(data.message || data.error || `Finish Setup V2 returned ok=false: ${action}`);
+  }
+
+  return data;
+}
+
+/* Route all V2 final calls through JSONP too. */
+async function finishV2GetFinal_(action, params = {}) {
+  return finishSetupV2Api_(action, params);
+}
+
+/* Prevent repeated old loaders from stacking failed calls. */
+let finishSetupV2LoadLock_ = null;
+
+async function finishSetupV2Load_(options = {}) {
+  if (finishSetupV2LoadLock_) return finishSetupV2LoadLock_;
+
+  finishSetupV2LoadLock_ = (async () => {
+    finishSetupV2State.loading = true;
+    finishSetupV2RenderShell_();
+
+    try {
+      const owner = finishSetupV2State.ownerUsername || finishSetupV2GetCurrentUsername_();
+      const shift = finishSetupV2State.shiftType || "Weekday";
+
+      const data = await finishSetupV2Api_("finishSetupV2Bootstrap", {
+        ownerUsername: owner,
+        shiftType: shift,
+        debug: "true"
+      });
+
+      finishSetupV2State.ownerUsername = owner;
+      finishSetupV2State.shiftType = shift;
+      finishSetupV2State.master = Array.isArray(data.master) ? data.master : [];
+      finishSetupV2State.roster = Array.isArray(data.roster) ? data.roster : [];
+      finishSetupV2State.owners = Array.isArray(data.owners) ? data.owners : [];
+      finishSetupV2State.profiles = finishSetupV2BuildProfiles_();
+      finishSetupV2State.lastLoadedAt = new Date();
+
+      if (window.finishRosterApiState) {
+        finishRosterApiState.roster = finishSetupV2State.roster;
+        finishRosterApiState.morningRoster = finishSetupV2State.roster.map(finishSetupV2ConvertRosterRowToMorning_);
+      }
+    } catch (error) {
+      console.error("[Finish Setup V2] load failed", error);
+      finishSetupV2ShowToast_(`Finish Setup V2 load failed: ${error.message}`);
+    } finally {
+      finishSetupV2State.loading = false;
+      finishSetupV2RenderShell_();
+      finishSetupV2LoadLock_ = null;
+    }
+  })();
+
+  return finishSetupV2LoadLock_;
+}
+
+window.debugFinishV2Jsonp = async function() {
+  const ownerUsername = finishSetupV2State?.ownerUsername || finishSetupV2GetCurrentUsername_?.() || "BLOPEZ";
+  const shiftType = finishSetupV2State?.shiftType || "Weekday";
+
+  const data = await finishSetupV2Api_("finishSetupV2Bootstrap", {
+    ownerUsername,
+    shiftType,
+    debug: "true"
+  });
+
+  const result = {
+    ownerUsername,
+    shiftType,
+    master: Array.isArray(data.master) ? data.master.length : 0,
+    roster: Array.isArray(data.roster) ? data.roster.length : 0,
+    owners: Array.isArray(data.owners) ? data.owners.length : 0,
+    transport: "JSONP"
+  };
+
+  console.log("[Finish V2 JSONP]", result);
+  return result;
+};
+
+/*********************************************************
+ * FINISH ACCESS CONTROL — AR-STYLE CLEAN VERSION
+ * One small controller, same idea as AR:
+ * - Read the logged-in user.
+ * - Check role/profile.
+ * - Show/hide Finish Setup without breaking the page.
+ * This does NOT call the broken separate Scan Activity API.
+ *********************************************************/
+(function installFinishArStyleAccessControl() {
+  const SETUP_TAB = 'lms-control';
+  const CONTROLLED_TABS = new Set(['config', 'inactivity', 'lms-control']);
+  const ALLOWED_ROLE_WORDS = ['lms', 'sr lms', 'admin', 'director', 'manager', 'supervisor', 'training', 'trainer'];
+
+  function clean(value) {
+    return String(value ?? '').trim();
+  }
+
+  function cleanUpper(value) {
+    return clean(value).toUpperCase().replace(/\s+/g, ' ');
+  }
+
+  function parseStored(raw) {
+    if (raw == null || raw === '') return null;
+    if (typeof raw === 'object') return raw;
+    const text = clean(raw);
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return text; }
+  }
+
+  function readNested(obj, keys) {
+    if (!obj || typeof obj !== 'object') return '';
+    for (const key of keys) {
+      if (obj[key] != null && clean(obj[key]) !== '') return clean(obj[key]);
+    }
+    const nested = [obj.user, obj.profile, obj.account, obj.auth, obj.data, obj.currentUser];
+    for (const item of nested) {
+      if (!item || typeof item !== 'object') continue;
+      for (const key of keys) {
+        if (item[key] != null && clean(item[key]) !== '') return clean(item[key]);
+      }
+    }
+    return '';
+  }
+
+  function findStoredUser() {
+    const objectKeys = [
+      'lmsCurrentUser', 'currentUser', 'loggedInUser', 'dashboardUser', 'LMS_USER',
+      'lmsUser', 'authUser', 'userProfile', 'loginUser', 'loginProfile',
+      'lms_user', 'current_user', 'logged_in_user', 'user'
+    ];
+
+    const roleKeys = ['lmsRole', 'LMS_ROLE', 'currentUserRole', 'loggedInRole', 'userRole', 'role', 'Role'];
+    const userKeys = ['lmsUsername', 'LMS_USERNAME', 'currentUsername', 'loggedInUsername', 'username', 'Username', 'userName'];
+
+    let username = '';
+    let role = '';
+    let fullName = '';
+
+    for (const key of objectKeys) {
+      const parsed = parseStored(sessionStorage.getItem(key) || localStorage.getItem(key));
+      if (!parsed) continue;
+      if (typeof parsed === 'string') {
+        username = username || parsed;
+        continue;
+      }
+      username = username || readNested(parsed, ['username', 'Username', 'userName', 'UserName', 'login', 'Login', 'email', 'Email']);
+      role = role || readNested(parsed, ['role', 'Role', 'userRole', 'UserRole', 'accessRole', 'AccessRole']);
+      fullName = fullName || readNested(parsed, ['fullName', 'FullName', 'displayName', 'DisplayName', 'name', 'Name']);
+    }
+
+    for (const key of roleKeys) {
+      const parsed = parseStored(sessionStorage.getItem(key) || localStorage.getItem(key));
+      if (typeof parsed === 'string') role = role || parsed;
+      else if (parsed && typeof parsed === 'object') role = role || readNested(parsed, ['role', 'Role', 'userRole', 'UserRole']);
+    }
+
+    for (const key of userKeys) {
+      const parsed = parseStored(sessionStorage.getItem(key) || localStorage.getItem(key));
+      if (typeof parsed === 'string') username = username || parsed;
+      else if (parsed && typeof parsed === 'object') username = username || readNested(parsed, ['username', 'Username', 'userName', 'UserName']);
+    }
+
+    if (!username && typeof getCurrentUsername === 'function') username = getCurrentUsername();
+    if (!role && typeof getCurrentUserRole === 'function') role = getCurrentUserRole();
+
+    return {
+      username: cleanUpper(username).replace(/@.*$/, ''),
+      role: clean(role),
+      fullName: clean(fullName)
+    };
+  }
+
+  function getProfiles() {
+    const stateProfiles = Array.isArray(window.finishRosterApiState?.profiles) ? window.finishRosterApiState.profiles : [];
+    const stateOwners = Array.isArray(window.finishRosterApiState?.owners) ? window.finishRosterApiState.owners : [];
+    return [...stateProfiles, ...stateOwners].filter(Boolean);
+  }
+
+  function profileMatchesUser(profile, username) {
+    const candidates = [
+      profile.username, profile.Username, profile.OwnerUsername, profile.ownerUsername,
+      profile.userName, profile.UserName, profile.email, profile.Email
+    ].map(cleanUpper).filter(Boolean);
+    return candidates.some(v => v === username || v.replace(/@.*$/, '') === username);
+  }
+
+  function getSheetProfile(username) {
+    if (!username) return null;
+    return getProfiles().find(profile => profileMatchesUser(profile, username)) || null;
+  }
+
+  function boolValue(value, fallback = true) {
+    if (value === true || value === false) return value;
+    const text = clean(value).toLowerCase();
+    if (!text) return fallback;
+    if (['true', 'yes', 'y', '1', 'active'].includes(text)) return true;
+    if (['false', 'no', 'n', '0', 'inactive', 'disabled'].includes(text)) return false;
+    return fallback;
+  }
+
+  function roleAllowed(role) {
+    const text = clean(role).toLowerCase();
+    if (!text) return false;
+    return ALLOWED_ROLE_WORDS.some(word => text === word || text.includes(word));
+  }
+
+  function getFinishAccessProfile() {
+    const user = findStoredUser();
+    const sheetProfile = getSheetProfile(user.username);
+
+    const role = clean(sheetProfile?.role || sheetProfile?.Role || user.role);
+    const canEdit = boolValue(sheetProfile?.canEdit ?? sheetProfile?.CanEdit, roleAllowed(role));
+    const isActive = boolValue(sheetProfile?.isActive ?? sheetProfile?.IsActive ?? sheetProfile?.activeStatus ?? sheetProfile?.ActiveStatus, true);
+    const shiftGroup = clean(sheetProfile?.shiftGroup || sheetProfile?.ShiftGroup || '');
+
+    const canSeeSetup = !!user.username && isActive && canEdit && roleAllowed(role);
+
+    return {
+      username: user.username,
+      role,
+      shiftGroup,
+      canEdit,
+      isActive,
+      canSeeSetup,
+      source: sheetProfile ? 'FINISH_USER_PROFILES' : 'login-storage'
+    };
+  }
+
+  function setTabVisible(tabKey, visible) {
+    const tab = document.querySelector(`.tab-btn[data-tab="${tabKey}"]`);
+    const content = document.querySelector(`.tab-content[data-content="${tabKey}"]`);
+
+    [tab, content].forEach(el => {
+      if (!el) return;
+      el.hidden = !visible;
+      el.classList.toggle('is-hidden', !visible);
+      el.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      if (tabKey === SETUP_TAB && visible) {
+        el.classList.add('finish-setup-visible');
+      }
+    });
+
+    if (tabKey === SETUP_TAB && tab) {
+      tab.textContent = 'Finish Setup';
+      tab.classList.add('finish-setup-tab');
+    }
+  }
+
+  function applyFinishAccess() {
+    const access = getFinishAccessProfile();
+
+    CONTROLLED_TABS.forEach(tabKey => setTabVisible(tabKey, access.canSeeSetup));
+
+    const ownerSelect = document.getElementById('finishRosterOwnerSelect');
+    if (ownerSelect) {
+      const wrap = ownerSelect.closest('.setup-filter') || ownerSelect.closest('label') || ownerSelect.parentElement;
+      if (wrap) wrap.hidden = true;
+      ownerSelect.disabled = true;
+    }
+
+    document.body.classList.toggle('finish-setup-allowed', access.canSeeSetup);
+    document.body.classList.toggle('finish-setup-denied', !access.canSeeSetup);
+
+    const activeHiddenSetup = document.querySelector('.tab-content.active[hidden], .tab-content.active.is-hidden');
+    if (activeHiddenSetup) {
+      document.querySelector('.tab-btn[data-tab="floor"]')?.click();
+    }
+
+    return access;
+  }
+
+  window.getFinishAccessProfile = getFinishAccessProfile;
+  window.applyFinishAccess = applyFinishAccess;
+  window.debugFinishSetupAccess = function () {
+    const access = applyFinishAccess();
+    console.table([access]);
+    return access;
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    applyFinishAccess();
+    setTimeout(applyFinishAccess, 600);
+    setTimeout(applyFinishAccess, 1800);
+    setTimeout(applyFinishAccess, 3500);
+  });
+
+  document.addEventListener('click', event => {
+    if (event.target.closest?.('.tab-btn')) setTimeout(applyFinishAccess, 50);
+  });
+})();
+
+
+console.log("[Finish Clean JS] Downtime API restored on main Finish API URL");
