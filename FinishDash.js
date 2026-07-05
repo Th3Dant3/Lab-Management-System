@@ -3764,6 +3764,8 @@ let finishOperatorState = {
   stations: {},
   selectedStation: null,
   selectedOperator: "all",
+  selectedArStation: "all",
+  performanceShiftType: "",
   uiStatus: {}
 };
 
@@ -4082,61 +4084,303 @@ const FINISH_AR_STYLE_STATION_ORDER = [
   "Final Inspection"
 ];
 
-function getFinishArStyleStationConfig_(stationName) {
+/* Hourly Operator Performance visibility only.
+   Keep FSV / Frame Only visible in WIP and Process Flow, but hide it from
+   the Finish Operator Performance tab because that tab should focus on Finish floor roles. */
+function isFinishHourlyOperatorPerformanceVisibleStation_(stationName) {
+  const name = normalizeFinishOperatorStation(stationName || "");
+  return name !== "FSV Scan & Verify";
+}
+
+
+function normalizeFinishShiftTypeForMetrics_(value) {
+  const clean = String(value || "").trim().toLowerCase();
+  return clean === "weekend" ? "Weekend" : "Weekday";
+}
+
+function getFinishOperatorPerformanceShiftType_() {
+  const operatorSelect = document.getElementById("finishOperatorPerformanceShiftSelect");
+  const stateShift = finishOperatorState?.performanceShiftType || "";
+  const apiShift = finishRosterApiState?.morningShiftType || finishRosterApiState?.shiftType || "";
+  const morningSelect = document.getElementById("morningSetupShiftSelect");
+
+  // Do NOT call getMorningSetupShiftType() here. That function reads the hidden Morning Set Up
+  // dropdown first, which can force this tab back to Weekday even when the operator metrics
+  // should be viewed as Weekend. Operator Performance owns its own shift selector.
+  return normalizeFinishShiftTypeForMetrics_(
+    operatorSelect?.value || stateShift || apiShift || morningSelect?.value || "Weekday"
+  );
+}
+
+async function setFinishOperatorPerformanceShiftType_(value, summary = {}) {
+  const shiftType = normalizeFinishShiftTypeForMetrics_(value);
+
+  finishOperatorState.performanceShiftType = shiftType;
+  finishRosterApiState.morningShiftType = shiftType;
+
+  const operatorSelect = document.getElementById("finishOperatorPerformanceShiftSelect");
+  if (operatorSelect) operatorSelect.value = shiftType;
+
+  const morningSelect = document.getElementById("morningSetupShiftSelect");
+  if (morningSelect) morningSelect.value = shiftType;
+
+  // Pull the roster rows for the selected shift so capacity is based on the correct headcount/JPH.
+  if (typeof loadMorningSetupRoster === "function") {
+    await loadMorningSetupRoster({ silent: true }).catch(error => {
+      console.warn("Unable to refresh Finish roster for operator performance shift:", error);
+    });
+  }
+
+  renderFinishArStyleOperatorPerformance_(finishOperatorState.stations || {}, summary || {});
+}
+
+function getFinishOperatorPerformanceShiftHours_() {
+  return getFinishOperatorPerformanceShiftType_() === "Weekend" ? 10.5 : 9.5;
+}
+
+function isFinishLineCDrillHybridRow_(row) {
+  const line = String(
+    row?.defaultLine || row?.DefaultLine || row?.line || row?.Line || ""
+  ).trim().toUpperCase();
+
+  const position = String(
+    row?.defaultPosition || row?.DefaultPosition || row?.position || row?.Position || ""
+  ).trim().toUpperCase().replace(/\s+/g, "");
+
+  return line === "LINE C" && (position === "M09" || position === "M9" || position === "D09" || position === "D9" || position === "M07" || position === "M7" || position === "D07" || position === "D7");
+}
+
+function getFinishOperatorMetricAreaFromRosterRow_(row) {
+  if (!row || typeof row !== "object") return "";
+
+  const rawArea =
+    (typeof getFinishRosterRowAreaFinal_ === "function" ? getFinishRosterRowAreaFinal_(row) : "") ||
+    row.defaultArea || row.DefaultArea || row.area || row.Area || row.FlowStation || row.flowStation || "";
+
+  let area = normalizeFinishOperatorStation(rawArea);
+
+  // Line C M09/M07 are Drill-first hybrid seats. Count their assigned labor/JPH under Drill.
+  if (area === "Mounting" && isFinishLineCDrillHybridRow_(row)) {
+    area = "Drill";
+  }
+
+  return area;
+}
+
+function isFinishOperatorMetricRosterRowActive_(row) {
+  if (!row || typeof row !== "object") return false;
+  if (typeof isFinishRosterRowActiveFinal_ === "function" && !isFinishRosterRowActiveFinal_(row)) return false;
+
+  const status = String(row.activeStatus || row.ActiveStatus || row.status || row.Status || "Active").trim().toLowerCase();
+  if (status === "removed" || status === "inactive" || status === "archived") return false;
+
+  const role = String(row.roleType || row.RoleType || row.role || row.Role || "").trim().toLowerCase();
+  if (role === "unassigned" || role === "ignore") return false;
+
+  const name = getFinishOperatorNameFromAnyRow_(row);
+  if (!name || shouldHideFinishOperatorOnWebpage(name)) return false;
+
+  const area = getFinishOperatorMetricAreaFromRosterRow_(row);
+  return !!area && isFinishHourlyOperatorPerformanceVisibleStation_(area) && !shouldHideFinishLmsArea_(area);
+}
+
+function getFinishOperatorPerformanceRosterRows_() {
+  const selectedShift = getFinishOperatorPerformanceShiftType_();
+  const owner = String(getMorningSetupOwnerUsername?.() || getFinishGlobalRosterOwnerUsername?.() || getCurrentUsername?.() || "").trim().toUpperCase();
+
+  const sources = [
+    finishRosterApiState?.morningRoster,
+    finishRosterApiState?.roster,
+    window.__finishConfigAssignedRosterRows
+  ];
+
+  const rows = [];
+  const seen = new Set();
+
+  sources.forEach(source => {
+    if (!Array.isArray(source)) return;
+
+    source.forEach(row => {
+      if (!row || typeof row !== "object") return;
+
+      const rowShift = String(row.shiftType || row.ShiftType || row.shift || row.Shift || selectedShift).trim();
+      if (rowShift && rowShift.toLowerCase() !== selectedShift.toLowerCase()) return;
+
+      const rowOwner = String(row.ownerUsername || row.OwnerUsername || row.owner || row.Owner || owner).trim().toUpperCase();
+      if (owner && rowOwner && rowOwner !== owner) return;
+
+      if (!isFinishOperatorMetricRosterRowActive_(row)) return;
+
+      const key = [
+        getFinishOperatorNameFromAnyRow_(row).toUpperCase(),
+        getFinishOperatorMetricAreaFromRosterRow_(row),
+        String(row.defaultLine || row.DefaultLine || row.line || row.Line || "").toUpperCase(),
+        String(row.defaultPosition || row.DefaultPosition || row.position || row.Position || "").toUpperCase(),
+        rowShift.toUpperCase(),
+        rowOwner
+      ].join("||");
+
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push(row);
+    });
+  });
+
+  return rows;
+}
+
+function getFinishDefaultAreaJphForMetrics_(area, config = loadConfig()) {
+  const name = normalizeFinishOperatorStation(area);
+
+  switch (name) {
+    case "Finish Unbox": return Number(config.unboxRate || 0) || 0;
+    case "Mounting": return Number(config.mountRate || 0) || 0;
+    case "Drill": return Number(config.drillRate || 0) || 0;
+    case "Final Inspection": return Number(config.finalRate || 0) || 0;
+    case "MEI Line B": return Number(config.meiBRate || 0) || 0;
+    case "MEI Line C": return Number(config.meiCRate || 0) || 0;
+    case "MEI Easy Fit": return Number(config.meiBRate || 0) || 0;
+    default: return 0;
+  }
+}
+
+function getFinishRosterRowJphForOperatorMetrics_(row, area, config = loadConfig()) {
+  const explicit = Number(
+    row?.finalJph || row?.FinalJPH || row?.individualJph || row?.IndividualJPH || row?.IndividualJph || row?.customJph || row?.CustomJPH || 0
+  ) || 0;
+
+  if (explicit > 0) return explicit;
+
+  const role = String(row?.roleType || row?.RoleType || row?.role || row?.Role || "").trim().toLowerCase();
+  if (role === "training") {
+    const week = row?.trainingWeek || row?.TrainingWeek || row?.week || row?.Week || "";
+    const trainingRate = typeof getTrainingRateForStationWeek === "function"
+      ? Number(getTrainingRateForStationWeek(area, week) || 0)
+      : 0;
+    if (trainingRate > 0) return trainingRate;
+  }
+
+  return getFinishDefaultAreaJphForMetrics_(area, config);
+}
+
+function getFinishOperatorMetricStationCapacity_(stationName) {
   const name = normalizeFinishOperatorStation(stationName);
   const config = loadConfig();
+  const shiftHours = getFinishOperatorPerformanceShiftHours_();
+  const rows = getFinishOperatorPerformanceRosterRows_().filter(row => getFinishOperatorMetricAreaFromRosterRow_(row) === name);
+
+  if (rows.length) {
+    const jph = rows.reduce((sum, row) => sum + getFinishRosterRowJphForOperatorMetrics_(row, name, config), 0);
+    return {
+      assigned: rows.length,
+      jph,
+      shiftHours,
+      capacity: Math.round(jph * shiftHours)
+    };
+  }
+
+  // Safe fallback: if the roster has not loaded yet, use configuration counts so the tab does not go blank.
+  const fallbackAssigned = (() => {
+    switch (name) {
+      case "Finish Unbox": return Math.max(0, Number(config.unboxCount || 0));
+      case "Mounting": return Math.max(0, Number(config.mountCount || 0));
+      case "Drill": return Math.max(0, Number(config.drillCount || 0));
+      case "Final Inspection": return Math.max(0, Number(config.finalCount || 0));
+      default: return 0;
+    }
+  })();
+
+  const fallbackJph = getFinishDefaultAreaJphForMetrics_(name, config) * fallbackAssigned;
+
+  return {
+    assigned: fallbackAssigned,
+    jph: fallbackJph,
+    shiftHours,
+    capacity: Math.round(fallbackJph * shiftHours)
+  };
+}
+
+function getFinishArFocusedStationName_() {
+  const selected = normalizeFinishOperatorStation(finishOperatorState?.selectedArStation || "");
+  return selected && selected !== "Unmapped" ? selected : "all";
+}
+
+function getFinishArStationScopedRows_(stations, focusStation) {
+  const visible = getFinishArVisibleStations_(stations);
+  if (!focusStation || focusStation === "all") return visible;
+  return visible.filter(station => normalizeFinishOperatorStation(station.name) === focusStation);
+}
+
+function getFinishArStationScopedSummary_(stations, visibleStations, leaderboard, focusStation, summary = {}) {
+  const totalOutput = visibleStations.reduce((sum, station) => sum + (Number(station.total || 0) || 0), 0);
+  const activeOperators = leaderboard.length;
+  const capacityToday = visibleStations.reduce((sum, station) => {
+    const cfg = getFinishArStyleStationConfig_(station.name);
+    return sum + (Number(cfg.capacity || 0) || 0);
+  }, 0);
+  const outputPct = capacityToday > 0 ? Math.round((totalOutput / capacityToday) * 100) : 0;
+  const topStation = visibleStations.slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
+  const topOperator = leaderboard[0];
+  const pressureStation = visibleStations
+    .map(station => ({ station, status: getFinishArStationStatus_(station) }))
+    .sort((a, b) => Number(a.status.gap || 0) - Number(b.status.gap || 0))[0];
+
+  const peakHour = focusStation && focusStation !== "all"
+    ? getPeakHour(topStation?.hourly || {}).hour || "--"
+    : summary.peakHour || buildOperatorSummaryFromStations(stations).peakHour || "--";
+
+  return { totalOutput, activeOperators, capacityToday, outputPct, topStation, topOperator, pressureStation, peakHour };
+}
+
+function getFinishArStyleStationConfig_(stationName) {
+  const name = normalizeFinishOperatorStation(stationName);
+  const metrics = getFinishOperatorMetricStationCapacity_(name);
 
   const map = {
     "Finish Unbox": {
       label: "FINISH UNBOX",
       zone: "Feed",
-      capacity: Number(config.unboxRate || 0) * Math.max(1, Number(config.unboxCount || 1)),
-      assigned: 1,
       statusType: "watch"
     },
     "Mounting": {
       label: "MOUNTING",
       zone: "Mount / Assemble",
-      capacity: Number(config.mountRate || 0) * Math.max(1, Number(config.mountCount || 1)),
-      assigned: Math.max(1, Number(config.mountCount || 1)),
       statusType: "watch"
     },
     "Drill": {
       label: "DRILL",
       zone: "Specialty",
-      capacity: Number(config.drillRate || 0) * Math.max(1, Number(config.drillCount || 1)),
-      assigned: Math.max(1, Number(config.drillCount || 1)),
       statusType: "constraint"
     },
     "Bigs": {
       label: "BIGS",
       zone: "Specialty",
-      capacity: 0,
-      assigned: 0,
       statusType: "constraint"
     },
     "Sharps": {
       label: "SHARPS",
       zone: "Specialty",
-      capacity: 0,
-      assigned: 0,
       statusType: "constraint"
     },
     "Final Inspection": {
       label: "FINAL INSPECTION",
       zone: "QA",
-      capacity: Number(config.finalRate || 0) * Math.max(1, Number(config.finalCount || 1)),
-      assigned: Math.max(1, Number(config.finalCount || 1)),
       statusType: "watch"
     }
   };
 
-  return map[name] || {
+  const base = map[name] || {
     label: name.toUpperCase(),
     zone: "Finish",
-    capacity: getFinishOperatorStationTarget(name),
-    assigned: 0,
     statusType: "watch"
+  };
+
+  return {
+    ...base,
+    capacity: Number(metrics.capacity || 0),
+    assigned: Number(metrics.assigned || 0),
+    jph: Number(metrics.jph || 0),
+    shiftHours: Number(metrics.shiftHours || getFinishOperatorPerformanceShiftHours_())
   };
 }
 
@@ -4145,7 +4389,9 @@ function getFinishArVisibleStations_(stations) {
   const ordered = [];
 
   FINISH_AR_STYLE_STATION_ORDER.forEach(name => {
-    if (stationMap[name]) ordered.push(stationMap[name]);
+    if (stationMap[name] && isFinishHourlyOperatorPerformanceVisibleStation_(name)) {
+      ordered.push(stationMap[name]);
+    }
   });
 
   Object.values(stationMap || {})
@@ -4153,6 +4399,7 @@ function getFinishArVisibleStations_(stations) {
       const name = normalizeFinishOperatorStation(station.name || "");
       if (FINISH_AR_STYLE_STATION_ORDER.includes(name)) return false;
       if (!isFinishOperatorStationAllowed(name)) return false;
+      if (!isFinishHourlyOperatorPerformanceVisibleStation_(name)) return false;
       if (shouldHideFinishLmsArea_(name)) return false;
       return true;
     })
@@ -4183,12 +4430,15 @@ function getFinishArStationStatus_(station) {
   return { label: "BEHIND", className: "behind", pct, gap: output - capacity };
 }
 
-function buildFinishArOperatorLeaderboard_(stations) {
+function buildFinishArOperatorLeaderboard_(stations, focusStation = "all") {
   const byName = {};
+  const selectedStation = normalizeFinishOperatorStation(focusStation || "all");
 
   Object.values(stations || {}).forEach(station => {
     const stationName = normalizeFinishOperatorStation(station.name || "");
+    if (selectedStation && selectedStation !== "all" && selectedStation !== "Unmapped" && stationName !== selectedStation) return;
     if (!isFinishOperatorStationAllowed(stationName)) return;
+    if (!isFinishHourlyOperatorPerformanceVisibleStation_(stationName)) return;
     if (shouldHideFinishLmsArea_(stationName)) return;
 
     (station.operatorList || []).forEach(operator => {
@@ -4279,10 +4529,21 @@ function installFinishArFloaterAreaListStyles_() {
       font-size: 12px;
     }
 
-    .finish-ar-floater-area-pill small {
+    .finish-ar-process-card.selected {
+      border-color: rgba(95,216,255,.82) !important;
+      box-shadow: 0 0 0 1px rgba(95,216,255,.35), 0 0 24px rgba(95,216,255,.18) !important;
+      transform: translateY(-2px);
+    }
+
+    .finish-ar-capacity-note {
+      display: block;
+      margin-top: 9px;
       color: #8fa6c3;
+      font-family: "JetBrains Mono", monospace;
       font-size: 10px;
-      font-weight: 800;
+      font-weight: 900;
+      letter-spacing: .06em;
+      text-transform: uppercase;
     }
   `;
   document.head.appendChild(style);
@@ -4299,21 +4560,23 @@ function renderFinishArStyleOperatorPerformance_(stations, summary = {}) {
 
   if (!root) return false;
 
-  const visibleStations = getFinishArVisibleStations_(stations);
-  const leaderboard = buildFinishArOperatorLeaderboard_(stations);
-  const totalOutput = visibleStations.reduce((sum, station) => sum + (Number(station.total || 0) || 0), 0);
-  const activeOperators = leaderboard.length;
-  const capacityToday = visibleStations.reduce((sum, station) => {
-    const cfg = getFinishArStyleStationConfig_(station.name);
-    return sum + (Number(cfg.capacity || 0) || 0);
-  }, 0);
-  const outputPct = capacityToday > 0 ? Math.round((totalOutput / capacityToday) * 100) : 0;
-  const topStation = visibleStations.slice().sort((a, b) => Number(b.total || 0) - Number(a.total || 0))[0];
-  const peakHour = summary.peakHour || buildOperatorSummaryFromStations(stations).peakHour || "--";
-  const topOperator = leaderboard[0];
-  const pressureStation = visibleStations
-    .map(station => ({ station, status: getFinishArStationStatus_(station) }))
-    .sort((a, b) => Number(a.status.gap || 0) - Number(b.status.gap || 0))[0];
+  const focusStation = getFinishArFocusedStationName_();
+  const allVisibleStations = getFinishArVisibleStations_(stations);
+  const visibleStations = getFinishArStationScopedRows_(stations, focusStation);
+  const leaderboard = buildFinishArOperatorLeaderboard_(stations, focusStation);
+  const scoped = getFinishArStationScopedSummary_(stations, visibleStations, leaderboard, focusStation, summary);
+  const selectedLabel = focusStation && focusStation !== "all" ? focusStation : "All Finish Areas";
+
+  const totalOutput = scoped.totalOutput;
+  const activeOperators = scoped.activeOperators;
+  const capacityToday = scoped.capacityToday;
+  const outputPct = scoped.outputPct;
+  const topStation = scoped.topStation;
+  const peakHour = scoped.peakHour;
+  const topOperator = scoped.topOperator;
+  const pressureStation = scoped.pressureStation;
+  const shiftHours = getFinishOperatorPerformanceShiftHours_();
+  const shiftType = getFinishOperatorPerformanceShiftType_();
 
   root.classList.add("finish-ar-style-command");
 
@@ -4322,27 +4585,35 @@ function renderFinishArStyleOperatorPerformance_(stations, summary = {}) {
       <div>
         <div class="finish-ar-eyebrow">FINISH PRODUCTIVITY COMMAND CENTER</div>
         <h2>Finish Operator Performance</h2>
-        <p>Professional associate productivity, station flow, capacity health, and hourly performance by role target.</p>
+        <p>Metrics are based on ${escapeHtml(shiftType)} shift hours, assigned roster headcount, and final JPH for each area.</p>
       </div>
       <div class="finish-ar-actions">
+        <label class="finish-ar-shift-control" for="finishOperatorPerformanceShiftSelect">
+          <span>View Shift</span>
+          <select id="finishOperatorPerformanceShiftSelect">
+            <option value="Weekday" ${shiftType === "Weekday" ? "selected" : ""}>Weekday · 9.5 hrs</option>
+            <option value="Weekend" ${shiftType === "Weekend" ? "selected" : ""}>Weekend · 10.5 hrs</option>
+          </select>
+        </label>
+        <button type="button" class="finish-ar-refresh" id="finishArViewAllTopBtn">View All</button>
         <button id="operatorRefreshBtn" class="finish-ar-refresh" type="button">Refresh Metrics</button>
       </div>
     </section>
 
     <section class="finish-ar-kpi-grid">
-      ${renderFinishArKpiCard_("Total Finish Output", numberFmt(totalOutput), "All visible Finish station activity today")}
-      ${renderFinishArKpiCard_("Active Operators", numberFmt(activeOperators), "Operators with Finish activity")}
-      ${renderFinishArKpiCard_("Capacity Today", numberFmt(capacityToday), "Configured station JPH capacity")}
-      ${renderFinishArKpiCard_("Output vs Capacity", capacityToday > 0 ? outputPct + "%" : "N/A", capacityToday > 0 ? "Gap: " + numberFmt(totalOutput - capacityToday) : "No capacity target")}
+      ${renderFinishArKpiCard_(focusStation === "all" ? "Total Finish Output" : selectedLabel + " Output", numberFmt(totalOutput), focusStation === "all" ? "All visible Finish station activity today" : "Selected area output today")}
+      ${renderFinishArKpiCard_("Active Operators", numberFmt(activeOperators), focusStation === "all" ? "Operators with Finish activity" : "Operators with selected-area activity")}
+      ${renderFinishArKpiCard_("Capacity Today", numberFmt(capacityToday), `${numberFmt(shiftHours)} hrs × assigned area JPH`)}
+      ${renderFinishArKpiCard_("Output vs Capacity", capacityToday > 0 ? outputPct + "%" : "N/A", capacityToday > 0 ? "Gap: " + numberFmt(totalOutput - capacityToday) : "No assigned JPH target")}
       ${renderFinishArKpiCard_("Top Station", topStation?.name || "--", numberFmt(topStation?.total || 0) + " output today")}
-      ${renderFinishArKpiCard_("Peak Hour", peakHour || "--", "Peak combined Finish demand")}
+      ${renderFinishArKpiCard_("Peak Hour", peakHour || "--", focusStation === "all" ? "Peak combined Finish demand" : "Peak selected-area demand")}
     </section>
 
     <section class="finish-ar-section">
       <header class="finish-ar-section-head">
         <div>
           <h3>Finish Process Flow</h3>
-          <p>Station health, capacity pressure, and labor status from Finish Unbox through Final Inspection.</p>
+          <p>Click an area to focus its own output, assigned body count, shift capacity, and JPH-based performance. Click View All to reset.</p>
         </div>
         <div class="finish-ar-legend">
           <span><i class="ontrack"></i>On Track</span>
@@ -4352,7 +4623,7 @@ function renderFinishArStyleOperatorPerformance_(stations, summary = {}) {
         </div>
       </header>
       <div class="finish-ar-flow-grid">
-        ${visibleStations.map(renderFinishArProcessCard_).join("")}
+        ${allVisibleStations.map(station => renderFinishArProcessCard_(station, focusStation)).join("")}
       </div>
     </section>
 
@@ -4360,21 +4631,21 @@ function renderFinishArStyleOperatorPerformance_(stations, summary = {}) {
       <article class="finish-ar-panel">
         <header class="finish-ar-panel-head">
           <h3>Operator Productivity Overview</h3>
-          <span>${numberFmt(activeOperators)} operators with output</span>
+          <span>${escapeHtml(selectedLabel)} · ${numberFmt(activeOperators)} operators with output</span>
         </header>
         <div class="finish-ar-overview-body">
           <div class="finish-ar-ring">
             <strong>${capacityToday > 0 ? outputPct : 0}%</strong>
-            <span>Avg target</span>
+            <span>${escapeHtml(selectedLabel)} target</span>
           </div>
           <div class="finish-ar-overview-lines">
-            ${renderFinishArOverviewLine_("Full Target", leaderboard.filter(op => getFinishOperatorMultiStationInfo_(op.name).isFloater || true).slice(0, 0).length, "green")}
+            ${renderFinishArOverviewLine_("Selected Area", selectedLabel, "green")}
             ${renderFinishArOverviewLine_("Top Output", topOperator ? topOperator.name : "--", "amber")}
             ${renderFinishArOverviewLine_("Highest Pressure", pressureStation?.station?.name || "--", "red")}
           </div>
         </div>
         <div class="finish-ar-mini-panels">
-          <div><span>Best Performer</span><strong>${escapeHtml(topOperator?.name || "--")}</strong><small>${numberFmt(topOperator?.total || 0)} total output</small></div>
+          <div><span>Best Performer</span><strong>${escapeHtml(topOperator?.name || "--")}</strong><small>${numberFmt(topOperator?.total || 0)} selected output</small></div>
           <div><span>Highest Pressure</span><strong>${escapeHtml(pressureStation?.station?.name || "--")}</strong><small>Gap: ${numberFmt(pressureStation?.status?.gap || 0)}</small></div>
         </div>
       </article>
@@ -4382,14 +4653,14 @@ function renderFinishArStyleOperatorPerformance_(stations, summary = {}) {
       <article class="finish-ar-panel">
         <header class="finish-ar-panel-head">
           <h3>Operator Performance Leaderboard</h3>
-          <button type="button" class="finish-ar-small-btn">View All</button>
+          <button type="button" class="finish-ar-small-btn" id="finishArViewAllBtn">View All</button>
         </header>
         <div class="finish-ar-leaderboard">
-          ${leaderboard.slice(0, 6).map((op, index) => renderFinishArLeaderboardRow_(op, index)).join("")}
+          ${leaderboard.length ? leaderboard.slice(0, 6).map((op, index) => renderFinishArLeaderboardRow_(op, index)).join("") : `<article class="finish-roster-empty-station">No output for ${escapeHtml(selectedLabel)} yet.</article>`}
         </div>
         <div class="finish-ar-signal-grid">
-          <div><span>Station Focus</span><strong>${escapeHtml(pressureStation?.station?.name || "--")}</strong></div>
-          <div><span>Labor Signal</span><strong>${escapeHtml(topOperator ? topOperator.name + " leads output" : "--")}</strong></div>
+          <div><span>Station Focus</span><strong>${escapeHtml(selectedLabel)}</strong></div>
+          <div><span>Labor Signal</span><strong>${escapeHtml(topOperator ? topOperator.name + " leads output" : "No signal yet")}</strong></div>
           <div><span>Peak Demand</span><strong>${escapeHtml(peakHour || "--")}</strong></div>
         </div>
       </article>
@@ -4399,25 +4670,38 @@ function renderFinishArStyleOperatorPerformance_(stations, summary = {}) {
       <header class="finish-ar-section-head">
         <div>
           <h3>Operator Loadout Details</h3>
-          <p>Click to open associate productivity cards. Multi-area operators show as Floater while JPH remains by area.</p>
+          <p>${focusStation === "all" ? "Click to open associate productivity cards. Multi-area operators show as Floater while JPH remains by area." : "Showing selected-area operators only. Area target uses assigned JPH and the selected shift hours."}</p>
         </div>
         <span class="finish-ar-sort">Sort by output</span>
       </header>
       <div class="finish-ar-loadout-grid">
-        ${leaderboard.map(renderFinishArLoadoutCard_).join("")}
+        ${leaderboard.length ? leaderboard.map(renderFinishArLoadoutCard_).join("") : `<article class="finish-roster-empty-station">No selected-area operator output available.</article>`}
       </div>
     </section>
   `;
 
   root.querySelector("#operatorRefreshBtn")?.addEventListener("click", loadFinishOperatorActivity);
+  root.querySelectorAll("#finishArViewAllBtn, #finishArViewAllTopBtn").forEach(button => {
+    button.addEventListener("click", () => {
+      finishOperatorState.selectedArStation = "all";
+      renderFinishArStyleOperatorPerformance_(finishOperatorState.stations || {}, summary || {});
+    });
+  });
+
+  root.querySelector("#finishOperatorPerformanceShiftSelect")?.addEventListener("change", event => {
+    setFinishOperatorPerformanceShiftType_(event.target.value, summary || {});
+  });
 
   root.querySelectorAll("[data-finish-ar-station]").forEach(card => {
-    card.addEventListener("click", () => openOperatorDrawer(card.dataset.finishArStation));
+    card.addEventListener("click", () => {
+      finishOperatorState.selectedArStation = normalizeFinishOperatorStation(card.dataset.finishArStation || "all");
+      renderFinishArStyleOperatorPerformance_(finishOperatorState.stations || {}, summary || {});
+    });
   });
 
   root.querySelectorAll("[data-finish-ar-operator]").forEach(card => {
     card.addEventListener("click", () => {
-      const stationName = card.dataset.finishArStation || card.dataset.primaryStation || "Mounting";
+      const stationName = card.dataset.finishArStation || card.dataset.primaryStation || focusStation || "Mounting";
       const operatorName = card.dataset.finishArOperator;
       openExpandedOperatorViewer(stationName, operatorName);
     });
@@ -4435,18 +4719,19 @@ function renderFinishArKpiCard_(label, value, sub) {
     </article>`;
 }
 
-function renderFinishArProcessCard_(station) {
+function renderFinishArProcessCard_(station, focusStation = "all") {
   const cfg = getFinishArStyleStationConfig_(station.name);
   const status = getFinishArStationStatus_(station);
   const output = Number(station.total || 0) || 0;
   const capacity = Number(cfg.capacity || 0) || 0;
   const bar = capacity > 0 ? Math.min(100, Math.round((output / capacity) * 100)) : 100;
+  const isSelected = normalizeFinishOperatorStation(station.name) === normalizeFinishOperatorStation(focusStation || "");
 
   return `
-    <article class="finish-ar-process-card ${escapeHtml(status.className)}" data-finish-ar-station="${escapeHtml(station.name)}">
+    <article class="finish-ar-process-card ${escapeHtml(status.className)} ${isSelected ? "selected" : ""}" data-finish-ar-station="${escapeHtml(station.name)}" title="Click to focus ${escapeHtml(station.name)} metrics">
       <header>
         <h4>${escapeHtml(cfg.label)}</h4>
-        <span>${escapeHtml(status.label)}</span>
+        <span>${escapeHtml(isSelected ? "FOCUSED" : status.label)}</span>
       </header>
       <div class="finish-ar-process-metrics">
         <div><span>Output</span><strong>${numberFmt(output)}</strong></div>
@@ -4456,8 +4741,9 @@ function renderFinishArProcessCard_(station) {
       <footer>
         <div><span>Pace</span><strong>${capacity > 0 ? status.pct + "%" : "Process"}</strong></div>
         <div><span>Gap</span><strong>${capacity > 0 ? numberFmt(status.gap) : "No JPH"}</strong></div>
-        <div><span>Assigned</span><strong>${numberFmt((station.operatorList || []).length)}</strong></div>
+        <div><span>Assigned</span><strong>${numberFmt(cfg.assigned || 0)}</strong></div>
       </footer>
+      <small class="finish-ar-capacity-note">${numberFmt(cfg.jph || 0)} JPH × ${numberFmt(cfg.shiftHours || 0)} hrs</small>
     </article>`;
 }
 
@@ -4569,7 +4855,9 @@ function renderOperatorSummary(summary) {
 }
 
 function buildOperatorSummaryFromStations(stations) {
-  const allStations = Object.values(stations || {});
+  const allStations = Object.values(stations || {}).filter(station =>
+    isFinishHourlyOperatorPerformanceVisibleStation_(station.name || "")
+  );
   const operatorSet = {};
   let totalJobs = 0;
   let topStation = "";
@@ -4668,13 +4956,16 @@ function getOrderedFinishOperatorStations(stations) {
   const ordered = [];
 
   FINISH_OPERATOR_STATION_ORDER.forEach(name => {
-    if (stationMap[name]) ordered.push(stationMap[name]);
+    if (stationMap[name] && isFinishHourlyOperatorPerformanceVisibleStation_(name)) {
+      ordered.push(stationMap[name]);
+    }
   });
 
   Object.keys(stationMap)
     .filter(name =>
       !FINISH_OPERATOR_STATION_ORDER.includes(name) &&
-      isFinishOperatorStationAllowed(name)
+      isFinishOperatorStationAllowed(name) &&
+      isFinishHourlyOperatorPerformanceVisibleStation_(name)
     )
     .sort()
     .forEach(name => ordered.push(stationMap[name]));
@@ -5536,6 +5827,46 @@ const FINISH_LINE_LAYOUT = {
   finalRight: ["FI-04", "FI-02"]
 };
 
+/* Line C special rule:
+   C-M09 and C-M07 are Drill-first hybrid stations.
+   They run Drill when Drill work exists, then can help Mounting when Drill runs out.
+   The roster/display must not treat those two positions as normal Mounting-only seats. */
+const FINISH_LINE_C_DRILL_MOUNT_SLOTS = new Set(["M09", "M07"]);
+const FINISH_LINE_C_DRILL_SLOT_ALIAS_TO_MOUNT = {
+  D09: "M09",
+  D07: "M07"
+};
+
+function isFinishLineCDrillMountSlot_(line, slot) {
+  return (
+    String(line || "").trim().toUpperCase() === "LINE C" &&
+    FINISH_LINE_C_DRILL_MOUNT_SLOTS.has(String(slot || "").trim().toUpperCase())
+  );
+}
+
+function normalizeFinishLineCDrillSlot_(line, station, slot) {
+  const cleanLine = String(line || "").trim().toUpperCase();
+  const cleanStation = normalizeFinishOperatorStation(station || "");
+  const cleanSlot = String(slot || "").trim().toUpperCase();
+
+  if (cleanLine === "LINE C" && cleanStation === "Drill" && FINISH_LINE_C_DRILL_SLOT_ALIAS_TO_MOUNT[cleanSlot]) {
+    return FINISH_LINE_C_DRILL_SLOT_ALIAS_TO_MOUNT[cleanSlot];
+  }
+
+  return cleanSlot || slot || "";
+}
+
+function getFinishLineSlotRenderStation_(line, station, slot) {
+  const cleanStation = normalizeFinishOperatorStation(station || "");
+  const cleanSlot = normalizeFinishLineCDrillSlot_(line, cleanStation, slot);
+
+  if (isFinishLineCDrillMountSlot_(line, cleanSlot) && (cleanStation === "Mounting" || cleanStation === "Drill")) {
+    return "Drill";
+  }
+
+  return cleanStation;
+}
+
 
 /*******************************************************
  * MORNING SET UP — SLOT STATUS DOTS
@@ -5656,10 +5987,7 @@ function findFinishMorningSlotAssignment_(operatorName, stationName, line, posit
     );
   });
 
-  const liveStation = finishOperatorState?.stations?.[cleanStation];
-  const liveOperator = (liveStation?.operatorList || []).find(item =>
-    normalizeAssignmentOperatorName(item.name || "").toLowerCase() === cleanOperator
-  );
+  const liveOperator = getLiveOperatorForLineSlot_(operatorName, cleanStation, line, position);
 
   return {
     ...(saved || {}),
@@ -5754,6 +6082,32 @@ function installFinishMorningSlotStatusDotStyles_() {
     .finish-slot.morning-slot-dot-red {
       border-color: rgba(251,113,133,.74) !important;
     }
+
+    .finish-slot.drill-hybrid {
+      border-color: rgba(168,85,247,.72) !important;
+      background: linear-gradient(90deg, rgba(88,28,135,.38), rgba(2,12,24,.72)) !important;
+      box-shadow: inset 0 0 26px rgba(168,85,247,.14), 0 0 18px rgba(168,85,247,.14) !important;
+    }
+
+    .finish-slot.drill-hybrid.live-source-drill {
+      border-color: rgba(168,85,247,.92) !important;
+      box-shadow: inset 0 0 28px rgba(168,85,247,.18), 0 0 20px rgba(168,85,247,.22) !important;
+    }
+
+    .finish-slot.drill-hybrid.live-source-mounting {
+      border-color: rgba(251,191,36,.88) !important;
+      background: linear-gradient(90deg, rgba(120,53,15,.42), rgba(2,12,24,.72)) !important;
+      box-shadow: inset 0 0 28px rgba(251,191,36,.18), 0 0 20px rgba(251,191,36,.18) !important;
+    }
+
+    .finish-slot .slot-code small {
+      display: block;
+      margin-top: 1px;
+      font-size: 8px;
+      line-height: 1;
+      letter-spacing: .14em;
+      opacity: .82;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -5839,7 +6193,7 @@ function getFinishLineSlotAtPoint(clientX, clientY, lineCell) {
 
 function isLineSlotStation(stationName) {
   const station = normalizeFinishOperatorStation(stationName);
-  return station === "Mounting" || station === "Final Inspection";
+  return station === "Mounting" || station === "Final Inspection" || station === "Drill";
 }
 
 function getFinishLineSlotStatusKey() {
@@ -5880,7 +6234,7 @@ function getSlotsForLineStation(stationName) {
     return ["FI-01", "FI-02", "FI-03", "FI-04"];
   }
   if (station === "Drill") {
-    return ["D07", "D09"];
+    return ["M07", "M09", "D07", "D09"];
   }
   return [];
 }
@@ -5930,13 +6284,18 @@ function getAssignedLineSlots(config = loadConfig(), rosterRows = null) {
 
   assignments.forEach(assignment => {
     const line = assignment.line || "";
-    const station = normalizeFinishOperatorStation(assignment.station || "");
-    const slot = assignment.slot || "";
+    let station = normalizeFinishOperatorStation(assignment.station || "");
+    let slot = normalizeFinishLineCDrillSlot_(line, station, assignment.slot || "");
+
     if (!line || !station || !slot) return;
+
+    // Line C M09/M07 are Drill-first hybrid seats, even if an old saved row says Mounting.
+    station = getFinishLineSlotRenderStation_(line, station, slot);
+
     if (!isLineSlotStation(station)) return;
 
     const key = makeLineSlotKey(line, station, slot);
-    const live = getLiveOperatorForStation(assignment.operator, station);
+    const live = getLiveOperatorForLineSlot_(assignment.operator, station, line, slot);
     map[key] = {
       ...assignment,
       station,
@@ -5944,7 +6303,8 @@ function getAssignedLineSlots(config = loadConfig(), rosterRows = null) {
       slot,
       total: live?.total ?? 0,
       hourly: live?.hourly || {},
-      liveNow: !!live
+      liveNow: !!live,
+      liveSourceArea: live?.__finishLiveSourceArea || station
     };
   });
 
@@ -5952,10 +6312,44 @@ function getAssignedLineSlots(config = loadConfig(), rosterRows = null) {
 }
 
 function getLiveOperatorForStation(operatorName, stationName) {
-  const station = finishOperatorState?.stations?.[normalizeFinishOperatorStation(stationName)];
+  const normalizedStation = normalizeFinishOperatorStation(stationName);
+  const station = finishOperatorState?.stations?.[normalizedStation];
   if (!station) return null;
   const target = normalizeAssignmentOperatorName(operatorName);
-  return (station.operatorList || []).find(op => normalizeAssignmentOperatorName(op.name) === target) || null;
+  const found = (station.operatorList || []).find(op => normalizeAssignmentOperatorName(op.name) === target) || null;
+  return found ? { ...found, __finishLiveSourceArea: normalizedStation } : null;
+}
+
+function getFinishLiveTotal_(live) {
+  return Number(live?.total || 0) || 0;
+}
+
+function getLiveOperatorForLineSlot_(operatorName, stationName, line, slot) {
+  const station = normalizeFinishOperatorStation(stationName);
+
+  if (isFinishLineCDrillMountSlot_(line, slot)) {
+    const drillLive = getLiveOperatorForStation(operatorName, "Drill");
+    const mountingLive = getLiveOperatorForStation(operatorName, "Mounting");
+
+    // Drill wins when Drill output exists. When Drill is empty and the associate helps Mounting,
+    // show the Mounting output on the same hybrid station instead of leaving the card at 0.
+    if (getFinishLiveTotal_(drillLive) > 0) return drillLive;
+    if (getFinishLiveTotal_(mountingLive) > 0) return mountingLive;
+
+    return drillLive || mountingLive || null;
+  }
+
+  if (station === "Drill") {
+    const drillLive = getLiveOperatorForStation(operatorName, "Drill");
+    const mountingLive = getLiveOperatorForStation(operatorName, "Mounting");
+
+    if (getFinishLiveTotal_(drillLive) > 0) return drillLive;
+    if (getFinishLiveTotal_(mountingLive) > 0) return mountingLive;
+
+    return drillLive || mountingLive || null;
+  }
+
+  return getLiveOperatorForStation(operatorName, station);
 }
 
 
@@ -5970,14 +6364,20 @@ function renderFinishLineSelector(assignmentMap = {}) {
       <span class="line-selector-kicker">Production Cell</span>
       ${FINISH_LINE_NAMES.map(line => {
         const lineAssignments = Object.values(assignmentMap || {}).filter(a => a.line === line);
-        const mount = lineAssignments.filter(a => a.station === "Mounting").length;
-        const final = lineAssignments.filter(a => a.station === "Final Inspection").length;
+        const drill = lineAssignments.filter(a => normalizeFinishOperatorStation(a.station) === "Drill").length;
+        const mount = lineAssignments.filter(a => normalizeFinishOperatorStation(a.station) === "Mounting").length;
+        const final = lineAssignments.filter(a => normalizeFinishOperatorStation(a.station) === "Final Inspection").length;
         const liveTotal = lineAssignments.reduce((sum, a) => sum + Number(a.total || 0), 0);
         const active = getSelectedFinishMorningLine() === line;
+        const isLineC = String(line || "").trim().toUpperCase() === "LINE C";
+        const capacityText = isLineC
+          ? `${numberFmt(drill)}/2 Drill · ${numberFmt(mount)}/8 Mount · ${numberFmt(final)}/4 Final`
+          : `${numberFmt(mount)}/10 Mount · ${numberFmt(final)}/4 Final`;
+
         return `
           <button type="button" class="finish-line-selector-btn ${active ? "active" : ""}" data-finish-line-select="${escapeHtml(line)}">
             <span>${escapeHtml(line)}</span>
-            <strong>${numberFmt(mount)}/10 Mount · ${numberFmt(final)}/4 Final</strong>
+            <strong>${capacityText}</strong>
             <em>${numberFmt(liveTotal)} live output</em>
           </button>`;
       }).join("")}
@@ -6085,6 +6485,7 @@ function renderMorningSetupRosterSummary() {
 function renderOneFinishLine(line, assignmentMap, statusMap) {
   const lineAssignments = Object.values(assignmentMap).filter(a => a.line === line);
   const mountingCount = lineAssignments.filter(a => a.station === "Mounting").length;
+  const drillCount = lineAssignments.filter(a => a.station === "Drill").length;
   const finalCount = lineAssignments.filter(a => a.station === "Final Inspection").length;
   const liveTotal = lineAssignments.reduce((sum, a) => sum + Number(a.total || 0), 0);
   const mountingStats = getLineStationCapacityStats(lineAssignments, "Mounting");
@@ -6099,7 +6500,8 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
           <h3>${escapeHtml(line)}</h3>
         </div>
         <div class="finish-line-metrics">
-          <div><span>Mounting</span><strong>${numberFmt(mountingCount)}/10</strong></div>
+          <div><span>Drill</span><strong>${numberFmt(drillCount)}/2</strong></div>
+          <div><span>Mounting</span><strong>${numberFmt(mountingCount)}/8</strong></div>
           <div><span>Final</span><strong>${numberFmt(finalCount)}/4</strong></div>
           ${renderLineCapacityMetric("Mount Cap", mountingStats)}
           ${renderLineCapacityMetric("Final Cap", finalStats)}
@@ -6110,7 +6512,7 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
       <div class="finish-line-body">
         <div class="line-side left">
           <div class="line-side-label"><span>Odd Side</span><span>Left</span></div>
-          ${FINISH_LINE_LAYOUT.mountingLeft.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "left")).join("")}
+          ${FINISH_LINE_LAYOUT.mountingLeft.map(slot => renderLineSlot(line, getFinishLineSlotRenderStation_(line, "Mounting", slot), slot, assignmentMap, statusMap, "left")).join("")}
           <div class="line-final-divider"></div>
           ${FINISH_LINE_LAYOUT.finalLeft.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "left")).join("")}
         </div>
@@ -6123,7 +6525,7 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
 
         <div class="line-side right">
           <div class="line-side-label"><span>Even Side</span><span>Right</span></div>
-          ${FINISH_LINE_LAYOUT.mountingRight.map(slot => renderLineSlot(line, "Mounting", slot, assignmentMap, statusMap, "right")).join("")}
+          ${FINISH_LINE_LAYOUT.mountingRight.map(slot => renderLineSlot(line, getFinishLineSlotRenderStation_(line, "Mounting", slot), slot, assignmentMap, statusMap, "right")).join("")}
           <div class="line-final-divider"></div>
           ${FINISH_LINE_LAYOUT.finalRight.map(slot => renderLineSlot(line, "Final Inspection", slot, assignmentMap, statusMap, "right")).join("")}
         </div>
@@ -6139,20 +6541,34 @@ function renderOneFinishLine(line, assignmentMap, statusMap) {
 }
 
 function renderLineSlot(line, station, slot, assignmentMap, statusMap, side) {
-  const key = makeLineSlotKey(line, station, slot);
+  const renderStation = getFinishLineSlotRenderStation_(line, station, slot);
+  const normalizedSlot = normalizeFinishLineCDrillSlot_(line, renderStation, slot);
+  const key = makeLineSlotKey(line, renderStation, normalizedSlot);
   const assignment = assignmentMap[key];
   const status = statusMap[key] || "online";
-  const isFinal = normalizeFinishOperatorStation(station) === "Final Inspection";
+  const normalizedStation = normalizeFinishOperatorStation(renderStation);
+  const isFinal = normalizedStation === "Final Inspection";
+  const isDrillHybrid = isFinishLineCDrillMountSlot_(line, normalizedSlot);
   const operator = assignment?.operator || "Click to assign";
-  const role = assignment ? getAssignmentRoleLabel(assignment.operator, station, loadConfig()) : "Select from your active roster";
+  const role = assignment ? getAssignmentRoleLabel(assignment.operator, normalizedStation, loadConfig()) : "Select from active roster";
   const total = Number(assignment?.total || 0);
-  const liveText = assignment?.liveNow ? "Live" : (assignment ? "Saved" : "Open");
+  const liveSourceArea = normalizeFinishOperatorStation(assignment?.liveSourceArea || normalizedStation);
+  const liveText = assignment?.liveNow
+    ? (isDrillHybrid && liveSourceArea === "Mounting" ? "Mounting Live" : (isDrillHybrid ? "Drill Live" : "Live"))
+    : (assignment ? "Saved · No Live Output" : "Open");
   const direction = side === "left" ? "→" : "←";
+  const typeClass = isFinal ? "final" : (isDrillHybrid ? "drill-hybrid" : "mounting");
+  const sourceClass = assignment?.liveNow
+    ? (liveSourceArea === "Mounting" ? "live-source-mounting" : liveSourceArea === "Drill" ? "live-source-drill" : "")
+    : "";
+  const stationLabel = isDrillHybrid
+    ? (assignment?.liveNow && liveSourceArea === "Mounting" ? "MOUNT" : "DRILL")
+    : "";
 
   return `
-    <article class="finish-slot ${isFinal ? "final" : "mounting"} ${assignment ? "assigned" : "empty"} slot-status-${escapeHtml(status)}" data-line-slot="${escapeHtml(key)}" data-line="${escapeHtml(line)}" data-station="${escapeHtml(station)}" data-slot="${escapeHtml(slot)}" data-operator="${escapeHtml(assignment?.operator || "")}">
+    <article class="finish-slot ${typeClass} ${sourceClass} ${assignment ? "assigned" : "empty"} slot-status-${escapeHtml(status)}" data-line-slot="${escapeHtml(key)}" data-line="${escapeHtml(line)}" data-station="${escapeHtml(normalizedStation)}" data-slot="${escapeHtml(normalizedSlot)}" data-operator="${escapeHtml(assignment?.operator || "")}">
       <span class="slot-status-dot"></span>
-      <div class="slot-code">${escapeHtml(slot)}</div>
+      <div class="slot-code">${escapeHtml(normalizedSlot)}${stationLabel ? `<small>${escapeHtml(stationLabel)}</small>` : ""}</div>
       <div class="slot-copy">
         <strong>${escapeHtml(operator)}</strong>
         <span>${escapeHtml(role)} · ${escapeHtml(liveText)}</span>
@@ -8854,7 +9270,7 @@ function buildRosterPositionOptions(area, selected) {
       : normalizedArea === "Mounting"
         ? ["", "M01", "M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10"]
         : normalizedArea === "Drill"
-          ? ["", "D07", "D09"]
+          ? ["", "M07", "M09", "D07", "D09"]
           : [""];
 
   return slots
@@ -13594,7 +14010,8 @@ function getFinishAutoAssignPosition_(area, stationName, accessPoint) {
 
   const drill = raw.match(/\bD\s*0?(\d{1,2})\b/);
   if (area === "Drill" && drill) {
-    return `D${String(drill[1]).padStart(2, "0")}`;
+    const drillSlot = `D${String(drill[1]).padStart(2, "0")}`;
+    return FINISH_LINE_C_DRILL_SLOT_ALIAS_TO_MOUNT[drillSlot] || drillSlot;
   }
 
   const final = raw.match(/\bFI[-\s]*0?(\d{1,2})\b/);
@@ -19742,4 +20159,443 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("[Finish User Control Debug]", result);
     return result;
   };
+})();
+
+/*******************************************************
+ * FINISH MORNING SET UP — LIVE LABEL + DRILL PROTECTION
+ * Purpose:
+ *  1) Stop showing "UNASSIGNED · LIVE" when the card has live output.
+ *  2) Protect Drill associates from being displayed/saved into Mounting.
+ *  3) Keep Production API and User Control API separated.
+ *******************************************************/
+(function installFinishMorningDrillProtection_() {
+  if (window.__finishMorningDrillProtectionInstalled) return;
+  window.__finishMorningDrillProtectionInstalled = true;
+
+  function cleanText_(value) {
+    return String(value || "").trim().replace(/\s+/g, " ");
+  }
+
+  function upper_(value) {
+    return cleanText_(value).toUpperCase();
+  }
+
+  function normOp_(value) {
+    try {
+      if (typeof normalizeAssignmentOperatorName === "function") {
+        return normalizeAssignmentOperatorName(value || "");
+      }
+    } catch (_) {}
+    return cleanText_(value);
+  }
+
+  function normArea_(value) {
+    const raw = upper_(value);
+    if (!raw) return "";
+    if (raw === "FINAL" || raw.includes("FINAL INSPECTION") || raw.includes("FINAL QA")) return "Final Inspection";
+    if (raw.includes("DRILL") || /\bD\s*0?\d{1,2}\b/.test(raw)) return "Drill";
+    if (raw.includes("MOUNT") || raw.includes("ASSEMBLE") || /\bM\s*0?\d{1,2}\b/.test(raw)) return "Mounting";
+    if (raw.includes("FINISH UNBOX") || raw.includes("UNBOX")) return "Finish Unbox";
+    if (raw.includes("SHARP")) return "Sharps";
+    if (raw.includes("BIG")) return "Bigs";
+    if (raw.includes("MEI")) return "MEI";
+    try {
+      if (typeof normalizeFinishOperatorStation === "function") {
+        return normalizeFinishOperatorStation(value || "");
+      }
+    } catch (_) {}
+    return cleanText_(value);
+  }
+
+  function isDrillText_(value) {
+    const raw = upper_(value);
+    return raw.includes("DRILL") || /\bD\s*0?\d{1,2}\b/.test(raw);
+  }
+
+  function positionFromText_(area, value) {
+    const raw = upper_(value);
+    if (area === "Drill") {
+      const d = raw.match(/\bD\s*0?(\d{1,2})\b/);
+      if (d) return `D${String(d[1]).padStart(2, "0")}`;
+    }
+    if (area === "Mounting") {
+      const m = raw.match(/\bM\s*0?(\d{1,2})\b/);
+      if (m) return `M${String(m[1]).padStart(2, "0")}`;
+    }
+    if (area === "Final Inspection") {
+      const f = raw.match(/\bFI[-\s]*0?(\d{1,2})\b/);
+      if (f) return `FI-${String(f[1]).padStart(2, "0")}`;
+    }
+    return "";
+  }
+
+  function lineFromText_(area, value) {
+    const raw = upper_(value);
+    if (raw.includes("LINE A")) return "Line A";
+    if (raw.includes("LINE B")) return "Line B";
+    if (raw.includes("LINE C")) return "Line C";
+    if (area === "Drill") return "Line C";
+    return "";
+  }
+
+  function getRowOperator_(row) {
+    return normOp_(row?.operatorName || row?.OperatorName || row?.Operator || row?.operator || row?.Name || row?.name || "");
+  }
+
+  function getSavedRosterRowForOperator_(operatorName) {
+    const target = normOp_(operatorName).toLowerCase();
+    if (!target) return null;
+
+    const sources = [
+      ...(Array.isArray(window.finishRosterApiState?.morningRoster) ? window.finishRosterApiState.morningRoster : []),
+      ...(Array.isArray(window.finishRosterApiState?.roster) ? window.finishRosterApiState.roster : [])
+    ];
+
+    return sources.find(row => {
+      if (String(row?.activeStatus || row?.ActiveStatus || "Active").toLowerCase() === "removed") return false;
+      return getRowOperator_(row).toLowerCase() === target;
+    }) || null;
+  }
+
+  function savedRowIsDrill_(row) {
+    if (!row) return false;
+    return (
+      normArea_(row.defaultArea || row.DefaultArea || row.area || row.Area || "") === "Drill" ||
+      isDrillText_(row.defaultPosition || row.DefaultPosition || row.position || row.Position || "")
+    );
+  }
+
+  function resolveProtectedArea_(operatorName, activityArea, accessPoint = "", flowStation = "") {
+    const saved = getSavedRosterRowForOperator_(operatorName);
+    const savedArea = normArea_(saved?.defaultArea || saved?.DefaultArea || saved?.area || saved?.Area || "");
+
+    // Hard rule: if the saved setup says Drill, live Mounting cannot move that person into M01-M10.
+    if (savedRowIsDrill_(saved)) return "Drill";
+
+    // If the live/current station clearly says Drill, save/display as Drill.
+    if (isDrillText_(`${accessPoint} ${flowStation} ${activityArea}`)) return "Drill";
+
+    return normArea_(activityArea || savedArea || "");
+  }
+
+  function getProtectedLine_(operatorName, area, accessPoint = "", flowStation = "") {
+    const saved = getSavedRosterRowForOperator_(operatorName);
+    const savedLine = cleanText_(saved?.defaultLine || saved?.DefaultLine || saved?.line || saved?.Line || "");
+    const liveLine = lineFromText_(area, `${accessPoint} ${flowStation}`);
+    if (area === "Drill") return savedLine || liveLine || "Line C";
+    return liveLine || savedLine || "";
+  }
+
+  function getProtectedPosition_(operatorName, area, accessPoint = "", flowStation = "") {
+    const saved = getSavedRosterRowForOperator_(operatorName);
+    const savedPosition = cleanText_(saved?.defaultPosition || saved?.DefaultPosition || saved?.position || saved?.Position || "");
+    const livePosition = positionFromText_(area, `${accessPoint} ${flowStation}`);
+    if (area === "Drill") return (isDrillText_(savedPosition) ? savedPosition : "") || livePosition || savedPosition || "";
+    return livePosition || savedPosition || "";
+  }
+
+  function jphForArea_(area, roleType = "Certified", week = "") {
+    const normalizedArea = normArea_(area);
+    const role = cleanText_(roleType || "Certified").toLowerCase();
+    const wk = cleanText_(week).toUpperCase().replace(/^WEEK\s*/, "W");
+    const rules = Array.isArray(window.__finishUserControlJphRules) ? window.__finishUserControlJphRules : [];
+
+    if (role === "training") {
+      const found = rules.find(row =>
+        normArea_(row.Area || row.area) === normalizedArea &&
+        cleanText_(row.RoleType || row.roleType || "").toLowerCase() === "training" &&
+        cleanText_(row.TrainingWeek || row.trainingWeek || "").toUpperCase().replace(/^WEEK\s*/, "W") === wk
+      );
+      const n = Number(found?.TrainingJPH ?? found?.trainingJPH ?? found?.DefaultJPH ?? found?.defaultJPH ?? 0);
+      if (n > 0 || normalizedArea === "Sharps") return n;
+    }
+
+    const certified = rules.find(row =>
+      normArea_(row.Area || row.area) === normalizedArea &&
+      cleanText_(row.RoleType || row.roleType || "Certified").toLowerCase() === "certified"
+    );
+    const n = Number(certified?.CertifiedJPH ?? certified?.certifiedJPH ?? certified?.DefaultJPH ?? certified?.defaultJPH ?? 0);
+    if (n > 0 || normalizedArea === "Sharps") return n;
+
+    return Number({
+      "Finish Unbox": 150,
+      "Mounting": 25,
+      "Final Inspection": 75,
+      "Bigs": 18,
+      "Sharps": 0,
+      "Drill": 6,
+      "MEI": 50
+    }[normalizedArea] ?? 0);
+  }
+
+  function bool_(value) {
+    if (value === true) return true;
+    return /^(true|yes|1)$/i.test(cleanText_(value));
+  }
+
+  function savePayloadForProtectedRow_(row, area, line, position) {
+    const saved = getSavedRosterRowForOperator_(row.operatorName);
+    const roleType = cleanText_(saved?.roleType || saved?.RoleType || "Certified") || "Certified";
+    const trainingWeek = cleanText_(saved?.trainingWeek || saved?.TrainingWeek || "");
+    const customJph = saved?.customJPH ?? saved?.CustomJPH ?? saved?.individualJph ?? saved?.IndividualJPH ?? "";
+    const useCustom = bool_(saved?.useCustomJPH ?? saved?.UseCustomJPH ?? (cleanText_(customJph) !== ""));
+    const defaultJph = Number(saved?.defaultJPH ?? saved?.DefaultJPH ?? jphForArea_(area, roleType, trainingWeek));
+    const finalJph = useCustom && cleanText_(customJph) !== "" ? Number(customJph) : jphForArea_(area, roleType, trainingWeek);
+
+    return {
+      OperatorName: row.operatorName,
+      operatorName: row.operatorName,
+      DefaultArea: area,
+      defaultArea: area,
+      DefaultLine: line,
+      defaultLine: line,
+      DefaultPosition: position,
+      defaultPosition: position,
+      RoleType: roleType,
+      roleType: roleType,
+      TrainingWeek: trainingWeek,
+      trainingWeek: trainingWeek,
+      DefaultJPH: defaultJph,
+      defaultJPH: defaultJph,
+      CustomJPH: customJph,
+      customJPH: customJph,
+      UseCustomJPH: useCustom,
+      useCustomJPH: useCustom,
+      FinalJPH: finalJph,
+      finalJPH: finalJph,
+      IndividualJPH: finalJph,
+      individualJph: finalJph
+    };
+  }
+
+  // Saved Drill should win over generic/stale live Mounting when setup rows are rendered.
+  if (typeof finishSetupFinalResolved_ === "function") {
+    const previousResolved = finishSetupFinalResolved_;
+    window.finishSetupFinalResolved_ = finishSetupFinalResolved_ = function(row) {
+      const resolved = previousResolved(row) || {};
+      const operatorName = getRowOperator_(row);
+      const saved = getSavedRosterRowForOperator_(operatorName) || row;
+      if (savedRowIsDrill_(saved)) {
+        const accessPoint = resolved.accessPoint || row?.LastAccessPoint || row?.lastAccessPoint || "";
+        const flowStation = resolved.flowStation || row?.LastFlowStation || row?.lastFlowStation || "";
+        return {
+          ...resolved,
+          area: "Drill",
+          line: getProtectedLine_(operatorName, "Drill", accessPoint, flowStation),
+          position: getProtectedPosition_(operatorName, "Drill", accessPoint, flowStation)
+        };
+      }
+      return resolved;
+    };
+  }
+
+  // Morning Set Up assignment map: never put Drill rows into M01-M10 cards.
+  if (typeof loadFinishPersonalOperatorAssignments === "function") {
+    window.loadFinishPersonalOperatorAssignments = loadFinishPersonalOperatorAssignments = function(rosterRows) {
+      const assignments = {};
+      const sourceRows = Array.isArray(rosterRows) ? rosterRows : (window.finishRosterApiState?.roster || []);
+
+      sourceRows
+        .filter(row => String(row?.activeStatus || row?.ActiveStatus || "Active").toLowerCase() !== "removed")
+        .forEach(row => {
+          let station = "";
+          try {
+            station = typeof getFinishRosterRowAreaFinal_ === "function"
+              ? getFinishRosterRowAreaFinal_(row)
+              : normArea_(row.defaultArea || row.DefaultArea || row.station || row.Station || "");
+          } catch (_) {
+            station = normArea_(row.defaultArea || row.DefaultArea || row.station || row.Station || "");
+          }
+
+          const operator = getRowOperator_(row);
+          const line = cleanText_(row.defaultLine || row.DefaultLine || row.line || row.Line || "");
+          const slot = cleanText_(row.defaultPosition || row.DefaultPosition || row.position || row.Position || "");
+          if (!operator || !station) return;
+
+          let role = "core";
+          try {
+            role = typeof convertApiRoleToLocal === "function" ? convertApiRoleToLocal(row.roleType || row.RoleType) : "core";
+          } catch (_) {}
+          if (role === "ignore" && !line && !slot) return;
+
+          const key = `${typeof makeAssignmentKey === "function" ? makeAssignmentKey(station, operator) : `${station}||${operator}`}||${line}||${slot}`;
+          assignments[key] = {
+            station,
+            operator,
+            role,
+            trainingWeek: typeof convertApiWeekToNumber === "function" ? convertApiWeekToNumber(row.trainingWeek || row.TrainingWeek) : 1,
+            individualJph: Number(row.individualJph || row.IndividualJPH || row.finalJPH || row.FinalJPH || 0) || 0,
+            line,
+            slot,
+            activeStatus: row.activeStatus || row.ActiveStatus || "Active",
+            updatedAt: row.updatedAt || row.UpdatedAt || "",
+            updatedBy: row.updatedBy || row.UpdatedBy || ""
+          };
+        });
+
+      return assignments;
+    };
+  }
+
+  // Card label + color-class fix:
+  // live output without saved capacity role should say LIVE OUTPUT, not UNASSIGNED · LIVE.
+  // Line C M09/M07 are Drill-first hybrid stations, so they must render with drill-hybrid
+  // unless live output is clearly coming from Mounting backup work.
+  if (typeof renderLineSlot === "function") {
+    window.renderLineSlot = renderLineSlot = function(line, station, slot, assignmentMap, statusMap, side) {
+      const key = makeLineSlotKey(line, station, slot);
+      const assignment = assignmentMap[key];
+      const status = statusMap[key] || "online";
+      const normalizedLine = cleanText_(line);
+      const normalizedSlot = cleanText_(slot).toUpperCase().replace(/\s+/g, "");
+      const normalizedStation = normArea_(station);
+
+      const isFinal = normalizedStation === "Final Inspection";
+      const isLineC = normalizedLine.toUpperCase() === "LINE C";
+      const isDrillHybrid = !isFinal && isLineC && (normalizedSlot === "M09" || normalizedSlot === "M07" || normalizedSlot === "D09" || normalizedSlot === "D07");
+
+      const operator = assignment?.operator || "Click to assign";
+      const total = Number(assignment?.total || 0);
+      const hasLive = !!assignment?.liveNow || total > 0;
+      const direction = side === "left" ? "→" : "←";
+
+      const assignmentStation = normArea_(assignment?.station || assignment?.defaultArea || assignment?.area || station || "");
+      const assignmentLiveSource = normArea_(assignment?.liveSourceArea || assignment?.sourceArea || assignment?.activityArea || assignment?.area || "");
+      const assignmentPosition = cleanText_(assignment?.slot || assignment?.position || assignment?.defaultPosition || slot);
+      const saved = assignment?.operator ? getSavedRosterRowForOperator_(assignment.operator) : null;
+      const savedIsDrill = savedRowIsDrill_(saved);
+      const slotLooksDrill = isDrillText_(`${assignmentPosition} ${slot}`);
+
+      let liveSourceArea = "";
+      if (isFinal) {
+        liveSourceArea = "Final Inspection";
+      } else if (isDrillHybrid) {
+        if (assignmentLiveSource === "Mounting" && !savedIsDrill && !slotLooksDrill) {
+          liveSourceArea = "Mounting";
+        } else if (assignmentLiveSource === "Mounting" && hasLive && assignmentStation === "Mounting" && !savedIsDrill) {
+          liveSourceArea = "Mounting";
+        } else {
+          liveSourceArea = "Drill";
+        }
+      } else {
+        liveSourceArea = assignmentLiveSource || assignmentStation || "Mounting";
+      }
+
+      const typeClass = isFinal ? "final" : (isDrillHybrid ? "drill-hybrid" : "mounting");
+      const sourceClass = isFinal
+        ? ""
+        : (liveSourceArea === "Mounting" ? "live-source-mounting" : liveSourceArea === "Drill" ? "live-source-drill" : "");
+
+      const stationBadge = isDrillHybrid
+        ? `<small>${escapeHtml(liveSourceArea === "Mounting" ? "MOUNT" : "DRILL")}</small>`
+        : "";
+
+      let role = assignment ? getAssignmentRoleLabel(assignment.operator, station, loadConfig()) : "Select from active roster";
+      const roleIsMissing = !role || /^unassigned$/i.test(role);
+      let subLabel = "Select from active roster";
+
+      if (assignment && hasLive && roleIsMissing) subLabel = liveSourceArea === "Drill" ? "Drill Live Output" : "Live Output";
+      else if (assignment && hasLive) subLabel = `${role} · ${liveSourceArea === "Drill" ? "Drill Live" : "Live"}`;
+      else if (assignment && roleIsMissing) subLabel = isDrillHybrid ? "Drill Seat · No Live Output" : "Saved · No Live Output";
+      else if (assignment) subLabel = `${role} · Saved`;
+
+      return `
+        <article class="finish-slot ${typeClass} ${sourceClass} ${assignment ? "assigned" : "empty"} slot-status-${escapeHtml(status)}" data-line-slot="${escapeHtml(key)}" data-line="${escapeHtml(line)}" data-station="${escapeHtml(station)}" data-slot="${escapeHtml(slot)}" data-operator="${escapeHtml(assignment?.operator || "")}">
+          <span class="slot-status-dot"></span>
+          <div class="slot-code">${escapeHtml(slot)}${stationBadge}</div>
+          <div class="slot-copy">
+            <strong>${escapeHtml(operator)}</strong>
+            <span>${escapeHtml(subLabel)}</span>
+          </div>
+          <div class="slot-output">
+            <strong>${numberFmt(total)}</strong>
+            <span>${escapeHtml(direction)}</span>
+          </div>
+        </article>`;
+    };
+  }
+
+  // Activity reader protection: Drill beats generic Mounting when LastAccessPoint/position says Drill.
+  if (typeof getFinishSetupActivityRowsFinal_ === "function") {
+    const previousActivityRows = getFinishSetupActivityRowsFinal_;
+    window.getFinishSetupActivityRowsFinal_ = getFinishSetupActivityRowsFinal_ = function() {
+      return (previousActivityRows() || []).map(row => {
+        const protectedArea = resolveProtectedArea_(row.operatorName, row.area || row.defaultArea || "", row.accessPoint || "", row.stationName || row.flowStation || "");
+        return {
+          ...row,
+          area: protectedArea,
+          defaultArea: protectedArea,
+          line: getProtectedLine_(row.operatorName, protectedArea, row.accessPoint || "", row.stationName || row.flowStation || "") || row.line || "",
+          position: getProtectedPosition_(row.operatorName, protectedArea, row.accessPoint || "", row.stationName || row.flowStation || "") || row.position || ""
+        };
+      });
+    };
+  }
+
+  // Auto Assign protection: saving from live activity cannot overwrite an existing Drill setup into Mounting.
+  window.saveFinishArAutoAssignFinal_ = saveFinishArAutoAssignFinal_ = async function() {
+    const button = document.getElementById("finishArAutoAssignBtn") || document.getElementById("finishAutoAssignFromActivityBtn");
+    const run = async () => {
+      await fetchFinishRosterApi("getJphRules", { department: "Finish", t: Date.now() }).catch(() => null);
+      await loadMorningSetupRoster({ silent: true }).catch(() => []);
+      await loadFinishRosterForSelectedProfile({ silent: true }).catch(() => []);
+
+      const bestByOperator = new Map();
+      (typeof getFinishSetupActivityRowsFinal_ === "function" ? getFinishSetupActivityRowsFinal_() : []).forEach(row => {
+        const key = normOp_(row.operatorName).toLowerCase();
+        if (!key) return;
+        const current = bestByOperator.get(key);
+        if (!current || Number(row.total || 0) > Number(current.total || 0)) bestByOperator.set(key, row);
+      });
+
+      const rows = Array.from(bestByOperator.values());
+      if (!rows.length) {
+        showFinishAssignmentToast?.("No live activity found to auto assign.");
+        return false;
+      }
+
+      if (!window.confirm(`Auto assign ${rows.length} associates from current activity? Drill assignments will be protected.`)) return false;
+
+      let protectedCount = 0;
+      for (const row of rows) {
+        const protectedArea = resolveProtectedArea_(row.operatorName, row.area || row.defaultArea || "", row.accessPoint || "", row.stationName || row.flowStation || "");
+        const line = getProtectedLine_(row.operatorName, protectedArea, row.accessPoint || "", row.stationName || row.flowStation || "") || row.line || "";
+        const position = getProtectedPosition_(row.operatorName, protectedArea, row.accessPoint || "", row.stationName || row.flowStation || "") || row.position || "";
+        const saved = getSavedRosterRowForOperator_(row.operatorName);
+        if (savedRowIsDrill_(saved) && normArea_(row.area || row.defaultArea || "") === "Mounting") protectedCount += 1;
+        await fetchFinishRosterApi("saveRosterRow", savePayloadForProtectedRow_(row, protectedArea, line, position));
+      }
+
+      showFinishAssignmentToast?.(
+        protectedCount > 0
+          ? `Auto assigned ${rows.length}. Protected ${protectedCount} Drill assignment(s).`
+          : `Auto assigned ${rows.length} associates.`
+      );
+      await loadFinishRosterForSelectedProfile({ silent: true }).catch(() => []);
+      await loadMorningSetupRoster({ silent: true }).catch(() => []);
+      renderFinishArFinalLoadout_?.();
+      renderOperatorAssignmentConfigPanel?.();
+      updateConfigTotals?.();
+      renderFinishThreeLineCell?.();
+      return true;
+    };
+
+    if (typeof withFinishButtonLoading_ === "function" && button) {
+      return withFinishButtonLoading_(button, "Auto assigning...", run);
+    }
+    return run();
+  };
+
+  document.addEventListener("DOMContentLoaded", () => {
+    window.setTimeout(() => {
+      try {
+        renderFinishThreeLineCell?.();
+        renderFinishArFinalLoadout_?.();
+      } catch (error) {
+        console.warn("Finish Drill protection initial render skipped:", error);
+      }
+    }, 1300);
+  });
+
+  console.log("[Finish Morning Set Up] Drill protection + live label fix installed.");
 })();

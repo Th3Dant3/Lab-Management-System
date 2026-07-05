@@ -10635,3 +10635,242 @@ body.operator-drawer-open {
     grid-template-columns: 1fr;
   }
 }
+
+/*******************************************************
+ * FINISH MORNING SET UP — DRILL / MOUNTING COLOR SPLIT
+ * Mounting = amber/orange
+ * Drill-first hybrid (Line C M09/M07) = violet/purple
+ * Final Inspection = cyan/blue
+ *
+ * Logic comes from FinishDash.js:
+ * - .finish-slot.mounting
+ * - .finish-slot.drill-hybrid
+ * - .finish-slot.live-source-drill
+ * - .finish-slot.live-source-mounting
+ * - .finish-slot.final
+ *******************************************************/
+
+/* Base Mounting station color */
+.finish-slot.mounting,
+.finish-slot:not(.final):not(.drill-hybrid) {
+  border-color: rgba(255, 159, 26, 0.76) !important;
+  color: var(--orange) !important;
+  background:
+    radial-gradient(circle at 84% 50%, rgba(255, 159, 26, 0.22), transparent 24%),
+    linear-gradient(180deg, rgba(255, 159, 26, 0.18), rgba(2, 12, 24, 0.94)) !important;
+  box-shadow:
+    0 0 20px rgba(255, 159, 26, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Drill-first hybrid seats: Line C M09 and M07 */
+.finish-slot.drill-hybrid,
+.finish-slot.drill-hybrid.live-source-drill {
+  border-color: rgba(176, 108, 255, 0.84) !important;
+  color: var(--purple) !important;
+  background:
+    radial-gradient(circle at 84% 50%, rgba(176, 108, 255, 0.24), transparent 24%),
+    linear-gradient(180deg, rgba(176, 108, 255, 0.20), rgba(2, 12, 24, 0.94)) !important;
+  box-shadow:
+    0 0 22px rgba(176, 108, 255, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Hybrid seat temporarily doing Mounting work */
+.finish-slot.drill-hybrid.live-source-mounting {
+  border-color: rgba(255, 159, 26, 0.86) !important;
+  color: var(--orange) !important;
+  background:
+    radial-gradient(circle at 84% 50%, rgba(255, 159, 26, 0.28), transparent 24%),
+    linear-gradient(180deg, rgba(255, 159, 26, 0.22), rgba(2, 12, 24, 0.94)) !important;
+  box-shadow:
+    0 0 24px rgba(255, 159, 26, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Final Inspection stays cyan */
+.finish-slot.final {
+  border-color: rgba(0, 217, 255, 0.80) !important;
+  color: var(--cyan) !important;
+  background:
+    radial-gradient(circle at 84% 50%, rgba(0, 217, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, rgba(0, 217, 255, 0.17), rgba(2, 12, 24, 0.94)) !important;
+  box-shadow:
+    0 0 20px rgba(0, 217, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Small DRILL/MOUNT badge inside M09/M07 */
+.finish-slot .slot-code small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  transform: translateY(-2px);
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  color: currentColor;
+  background: rgba(2, 12, 24, 0.72);
+  box-shadow: 0 0 10px currentColor;
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
+/* Make live cards feel active without changing the meaning of the station color */
+.finish-slot.assigned.live-source-drill,
+.finish-slot.assigned.live-source-mounting,
+.finish-slot.assigned:not(.empty) {
+  outline: 1px solid rgba(0, 245, 160, 0.22) !important;
+}
+
+.finish-slot.empty {
+  outline: 1px dashed currentColor !important;
+  opacity: 0.72 !important;
+}
+
+/* Status dots stay behavior-based, not station-color-based */
+.finish-slot.slot-status-online .slot-status-dot,
+.finish-slot.morning-slot-dot-green .slot-status-dot,
+.finish-slot.morning-slot-dot-green .morning-slot-live-dot {
+  background: var(--green) !important;
+  box-shadow:
+    0 0 0 3px rgba(0, 245, 160, 0.14),
+    0 0 16px rgba(0, 245, 160, 0.85) !important;
+}
+
+.finish-slot.slot-status-issue .slot-status-dot,
+.finish-slot.morning-slot-dot-amber .slot-status-dot,
+.finish-slot.morning-slot-dot-amber .morning-slot-live-dot {
+  background: var(--amber) !important;
+  box-shadow:
+    0 0 0 3px rgba(251, 191, 36, 0.14),
+    0 0 16px rgba(251, 191, 36, 0.85) !important;
+}
+
+.finish-slot.slot-status-down .slot-status-dot,
+.finish-slot.morning-slot-dot-red .slot-status-dot,
+.finish-slot.morning-slot-dot-red .morning-slot-live-dot {
+  background: var(--red) !important;
+  box-shadow:
+    0 0 0 3px rgba(251, 113, 133, 0.14),
+    0 0 16px rgba(251, 113, 133, 0.85) !important;
+}
+
+/* Keep output value green so production activity is still obvious */
+.finish-slot .slot-output strong {
+  color: var(--green) !important;
+  text-shadow: 0 0 12px rgba(0, 245, 160, 0.28);
+}
+
+.finish-slot.empty .slot-output strong {
+  color: rgba(191, 218, 242, 0.48) !important;
+  text-shadow: none;
+}
+
+/* Legend helper if the chips are present in the Morning Set Up header */
+.morning-setup-legend .legend-drill,
+.finish-line-legend .legend-drill {
+  color: var(--purple);
+  border-color: rgba(176, 108, 255, 0.44);
+  background: rgba(176, 108, 255, 0.08);
+}
+
+.morning-setup-legend .legend-mounting,
+.finish-line-legend .legend-mounting {
+  color: var(--orange);
+  border-color: rgba(255, 159, 26, 0.44);
+  background: rgba(255, 159, 26, 0.08);
+}
+
+.morning-setup-legend .legend-final,
+.finish-line-legend .legend-final {
+  color: var(--cyan);
+  border-color: rgba(0, 217, 255, 0.44);
+  background: rgba(0, 217, 255, 0.08);
+}
+
+
+/* =========================================================
+   OPERATOR PERFORMANCE SHIFT + RING CENTER FIX
+   Additive only. Does not touch Process Flow / WIP layout.
+========================================================= */
+.finish-ar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.finish-ar-shift-control {
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(95, 216, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(5, 16, 30, 0.78);
+}
+
+.finish-ar-shift-control span {
+  color: #8fa6c3;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.finish-ar-shift-control select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid rgba(95, 216, 255, 0.38);
+  border-radius: 9px;
+  outline: none;
+  background: rgba(2, 10, 20, 0.96);
+  color: #eef8ff;
+  font-family: "Sora", sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 10px;
+}
+
+.finish-ar-ring {
+  position: relative;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+}
+
+.finish-ar-ring strong {
+  display: block;
+  width: 100%;
+  margin: 0 auto;
+  text-align: center;
+  line-height: 1;
+}
+
+.finish-ar-ring span {
+  display: block;
+  width: 92px;
+  margin: 7px auto 0;
+  text-align: center;
+  line-height: 1.12;
+}
+
+@media (max-width: 900px) {
+  .finish-ar-actions {
+    justify-content: flex-start;
+  }
+
+  .finish-ar-shift-control {
+    width: 100%;
+  }
+}
