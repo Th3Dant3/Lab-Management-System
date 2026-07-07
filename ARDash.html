@@ -144,6 +144,11 @@
         <em id="largestWIP">--</em>
       </div>
 
+      <div class="status-pill hot secondary-status-pill">
+        <strong>AR WIP</strong>
+        <em id="secondaryArWipStatus">0</em>
+      </div>
+
       <div class="status-pill">
         <strong>Live Mode</strong>
         <em id="liveMiniStatus">Connected</em>
@@ -166,16 +171,17 @@
           </div>
         </article>
 
-        <article class="kpi">
+        <article class="kpi secondary-wip-kpi">
           <div class="kpi-head">
-            <div class="kpi-icon">⇥</div>AR WIP
+            <div class="kpi-icon">⇆</div>AR WIP
           </div>
-          <div class="kpi-value" id="surfaceInputWip">0</div>
+          <div class="kpi-value" id="secondaryArWip">0</div>
           <div class="kpi-foot">
-            <span>Surface Inspection input</span>
+            <span id="secondaryArWipRange">AR-IN → DeRing only</span>
           </div>
         </article>
 
+     
         <article class="kpi">
           <div class="kpi-head">
             <div class="kpi-icon">▤</div>Currently Active Baskets
@@ -242,7 +248,7 @@
             <span class="name">Incoming to AR WIP</span>
             <span class="val" id="queueSurface">0</span>
           </div>
-
+         
           <div class="q-item green">
             <span class="name">AR-IN WIP</span>
             <span class="val" id="queueArIn">0</span>
@@ -277,6 +283,22 @@
       <section class="flow-panel">
         <div class="flow-head">
           <h2>AR Process Flow</h2>          
+        </div>
+
+        <div class="secondary-wip-flow" aria-label="Secondary WIP from AR-IN to DeRing">
+          <div class="secondary-wip-flow-head">
+            <span>AR WIP</span>
+            <strong id="secondaryArWipFlow">0</strong>
+          </div>
+          <div class="secondary-wip-track">
+            <div class="secondary-wip-fill" id="secondaryArWipFill"></div>
+            <div class="secondary-wip-step">AR-IN</div>
+            <div class="secondary-wip-step">Basket</div>
+            <div class="secondary-wip-step">Oven</div>
+            <div class="secondary-wip-step">Sectoring</div>
+            <div class="secondary-wip-step">DeRing</div>
+          </div>
+          <div class="secondary-wip-flow-sub" id="secondaryArWipBreakdown">AR-IN 0 · Basket 0 · Oven 0 · Sectoring 0 · DeRing 0</div>
         </div>
 
         <div class="stations" id="stations">

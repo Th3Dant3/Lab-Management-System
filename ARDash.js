@@ -744,8 +744,10 @@ function renderDashboard(flowPayload, capacityPayload) {
   const sectoringActivity = toNumber(sectoringRow.ActivityToday);
   const deringActivity = toNumber(deringRow.ActivityToday);
 
+  const secondaryArWip = arInWip + basketWip + ovenWip + sectoringWip + deringWip;
+
   const totalArWip = toNumber(flowSummary.TotalWIP) ||
-    surfaceInputWip + arInWip + basketWip + ovenWip + sectoringWip + deringWip;
+    surfaceInputWip + secondaryArWip;
 
   const totalActivityToday =
     arInActivity + basketActivity + ovenActivity + sectoringActivity + deringActivity + arOutActivity;
@@ -815,6 +817,7 @@ function renderDashboard(flowPayload, capacityPayload) {
 
   LAST_VALUES = {
     surfaceInputWip,
+    secondaryArWip,
     arInWip,
     basketWip,
     ovenWip,
@@ -856,6 +859,7 @@ function renderDashboard(flowPayload, capacityPayload) {
   setText("largestPressure", largestWip.name);
 
   animateValue("totalArWip", totalArWip);
+  animateValue("secondaryArWip", secondaryArWip);
   animateValue("surfaceInputWip", surfaceInputWip);
   animateValue("activeBasketsKpi", basketUnits.length);
   animateValue("activeOvensKpi", activeOvens);
@@ -863,6 +867,15 @@ function renderDashboard(flowPayload, capacityPayload) {
   animateValue("arOutActivity", arOutActivity);
 
   setText("activeStations", `${fmt(activeWipStations)} active WIP stations`);
+  setText("secondaryArWipStatus", fmt(secondaryArWip));
+  setText("secondaryArWipFlow", fmt(secondaryArWip));
+  setText("secondaryArWipRange", `AR-IN ${fmt(arInWip)} → DeRing ${fmt(deringWip)}`);
+  setText("secondaryArWipBreakdown", `AR-IN ${fmt(arInWip)} · Basket ${fmt(basketWip)} · Oven ${fmt(ovenWip)} · Sectoring ${fmt(sectoringWip)} · DeRing ${fmt(deringWip)}`);
+  const secondaryFill = $("secondaryArWipFill");
+  if (secondaryFill) {
+    const secondaryDenominator = Math.max(totalArWip, secondaryArWip, 1);
+    secondaryFill.style.width = `${Math.max(6, pct(secondaryArWip, secondaryDenominator))}%`;
+  }
   setText("basketLensText", `${fmt(basketWip)} lenses / ${AR_CAPACITY_RULES.BASKET_LENS} each`);
   setText("ovenBasketText", `${fmt(ovenBasketLoad)} baskets / ${AR_CAPACITY_RULES.OVEN_BASKETS} each (${fmt(AR_CAPACITY_RULES.OVEN_LENS)} lenses)`);
 
@@ -888,6 +901,7 @@ function renderDashboard(flowPayload, capacityPayload) {
   setText("ovenBasketBadge", lastOvenBasketText);
 
   setText("queueSurface", fmt(surfaceInputWip));
+  setText("queueSecondaryArWip", fmt(secondaryArWip));
   setText("queueArIn", fmt(arInWip));
   setText("queueBasket", fmt(basketWip));
   setText("queueOven", fmt(ovenWip));
@@ -969,6 +983,11 @@ function renderWipTotals(body, summaryBox, rows, flowSummary) {
     <div class="ar-summary-card">
       <span>Surface Input WIP</span>
       <strong>${fmt(bridgeInput)}</strong>
+    </div>
+
+    <div class="ar-summary-card">
+      <span>Secondary WIP</span>
+      <strong>${fmt(LAST_VALUES?.secondaryArWip)}</strong>
     </div>
 
     <div class="ar-summary-card">
@@ -1286,6 +1305,11 @@ function renderDailyBrief(values) {
     <div class="brief-item station-brief">
       <strong>${fmt(values.totalArWip)}</strong>
       <span>Currently AR Work In Progress.</span>
+    </div>
+
+    <div class="brief-item station-brief">
+      <strong>${fmt(values.secondaryArWip)}</strong>
+      <span>Secondary WIP from AR-IN through DeRing.</span>
     </div>
 
     <div class="brief-item station-brief">

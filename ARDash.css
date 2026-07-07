@@ -368,7 +368,7 @@ button {
 
 .status-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -465,7 +465,7 @@ button {
 
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -655,6 +655,25 @@ button {
   box-shadow: 0 0 9px var(--green);
 }
 
+.q-item.purple::before {
+  background: var(--purple);
+  box-shadow: 0 0 9px var(--purple);
+}
+
+.secondary-wip-row {
+  border-color: rgba(155, 92, 255, 0.26);
+  background: rgba(155, 92, 255, 0.055);
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+
+.secondary-wip-row .val,
+.secondary-wip-kpi .kpi-value,
+.secondary-status-pill em {
+  color: var(--purple-bright);
+  text-shadow: 0 0 18px rgba(155, 92, 255, 0.24);
+}
+
 .q-item .name {
   flex: 1;
   color: var(--text);
@@ -696,6 +715,111 @@ button {
 .flow-head span {
   color: var(--text-dim);
   font-size: 11px;
+}
+
+.secondary-wip-flow {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 14px;
+  padding: 12px 13px 11px;
+  border: 1px solid rgba(155, 92, 255, 0.24);
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, rgba(255, 153, 0, 0.08), rgba(155, 92, 255, 0.10), rgba(255, 153, 0, 0.04)),
+    rgba(13, 14, 20, 0.88);
+}
+
+.secondary-wip-flow::before {
+  content: "";
+  position: absolute;
+  left: -20%;
+  top: 0;
+  width: 42%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+  animation: secondaryWipSweep 3.2s linear infinite;
+}
+
+.secondary-wip-flow-head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.secondary-wip-flow-head span {
+  color: var(--purple-bright);
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.secondary-wip-flow-head strong {
+  color: var(--purple-bright);
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 950;
+  text-shadow: 0 0 18px rgba(155, 92, 255, 0.34);
+}
+
+.secondary-wip-track {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-height: 34px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 999px;
+  background: rgba(5, 6, 10, 0.62);
+}
+
+.secondary-wip-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,153,0,0.38), rgba(155,92,255,0.42));
+  box-shadow: 0 0 22px rgba(155, 92, 255, 0.22);
+  transition: width 0.65s ease;
+}
+
+.secondary-wip-step {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.78);
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.secondary-wip-step:last-child {
+  border-right: 0;
+}
+
+.secondary-wip-flow-sub {
+  position: relative;
+  z-index: 2;
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 750;
+  text-align: center;
+}
+
+@keyframes secondaryWipSweep {
+  from { transform: translateX(0); }
+  to { transform: translateX(340%); }
 }
 
 .stations {
