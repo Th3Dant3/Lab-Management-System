@@ -5,6 +5,8 @@
 ========================================================= */
 "use strict";
 
+console.log("[SurfaceWIP] Option A loaded. Surface WIP and operator activity = Production API.");
+
 let hourlyInOutChart = null;
 
 
@@ -538,7 +540,7 @@ async function fetchData(forceRender = false) {
   setSystemStatus("loading");
 
   try {
-    const url = `${CONFIG.API_URL}?action=productionFlow&area=${encodeURIComponent(CONFIG.AREA || "Surface")}&t=${Date.now()}`;
+    const url = `${CONFIG.API_URL}?action=productionFlow&area=${encodeURIComponent(CONFIG.AREA || "Surface")}&debug=true&t=${Date.now()}`;
 
     const res = await fetch(url, {
       cache: "no-store"
@@ -681,10 +683,64 @@ function normalizeOperatorActivityPayload(payload){
   const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
   return rows.map(row=>{ const hours=row.Hours||row.hours||{}; return {reportDate:getOperatorField(row,"ReportDate","reportDate",""),area:getOperatorField(row,"Area","area",CONFIG.AREA),flowStation:getOperatorField(row,"FlowStation","flowStation",""),accessPoint:getOperatorField(row,"AccessPoint","accessPoint",""),operator:normalizeOperatorDisplayName(getOperatorField(row,"Operator","operator","System / No Operator Captured")),total:num(getOperatorField(row,"Total","total",0)),hourlyTotal:num(getOperatorField(row,"HourlyTotal","hourlyTotal",0)),bestHour:getOperatorField(row,"BestHour","bestHour","—"),bestHourValue:num(getOperatorField(row,"BestHourValue","bestHourValue",0)),lastActiveHour:getOperatorField(row,"LastActiveHour","lastActiveHour","—"),hours}; }).filter(row=>isVisibleSurfaceOperatorStation(row.flowStation)).sort(sortOperatorRowsByStationOrder);
 }
-async function fetchOperatorActivity(quiet=true){
-  const url=`${CONFIG.API_URL}?action=operatorActivity&area=${encodeURIComponent(CONFIG.AREA||"Surface")}&t=${Date.now()}`;
-  try { const res=await fetch(url,{cache:"no-store"}); if(!res.ok) throw new Error("Operator API HTTP "+res.status); const json=await res.json(); if(!json||json.status!=="success") throw new Error(json?.message||"Operator API returned error"); state.operatorActivity=normalizeOperatorActivityPayload(json); state.operatorSummary=json.summary||{}; state.operatorStationOptions=OPERATOR_SURFACE_STATION_ORDER.filter(st=>state.operatorActivity.some(row=>row.flowStation===st)); state.operatorError=""; renderOperatorStationOptions(); renderOperatorActivity(); return json; }
-  catch(err){ console.error("[SurfaceWIP] Operator activity error:",err); state.operatorError=err.message||"Unable to load operator activity."; if(!quiet) renderOperatorActivity(); return null; }
+async function fetchOperatorActivity(quiet = true) {
+  const area = encodeURIComponent(CONFIG.AREA || "Surface");
+  const stamp = Date.now();
+
+  /*
+    Surface Option A:
+    Operator activity must come from the Production API, same as WIP.
+    debug=true bypasses short Apps Script cache while we validate the live dashboard.
+    operator_activity is kept as a fallback alias because the Production API supports both names.
+  */
+  const urls = [
+    `${CONFIG.API_URL}?action=operatorActivity&area=${area}&debug=true&t=${stamp}`,
+    `${CONFIG.API_URL}?action=operator_activity&area=${area}&debug=true&t=${stamp}`
+  ];
+
+  let lastError = null;
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+
+      if (!res.ok) {
+        throw new Error(`Operator API HTTP ${res.status}`);
+      }
+
+      const json = await res.json();
+
+      if (!json || String(json.status || "").toLowerCase() !== "success") {
+        throw new Error(json?.message || "Operator API returned error");
+      }
+
+      state.operatorActivity = normalizeOperatorActivityPayload(json);
+      state.operatorSummary = json.summary || {};
+      state.operatorStationOptions = OPERATOR_SURFACE_STATION_ORDER.filter(st =>
+        state.operatorActivity.some(row => row.flowStation === st)
+      );
+      state.operatorError = "";
+
+      renderOperatorStationOptions();
+      renderOperatorActivity();
+
+      return json;
+
+    } catch (err) {
+      lastError = err;
+      console.warn("[SurfaceWIP] Operator activity attempt failed:", err, url);
+    }
+  }
+
+  console.error("[SurfaceWIP] Operator activity error:", lastError);
+
+  state.operatorError = lastError?.message || "Unable to load operator activity.";
+
+  if (!quiet) {
+    renderOperatorActivity();
+  }
+
+  return null;
 }
 function renderOperatorStationOptions(){ const select=document.getElementById("operatorStationFilter"); if(!select) return; const current=select.value||state.operatorFilter||"all", stations=state.operatorStationOptions||[]; select.innerHTML=`<option value="all">All Surface Operator Stations</option>${stations.map(st=>`<option value="${escapeHTML(st)}">${escapeHTML(st)}</option>`).join("")}`; select.value=stations.includes(current)?current:"all"; state.operatorFilter=select.value; }
 function getFilteredOperatorRows(){
