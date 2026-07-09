@@ -248,7 +248,8 @@ h1 { font-size: clamp(28px, 3vw, 40px); letter-spacing: -0.04em; }
 .chart-line-actual { fill: none; stroke: var(--green); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
 .chart-line-expected { fill: none; stroke: var(--blue); stroke-width: 3; stroke-dasharray: 9 8; stroke-linecap: round; stroke-linejoin: round; }
 .chart-line-projected { fill: none; stroke: var(--cyan); stroke-width: 3; stroke-dasharray: 4 7; stroke-linecap: round; stroke-linejoin: round; }
-.chart-label { fill: var(--muted); font-size: 12px; }
+.chart-label { fill: var(--muted); font-size: 13px; }
+.chart-y-label { fill: var(--muted); font-size: 13px; font-weight: 600; }
 .chart-now { stroke: var(--cyan); stroke-width: 2; stroke-dasharray: 5 5; animation: chartNowPulse 1.6s ease-in-out infinite; }
 .chart-now-tag { fill: var(--bg2); stroke: var(--cyan); stroke-width: 1; }
 .chart-now-label { fill: var(--cyan); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
@@ -293,7 +294,7 @@ h1 { font-size: clamp(28px, 3vw, 40px); letter-spacing: -0.04em; }
   gap: 18px;
   padding: 0 4px 10px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .chart-legend-item { display: flex; align-items: center; gap: 6px; }
 .chart-legend .swatch {
@@ -360,6 +361,22 @@ input, select {
 }
 input:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(18,216,255,0.12); }
 select:disabled { opacity: .6; cursor: not-allowed; }
+
+/* The <select> element's own background/color rules above only style the CLOSED
+   box — browsers render the open dropdown list as a separate native popup that
+   ignores them unless <option> is styled directly. Without this, the popup falls
+   back to the browser's default white background + tiny system font. */
+select option {
+  background: #0a1626;
+  color: var(--text);
+  font-size: 15px;
+  padding: 10px 12px;
+}
+select option:checked,
+select option:hover {
+  background: var(--cyan);
+  color: #04121e;
+}
 
 .form-grid, .setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .input-panel { grid-column: 1 / -1; }

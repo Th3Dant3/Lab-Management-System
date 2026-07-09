@@ -17,7 +17,7 @@
  */
 
 const SURFACE_DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec';
-const SURFACE_DASHBOARD_REFRESH_MS = 5 * 60 * 500;
+const SURFACE_DASHBOARD_REFRESH_MS = 5 * 60 * 1000;
 
 const SURFACE_API_URL = 'https://script.google.com/macros/s/AKfycbzaropKAS7ujmUgz88cjchj9lFCJS3VX-TCBFmaE8x449QtEiWV-3cbTvVuRXxIpedv/exec';
 
@@ -1452,12 +1452,16 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
       html += `<line class="chart-grid" x1="${xx}" y1="${padTop}" x2="${xx}" y2="${height - padBottom}"></line>`;
     }
     const label = formatHourLabel(slots[i - 1] ? slots[i - 1].label : '');
-    html += `<text class="chart-label" x="${xx}" y="${height - 12}" text-anchor="middle">${label}</text>`;
+    const anchor = i === 1 ? 'start' : (i === totalPoints ? 'end' : 'middle');
+    html += `<text class="chart-label" x="${xx}" y="${height - 12}" text-anchor="${anchor}">${label}</text>`;
   }
 
   html += `<line class="chart-axis" x1="${padLeft}" y1="${height - padBottom}" x2="${width - padRight}" y2="${height - padBottom}"></line>`;
   html += `<line class="chart-axis" x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${height - padBottom}"></line>`;
-  html += `<path class="chart-area-actual" d="${areaPath(actualPoints)}"></path>`;
+  const realActualPoints = hoursEntered > 0 ? actualPoints.slice(0, Math.min(actualPoints.length, hoursEntered)) : [];
+  if (realActualPoints.length > 1) {
+    html += `<path class="chart-area-actual" d="${areaPath(realActualPoints)}"></path>`;
+  }
   html += `<path class="chart-line-expected" d="${path(expectedPoints)}"></path>`;
   html += `<path class="chart-line-projected" d="${path(projectedPoints)}"></path>`;
   html += `<path class="chart-line-actual" d="${path(actualPoints)}"></path>`;
@@ -1498,14 +1502,18 @@ function formatCompactNumber(value) {
 
 function formatHourLabel(value) {
   const text = String(value || '');
-  const match = text.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return text;
-  let hour = Number(match[1]);
+  // Range labels (final partial slot, e.g. "5:00 PM–5:30 PM") — axis space is tight,
+  // so show only the end time, which is what actually matters (when the shift closes).
+  const parts = text.split(/[–-]/);
+  const display = parts.length > 1 ? parts[parts.length - 1].trim() : text.trim();
+
+  const match = display.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return display;
+
+  const hour = match[1];
   const minute = match[2];
-  const suffix = hour >= 12 ? 'PM' : 'AM';
-  if (hour === 0) hour = 12;
-  else if (hour > 12) hour -= 12;
-  return minute === '00' ? `${hour} ${suffix}` : `${hour}:${minute} ${suffix}`;
+  const suffix = match[3].toUpperCase() === 'AM' ? 'a' : 'p';
+  return minute === '00' ? `${hour}${suffix}` : `${hour}:${minute}${suffix}`;
 }
 
 
