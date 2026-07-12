@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Surface WIP Forecast</title>
+  <title>Surface Goal Forecast</title>
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./surfaceforecast.css?v=20260709-v33-scoreboard-skin">
+  <link rel="stylesheet" href="./surfaceforecast.css?v=20260712-calendar-v1">
 </head>
 
 <body>
@@ -17,7 +17,7 @@
         <div class="brand-mark">SF</div>
         <div>
           <strong>SURFACE</strong>
-          <span>WIP FORECAST</span>
+          <span>Goal FORECAST</span>
         </div>
       </div>
 
@@ -41,13 +41,16 @@
 
     <div class="main-stage">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Real-time capacity analysis</p>
-          <h1>Surface WIP Forecast</h1>
-          <p class="subtitle">Pace, goal risk, bottleneck pressure, and projected AR41 output in one clean command view.</p>
+        <div>          
+          <h1>Surface Goal Forecast</h1>          
         </div>
 
         <div class="topbar-actions">
+          <label class="compact-select compact-date">
+            <span>Production Date</span>
+            <input id="productionDate" type="date">
+            <small id="productionDateLabel">Today</small>
+          </label>
           <label class="compact-select">
             <span>Shift Mode</span>
             <select id="shiftMode">
@@ -55,6 +58,7 @@
               <option value="Weekday OT 12">Weekday OT 12 - 10.5 Hours</option>
               <option value="Weekend">Weekend - 10.5 Hours</option>
             </select>
+            <small id="shiftControlStatus">Calendar Controlled</small>
           </label>
           <button type="button" id="calculateBtn" class="primary">↻ Refresh</button>
         </div>
@@ -146,8 +150,7 @@
 
           <section class="panel focus-panel dashboard-third">
             <div class="section-title command-title">
-              <h2>Operational Focus</h2>
-              <span>Live WIP + downtime</span>
+              <h2>Operational Focus</h2>              
             </div>
 
             <div class="focus-list">
@@ -174,10 +177,9 @@
             </div>
           </section>
 
-          <section class="panel action-panel dashboard-third">
-            <div class="section-title command-title">
+          <section class="panel action-panel dashboard-third">            <div class="section-title command-title">
               <h2>Action Insight – How to Reach Goal</h2>
-              <span>Best move now</span>
+              
             </div>
 
             <div class="action-list">
@@ -196,8 +198,7 @@
 
           <section class="panel wide goal-plan-panel">
             <div class="section-title command-title">
-              <h2>Goal Achievement Plan</h2>
-              <span>Coverage needed to hit Ship Goal — SF Unbox is a hard staffing limit, other areas are downtime risk</span>
+              <h2>Goal Achievement Plan</h2>              
             </div>
             <div id="goalPlanSummary" class="goal-plan-summary">
               <p class="muted-cell">Set a Ship Goal above 0 to see the staffing plan.</p>
@@ -226,8 +227,7 @@
 
           <section class="panel wide detail-panel">
             <div class="section-title command-title">
-              <h2>Area Bottleneck Detail</h2>
-              <span>Worst pressure first</span>
+              <h2>Area Bottleneck Detail</h2>              
             </div>
             <div class="table-wrap">
               <table>
@@ -260,8 +260,7 @@
             <div class="performance-tab-header">
               <div>
                 <p class="eyebrow">Live performance</p>
-                <h2>Pace &amp; Hourly Outlook</h2>
-                <p class="subtitle">Real-time pace, hourly outlook, and projected completion for the selected shift.</p>
+                <h2>Pace &amp; Hourly Outlook</h2>                
               </div>
               <div class="performance-tab-badge"><span class="status-led"></span>Current Shift</div>
             </div>
@@ -388,6 +387,11 @@
             </div>
 
             <div class="form-grid setup-grid">
+              <label>
+                Production Date
+                <div id="productionDateSetupText" class="readonly-field">Today</div>
+              </label>
+
               <label>
                 Shift Mode
                 <div id="shiftModeSetupText" class="readonly-field">Weekday - 9.5 Hours</div>
@@ -530,6 +534,6 @@
     </div>
   </div>
 
-  <script src="./surfaceforecast.js?v=20260709-v27-clean-tabs"></script>
+  <script src="./surfaceforecast.js?v=20260712-calendar-v1"></script>
 </body>
 </html>

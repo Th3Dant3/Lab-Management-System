@@ -90,9 +90,9 @@ function getSurfaceFlowOrderIndex(key) {
 const SURFACE_PRESSURE_ROUTE = {
   unbox: {
     pressureAreaKey: 'autoblocker',
-    pressureLabel: 'Auto Blocker / Detaper',
+    pressureLabel: 'Taping / Auto Blocker',
     timeMode: 'sf_unbox_stage',
-    note: 'SF Unbox scan is feeding Auto Blocker / Detaper'
+    note: 'SF Unbox scan is feeding Taping / Auto Blocker'
   },
   autoblocker: {
     pressureAreaKey: 'cooling',
@@ -142,10 +142,11 @@ const SURFACE_PRESSURE_ROUTE = {
 };
 
 const HOURLY_DEFAULTS = [
-  '06:00', '07:00', '08:00', '09:00', '10:00',
-  '11:00', '12:00', '13:00', '14:00', '15:00',
-  '16:00', '17:00', '18:00'
+  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
+  '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
 ];
+
+let shiftModeManualOverride = false;
 
 let downtimeCounter = 0;
 let latestForecastResult = null;
@@ -226,7 +227,7 @@ function wireButtons() {
     if (el) el.addEventListener('click', buttons[id]);
   });
 
-  ['shiftMode', 'perfShiftModeSelect', 'perfDateInput', 'bosWip', 'shipGoal', 'incomingLow', 'incomingHigh', 'remakeLow', 'remakeHigh', 'floaterCount', 'floaterAssign'].forEach(function (id) {
+  ['shiftMode', 'productionDate', 'perfShiftModeSelect', 'perfDateInput', 'bosWip', 'shipGoal', 'incomingLow', 'incomingHigh', 'remakeLow', 'remakeHigh', 'floaterCount', 'floaterAssign'].forEach(function (id) {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', calculateForecast);
@@ -378,38 +379,57 @@ function buildFloaterOptions() {
   });
 }
 
-function buildHourlyRows() {
+function buildHourlyRows(shiftMode, preserveExisting = true) {
   const body = document.getElementById('hourlyRows');
   if (!body) return;
 
+  const selectedShift = shiftMode || getValue('shiftMode', 'Weekday');
+  const windowInfo = getShiftWindow(selectedShift);
+  const startMinutes = parseTimeToMinutes(windowInfo.start) || 420;
+  const endMinutes = parseTimeToMinutes(windowInfo.end) || 1050;
+  const slots = buildPerformanceHourSlots(startMinutes, endMinutes);
+  const previous = {};
+
+  if (preserveExisting) {
+    document.querySelectorAll('.hourly-row').forEach(function (row) {
+      const key = row.dataset.apiHour || normalizeHourKey(getRowValue(row, '.hr-hour'));
+      previous[key] = {
+        unbox: getRowValue(row, '.hr-unbox'), autoblocker: getRowValue(row, '.hr-autoblocker'),
+        cooling: getRowValue(row, '.hr-cooling'), orb: getRowValue(row, '.hr-orb'),
+        polisher: getRowValue(row, '.hr-polisher'), engraving: getRowValue(row, '.hr-engraving'),
+        detaping: getRowValue(row, '.hr-detaping'), coater: getRowValue(row, '.hr-coater'),
+        inspection: getRowValue(row, '.hr-inspection'), notes: getRowValue(row, '.hr-notes'),
+        active: getRowValue(row, '.hr-active') || 'Yes'
+      };
+    });
+  }
+
   body.innerHTML = '';
 
-  HOURLY_DEFAULTS.forEach(function (hour) {
+  slots.forEach(function (slot) {
+    const apiHour = minutesToHourKey(Math.floor(slot.start / 60) * 60);
+    const saved = previous[apiHour] || {};
     const tr = document.createElement('tr');
     tr.className = 'hourly-row';
+    tr.dataset.apiHour = apiHour;
 
     tr.innerHTML = `
-      <td><input class="hour-input hr-hour" type="text" value="${hour}"></td>
-      <td><input class="hr-unbox" type="number" min="0" step="1"></td>
-      <td><input class="hr-autoblocker" type="number" min="0" step="1"></td>
-      <td><input class="hr-cooling" type="number" min="0" step="1"></td>
-      <td><input class="hr-orb" type="number" min="0" step="1"></td>
-      <td><input class="hr-polisher" type="number" min="0" step="1"></td>
-      <td><input class="hr-engraving" type="number" min="0" step="1"></td>
-      <td><input class="hr-detaping" type="number" min="0" step="1"></td>
-      <td><input class="hr-coater" type="number" min="0" step="1"></td>
-      <td><input class="hr-inspection" type="number" min="0" step="1"></td>
-      <td><input class="notes-input hr-notes" type="text"></td>
-      <td>
-        <select class="hr-active">
-          <option value="Yes">Yes</option>
-          <option value="No">No</option>
-        </select>
-      </td>
-    `;
+      <td><input class="hour-input hr-hour" type="text" value="${escapeHtml(slot.label)}" readonly></td>
+      <td><input class="hr-unbox" type="number" min="0" step="1" value="${escapeHtml(saved.unbox || '')}"></td>
+      <td><input class="hr-autoblocker" type="number" min="0" step="1" value="${escapeHtml(saved.autoblocker || '')}"></td>
+      <td><input class="hr-cooling" type="number" min="0" step="1" value="${escapeHtml(saved.cooling || '')}"></td>
+      <td><input class="hr-orb" type="number" min="0" step="1" value="${escapeHtml(saved.orb || '')}"></td>
+      <td><input class="hr-polisher" type="number" min="0" step="1" value="${escapeHtml(saved.polisher || '')}"></td>
+      <td><input class="hr-engraving" type="number" min="0" step="1" value="${escapeHtml(saved.engraving || '')}"></td>
+      <td><input class="hr-detaping" type="number" min="0" step="1" value="${escapeHtml(saved.detaping || '')}"></td>
+      <td><input class="hr-coater" type="number" min="0" step="1" value="${escapeHtml(saved.coater || '')}"></td>
+      <td><input class="hr-inspection" type="number" min="0" step="1" value="${escapeHtml(saved.inspection || '')}"></td>
+      <td><input class="notes-input hr-notes" type="text" value="${escapeHtml(saved.notes || '')}"></td>
+      <td><select class="hr-active"><option value="Yes">Yes</option><option value="No">No</option></select></td>`;
 
     body.appendChild(tr);
-
+    const active = tr.querySelector('.hr-active');
+    if (active) active.value = saved.active || 'Yes';
     tr.querySelectorAll('input, select').forEach(function (input) {
       input.addEventListener('input', calculateForecast);
       input.addEventListener('change', calculateForecast);
@@ -441,17 +461,16 @@ function addDowntimeRow() {
       Issue
       <select class="dt-issue">
         <option value="Machine Down">Machine Down</option>
-        <option value="Machine Slow">Machine Slow</option>
+        <option value="Preventive Maintenance">Preventive Maintenance</option>
+        <option value="Low Work">Low Work / Starved</option>
         <option value="Quality Issue">Quality Issue</option>
-        <option value="Material Issue">Material Issue</option>
         <option value="Operator Short">Operator Short</option>
-        <option value="Other">Other</option>
       </select>
     </label>
 
     <label>
       Units Down
-      <input class="dt-units" type="number" min="0" step="0.5" value="0">
+      <input class="dt-units" type="number" min="0" step="0.5" value="1">
     </label>
 
     <label>
@@ -558,7 +577,7 @@ function collectPayload() {
 
   document.querySelectorAll('.hourly-row').forEach(function (row) {
     hourly.push({
-      hour: getRowValue(row, '.hr-hour'),
+      hour: row.dataset.apiHour || normalizeHourKey(getRowValue(row, '.hr-hour')),
       unbox: Number(getRowValue(row, '.hr-unbox')) || 0,
       autoblocker: Number(getRowValue(row, '.hr-autoblocker')) || 0,
       cooling: Number(getRowValue(row, '.hr-cooling')) || 0,
@@ -577,6 +596,7 @@ function collectPayload() {
   const dashboardSync = window.surfaceDashboardSync || null;
 
   return {
+    productionDate: getValue('productionDate', getLocalDateInputValue(new Date())),
     shiftMode: getValue('shiftMode', 'Weekday'),
     bosWip: Number(getValue('bosWip', 0)) || 0,
     shipGoal: Number(getValue('shipGoal', 0)) || 0,
@@ -1451,7 +1471,14 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
     if (i < totalPoints) {
       html += `<line class="chart-grid" x1="${xx}" y1="${padTop}" x2="${xx}" y2="${height - padBottom}"></line>`;
     }
-    const label = formatHourLabel(slots[i - 1] ? slots[i - 1].label : '');
+    // Every point on this chart is a cumulative value computed through
+    // slot.end (see expectedCum/slotEndHours above) — so the tick under it
+    // must always say slot.end too. The table/setup grid intentionally keep
+    // slots[].label start-based for readability; reusing that here caused a
+    // partial edge slot's forced end-label to collide with the very next
+    // slot's start-label at the same clock time (duplicate "7a" ticks) while
+    // the true shift-start time never showed up anywhere.
+    const label = slots[i - 1] ? formatHourLabel(formatMinutesAsClock(slots[i - 1].end)) : '';
     const anchor = i === 1 ? 'start' : (i === totalPoints ? 'end' : 'middle');
     html += `<text class="chart-label" x="${xx}" y="${height - 12}" text-anchor="${anchor}">${label}</text>`;
   }
@@ -1787,7 +1814,9 @@ async function saveCurrentStateToApi(showAlert) {
 function restorePayloadToPage(payload) {
   if (!payload) return false;
 
-  setValue('shiftMode', payload.shiftMode || 'Weekday');
+  setValue('productionDate', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('perfDateInput', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('shiftMode', payload.shiftMode || getAutomaticShiftMode(payload.productionDate));
   setValue('bosWip', payload.bosWip || 0);
   setValue('shipGoal', payload.shipGoal || 0);
   setValue('incomingLow', payload.incomingLow ?? SURFACE_EXTRA_WORK_DEFAULTS.incomingLow);
@@ -1815,7 +1844,8 @@ function restorePayloadToPage(payload) {
     });
   }
 
-  restoreHourlyRows(payload.hourly || []);
+  buildHourlyRows(payload.shiftMode || getAutomaticShiftMode(payload.productionDate), false);
+    restoreHourlyRows(payload.hourly || []);
   restoreDowntimeRows(payload.downtime || []);
 
   return true;
@@ -1867,7 +1897,9 @@ function restorePageState() {
   try {
     const payload = state.payload;
 
-    setValue('shiftMode', payload.shiftMode || 'Weekday');
+    setValue('productionDate', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('perfDateInput', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('shiftMode', payload.shiftMode || getAutomaticShiftMode(payload.productionDate));
     setValue('bosWip', payload.bosWip || 0);
     setValue('shipGoal', payload.shipGoal || 0);
     setValue('floaterCount', payload.floaterCount || 0);
@@ -1891,6 +1923,7 @@ function restorePageState() {
       });
     }
 
+    buildHourlyRows(payload.shiftMode || getAutomaticShiftMode(payload.productionDate), false);
     restoreHourlyRows(payload.hourly || []);
     restoreDowntimeRows(payload.downtime || []);
 
@@ -1902,13 +1935,16 @@ function restorePageState() {
 }
 
 function restoreHourlyRows(hourlyRows) {
-  const rows = Array.from(document.querySelectorAll('.hourly-row'));
+  const savedByHour = {};
+  (hourlyRows || []).forEach(function (saved) {
+    savedByHour[normalizeHourKey(saved.hour)] = saved;
+  });
 
-  rows.forEach(function (row, index) {
-    const saved = hourlyRows[index];
+  document.querySelectorAll('.hourly-row').forEach(function (row) {
+    const key = row.dataset.apiHour || normalizeHourKey(getRowValue(row, '.hr-hour'));
+    const saved = savedByHour[key];
     if (!saved) return;
 
-    setRowValue(row, '.hr-hour', saved.hour || getRowValue(row, '.hr-hour'));
     setRowValue(row, '.hr-unbox', saved.unbox || '');
     setRowValue(row, '.hr-autoblocker', saved.autoblocker || '');
     setRowValue(row, '.hr-cooling', saved.cooling || '');
@@ -2167,7 +2203,7 @@ function applyDashboardHourlyRows(hourlyRows) {
   });
 
   document.querySelectorAll('.hourly-row').forEach(function (tr) {
-    const hour = getRowValue(tr, '.hr-hour');
+    const hour = tr.dataset.apiHour || normalizeHourKey(getRowValue(tr, '.hr-hour'));
     const row = rowByHour[hour];
 
     if (!row) return;
@@ -2515,37 +2551,69 @@ function parseTimeToMinutes(value) {
 
 
 function initPerformanceControls() {
-  const dateInput = document.getElementById('perfDateInput');
+  const topDate = document.getElementById('productionDate');
+  const perfDate = document.getElementById('perfDateInput');
   const perfShift = document.getElementById('perfShiftModeSelect');
   const mainShift = document.getElementById('shiftMode');
+  const today = getLocalDateInputValue(new Date());
 
-  if (dateInput && !dateInput.value) {
-    dateInput.value = getLocalDateInputValue(new Date());
+  if (topDate && !topDate.value) topDate.value = today;
+  if (perfDate && !perfDate.value) perfDate.value = topDate ? topDate.value : today;
+
+  function applyDate(dateValue) {
+    const selectedDate = dateValue || today;
+    if (topDate) topDate.value = selectedDate;
+    if (perfDate) perfDate.value = selectedDate;
+    shiftModeManualOverride = false;
+    applyAutomaticShiftForDate(selectedDate, true);
   }
 
-  if (perfShift && mainShift) {
-    perfShift.value = mainShift.value || 'Weekday';
-  }
+  if (topDate) topDate.addEventListener('change', function () { applyDate(topDate.value); });
+  if (perfDate) perfDate.addEventListener('change', function () { applyDate(perfDate.value); });
 
   if (perfShift && mainShift) {
+    perfShift.value = mainShift.value || getAutomaticShiftMode(topDate ? topDate.value : today);
     perfShift.addEventListener('change', function () {
+      shiftModeManualOverride = true;
       mainShift.value = perfShift.value;
+      buildHourlyRows(mainShift.value, true);
+      updateShiftControlStatus();
       calculateForecast();
     });
 
     mainShift.addEventListener('change', function () {
+      shiftModeManualOverride = true;
       perfShift.value = mainShift.value;
-      updatePerformanceShiftChrome(latestForecastResult ? latestForecastResult.result : null);
+      buildHourlyRows(mainShift.value, true);
+      updateShiftControlStatus();
+      calculateForecast();
     });
   }
 
-  if (dateInput) {
-    dateInput.addEventListener('change', function () {
-      updatePerformanceShiftChrome(latestForecastResult ? latestForecastResult.result : null);
-    });
-  }
+  applyAutomaticShiftForDate(topDate ? topDate.value : today, false);
+}
 
-  updatePerformanceShiftChrome(null);
+function getAutomaticShiftMode(dateValue) {
+  const date = new Date(`${dateValue || getLocalDateInputValue(new Date())}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Weekday';
+  const day = date.getDay();
+  return day >= 1 && day <= 4 ? 'Weekday' : 'Weekend';
+}
+
+function applyAutomaticShiftForDate(dateValue, recalculate) {
+  const shiftMode = getAutomaticShiftMode(dateValue);
+  const mainShift = document.getElementById('shiftMode');
+  const perfShift = document.getElementById('perfShiftModeSelect');
+  if (mainShift) mainShift.value = shiftMode;
+  if (perfShift) perfShift.value = shiftMode;
+  buildHourlyRows(shiftMode, true);
+  updateShiftControlStatus();
+  updatePerformanceShiftChrome(latestForecastResult ? latestForecastResult.result : null);
+  if (recalculate) calculateForecast();
+}
+
+function updateShiftControlStatus() {
+  setText('shiftControlStatus', shiftModeManualOverride ? 'Manual Override' : 'Calendar Controlled');
 }
 
 function updatePerformanceUI(result) {
@@ -2566,14 +2634,8 @@ function getShiftWindow(shiftMode) {
 }
 
 
-function getHourlyRowOffsetForShift(shiftMode) {
-  const windowInfo = getShiftWindow(shiftMode || 'Weekday');
-  const startMinutes = parseTimeToMinutes(windowInfo.start);
-  if (startMinutes === null) return 0;
-  const floorHour = Math.floor(startMinutes / 60) * 60;
-  const key = minutesToHourKey(floorHour);
-  const idx = HOURLY_DEFAULTS.indexOf(key);
-  return idx >= 0 ? idx : 0;
+function getHourlyRowOffsetForShift() {
+  return 0;
 }
 
 function updatePerformanceShiftChrome(result) {
@@ -2585,7 +2647,9 @@ function updatePerformanceShiftChrome(result) {
   const startMinutes = parseTimeToMinutes(windowInfo.start) || 420;
   const endMinutes = parseTimeToMinutes(windowInfo.end) || 1050;
   const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const selectedDate = getValue('productionDate', getLocalDateInputValue(now));
+  const isToday = selectedDate === getLocalDateInputValue(now);
+  const nowMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : startMinutes;
   const totalMinutes = Math.max(1, endMinutes - startMinutes);
   const elapsedMinutes = Math.max(0, Math.min(totalMinutes, nowMinutes - startMinutes));
   const pct = Math.max(0, Math.min(100, (elapsedMinutes / totalMinutes) * 100));
@@ -2603,7 +2667,11 @@ function updatePerformanceShiftChrome(result) {
 
   const dateInput = document.getElementById('perfDateInput');
   if (dateInput && !dateInput.value) dateInput.value = getLocalDateInputValue(now);
-  setText('perfDayLabel', getPerformanceDateLabel(dateInput ? dateInput.value : ''));
+  const dateValue = dateInput ? dateInput.value : selectedDate;
+  setText('perfDayLabel', getPerformanceDateLabel(dateValue));
+  setText('productionDateLabel', getFullProductionDateLabel(dateValue));
+  setText('productionDateSetupText', getFullProductionDateLabel(dateValue));
+  setText('shiftModeSetupText', getShiftModeDisplay(shiftMode));
 
   const progress = document.getElementById('perfShiftProgress');
   const remain = document.getElementById('perfShiftRemaining');
@@ -2611,7 +2679,7 @@ function updatePerformanceShiftChrome(result) {
 
   if (progress) progress.style.width = `${pct}%`;
   if (remain) remain.style.width = `${Math.max(0, 100 - pct)}%`;
-  if (marker) marker.style.left = `${pct}%`;
+  if (marker) { marker.style.left = `${pct}%`; marker.style.display = isToday ? '' : 'none'; }
 }
 
 function renderPerformanceHourlyCards(result) {
@@ -2628,7 +2696,9 @@ function renderPerformanceHourlyCards(result) {
   const startMinutes = parseTimeToMinutes(windowInfo.start) || 420;
   const endMinutes = parseTimeToMinutes(windowInfo.end) || 1050;
   const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const selectedDate = getValue('productionDate', getLocalDateInputValue(now));
+  const todayValue = getLocalDateInputValue(now);
+  const nowMinutes = selectedDate === todayValue ? now.getHours() * 60 + now.getMinutes() : (selectedDate < todayValue ? endMinutes : startMinutes);
   const targetPace = Number(hourly.targetPace || 0);
   const rowOffset = getHourlyRowOffsetForShift(shiftMode);
 
@@ -2687,8 +2757,23 @@ function buildPerformanceHourSlots(startMinutes, endMinutes) {
   let start = startMinutes;
 
   while (start < endMinutes) {
-    const nextHour = Math.min(endMinutes, start + 60);
-    const label = nextHour - start < 60
+    // Snap to the next clock-hour mark (7:00, 8:00, 9:00...) rather than just
+    // adding 60 minutes to the previous slot's start. This makes the grid read
+    // in normal clock hours (7:00-8:00, 8:00-9:00...) instead of drifting by
+    // whatever minute the shift happens to start on (6:30-7:30, 7:30-8:30...).
+    // Only the first and last slots end up partial, wherever the shift's
+    // actual start/end don't land on the hour.
+    const nextClockHour = Math.floor(start / 60) * 60 + 60;
+    const nextHour = Math.min(endMinutes, nextClockHour);
+    // Rows are labeled by their START (the "7:00 AM" row = the 7-8am hour) —
+    // that's the existing convention and it's correct for every row except
+    // one: the LAST slot of the shift. When shift length is an exact multiple
+    // of 60 (Weekend 06:30-18:30, Weekday OT 12 07:00-19:00), that last slot
+    // is also a full 60-min block, so start-labeling it silently drops the
+    // true shift-end time from every row/tick. Force the final slot only to
+    // show the full range so the real end time is always visible somewhere.
+    const isFinalSlot = nextHour === endMinutes;
+    const label = (nextHour - start < 60 || isFinalSlot)
       ? `${formatMinutesAsClock(start)}–${formatMinutesAsClock(nextHour)}`
       : formatMinutesAsClock(start);
 
@@ -2733,6 +2818,15 @@ function getLocalDateInputValue(date) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+function getFullProductionDateLabel(value) {
+  if (!value) return 'Today';
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Selected day';
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
 }
 
 function getPerformanceDateLabel(value) {

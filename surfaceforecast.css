@@ -1563,3 +1563,28 @@ tr.row-risk td:first-child strong {
 .signal-ok { color: var(--green); font-weight: 900; }
 .signal-short { color: var(--red); font-weight: 900; }
 .signal-risk { color: var(--yellow); font-weight: 900; }
+
+/* Production calendar + automatic shift control */
+.compact-date { min-width: 230px; }
+.compact-select small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+#shiftControlStatus {
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+#productionDateLabel { white-space: nowrap; }
+.hr-hour[readonly] {
+  color: var(--cyan);
+  font-weight: 900;
+  cursor: default;
+  background: rgba(18,216,255,.06);
+}
+@media (max-width: 1180px) {
+  .topbar { flex-direction: column; }
+  .topbar-actions { flex-wrap: wrap; align-items: end; }
+  .compact-select, .compact-date { min-width: min(100%, 250px); flex: 1 1 220px; }
+}
