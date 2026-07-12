@@ -3,15 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!--
-    Keep the public URL as /login.html while loading the real login
-    CSS, JavaScript, and personalized loaders from /auth/.
-  -->
-  <base href="./auth/" />
-
   <title>Zenni USA Optical Dashboard</title>
-  <link rel="stylesheet" href="login.css" />
+
+  <!-- Explicit auth paths + cache busting -->
+  <link rel="stylesheet" href="./auth/login.css?v=20260712-2" />
 </head>
 <body>
 
@@ -19,7 +14,6 @@
 
   <main class="page">
 
-    <!-- ── BRAND ── -->
     <div class="brand">
       <div class="z-mark">Z</div>
       <div class="brand-copy">
@@ -28,13 +22,11 @@
       </div>
     </div>
 
-    <!-- ── PILLS ── -->
     <div class="pills">
       <div class="pill"><span class="dot"></span>Secure Live</div>
       <div class="pill">USA Manufacturing</div>
     </div>
 
-    <!-- ── LEFT: headline + modules ── -->
     <section class="left">
       <h1>LMS<br>DASHBOARD</h1>
       <div class="accent-line"></div>
@@ -100,7 +92,6 @@
       </div>
     </section>
 
-    <!-- ── CENTER: orbital sphere ── -->
     <section class="center">
       <div class="orb">
         <div class="orbit-wrap ow1"><div class="circle c1"></div></div>
@@ -111,7 +102,6 @@
       </div>
     </section>
 
-    <!-- ── RIGHT: login panel ── -->
     <section class="right">
       <div class="login-card">
 
@@ -178,6 +168,7 @@
 
   </main>
 
-  <script src="login.js"></script>
+  <!-- Explicit path prevents the old root login.js from loading -->
+  <script src="./auth/login.js?v=20260712-2"></script>
 </body>
 </html>

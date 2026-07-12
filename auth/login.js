@@ -7,34 +7,60 @@ const AUTH_API =
  */
 const AUTH_VERSION = "2026-07-12-main-rebuild";
 
+/*
+ * Resolve all redirects from the actual /auth/login.js file location.
+ * This prevents root legacy loaders such as /loader_BLOPEZ.html.
+ */
+const LOGIN_SCRIPT =
+  document.currentScript ||
+  Array.from(document.scripts).find(script =>
+    String(script.src || "").includes("/auth/login.js")
+  );
+
+const AUTH_DIR_URL =
+  LOGIN_SCRIPT && LOGIN_SCRIPT.src
+    ? new URL(".", LOGIN_SCRIPT.src)
+    : new URL("./auth/", window.location.href);
+
+const ROOT_URL = new URL("../", AUTH_DIR_URL);
+
+function authUrl(path) {
+  return new URL(path, AUTH_DIR_URL).href;
+}
+
+function rootUrl(path) {
+  return new URL(path, ROOT_URL).href;
+}
+
+
 /**************************************************
  * LOADER MAP
  * login.html is inside /auth
  * loaders are inside /auth/loaders
  **************************************************/
 const LOADER_MAP = {
-  BLOPEZ: "loaders/loader_BLOPEZ.html",
-  MLITTLE: "loaders/loader_MLITTLE.html",
-  JBOOMERSHINE: "loaders/loader_JBOOMERSHINE.html",
-  BKARR: "loaders/loader_BKARR.html",
-  RTATE: "loaders/loader_RTATE.html",
-  AIVANOVSKI: "loaders/loader_AIVANOVSKI.html",
-  SANDERSON: "loaders/loader_SANDERSON.html",
-  BHONICKER: "loaders/loader_BHONICKER.html",
-  BDADE: "loaders/loader_BDADE.html",
-  BBLAKE: "loaders/loader_BBLAKE.html",
-  NPOSTON: "loaders/loader_NPOSTON.html",
-  CSEARFOSS: "loaders/loader_CSEARFOSS.html",
-  DWATTERS: "loaders/loader_DWATTERS.html",
+  BLOPEZ: authUrl("loaders/loader_BLOPEZ.html"),
+  MLITTLE: authUrl("loaders/loader_MLITTLE.html"),
+  JBOOMERSHINE: authUrl("loaders/loader_JBOOMERSHINE.html"),
+  BKARR: authUrl("loaders/loader_BKARR.html"),
+  RTATE: authUrl("loaders/loader_RTATE.html"),
+  AIVANOVSKI: authUrl("loaders/loader_AIVANOVSKI.html"),
+  SANDERSON: authUrl("loaders/loader_SANDERSON.html"),
+  BHONICKER: authUrl("loaders/loader_BHONICKER.html"),
+  BDADE: authUrl("loaders/loader_BDADE.html"),
+  BBLAKE: authUrl("loaders/loader_BBLAKE.html"),
+  NPOSTON: authUrl("loaders/loader_NPOSTON.html"),
+  CSEARFOSS: authUrl("loaders/loader_CSEARFOSS.html"),
+  DWATTERS: authUrl("loaders/loader_DWATTERS.html"),
 
-  CDAY: "loaders/loader_TEAMLEAD.html",
-  JJOHNSON: "loaders/loader_TEAMLEAD.html",
-  CPATRICK: "loaders/loader_TEAMLEAD.html",
-  CWOOD: "loaders/loader_TEAMLEAD.html",
-  CFORBES: "loaders/loader_TEAMLEAD.html",
-  JADAIR: "loaders/loader_TEAMLEAD.html",
-  JMOLING: "loaders/loader_TEAMLEAD.html",
-  KSMITH: "loaders/loader_TEAMLEAD.html"
+  CDAY: authUrl("loaders/loader_TEAMLEAD.html"),
+  JJOHNSON: authUrl("loaders/loader_TEAMLEAD.html"),
+  CPATRICK: authUrl("loaders/loader_TEAMLEAD.html"),
+  CWOOD: authUrl("loaders/loader_TEAMLEAD.html"),
+  CFORBES: authUrl("loaders/loader_TEAMLEAD.html"),
+  JADAIR: authUrl("loaders/loader_TEAMLEAD.html"),
+  JMOLING: authUrl("loaders/loader_TEAMLEAD.html"),
+  KSMITH: authUrl("loaders/loader_TEAMLEAD.html")
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -207,7 +233,7 @@ async function handleLoginResponse(data, originalPassword) {
   sessionStorage.removeItem("lms_redirect_after_login");
 
   const nextPage =
-    LOADER_MAP[username] || "../index.html";
+    LOADER_MAP[username] || rootUrl("index.html");
 
   setTimeout(() => {
     window.location.replace(nextPage);
@@ -329,7 +355,7 @@ function requireAuth() {
     savedVersion !== AUTH_VERSION
   ) {
     sessionStorage.clear();
-    window.location.replace("../login.html");
+    window.location.replace(rootUrl("login.html"));
     return false;
   }
 
