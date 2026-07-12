@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TARGET PRACTICE — ARCADE</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --yellow: #f9c74f;
+    --cyan: #90e0ef;
+    --red: #ef233c;
+    --green: #06d6a0;
+    --pink: #f15bb5;
+    --purple: #b5ead7;
+    --bg: #07070f;
+    --panel: #0d0d1a;
+    --border: #1e1e35;
+    --text: #c8c8d8;
+    --muted: #4a4a6a;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ── HUD ── */
+  #hud {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    height: 56px;
+  }
+
+  .hud-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 18px;
+    border-right: 1px solid var(--border);
+    height: 100%;
+    min-width: 80px;
+  }
+
+  .hud-cell:last-child { border-right: none; }
+
+  .hud-label {
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .hud-val {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #e0e0f0;
+  }
+
+  #cell-score .hud-val { color: var(--yellow); }
+  #cell-combo .hud-val { color: var(--cyan); }
+  #cell-timer .hud-val { color: var(--yellow); }
+  #cell-timer.urgent .hud-val { color: var(--red); animation: blink 0.5s step-end infinite; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  #lives-cell {
+    margin-left: auto;
+    border-right: none;
+    border-left: 1px solid var(--border);
+    gap: 6px;
+    flex-direction: row;
+    padding: 0 20px;
+  }
+
+  .heart { font-size: 20px; color: var(--red); transition: color 0.2s; }
+  .heart.dead { color: #222; }
+
+  #wave-badge {
+    background: var(--border);
+    border: 1px solid var(--muted);
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    align-self: center;
+    margin-right: 12px;
+  }
+
+  #wave-badge.active { border-color: var(--yellow); color: var(--yellow); }
+
+  /* ── ARENA ── */
+  #arena-wrap {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #arena {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: none;
+  }
+
+  /* ── OVERLAYS ── */
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(7,7,15,0.93);
+    z-index: 20;
+  }
+
+  .ov-eyebrow {
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .ov-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--yellow);
+    letter-spacing: 6px;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .ov-sub {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    margin-bottom: 32px;
+  }
+
+  .ov-score-big {
+    font-size: 64px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .ov-score-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    margin-bottom: 28px;
+  }
+
+  .ov-stats {
+    display: flex;
+    gap: 32px;
+    margin-bottom: 28px;
+  }
+
+  .ov-stat { text-align: center; }
+  .ov-stat-val { font-size: 24px; color: var(--cyan); }
+  .ov-stat-lbl { font-size: 9px; letter-spacing: 2px; color: var(--muted); }
+
+  #name-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 28px;
+    align-items: center;
+  }
+
+  #player-name {
+    background: #0d0d1a;
+    border: 1px solid var(--border);
+    color: #e0e0f0;
+    padding: 9px 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    border-radius: 4px;
+    outline: none;
+    width: 180px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  #player-name:focus { border-color: var(--yellow); }
+
+  .start-btn {
+    background: var(--yellow);
+    color: #07070f;
+    border: none;
+    padding: 10px 28px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.15s, transform 0.1s;
+  }
+
+  .start-btn:hover { background: #ffd166; }
+  .start-btn:active { transform: scale(0.97); }
+
+  /* ── LEADERBOARD ── */
+  #lb-wrap {
+    width: 100%;
+    max-width: 380px;
+    background: #0d0d1a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  #lb-header {
+    background: var(--border);
+    padding: 8px 16px;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  #lb-header::before { content: '◈'; color: var(--yellow); }
+
+  .lb-row {
+    display: flex;
+    align-items: center;
+    padding: 7px 16px;
+    gap: 12px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .lb-row:last-child { border-bottom: none; }
+  .lb-row.highlight { background: rgba(249,199,79,0.07); }
+
+  .lb-rank { min-width: 24px; font-size: 10px; color: var(--muted); }
+  .lb-rank.r1 { color: var(--yellow); }
+  .lb-rank.r2 { color: #adb5bd; }
+  .lb-rank.r3 { color: #cd7f32; }
+  .lb-name { flex: 1; color: #aaa; letter-spacing: 1px; }
+  .lb-pts { color: var(--yellow); font-weight: 700; min-width: 60px; text-align: right; }
+  .lb-wave { font-size: 10px; color: var(--muted); min-width: 36px; text-align: right; }
+
+  /* ── NOTICE STRIP ── */
+  #notice {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(239,35,60,0.85);
+    color: #fff;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-align: center;
+    padding: 6px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+
+  #notice.show { opacity: 1; }
+
+  /* ── COMBO POP ── */
+  #combo-pop {
+    position: absolute;
+    pointer-events: none;
+    z-index: 15;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--cyan);
+    opacity: 0;
+    transition: opacity 0.15s;
+    text-shadow: none;
+    letter-spacing: 1px;
+  }
+
+  /* ── LIFE LOSS FLASH ── */
+  #damage-flash {
+    position: absolute;
+    inset: 0;
+    border: 4px solid var(--red);
+    pointer-events: none;
+    opacity: 0;
+    z-index: 12;
+    border-radius: 0;
+    transition: opacity 0.1s;
+  }
+
+  /* ── WAVE ANNOUNCE ── */
+  #wave-announce {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 48px;
+    font-weight: 700;
+    color: var(--yellow);
+    letter-spacing: 6px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 14;
+    white-space: nowrap;
+  }
+
+  /* ── HAZARD KEY ── */
+  #hazard-key {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 8;
+    opacity: 0.6;
+  }
+
+  .hk-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .hk-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid;
+    flex-shrink: 0;
+  }
+
+  /* ── INSTRUCTION STRIP ── */
+  #instructions {
+    display: flex;
+    gap: 24px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 7px 20px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    overflow: hidden;
+  }
+
+  .inst-item { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .inst-dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div id="root">
+  <div id="hud">
+    <div class="hud-cell" id="cell-score">
+      <span class="hud-label">Score</span>
+      <span class="hud-val" id="val-score">0</span>
+    </div>
+    <div class="hud-cell" id="cell-combo">
+      <span class="hud-label">Combo</span>
+      <span class="hud-val" id="val-combo">x1</span>
+    </div>
+    <div class="hud-cell" id="cell-timer">
+      <span class="hud-label">Time</span>
+      <span class="hud-val" id="val-timer">30</span>
+    </div>
+    <div class="hud-cell">
+      <span class="hud-label">Kills</span>
+      <span class="hud-val" id="val-kills">0</span>
+    </div>
+    <div class="hud-cell">
+      <span class="hud-label">Accuracy</span>
+      <span class="hud-val" id="val-acc">—</span>
+    </div>
+    <div id="wave-badge">WAVE 1</div>
+    <div class="hud-cell" id="lives-cell">
+      <span class="heart" id="h1">&#9829;</span>
+      <span class="heart" id="h2">&#9829;</span>
+      <span class="heart" id="h3">&#9829;</span>
+    </div>
+  </div>
+
+  <div id="arena-wrap">
+    <canvas id="arena"></canvas>
+    <div id="damage-flash"></div>
+    <div id="combo-pop"></div>
+    <div id="notice"></div>
+    <div id="wave-announce"></div>
+
+    <div id="hazard-key">
+      <div class="hk-row"><div class="hk-dot" style="border-color:#f9c74f;background:rgba(249,199,79,0.15)"></div>NORMAL — click to score</div>
+      <div class="hk-row"><div class="hk-dot" style="border-color:#ef233c;background:rgba(239,35,60,0.15)"></div>BOMB — click = lose life</div>
+      <div class="hk-row"><div class="hk-dot" style="border-color:#b5ead7;background:rgba(181,234,215,0.15)"></div>GHOST — fades in &amp; out</div>
+      <div class="hk-row"><div class="hk-dot" style="border-color:#f15bb5;background:rgba(241,91,181,0.15)"></div>SHIELD — bullet-proof (wait)</div>
+      <div class="hk-row"><div class="hk-dot" style="border-color:#ffd166;background:rgba(255,209,102,0.15)"></div>BOSS — hit 3× to kill</div>
+      <div class="hk-row"><div class="hk-dot" style="border-color:#888;background:rgba(136,136,136,0.15)"></div>DECOY — clicking costs life</div>
+    </div>
+
+    <div id="overlay">
+      <div class="ov-eyebrow">ARCADE — ALL HAZARDS ACTIVE</div>
+      <div class="ov-title">TARGET PRACTICE</div>
+      <div class="ov-sub">CLICK TO SURVIVE</div>
+      <div id="name-row">
+        <input id="player-name" type="text" maxlength="12" placeholder="CALLSIGN..." autocomplete="off" spellcheck="false">
+        <button class="start-btn" id="start-btn">DEPLOY</button>
+      </div>
+      <div id="lb-wrap">
+        <div id="lb-header">LEADERBOARD</div>
+        <div id="lb-body"><div class="lb-row" style="justify-content:center;color:var(--muted);font-size:11px;padding:14px">No runs yet. Be the first.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="instructions">
+    <div class="inst-item"><div class="inst-dot" style="background:#f9c74f"></div>Targets expire → lose life</div>
+    <div class="inst-item"><div class="inst-dot" style="background:#ef233c"></div>Click bomb → lose life</div>
+    <div class="inst-item"><div class="inst-dot" style="background:#888"></div>Click decoy → lose life</div>
+    <div class="inst-item"><div class="inst-dot" style="background:#f15bb5"></div>Shield → invincible for 2s</div>
+    <div class="inst-item"><div class="inst-dot" style="background:#b5ead7"></div>Ghost → appears/vanishes</div>
+    <div class="inst-item"><div class="inst-dot" style="background:#ffd166"></div>Boss → 3 hits to kill</div>
+    <div class="inst-item"><div class="inst-dot" style="background:#4a4a6a"></div>Miss → combo resets</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const canvas = document.getElementById('arena');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('arena-wrap');
+
+  function resize() {
+    canvas.width = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); });
+
+  // ── STATE ──
+  let state = 'menu';
+  let score = 0, combo = 1, kills = 0, lives = 3, wave = 1;
+  let shots = 0, hits = 0;
+  let timeLeft = 30;
+  let targets = [], particles = [], floaters = [];
+  let spawnTimer = 0;
+  let timerInterval = null;
+  let animId = null;
+  let leaderboard = [];
+  let mouseX = 0, mouseY = 0;
+  let lastPlayerName = 'PLAYER';
+  let waveTransition = false;
+
+  // ── WAVE CONFIG ──
+  function waveCfg(w) {
+    return {
+      spawnInterval: Math.max(22, 85 - w * 7),
+      baseSpeed:     Math.min(3.2, 0.7 + w * 0.28),
+      minR:          Math.max(13, 32 - w * 1.8),
+      maxR:          Math.max(18, 46 - w * 2),
+      lifespan:      Math.max(50, 130 - w * 10),
+      maxTargets:    Math.min(2 + Math.floor(w * 0.7), 9),
+      bombChance:    Math.min(0.18, w > 2 ? 0.06 + w * 0.02 : 0),
+      ghostChance:   Math.min(0.15, w > 3 ? 0.04 + w * 0.015 : 0),
+      shieldChance:  Math.min(0.12, w > 4 ? 0.03 + w * 0.01 : 0),
+      decoyChance:   Math.min(0.14, w > 3 ? 0.03 + w * 0.015 : 0),
+      bossChance:    Math.min(0.08, w > 5 ? 0.02 + w * 0.008 : 0),
+    };
+  }
+
+  // ── SPAWN ──
+  const COLORS = ['#f9c74f','#90e0ef','#06d6a0','#ff9f1c','#48cae4','#a8dadc'];
+
+  function pickType(cfg) {
+    const r = Math.random();
+    if (r < cfg.bombChance)  return 'bomb';
+    if (r < cfg.bombChance + cfg.decoyChance)  return 'decoy';
+    if (r < cfg.bombChance + cfg.decoyChance + cfg.ghostChance) return 'ghost';
+    if (r < cfg.bombChance + cfg.decoyChance + cfg.ghostChance + cfg.shieldChance) return 'shield';
+    if (r < cfg.bombChance + cfg.decoyChance + cfg.ghostChance + cfg.shieldChance + cfg.bossChance) return 'boss';
+    return 'normal';
+  }
+
+  function spawnTarget() {
+    const W = canvas.width, H = canvas.height;
+    const cfg = waveCfg(wave);
+    if (targets.length >= cfg.maxTargets) return;
+
+    const type = pickType(cfg);
+    const isBoss = type === 'boss';
+    const r = isBoss
+      ? (cfg.maxR * 1.5)
+      : (cfg.minR + Math.random() * (cfg.maxR - cfg.minR));
+
+    const x = r + Math.random() * (W - 2 * r);
+    const y = r + Math.random() * (H - 2 * r);
+    const angle = Math.random() * Math.PI * 2;
+    const speed = type === 'shield' ? cfg.baseSpeed * 0.5 : cfg.baseSpeed + Math.random() * 0.5;
+    const lifespan = isBoss ? cfg.lifespan * 1.8 : cfg.lifespan;
+
+    targets.push({
+      x, y, r,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: lifespan,
+      maxLife: lifespan,
+      type,
+      color: type === 'bomb'   ? '#ef233c'
+           : type === 'decoy'  ? '#888'
+           : type === 'ghost'  ? '#b5ead7'
+           : type === 'shield' ? '#f15bb5'
+           : type === 'boss'   ? '#ffd166'
+           : COLORS[Math.floor(Math.random() * COLORS.length)],
+      wobble: Math.random() * Math.PI * 2,
+      shieldTimer: type === 'shield' ? 90 : 0,
+      hp: isBoss ? 3 : 1,
+      ghostPhase: 0,
+    });
+  }
+
+  // ── LIFE / DAMAGE ──
+  function loseLife(reason) {
+    lives = Math.max(0, lives - 1);
+    updateHUD();
+    flashDamage();
+    showNotice('— ' + reason + ' —');
+    combo = 1;
+    updateHUD();
+    if (lives <= 0) endGame();
+  }
+
+  function flashDamage() {
+    const f = document.getElementById('damage-flash');
+    f.style.opacity = '1';
+    clearTimeout(f._t);
+    f._t = setTimeout(() => { f.style.opacity = '0'; }, 220);
+  }
+
+  function showNotice(msg) {
+    const n = document.getElementById('notice');
+    n.textContent = msg;
+    n.classList.add('show');
+    clearTimeout(n._t);
+    n._t = setTimeout(() => { n.classList.remove('show'); }, 1100);
+  }
+
+  // ── COMBO POP ──
+  function showComboPop(x, y, mult) {
+    if (mult < 2) return;
+    const el = document.getElementById('combo-pop');
+    const rect = canvas.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    el.style.left = (x / scaleX - 20) + 'px';
+    el.style.top  = (y / scaleY - 36) + 'px';
+    el.textContent = 'x' + mult + '!';
+    el.style.opacity = '1';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.opacity = '0'; }, 600);
+  }
+
+  // ── PARTICLES ──
+  function spawnParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1.5 + Math.random() * 3.5;
+      particles.push({ x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 1, color, r: 2 + Math.random()*2.5 });
+    }
+  }
+
+  // ── SCORE TEXT FLOATERS ──
+  function spawnFloater(x, y, text, color) {
+    floaters.push({ x, y, vy: -1.2, life: 1, text, color });
+  }
+
+  // ── HUD ──
+  function updateHUD() {
+    document.getElementById('val-score').textContent = score.toLocaleString();
+    document.getElementById('val-combo').textContent = 'x' + combo;
+    document.getElementById('val-kills').textContent = kills;
+    document.getElementById('val-timer').textContent = timeLeft;
+    document.getElementById('val-acc').textContent = shots > 0 ? Math.round((hits/shots)*100) + '%' : '—';
+
+    const timerCell = document.getElementById('cell-timer');
+    timerCell.classList.toggle('urgent', timeLeft <= 8);
+
+    const wb = document.getElementById('wave-badge');
+    wb.textContent = 'WAVE ' + wave;
+    wb.classList.toggle('active', wave > 1);
+
+    for (let i = 1; i <= 3; i++) {
+      document.getElementById('h' + i).classList.toggle('dead', i > lives);
+    }
+  }
+
+  // ── WAVE ANNOUNCE ──
+  function announceWave(w) {
+    const el = document.getElementById('wave-announce');
+    el.textContent = 'WAVE ' + w;
+    el.style.opacity = '1';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.opacity = '0'; }, 900);
+  }
+
+  // ── TIMER ──
+  function startTimer() {
+    clearInterval(timerInterval);
+    timeLeft = 30;
+    timerInterval = setInterval(() => {
+      if (state !== 'playing') return;
+      timeLeft--;
+      updateHUD();
+      if (timeLeft <= 0) { timeLeft = 0; endGame(); }
+    }, 1000);
+  }
+
+  // ── GAME FLOW ──
+  function resetGame() {
+    score = 0; combo = 1; kills = 0; lives = 3; wave = 1;
+    shots = 0; hits = 0; timeLeft = 30;
+    targets = []; particles = []; floaters = [];
+    spawnTimer = 0;
+    updateHUD();
+  }
+
+  function startGame() {
+    const inp = document.getElementById('player-name');
+    lastPlayerName = (inp ? inp.value.trim().toUpperCase() : lastPlayerName) || 'PLAYER';
+    resetGame();
+    state = 'playing';
+    document.getElementById('overlay').style.display = 'none';
+    startTimer();
+    loop();
+  }
+
+  function endGame() {
+    state = 'over';
+    clearInterval(timerInterval);
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
+
+    const acc = shots > 0 ? Math.round((hits / shots) * 100) : 0;
+    leaderboard.push({ name: lastPlayerName.slice(0, 12), score, wave, kills, acc });
+    leaderboard.sort((a, b) => b.score - a.score);
+    if (leaderboard.length > 10) leaderboard.length = 10;
+
+    buildOverlay(true);
+  }
+
+  // ── OVERLAY ──
+  function buildOverlay(isOver) {
+    const ov = document.getElementById('overlay');
+    ov.style.display = 'flex';
+
+    const acc = shots > 0 ? Math.round((hits / shots) * 100) : 0;
+
+    ov.innerHTML = `
+      <div class="ov-eyebrow">ARCADE — ALL HAZARDS ACTIVE</div>
+      ${isOver
+        ? `<div class="ov-title" style="color:var(--red)">GAME OVER</div>
+           <div class="ov-score-big">${score.toLocaleString()}</div>
+           <div class="ov-score-label">FINAL SCORE</div>
+           <div class="ov-stats">
+             <div class="ov-stat"><div class="ov-stat-val">${wave}</div><div class="ov-stat-lbl">WAVE</div></div>
+             <div class="ov-stat"><div class="ov-stat-val">${kills}</div><div class="ov-stat-lbl">KILLS</div></div>
+             <div class="ov-stat"><div class="ov-stat-val">${acc}%</div><div class="ov-stat-lbl">ACCURACY</div></div>
+           </div>`
+        : `<div class="ov-title">TARGET PRACTICE</div>
+           <div class="ov-sub">CLICK TO SURVIVE</div>`
+      }
+      <div id="name-row">
+        <input id="player-name" type="text" maxlength="12" placeholder="CALLSIGN..." autocomplete="off" spellcheck="false" value="${lastPlayerName}">
+        <button class="start-btn" id="start-btn">${isOver ? 'RETRY' : 'DEPLOY'}</button>
+      </div>
+      <div id="lb-wrap">
+        <div id="lb-header">LEADERBOARD</div>
+        <div id="lb-body"></div>
+      </div>
+    `;
+
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('player-name').addEventListener('keydown', e => {
+      if (e.key === 'Enter') startGame();
+    });
+
+    renderLeaderboard();
+  }
+
+  function renderLeaderboard() {
+    const body = document.getElementById('lb-body');
+    if (!body) return;
+    if (leaderboard.length === 0) {
+      body.innerHTML = '<div class="lb-row" style="justify-content:center;color:var(--muted);font-size:11px;padding:14px">No runs yet. Be the first.</div>';
+      return;
+    }
+    const rankClass = ['r1','r2','r3'];
+    const rankSym   = ['#1','#2','#3'];
+    body.innerHTML = leaderboard.slice(0, 8).map((e, i) => `
+      <div class="lb-row ${e.name === lastPlayerName && i === 0 ? 'highlight' : ''}">
+        <span class="lb-rank ${rankClass[i]||''}">${rankSym[i] || '#'+(i+1)}</span>
+        <span class="lb-name">${e.name}</span>
+        <span class="lb-pts">${e.score.toLocaleString()}</span>
+        <span class="lb-wave">W${e.wave}</span>
+      </div>
+    `).join('');
+  }
+
+  // ── DRAW HELPERS ──
+  function drawTarget(t) {
+    const W = canvas.width, H = canvas.height;
+    const lifeRatio = t.life / t.maxLife;
+    t.wobble += 0.07;
+
+    let alpha = Math.min(1, t.life / 18);
+
+    if (t.type === 'ghost') {
+      t.ghostPhase = (t.ghostPhase || 0) + 0.05;
+      alpha *= Math.abs(Math.sin(t.ghostPhase));
+    }
+
+    if (t.type === 'shield' && t.shieldTimer > 0) {
+      t.shieldTimer--;
+      alpha = Math.min(alpha, 0.5 + 0.5 * Math.sin(t.wobble * 3));
+    }
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, alpha);
+
+    const pulse = Math.sin(t.wobble) * 1.5;
+
+    if (t.type === 'bomb') {
+      ctx.strokeStyle = '#ef233c';
+      ctx.fillStyle = 'rgba(239,35,60,0.1)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r + pulse, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(239,35,60,0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.55, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = '#ef233c';
+      ctx.font = `bold ${Math.round(t.r * 0.75)}px Share Tech Mono,monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('✕', t.x, t.y);
+
+    } else if (t.type === 'decoy') {
+      ctx.strokeStyle = '#666';
+      ctx.fillStyle = 'rgba(100,100,100,0.1)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r + pulse, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.55, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = '#888';
+      ctx.font = `bold ${Math.round(t.r * 0.55)}px Share Tech Mono,monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('?', t.x, t.y);
+
+    } else if (t.type === 'boss') {
+      const bossColor = '#ffd166';
+      ctx.strokeStyle = bossColor;
+      ctx.fillStyle = 'rgba(255,209,102,0.08)';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r + pulse * 2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = bossColor + '60';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.65, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.3, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = bossColor;
+      ctx.font = `bold ${Math.round(t.r * 0.45)}px Rajdhani,sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('HP:' + t.hp, t.x, t.y);
+      ctx.strokeStyle = '#ef233c';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.r + pulse * 2 + 4, 0, Math.PI * 2 * lifeRatio);
+      ctx.stroke();
+
+    } else if (t.type === 'shield') {
+      const shielded = t.shieldTimer > 0;
+      ctx.strokeStyle = '#f15bb5';
+      ctx.fillStyle = 'rgba(241,91,181,0.08)';
+      ctx.lineWidth = shielded ? 3 : 1.5;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r + pulse, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      if (shielded) {
+        ctx.strokeStyle = 'rgba(241,91,181,0.5)';
+        ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(t.x, t.y, t.r + 10, 0, Math.PI*2); ctx.stroke();
+      }
+      ctx.strokeStyle = '#f15bb5' + '60';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.55, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = '#f15bb5';
+      ctx.font = `bold ${Math.round(t.r * 0.5)}px Share Tech Mono,monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(shielded ? '🛡' : '★', t.x, t.y);
+
+    } else {
+      ctx.strokeStyle = t.color;
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r + pulse, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = t.color + '70';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.58, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r * 0.24, 0, Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = '#ef233c';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.r + pulse + 4, 0, Math.PI * 2 * lifeRatio);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawGrid() {
+    const W = canvas.width, H = canvas.height;
+    ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 48) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  }
+
+  function drawCrosshair(cx, cy) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(249,199,79,0.7)';
+    ctx.lineWidth = 1;
+    const s = 14;
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy); ctx.lineTo(cx - 5, cy);
+    ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + s, cy);
+    ctx.moveTo(cx, cy - s); ctx.lineTo(cx, cy - 5);
+    ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + s);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(249,199,79,0.4)';
+    ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── MAIN LOOP ──
+  function loop() {
+    if (state !== 'playing') return;
+    const W = canvas.width, H = canvas.height;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#07070f';
+    ctx.fillRect(0, 0, W, H);
+
+    drawGrid();
+
+    spawnTimer++;
+    const cfg = waveCfg(wave);
+    if (spawnTimer >= cfg.spawnInterval) {
+      spawnTarget();
+      spawnTimer = 0;
+    }
+
+    for (let i = targets.length - 1; i >= 0; i--) {
+      const t = targets[i];
+      t.x += t.vx; t.y += t.vy;
+
+      if (t.x - t.r < 0)  { t.vx =  Math.abs(t.vx); }
+      if (t.x + t.r > W)  { t.vx = -Math.abs(t.vx); }
+      if (t.y - t.r < 0)  { t.vy =  Math.abs(t.vy); }
+      if (t.y + t.r > H)  { t.vy = -Math.abs(t.vy); }
+
+      t.life--;
+
+      if (t.life <= 0) {
+        if (t.type !== 'bomb' && t.type !== 'decoy') {
+          loseLife('TARGET EXPIRED');
+        }
+        spawnParticles(t.x, t.y, t.color, 5);
+        targets.splice(i, 1);
+        continue;
+      }
+
+      drawTarget(t);
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.1;
+      p.life -= 0.03;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.save();
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    for (let i = floaters.length - 1; i >= 0; i--) {
+      const f = floaters[i];
+      f.y += f.vy; f.life -= 0.025;
+      if (f.life <= 0) { floaters.splice(i, 1); continue; }
+      ctx.save();
+      ctx.globalAlpha = f.life;
+      ctx.fillStyle = f.color;
+      ctx.font = '500 13px Share Tech Mono,monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.restore();
+    }
+
+    drawCrosshair(mouseX, mouseY);
+    animId = requestAnimationFrame(loop);
+  }
+
+  // ── INPUT ──
+  const arenaWrap = document.getElementById('arena-wrap');
+  arenaWrap.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    mouseX = (e.clientX - rect.left) * scaleX;
+    mouseY = (e.clientY - rect.top)  * scaleY;
+  });
+
+  arenaWrap.addEventListener('click', e => {
+    if (state !== 'playing') return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top)  * scaleY;
+
+    shots++;
+    let hit = false;
+
+    for (let i = targets.length - 1; i >= 0; i--) {
+      const t = targets[i];
+      const dx = cx - t.x, dy = cy - t.y;
+      if (dx*dx + dy*dy > t.r * t.r) continue;
+
+      hit = true;
+
+      if (t.type === 'bomb') {
+        spawnParticles(t.x, t.y, '#ef233c', 14);
+        targets.splice(i, 1);
+        loseLife('BOMB CLICKED');
+        return;
+      }
+
+      if (t.type === 'decoy') {
+        spawnParticles(t.x, t.y, '#888', 8);
+        targets.splice(i, 1);
+        loseLife('DECOY CLICKED');
+        return;
+      }
+
+      if (t.type === 'shield' && t.shieldTimer > 0) {
+        showNotice('— SHIELD ACTIVE — WAIT —');
+        combo = 1; updateHUD();
+        return;
+      }
+
+      if (t.type === 'boss') {
+        t.hp--;
+        spawnParticles(t.x, t.y, '#ffd166', 6);
+        spawnFloater(t.x, t.y - t.r, 'HIT!', '#ffd166');
+        if (t.hp <= 0) {
+          const pts = Math.round(500 * combo);
+          score += pts;
+          kills++;
+          combo = Math.min(combo + 1, 12);
+          hits++;
+          spawnParticles(t.x, t.y, '#ffd166', 24);
+          spawnFloater(t.x, t.y - t.r - 10, '+' + pts, '#ffd166');
+          showComboPop(t.x, t.y, combo);
+          targets.splice(i, 1);
+        }
+        advanceWave();
+        updateHUD();
+        return;
+      }
+
+      // normal / ghost / shield (unshielded)
+      const pts = Math.round((100 + Math.round(t.r) * 2) * combo);
+      score += pts;
+      kills++;
+      hits++;
+      combo = Math.min(combo + 1, 12);
+      showComboPop(t.x, t.y, combo);
+      spawnParticles(t.x, t.y, t.color, 10);
+      spawnFloater(t.x, t.y - t.r, '+' + pts, t.color);
+      targets.splice(i, 1);
+      advanceWave();
+      updateHUD();
+      return;
+    }
+
+    if (!hit) {
+      combo = 1;
+      updateHUD();
+    }
+  });
+
+  function advanceWave() {
+    const newWave = Math.max(1, Math.floor(kills / 10) + 1);
+    if (newWave > wave) {
+      wave = newWave;
+      timeLeft = Math.min(timeLeft + 6, 30);
+      announceWave(wave);
+    }
+  }
+
+  // ── KEYBOARD SHORTCUT ──
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && state === 'menu') startGame();
+    if (e.key === 'Escape' && state === 'playing') { state = 'over'; clearInterval(timerInterval); cancelAnimationFrame(animId); buildOverlay(true); }
+  });
+
+  // ── INIT ──
+  buildOverlay(false);
+  document.getElementById('start-btn').addEventListener('click', startGame);
+  document.getElementById('player-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startGame();
+  });
+
+})();
+</script>
+</body>
+</html>

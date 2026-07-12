@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Productivity Hub Command Center</title>
+  <link rel="stylesheet" href="./ProductivityDashboard.css" />
+</head>
+
+<body>
+  <!-- COMMAND CENTER LOADING SCREEN — HUD REDESIGN -->
+  <div id="appLoader" class="app-loader show">
+    <div class="ldr-bg-grid"></div>
+    <div class="ldr-scanline"></div>
+
+    <div class="ldr-frame">
+      <div class="ldr-corner ldr-tl"></div>
+      <div class="ldr-corner ldr-tr"></div>
+      <div class="ldr-corner ldr-bl"></div>
+      <div class="ldr-corner ldr-br"></div>
+
+      <div class="ldr-top-strip">
+        <span class="ldr-chip">ZENNI OPTICAL</span>
+        <span class="ldr-chip live">● SYSTEM BOOT</span>
+        <span class="ldr-chip" id="ldrClock">--:--:--</span>
+      </div>
+
+      <div class="ldr-identity">
+        <div class="ldr-mark">
+          <div class="ldr-mark-ring"></div>
+          <div class="ldr-mark-bars">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+        <div class="ldr-title-block">
+          <p class="ldr-eyebrow">Manufacturing Command Center</p>
+          <h1 class="ldr-title">PRODUCTIVITY HUB</h1>
+        </div>
+      </div>
+
+      <div class="ldr-status-row">
+        <div class="ldr-status-item" id="ldrS1">
+          <div class="ldr-status-dot pending"></div>
+          <span>API Connect</span>
+        </div>
+        <div class="ldr-status-sep">›</div>
+        <div class="ldr-status-item" id="ldrS2">
+          <div class="ldr-status-dot pending"></div>
+          <span>Load Data</span>
+        </div>
+        <div class="ldr-status-sep">›</div>
+        <div class="ldr-status-item" id="ldrS3">
+          <div class="ldr-status-dot pending"></div>
+          <span>Build Scorecards</span>
+        </div>
+        <div class="ldr-status-sep">›</div>
+        <div class="ldr-status-item" id="ldrS4">
+          <div class="ldr-status-dot pending"></div>
+          <span>Ready</span>
+        </div>
+      </div>
+
+      <div class="ldr-log-line">
+        <span class="ldr-log-prefix">SYS &gt;</span>
+        <span id="loaderStepText">Connecting to Productivity API...</span>
+      </div>
+
+      <div class="ldr-bar-wrap">
+        <div class="ldr-bar-track">
+          <div class="ldr-bar-fill" id="loaderProgressBar"></div>
+          <div class="ldr-bar-pulse"></div>
+        </div>
+        <strong class="ldr-pct" id="loaderPercent">0%</strong>
+      </div>
+
+      <div class="ldr-bottom-strip">
+        <span>Loading prepared scorecards · snapshots · shift guidance</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <span></span><span></span><span></span>
+        </div>
+        <div>
+          <h1>Productivity Hub</h1>
+          <p>Manufacturing Command Center</p>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <button class="side-link active" data-page="dashboard" type="button">▣ Dashboard Hub</button>
+        <button class="side-link" data-page="scorecards" type="button">▤ Associate Scorecards</button>
+        <button class="side-link" data-page="daily" type="button">◫ Daily Summary</button>
+        <button class="side-link" data-page="trends" type="button">⌁ Weekly Trends</button>
+        <button class="side-link" data-page="archive" type="button">▥ Associate Archive</button>
+      </nav>
+
+      <div class="side-block">
+        <label for="sideDeptSelect">Department</label>
+        <select id="sideDeptSelect">
+          
+          <option value="FINISH">Finish</option>
+          <option value="SURFACE">Surface</option>
+          <option value="AR">AR</option>
+          <option value="INVENTORY">Picking</option>
+          
+        </select>
+      </div>
+
+      <div class="sidebar-footer">
+        <span class="live-dot"></span>
+        <div>
+          <strong>Data updated</strong>
+          <small id="generatedAt">Loading...</small>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="productivity-top-actions">
+        <button class="back-dashboard-btn" type="button" onclick="goBackToDashboard()">
+          ← Back to Dashboard
+        </button>
+
+        <div id="productivityUserBadgeMount" class="productivity-top-user-mount"></div>
+
+        <div class="productivity-clock">
+          <strong id="productivityTopTime">--:--:-- --</strong>
+          <span id="productivityTopDate">--</span>
+        </div>
+      </header>
+
+      <!-- SHIFT TOGGLE + GROUPED DEPT NAV -->
+      <nav class="hub-nav-shell">
+
+        <div class="hub-shift-row">
+          <div class="hub-shift-toggle">
+            <button class="hub-shift-btn active wd" data-shift="WEEKDAY" type="button" id="shiftBtnWD">⬡ Weekday</button>
+            <button class="hub-shift-btn we" data-shift="WEEKEND" type="button" id="shiftBtnWE">⬡ Weekend</button>
+            <button class="hub-shift-btn all" data-shift="ALL" type="button" id="shiftBtnALL">⬡ All Shifts</button>
+          </div>
+          <div class="hub-shift-meta" id="shiftMetaLabel">Shift: <strong>Weekday</strong></div>
+        </div>
+
+        <div class="hub-dept-row">
+          <div class="hub-dept-group">
+            <span class="hub-group-label">Production Dept</span>
+            <div class="hub-dept-tabs">
+              <button class="hub-dept-tab active" data-dept="FINISH" type="button">Finish</button>
+              <button class="hub-dept-tab" data-dept="SURFACE" type="button">Surface</button>
+              <button class="hub-dept-tab" data-dept="AR" type="button">AR</button>
+              <button class="hub-dept-tab all-dept" data-dept="PROD_ALL" type="button">All Depts</button>
+            </div>
+          </div>
+          <div class="hub-dept-divider"></div>
+          <div class="hub-dept-group">
+            <span class="hub-group-label">Distribution &amp; Inventory Dept</span>
+            <div class="hub-dept-tabs">
+              <button class="hub-dept-tab inv" data-dept="INVENTORY" type="button">Picking</button>
+              <button class="hub-dept-tab inv all-dept" data-dept="DIST_ALL" type="button">All</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="hub-ap-bar" id="hubApBar">
+          <span class="hub-ap-label">Station Group</span>
+          <button class="hub-ap-chip active" data-ap="ALL" type="button">All Stations</button>
+        </div>
+
+      </nav>
+
+      <section class="filter-bar command-filter">
+        <div class="field wide">
+          <label for="associateSelect">Associate</label>
+          <select id="associateSelect"></select>
+        </div>
+
+        <div class="field">
+          <label for="searchInput">Search</label>
+          <input id="searchInput" type="text" placeholder="Search associate, station, access point..." />
+        </div>
+
+        <div class="field">
+          <label for="fiscalWeekSelect">Fiscal Week</label>
+          <select id="fiscalWeekSelect">
+            <option value="">Loading weeks...</option>
+          </select>
+        </div>
+
+        <div class="mini-meta">
+          <span>Week Start</span>
+          <strong id="weekStartLabel">--</strong>
+        </div>
+
+        <div class="mini-meta">
+          <span>Week End</span>
+          <strong id="weekEndLabel">--</strong>
+        </div>
+
+        <button id="refreshBtn" class="refresh-btn" type="button">⟳ Refresh</button>
+      </section>
+
+      <section class="kpi-grid compact-kpis">
+        <article class="kpi-card">
+          <div class="kpi-icon blue">👥</div>
+          <div>
+            <span>Total Associates</span>
+            <strong id="totalAssociates">0</strong>            
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <div class="kpi-icon green">▣</div>
+          <div>
+            <span>Total Jobs</span>
+            <strong id="totalJobs">0</strong>
+            <small>All departments</small>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <div class="kpi-icon purple">↗</div>
+          <div>
+            <span>Average Productivity</span>
+            <strong id="avgProductivity">0%</strong>
+            <small>Work produced vs hours</small>
+          </div>
+        </article>
+
+        <article class="kpi-card">
+          <div class="kpi-icon red">⚠</div>
+          <div>
+            <span>Watch / Warning</span>
+            <strong id="watchWarning">0</strong>            
+          </div>
+        </article>
+      </section>
+
+      <section id="pageContent" class="profile-stage">
+        <div class="loading-card command-loading-card">
+          <div class="spinner"></div>
+          <strong>Loading productivity profile...</strong>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./ProductivityDashboard.js"></script>
+</body>
+</html>

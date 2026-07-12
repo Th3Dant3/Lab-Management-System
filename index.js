@@ -1338,9 +1338,28 @@ function unlockPage() {
    LOGOUT
 ===================================================== */
 function logout() {
-  sessionStorage.clear();
-  localStorage.removeItem(SCANNER_STORAGE_KEY);
-  window.location.href = "login.html";
+  [
+    "lms_logged_in",
+    "lms_user",
+    "lms_username",
+    "lms_role",
+    "lms_subrole",
+    "lms_fullname",
+    "lms_firstname",
+    "lms_lastname",
+    "lms_visibility",
+    "lms_departments",
+    "lms_features",
+    "lms_redirect_after_login"
+  ].forEach(key => sessionStorage.removeItem(key));
+
+  [
+    "LMS_AUTH_USER",
+    "LMS_USER",
+    "LMS_USERNAME"
+  ].forEach(key => localStorage.removeItem(key));
+
+  window.location.replace("./auth/login.html");
 }
 
 /* =====================================================

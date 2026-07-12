@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#08000e;overflow:hidden;height:100vh;width:100vw;}
+
+/* ── Split atmosphere: left Deadpool red, right Nightcrawler purple ── */
+.bg{
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 60% 100% at 0%   50%, rgba(180,0,16,.2)  0%,transparent 60%),
+    radial-gradient(ellipse 60% 100% at 100% 50%, rgba(60,0,160,.2)  0%,transparent 60%),
+    radial-gradient(ellipse 80%  40% at 50% 100%, rgba(100,0,80,.15) 0%,transparent 55%),
+    #08000e;
+  animation:bgp 5s ease-in-out infinite;
+}
+@keyframes bgp{0%,100%{opacity:.88}50%{opacity:1}}
+
+/* ── Center divide glow ── */
+.center-glow{
+  position:fixed;top:0;bottom:0;left:50%;
+  width:1px;
+  background:linear-gradient(180deg,
+    transparent 0%,
+    rgba(255,255,255,.06) 15%,
+    rgba(255,255,255,.18) 50%,
+    rgba(255,255,255,.06) 85%,
+    transparent 100%);
+  z-index:3;pointer-events:none;
+}
+
+/* ── DP slash lines left ── */
+.dp-slashes{position:fixed;top:0;left:0;bottom:0;right:50%;pointer-events:none;overflow:hidden;z-index:1;}
+.ds{position:absolute;width:1px;height:200%;
+  background:linear-gradient(180deg,transparent,rgba(220,0,20,.14),transparent);
+  animation:dsa 4s ease-in-out infinite;}
+@keyframes dsa{0%,100%{opacity:0}50%{opacity:1}}
+
+/* ── NC teleport rings right ── */
+.nc-rings{position:fixed;top:0;left:50%;bottom:0;right:0;pointer-events:none;z-index:1;overflow:hidden;}
+.ncr{position:absolute;border-radius:50%;border:1.5px solid rgba(100,40,220,.45);
+  animation:ncrExp ease-out infinite;}
+@keyframes ncrExp{0%{transform:translate(-50%,-50%) scale(0);opacity:.7}100%{transform:translate(-50%,-50%) scale(4);opacity:0}}
+
+/* ── Red sparks ── */
+.rspark{position:fixed;border-radius:50%;background:#cc0010;
+  animation:spkFly linear infinite;pointer-events:none;z-index:2;}
+/* ── Purple sparks ── */
+.pspark{position:fixed;border-radius:50%;background:#7040ff;
+  animation:spkFly linear infinite;pointer-events:none;z-index:2;}
+@keyframes spkFly{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0)}}
+
+/* ── Scan ── */
+.scan{position:fixed;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,rgba(200,0,16,.18),rgba(80,0,200,.18));
+  animation:sc 5s linear infinite;pointer-events:none;z-index:2;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+/* ── HUD corners ── */
+.hc{position:fixed;width:55px;height:55px;pointer-events:none;z-index:3;}
+.hc.tl{top:16px;left:16px;border-top:2px solid rgba(200,0,16,.45);border-left:2px solid rgba(200,0,16,.45);}
+.hc.tr{top:16px;right:16px;border-top:2px solid rgba(80,0,200,.45);border-right:2px solid rgba(80,0,200,.45);}
+.hc.bl{bottom:16px;left:16px;border-bottom:2px solid rgba(200,0,16,.45);border-left:2px solid rgba(200,0,16,.45);}
+.hc.br{bottom:16px;right:16px;border-bottom:2px solid rgba(80,0,200,.45);border-right:2px solid rgba(80,0,200,.45);}
+
+/* ══ PAGE ══ */
+.page{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:10;gap:6px;
+}
+
+/* ── DUAL EMBLEM ── */
+.emblem-row{
+  display:flex;align-items:center;gap:22px;
+  margin-bottom:8px;
+  animation:embIn .9s cubic-bezier(.17,.67,.3,1.4) both;
+}
+@keyframes embIn{from{opacity:0;transform:scale(.3) rotate(-180deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+
+/* ── Deadpool emblem ── */
+.dp-em{
+  width:100px;height:100px;border-radius:50%;
+  border:2.5px solid #cc0010;
+  background:radial-gradient(circle at 38% 32%,rgba(160,0,10,.5),#040004);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  animation:dpGlow 2.5s 1s ease-in-out infinite;
+}
+@keyframes dpGlow{
+  0%,100%{box-shadow:0 0 14px rgba(200,0,16,.4)}
+  50%{box-shadow:0 0 36px rgba(200,0,16,1),0 0 70px rgba(200,0,16,.25)}
+}
+.dp-ring{position:absolute;inset:-9px;border-radius:50%;border:1.5px solid transparent;border-top-color:rgba(220,0,20,.8);animation:ro 2.8s linear infinite;}
+.dp-ring2{position:absolute;inset:-17px;border-radius:50%;border:1px solid transparent;border-right-color:rgba(180,0,10,.35);animation:ro2 5s linear infinite;}
+@keyframes ro{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes ro2{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
+
+/* ── Nightcrawler emblem ── */
+.nc-em{
+  width:100px;height:100px;border-radius:50%;
+  border:2.5px solid #5020cc;
+  background:radial-gradient(circle at 38% 32%,rgba(50,0,140,.5),#040004);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  animation:ncGlow 2.5s 1.3s ease-in-out infinite;
+}
+@keyframes ncGlow{
+  0%,100%{box-shadow:0 0 14px rgba(60,0,180,.4)}
+  50%{box-shadow:0 0 36px rgba(60,0,180,1),0 0 70px rgba(60,0,180,.25)}
+}
+.nc-ring{position:absolute;inset:-9px;border-radius:50%;border:1.5px solid transparent;border-bottom-color:rgba(100,50,255,.8);animation:ro2 2.8s linear infinite;}
+.nc-ring2{position:absolute;inset:-17px;border-radius:50%;border:1px solid transparent;border-left-color:rgba(80,20,200,.35);animation:ro 5s linear infinite;}
+
+/* NC teleport flash on emblem */
+.nc-em-flash{
+  position:absolute;inset:0;border-radius:50%;
+  background:rgba(100,40,255,.0);
+  animation:ncEmFlash 2.5s 1.3s ease-in-out infinite;
+}
+@keyframes ncEmFlash{0%,70%,100%{background:rgba(100,40,255,.0)}78%{background:rgba(100,40,255,.25)}85%{background:rgba(100,40,255,.0)}}
+
+/* × divider */
+.em-x{font-family:'Bebas Neue',sans-serif;font-size:28px;color:rgba(255,255,255,.18);}
+
+/* ── Name section ── */
+.welcome-txt{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:13px;letter-spacing:8px;
+  color:rgba(255,255,255,.4);
+  text-transform:uppercase;
+  animation:fu .4s .5s ease both;
+}
+.fullname{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:66px;color:#ffffff;
+  letter-spacing:5px;line-height:1;
+  animation:nameIn .6s .6s ease both;
+  text-shadow:
+    0 0 20px rgba(200,0,16,.35),
+    0 0 40px rgba(60,0,180,.25),
+    0 2px 0 rgba(0,0,0,.9);
+  text-align:center;
+}
+@keyframes nameIn{from{opacity:0;letter-spacing:18px}to{opacity:1;letter-spacing:5px}}
+
+/* ── Divider ── */
+.divider{
+  display:flex;align-items:center;gap:10px;
+  animation:fu .4s .75s ease both;
+}
+.div-l{width:55px;height:1px;background:linear-gradient(90deg,transparent,rgba(200,0,16,.5));}
+.div-r{width:55px;height:1px;background:linear-gradient(90deg,rgba(80,0,200,.5),transparent);}
+.div-dot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.3);box-shadow:0 0 6px rgba(200,100,255,.6);}
+
+/* ── Role card ── */
+.role-card{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:10px 30px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.45);
+  position:relative;overflow:hidden;
+  animation:fu .5s .85s ease both;
+  min-width:280px;
+}
+/* Red left accent, purple right accent */
+.role-card::before{
+  content:'';position:absolute;
+  top:0;left:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,#cc0010,rgba(200,0,16,.3));
+}
+.role-card::after{
+  content:'';position:absolute;
+  top:0;right:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,#5020cc,rgba(80,0,200,.3));
+}
+/* Shine */
+.rc-shine{
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.03),transparent);
+  animation:rcShine 4s ease-in-out infinite;
+}
+@keyframes rcShine{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+
+.role-title{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:19px;letter-spacing:5px;
+  color:#ffffff;text-transform:uppercase;font-weight:700;
+  line-height:1;
+}
+.role-dept{
+  font-family:'DM Mono',monospace;
+  font-size:10px;letter-spacing:3px;
+  color:rgba(255,255,255,.45);text-transform:uppercase;
+}
+.role-co{
+  font-family:'DM Mono',monospace;
+  font-size:9px;letter-spacing:3px;
+  color:rgba(180,100,255,.4);text-transform:uppercase;
+}
+
+/* ── Status dots ── */
+.status-row{
+  display:flex;align-items:center;gap:18px;
+  animation:fu .4s .98s ease both;
+}
+.st-item{display:flex;align-items:center;gap:5px;}
+.st-dot{width:6px;height:6px;border-radius:50%;animation:stPulse 2s ease-in-out infinite;}
+@keyframes stPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+.st-dot.d{background:#cc0010;box-shadow:0 0 6px rgba(200,0,16,.7);}
+.st-dot.n{background:#7040ff;box-shadow:0 0 6px rgba(100,40,255,.7);animation-delay:.5s;}
+.st-dot.g{background:#00d890;box-shadow:0 0 6px rgba(0,200,140,.7);animation-delay:1s;}
+.st-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.35);text-transform:uppercase;}
+
+/* ── Progress ── */
+.pbar-wrap{width:290px;animation:fu .4s 1.1s ease both;}
+.pbar-top{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:5px;}
+.pbar-track{width:100%;height:4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);overflow:hidden;}
+.pbar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#6a0008,#cc0010,#ff2030,#9060ff,#5020cc);
+  background-size:300% 100%;
+  animation:pf 6s 1.15s ease forwards,ps 4s 1.15s linear infinite;
+  position:relative;
+}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:12px;height:100%;background:rgba(180,120,255,.6);filter:blur(3px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+@keyframes ps{0%{background-position:0%}100%{background-position:300%}}
+.sys-txt{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(200,100,255,.4);text-transform:uppercase;margin-top:5px;text-align:center;animation:fu .4s 2.8s ease both;}
+
+@keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Bottom banner */
+.bbar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;z-index:20;animation:fu .5s 1.8s ease both;}
+.bl{width:22px;height:1px;background:linear-gradient(90deg,transparent,rgba(200,0,16,.45));}
+.br2{width:22px;height:1px;background:linear-gradient(90deg,rgba(80,0,200,.45),transparent);}
+.btxt{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.16);white-space:nowrap;}
+
+/* Corner labels */
+.ctxt{position:fixed;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:2px;z-index:1;}
+.ctxt.tl{top:20px;left:80px;color:rgba(200,0,16,.3);}
+.ctxt.br{bottom:20px;right:80px;color:rgba(80,0,200,.3);}
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="center-glow"></div>
+<div class="scan"></div>
+
+<!-- HUD -->
+<div class="hc tl"></div><div class="hc tr"></div>
+<div class="hc bl"></div><div class="hc br"></div>
+<div class="ctxt tl">ZENNI LMS · OPTICAL LAB</div>
+<div class="ctxt br">SESSION ACTIVE</div>
+
+<!-- DP slashes left -->
+<div class="dp-slashes">
+  <div class="ds" style="left:16%;transform:rotate(18deg);animation-delay:0s;"></div>
+  <div class="ds" style="left:42%;transform:rotate(18deg);animation-delay:.8s;"></div>
+  <div class="ds" style="left:72%;transform:rotate(18deg);animation-delay:1.6s;"></div>
+</div>
+
+<!-- NC teleport rings right -->
+<div class="nc-rings">
+  <div class="ncr" style="left:25%;top:35%;width:50px;height:50px;animation-duration:2.8s;animation-delay:0s;"></div>
+  <div class="ncr" style="left:60%;top:60%;width:40px;height:40px;animation-duration:3.2s;animation-delay:1s;"></div>
+  <div class="ncr" style="left:40%;top:72%;width:60px;height:60px;animation-duration:3.6s;animation-delay:2s;"></div>
+  <div class="ncr" style="left:75%;top:42%;width:35px;height:35px;animation-duration:2.5s;animation-delay:.6s;"></div>
+</div>
+
+<!-- Red sparks -->
+<div class="rspark" style="width:3px;height:3px;left:22%;top:52%;--tx:-50px;--ty:-90px;animation-duration:2.8s;animation-delay:0s;"></div>
+<div class="rspark" style="width:2px;height:2px;left:30%;top:58%;--tx:40px;--ty:-80px;animation-duration:3.2s;animation-delay:.5s;"></div>
+<div class="rspark" style="width:3px;height:3px;left:16%;top:48%;--tx:-35px;--ty:-100px;animation-duration:2.6s;animation-delay:1s;"></div>
+<!-- Purple sparks -->
+<div class="pspark" style="width:3px;height:3px;left:70%;top:50%;--tx:45px;--ty:-95px;animation-duration:3s;animation-delay:.3s;"></div>
+<div class="pspark" style="width:2px;height:2px;left:78%;top:56%;--tx:-35px;--ty:-80px;animation-duration:3.4s;animation-delay:.8s;"></div>
+<div class="pspark" style="width:3px;height:3px;left:64%;top:46%;--tx:55px;--ty:-85px;animation-duration:2.7s;animation-delay:1.4s;"></div>
+
+<!-- Bottom banner -->
+<div class="bbar">
+  <div class="bl"></div>
+  <span class="btxt">Deadpool × Nightcrawler · Zenni Optical Lab · Production</span>
+  <div class="br2"></div>
+</div>
+
+<div class="page">
+
+  <!-- Dual emblems -->
+  <div class="emblem-row">
+
+    <!-- Deadpool emblem -->
+    <div class="dp-em">
+      <div class="dp-ring"></div>
+      <div class="dp-ring2"></div>
+      <svg width="66" height="66" viewBox="0 0 66 66" fill="none">
+        <!-- DP mask face -->
+        <!-- Red top half -->
+        <path d="M33 6 Q52 6 59 22 Q64 32 62 33 L4 33 Q2 32 7 22 Q14 6 33 6Z" fill="#cc0010"/>
+        <!-- Black bottom half -->
+        <path d="M4 33 L62 33 Q59 48 48 55 Q40 60 33 60 Q26 60 18 55 Q7 48 4 33Z" fill="#111"/>
+        <!-- Black eye socket panels -->
+        <ellipse cx="21" cy="22" rx="10" ry="9" fill="#111"/>
+        <ellipse cx="45" cy="22" rx="10" ry="9" fill="#111"/>
+        <!-- White eyes -->
+        <ellipse cx="21" cy="22" rx="7.5" ry="7" fill="white"/>
+        <ellipse cx="45" cy="22" rx="7.5" ry="7" fill="white"/>
+        <!-- Red fills -->
+        <ellipse cx="21" cy="22" rx="5" ry="4.5" fill="#cc0010"/>
+        <ellipse cx="45" cy="22" rx="5" ry="4.5" fill="#cc0010"/>
+        <!-- Eye gloss -->
+        <ellipse cx="18" cy="19" rx="2" ry="1.5" fill="rgba(255,255,255,.5)"/>
+        <ellipse cx="42" cy="19" rx="2" ry="1.5" fill="rgba(255,255,255,.5)"/>
+        <!-- Eye squint lines -->
+        <path d="M11 17 Q21 12 31 17" stroke="#111" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M35 17 Q45 12 55 17" stroke="#111" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <!-- Center mask line -->
+        <line x1="33" y1="6" x2="33" y2="60" stroke="#111" stroke-width="2" opacity=".4"/>
+        <!-- Chin line -->
+        <path d="M20 46 Q33 42 46 46" stroke="#333" stroke-width="2" fill="none"/>
+        <!-- DP text -->
+        <text x="33" y="57" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="8" font-weight="900" fill="#cc0010" letter-spacing="2">DP</text>
+      </svg>
+    </div>
+
+    <div class="em-x">✕</div>
+
+    <!-- Nightcrawler emblem -->
+    <div class="nc-em">
+      <div class="nc-ring"></div>
+      <div class="nc-ring2"></div>
+      <div class="nc-em-flash"></div>
+      <svg width="66" height="66" viewBox="0 0 66 66" fill="none">
+        <!-- NC dark face -->
+        <ellipse cx="33" cy="34" rx="24" ry="26" fill="#1a0060"/>
+        <!-- Elf ears -->
+        <path d="M9 28 Q2 18 4 9 Q10 4 16 12 L14 28Z" fill="#1a0060" stroke="#2a0090" stroke-width="1.2"/>
+        <path d="M57 28 Q64 18 62 9 Q56 4 50 12 L52 28Z" fill="#1a0060" stroke="#2a0090" stroke-width="1.2"/>
+        <!-- Forehead tribal markings -->
+        <path d="M21 16 Q33 10 45 16" stroke="#5020cc" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M24 10 Q33 6  42 10" stroke="#5020cc" stroke-width="2" stroke-linecap="round" fill="none" opacity=".6"/>
+        <!-- Gold cat eyes -->
+        <ellipse cx="23" cy="30" rx="8" ry="6" fill="#e8b800"/>
+        <ellipse cx="43" cy="30" rx="8" ry="6" fill="#e8b800"/>
+        <!-- Slit pupils -->
+        <ellipse cx="23" cy="30" rx="2" ry="5.5" fill="#0a001a"/>
+        <ellipse cx="43" cy="30" rx="2" ry="5.5" fill="#0a001a"/>
+        <!-- Eye glow -->
+        <ellipse cx="23" cy="30" rx="8" ry="6" fill="none" stroke="rgba(255,200,0,.6)" stroke-width="1.5"/>
+        <ellipse cx="43" cy="30" rx="8" ry="6" fill="none" stroke="rgba(255,200,0,.6)" stroke-width="1.5"/>
+        <!-- Cheek marks -->
+        <path d="M8 38 Q16 35 22 38" stroke="rgba(80,0,200,.5)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+        <path d="M58 38 Q50 35 44 38" stroke="rgba(80,0,200,.5)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+        <!-- Tail peek -->
+        <path d="M50 52 Q58 44 56 36" stroke="#2a0090" stroke-width="5" stroke-linecap="round" fill="none"/>
+        <polygon points="56,36 50,43 62,43" fill="#5020cc"/>
+        <!-- NC text -->
+        <text x="33" y="60" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="8" font-weight="900" fill="#7040ff" letter-spacing="2">NC</text>
+      </svg>
+    </div>
+
+  </div>
+
+  <div class="welcome-txt">Welcome back</div>
+  <div class="fullname" id="displayName">Brian Honicker</div>
+
+  <div class="divider">
+    <div class="div-l"></div>
+    <div class="div-dot"></div>
+    <div class="div-r"></div>
+  </div>
+
+  <div class="role-card">
+    <div class="rc-shine"></div>
+    <div class="role-title">Production Supervisor</div>
+    <div class="role-dept">Optical Lab · Manufacturing</div>
+    <div class="role-co">Zenni USA · Ohio</div>
+  </div>
+
+  <div class="status-row">
+    <div class="st-item">
+      <div class="st-dot d"></div>
+      <div class="st-lbl">Deadpool</div>
+    </div>
+    <div class="st-item">
+      <div class="st-dot n"></div>
+      <div class="st-lbl">Nightcrawler</div>
+    </div>
+    <div class="st-item">
+      <div class="st-dot g"></div>
+      <div class="st-lbl">Online</div>
+    </div>
+  </div>
+
+  <div class="pbar-wrap">
+    <div class="pbar-top"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+    <div class="sys-txt" id="sysTxt">Initializing systems...</div>
+  </div>
+
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Brian Honicker";
+  const r=sessionStorage.getItem("lms_role")||"Supervisor";
+  const s=sessionStorage.getItem("lms_subrole")||"Production";
+  document.getElementById("displayName").textContent=n;
+
+  const msgs=["Initializing systems...","Loading optical lab data...","Syncing production floor...","Almost ready...","Welcome to the Rift..."];
+  let p=0;const pEl=document.getElementById("pct");const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);pEl.textContent=p+"%";
+    if(p<20)sysEl.textContent=msgs[0];else if(p<40)sysEl.textContent=msgs[1];
+    else if(p<60)sysEl.textContent=msgs[2];else if(p<80)sysEl.textContent=msgs[3];
+    else sysEl.textContent=msgs[4];
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  const MIN_TIME=6000;const startTime=Date.now();
+  const preload=document.createElement("link");preload.rel="prefetch";preload.href="index.html";document.head.appendChild(preload);
+  function go(){const e=Date.now()-startTime;const r=Math.max(0,MIN_TIME-e);setTimeout(()=>{p=100;pEl.textContent="100%";clearInterval(iv);setTimeout(()=>{window.location.replace("../../index.html");},400);},r);}
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>go()).catch(()=>go());
+  setTimeout(()=>{window.location.replace("../../index.html");},10000);
+</script>
+</body>
+</html>

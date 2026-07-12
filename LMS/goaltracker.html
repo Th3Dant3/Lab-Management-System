@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Goal Tracker // Mission HUD</title>
+  <link rel="stylesheet" href="goaltracker.css" />
+</head>
+
+<body>
+  <div class="scanlines"></div>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="hud-logo">GOAL//HUB</div>
+
+      <div class="hud-eq" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+
+      <nav class="hud-tabs" aria-label="Goal tracker navigation">
+        <button class="hud-tab nav-btn active" data-view="overview">Overview</button>
+        <button class="hud-tab nav-btn" data-view="work">Work Log</button>
+        <button class="hud-tab nav-btn" data-view="accuracy">Accuracy</button>
+        <button class="hud-tab nav-btn" data-view="docs">Documentation</button>
+        <button class="hud-tab nav-btn" data-view="summary">Monthly Update</button>
+      </nav>
+
+      <div class="hud-right">
+        <div class="hud-pill online">ONLINE</div>
+        <div class="hud-avatar">B</div>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <div class="player-card">
+        <div class="player-card-top">
+          <div class="player-avatar-big">B</div>
+          <div>
+            <div class="player-name">BLOPEZ</div>
+            <div class="player-rank">PRIVATE TRACKER</div>
+          </div>
+        </div>
+        <div class="xp-bar-wrap">
+          <div class="xp-label"><span>MISSION XP</span><span id="topProgress">38%</span></div>
+          <div class="xp-track"><div class="xp-fill"></div></div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">Command Menu</div>
+      <button class="side-link nav-btn active" data-view="overview"><span class="nav-icon">◎</span> Overview</button>
+      <button class="side-link nav-btn" data-view="work"><span class="nav-icon">✦</span> Work Log</button>
+      <button class="side-link nav-btn" data-view="accuracy"><span class="nav-icon">◇</span> Accuracy</button>
+      <button class="side-link nav-btn" data-view="docs"><span class="nav-icon">▣</span> Documentation</button>
+      <button class="side-link nav-btn" data-view="summary"><span class="nav-icon">⬡</span> Monthly Update</button>
+
+      <div class="sidebar-section">Mission Status</div>
+      <div class="side-metric">
+        <span>Completed</span>
+        <strong id="topCompleted">3 / 8</strong>
+      </div>
+      <div class="side-metric">
+        <span>Open Items</span>
+        <strong id="openItemsCount">0</strong>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <section id="overview" class="view active">
+        <div class="page-header">
+          <div>
+            <div class="page-title">GOAL COMMAND CENTER</div>
+            <div class="page-sub">Operational dashboard improvement mission tracker</div>
+          </div>
+          <button class="btn primary" id="refreshBtn">Refresh Tracker</button>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat-card cyan">
+            <div class="stat-label">Goal Progress</div>
+            <div class="stat-value" id="progressPercent">38%</div>
+            <div class="stat-delta">Live API Sync</div>
+            <div class="stat-icon">◎</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-label">Completed</div>
+            <div class="stat-value" id="topCompletedMirror">3 / 8</div>
+            <div class="stat-delta">Actions Closed</div>
+            <div class="stat-icon">✓</div>
+          </div>
+          <div class="stat-card gold">
+            <div class="stat-label">Documentation</div>
+            <div class="stat-value" id="docsHealthText">0%</div>
+            <div class="stat-delta">Tracker Health</div>
+            <div class="stat-icon">▣</div>
+          </div>
+          <div class="stat-card purple">
+            <div class="stat-label">Accuracy</div>
+            <div class="stat-value" id="qualityHealthText">0%</div>
+            <div class="stat-delta">Validation Pass</div>
+            <div class="stat-icon">◇</div>
+          </div>
+        </div>
+
+        <div class="content-grid main-grid">
+          <div class="card goal-card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Official Goal</div></div>
+            <div class="card-body">
+              <h1>Improving Operational Dashboards and Reporting</h1>
+              <p>
+                I want to continue improving the dashboards and reporting tools used to track daily lab operations.
+                These dashboards help give a clearer view of production activity, WIP, breakage, scan performance,
+                workflow movement, and operational bottlenecks.
+              </p>
+              <p>
+                My goal is to make the data easier to understand, more accurate, and more useful for day-to-day
+                decision-making. This includes improving dashboard design, adding KPI summaries and trends,
+                validating totals against source reports, and building better automation for imports, refreshes,
+                snapshots, and cleanup.
+              </p>
+              <p>
+                I also want to document the data sources, formulas, refresh timing, snapshot logic, API dependencies,
+                and troubleshooting steps so the dashboards can be maintained correctly and improved over time.
+              </p>
+            </div>
+          </div>
+
+          <div class="card progress-card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Mission Progress</div></div>
+            <div class="card-body center-body">
+              <div class="ring-wrap">
+                <div class="ring">
+                  <svg viewBox="0 0 120 120" aria-hidden="true">
+                    <circle class="ring-bg" cx="60" cy="60" r="50"></circle>
+                    <circle id="progressRing" class="ring-fill" cx="60" cy="60" r="50"></circle>
+                  </svg>
+                  <div class="ring-text">
+                    <strong id="progressPercentMirror">38%</strong>
+                    <span>COMPLETE</span>
+                  </div>
+                </div>
+                <h2 id="progressText">3 of 8 completed</h2>
+                <p class="muted" id="progressInsight">Keep this honest. Only mark actions complete when the work is stable, tested, or documented.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-grid lower-grid">
+          <div class="card wide-card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Official Actions</div></div>
+            <div class="card-body"><div id="actionsList" class="actions-list"></div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>System Health</div></div>
+            <div class="card-body">
+              <div class="status-bars">
+                <div class="status-bar-row"><span class="status-bar-label">DOCS</span><div class="status-track"><div class="status-fill docs-fill"></div></div><span id="docsHealthTextMirror" class="status-val">0%</span></div>
+                <div class="status-bar-row"><span class="status-bar-label">DATA</span><div class="status-track"><div class="status-fill data-fill"></div></div><span id="dataHealthText" class="status-val">Good</span></div>
+                <div class="status-bar-row"><span class="status-bar-label">AUTO</span><div class="status-track"><div class="status-fill auto-fill"></div></div><span id="automationHealthText" class="status-val">0%</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Recent Work Logs</div></div>
+            <div class="card-body"><div id="recentWorkLogs" class="record-list"></div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Recent Accuracy Checks</div></div>
+            <div class="card-body"><div id="recentAccuracyChecks" class="record-list"></div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Documentation Gaps</div></div>
+            <div class="card-body"><div id="documentationNotes" class="record-list"></div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Next Milestones</div></div>
+            <div class="card-body"><div id="nextMilestones" class="record-list"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="work" class="view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">WORK LOG</div>
+            <div class="page-sub">Record dashboard fixes, testing, automation, and proof</div>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Add Work Update</div></div>
+            <div class="card-body form-body">
+              <label>Date</label>
+              <input type="date" id="workDate" />
+
+              <label>Dashboard</label>
+              <select id="workDashboard"></select>
+
+              <label>Work Type</label>
+              <select id="workType"></select>
+
+              <label>Status</label>
+              <select id="workStatus"></select>
+
+              <label>Description</label>
+              <textarea id="workDescription" placeholder="Example: Fixed Picking WIP breakage count loading as 0 after refresh."></textarea>
+
+              <label>Evidence / Proof</label>
+              <textarea id="workEvidence" placeholder="Example: Tested first load and refresh. Count stayed accurate."></textarea>
+
+              <button class="btn primary full" id="saveWorkBtn">Save Work Log</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Latest Work Logs</div></div>
+            <div class="card-body"><div id="workLogList" class="record-list"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="accuracy" class="view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">ACCURACY VALIDATION</div>
+            <div class="page-sub">Compare dashboard metrics against source reports</div>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Add Accuracy Check</div></div>
+            <div class="card-body form-body">
+              <label>Date</label>
+              <input type="date" id="checkDate" />
+
+              <label>Dashboard</label>
+              <select id="checkDashboard"></select>
+
+              <label>Metric Name</label>
+              <input type="text" id="metricName" placeholder="Example: Total Breakage Count" />
+
+              <label>Source Report Total</label>
+              <input type="number" id="sourceTotal" step="any" />
+
+              <label>Dashboard Total</label>
+              <input type="number" id="dashboardTotal" step="any" />
+
+              <label>Notes</label>
+              <textarea id="checkNotes" placeholder="Example: Compared against RAW_BREAKAGE and dashboard KPI card."></textarea>
+
+              <button class="btn primary full" id="saveAccuracyBtn">Save Accuracy Check</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Latest Accuracy Checks</div></div>
+            <div class="card-body"><div id="accuracyList" class="record-list"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="docs" class="view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">DOCUMENTATION TRACKER</div>
+            <div class="page-sub">Lock down formulas, refresh timing, API dependencies, and troubleshooting</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><div class="card-title"><span class="dot"></span>Dashboard Documentation</div></div>
+          <div class="card-body form-body">
+            <label>Dashboard</label>
+            <select id="docDashboard"></select>
+
+            <div class="grid-three compact">
+              <div>
+                <label>Data Sources</label>
+                <select id="docDataSources"></select>
+              </div>
+              <div>
+                <label>Formulas</label>
+                <select id="docFormulas"></select>
+              </div>
+              <div>
+                <label>Refresh Timing</label>
+                <select id="docRefreshTiming"></select>
+              </div>
+              <div>
+                <label>Snapshot Logic</label>
+                <select id="docSnapshotLogic"></select>
+              </div>
+              <div>
+                <label>API Dependencies</label>
+                <select id="docApiDependencies"></select>
+              </div>
+              <div>
+                <label>Troubleshooting</label>
+                <select id="docTroubleshooting"></select>
+              </div>
+            </div>
+
+            <label>Overall Status</label>
+            <select id="docStatus"></select>
+
+            <label>Notes</label>
+            <textarea id="docNotes" placeholder="Example: Need to document API action names and refresh timing."></textarea>
+
+            <button class="btn primary full" id="saveDocsBtn">Save Documentation Status</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="summary" class="view">
+        <div class="page-header">
+          <div>
+            <div class="page-title">MONTHLY GOAL UPDATE</div>
+            <div class="page-sub">Generate a clean monthly comment from saved tracker data</div>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Generate Official Comment</div></div>
+            <div class="card-body form-body">
+              <label>Month</label>
+              <input type="month" id="summaryMonth" />
+
+              <button class="btn primary full" id="generateSummaryBtn">Generate Summary</button>
+
+              <label>Generated Comment</label>
+              <textarea id="generatedSummary" readonly></textarea>
+
+              <button class="btn ghost full" id="copySummaryBtn">Copy Comment</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="card-title"><span class="dot"></span>Saved Monthly Summaries</div></div>
+            <div class="card-body"><div id="monthlyList" class="record-list"></div></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="goaltracker.js"></script>
+</body>
+</html>

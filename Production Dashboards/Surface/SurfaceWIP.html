@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+  <script src="../../authGuard.js"></script>
+<meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Surface Dashboard</title>
+
+  <link rel="stylesheet" href="./SurfaceWIP.css?v=20260526-operator-command-no-line-constraints" />
+</head>
+
+<body>
+
+  <!-- =====================================================
+       SURFACE WIP LOADING SCREEN
+  ====================================================== -->
+  <div id="surfaceLoader" class="surface-loader">
+    <div class="loader-grid-bg"></div>
+
+    <div class="surface-loader-card">
+      <div class="loader-orbit">
+        <div class="loader-core">
+          <span></span>
+        </div>
+
+        <div class="orbit-ring ring-1"></div>
+        <div class="orbit-ring ring-2"></div>
+        <div class="orbit-dot dot-1"></div>
+        <div class="orbit-dot dot-2"></div>
+        <div class="orbit-dot dot-3"></div>
+      </div>
+
+      <div class="loader-title">Surface</div>
+      <div class="loader-subtitle">Surface Workflow</div>
+
+      <div class="loader-flow">
+        <div class="loader-node active">
+          <span>SF</span>
+        </div>
+
+        <div class="loader-track">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+
+        <div class="loader-node">
+          <span>BX</span>
+        </div>
+
+        <div class="loader-track">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+
+        <div class="loader-node">
+          <span>54R</span>
+        </div>
+      </div>
+
+      <div class="loader-progress">
+        <div id="surfaceLoaderFill" class="loader-progress-fill"></div>
+      </div>
+
+      <div id="surfaceLoaderStatus" class="loader-status-text">
+        Initializing Surface dashboard…
+      </div>
+    </div>
+  </div>
+
+  <div class="app">
+
+    <aside class="sidebar">
+
+      <div class="brand">
+        <div class="brand-logo">⬢</div>
+
+        <div class="brand-title">
+          Surface
+          <span>Workflow</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+
+        <button class="nav-item active" data-tab="overview">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            </svg>
+          </span>
+          Process Flow
+        </button>
+
+        <button class="nav-item" data-tab="operators">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </span>
+          Machine Hourly Breakdown
+        </button>
+
+        <button class="nav-item" data-tab="detail">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="16" y2="17"></line>
+            </svg>
+          </span>
+          Flow Detail
+        </button>
+
+        <button class="nav-item" data-tab="lines">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+          </span>
+          Production Lines
+        </button>
+
+        <button class="nav-item" data-tab="alerts">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </span>
+          Alerts
+          <span id="alertBadge" class="nav-badge" style="display:none;">0</span>
+        </button>
+
+        <button class="nav-item" data-tab="analytics">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+              <line x1="2" y1="20" x2="22" y2="20"></line>
+            </svg>
+          </span>
+          Production Health Report
+        </button>
+
+
+
+
+        <button class="nav-item" data-tab="summary">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+              <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+            </svg>
+          </span>
+          Summary
+        </button>
+
+      </nav>
+
+      <div class="system-card">
+        <div class="system-title">System Status</div>
+
+        <div class="system-ok">
+          <span class="dot yellow-dot"></span>
+          <span id="systemStatusText">Loading…</span>
+        </div>
+
+        <div class="refresh-mini">
+          <span class="spin-icon">⟳</span>
+          <span>Auto Refresh<br />30s</span>
+        </div>
+      </div>
+
+    </aside>
+
+    <main class="main">
+
+      <header class="page-header">
+
+        <div>
+          <div class="brand-kicker">Surface Dept</div>
+
+          <h1>Surface Dashboard</h1>
+
+          <div class="header-actions">
+            <div class="live-pill">
+              <span class="pulse-dot"></span>
+              LIVE MODE
+            </div>
+
+            <div class="auto-refresh">
+              <span class="dot green-dot"></span>
+              Auto-refreshing every 30s
+            </div>
+
+            <div id="latestUpdatePill" class="latest-update-pill">
+              Latest Update: —
+            </div>
+          </div>
+        </div>
+
+        <div class="surface-header-right">
+          <div class="surface-header-actions">
+            <a href="../../index.html" class="surface-action-btn dashboard-btn" aria-label="Back to dashboard">
+              <span>←</span>
+              <strong>Back to Dashboard</strong>
+            </a>
+
+            <a href="../../Breakage Dashboard/FacilityBreakage.html" class="surface-action-btn breakage-btn" aria-label="Open Facility Breakage">
+              <span>⚠</span>
+              <strong>Facility Breakage</strong>
+            </a>
+          </div>
+
+          <div class="clock-card">
+            <div id="clockTime">--:--:--</div>
+            <span id="clockDate">---</span>
+          </div>
+        </div>
+
+      </header>
+
+      <section class="kpi-grid">
+
+        <article class="kpi-card">
+          <div class="kpi-label">Total Surface WIP</div>
+          <div id="kpiTotal" class="kpi-value">—</div>
+          <div id="kpiActiveSteps" class="kpi-note">—</div>
+        </article>
+
+        <article class="kpi-card red">
+          <div class="kpi-label">Highest Bottleneck</div>
+          <div id="kpiBottleneck" class="kpi-value">—</div>
+          <div id="kpiBottleneckSub" class="kpi-note">—</div>
+        </article>
+
+        <article class="kpi-card green">
+          <div class="kpi-label">Surface Main WIP</div>
+          <div id="kpiMain" class="kpi-value">—</div>
+          <div id="kpiIntake" class="kpi-note">Intake: —</div>
+        </article>
+
+        <article class="kpi-card orange">
+          <div class="kpi-label">Total Surface Inspection</div>
+          <div id="kpiInspection" class="kpi-value">—</div>
+          <div class="kpi-note">Total Scan of Inspection</div>
+        </article>
+
+      </section>
+
+      <section id="tab-overview" class="tab-panel active">
+        <section class="transfer-shell surface-live-flow-v3-host">
+          <div class="transfer-shell__header">
+            <div>
+              <div class="transfer-title">Surface Live Flow</div>
+              <div class="transfer-subtitle">
+                Total Scan Today → Current WIP Moving → Next Station.
+              </div>
+            </div>
+
+            <div id="transferMeta" class="transfer-meta">
+              Live Surface WIP
+            </div>
+          </div>
+
+          <div id="transferGrid" class="transfer-grid">
+            <div class="transfer-loading">
+              <div class="spinner"></div>
+              <span>Loading live Surface flow…</span>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-detail" class="tab-panel">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Flow Detail</h1>
+            <p class="subtitle">Station-level WIP detail by flow order.</p>
+          </div>
+        </header>
+
+        <div id="flowDetailGrid" class="flow-detail-grid">
+          <div class="flow-loading">Loading detailed flow…</div>
+        </div>
+      </section>
+
+      <section id="tab-lines" class="tab-panel">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Production Lines</h1>
+            
+          </div>
+        </header>
+
+        <div id="linesGrid" class="lines-grid">
+          <div class="flow-loading">Loading line data…</div>
+        </div>
+      </section>
+
+      <section id="tab-alerts" class="tab-panel">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Operational Alerts</h1>
+            <p class="subtitle">Critical and watch-level Surface WIP conditions.</p>
+          </div>
+        </header>
+
+        <div id="alertsPanel" class="alerts-panel">
+          <div class="flow-loading">Loading alerts…</div>
+        </div>
+      </section>
+
+      <section id="tab-analytics" class="tab-panel">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Production Health Report</h1>            
+          </div>
+        </header>
+
+        <div id="analyticsGrid" class="analytics-grid">
+          <div class="flow-loading">Loading production intelligence…</div>
+        </div>
+      </section>
+
+
+      <section id="tab-operators" class="tab-panel">
+        <header class="page-header page-header--slim operator-command-header">
+          <div>
+            <div class="brand-kicker">Surface Machine Breakdown</div>
+            <h1>Hourly Breakdown</h1>
+            
+          </div>
+          <div class="header-actions">
+            <div id="operatorLatestUpdate" class="latest-update-pill">Latest Update: —</div>
+            <button id="btnExportOperatorsCsv" class="btn-export">Export Operators CSV</button>
+          </div>
+        </header>
+
+        <section class="operator-command-shell">
+          <div class="operator-command-hero">
+            <div class="operator-command-copy">              
+              <h2>Surface Dashboard</h2>              
+            </div>
+            <div class="operator-command-live"><span class="pulse-dot"></span>LIVE OPERATOR SIGNAL</div>
+          </div>
+
+          <div class="operator-command-kpis">
+            <article class="operator-command-kpi"><span>Total Jobs</span><strong id="operatorTotalJobs">—</strong><small>Visible station output</small></article>
+            <article class="operator-command-kpi"><span>Active Operators</span><strong id="operatorTotalOperators">—</strong><small>Operator rows captured</small></article>
+            <article class="operator-command-kpi highlight"><span>Peak Hour</span><strong id="operatorPeakHour">—</strong><small id="operatorPeakHourSub">—</small></article>
+            <article class="operator-command-kpi"><span>Top Station</span><strong id="operatorTopStation">—</strong><small id="operatorTopStationSub">—</small></article>
+          </div>
+
+          <div class="operator-command-toolbar">
+            <div class="operator-control"><label for="operatorStationFilter">Station Focus</label><select id="operatorStationFilter"><option value="all">All Surface Operator Stations</option></select></div>
+            <div class="operator-control operator-control--wide"><label for="operatorSearch">Search</label><input id="operatorSearch" type="search" placeholder="Search operator, station, or access point…" /></div>
+            <div class="operator-control"><label for="operatorSort">Station Sort</label><select id="operatorSort"><option value="stationAsc">Process Order</option><option value="totalDesc">Output High → Low</option><option value="operatorAsc">Top Operator A → Z</option><option value="lastActiveDesc">Last Active Hour</option></select></div>
+          </div>
+
+          <div id="operatorStationChips" class="operator-status-strip"><span class="flow-loading">Loading station status…</span></div>
+          <div id="operatorTableWrap" class="operator-command-grid"><div class="flow-loading">Loading Surface operator command cards…</div></div>
+        </section>
+
+        <aside id="operatorStationDrawer" class="operator-drawer" aria-hidden="true">
+          <div class="operator-drawer-backdrop" data-operator-close></div>
+          <div class="operator-drawer-panel">
+            <button class="operator-drawer-close" data-operator-close aria-label="Close station detail">×</button>
+            <div id="operatorDrawerContent" class="operator-drawer-content"><div class="flow-loading">Select a station to view details.</div></div>
+          </div>
+        </aside>
+      </section>
+
+      <section id="tab-summary" class="tab-panel">
+        <header class="page-header page-header--slim">
+          <div>
+            <h1>Summary</h1>
+            <p class="subtitle">Leadership-ready shift readout and export.</p>
+          </div>
+
+          <div class="header-actions">
+            <div id="summaryLatestUpdate" class="latest-update-pill">
+              Latest Update: —
+            </div>
+
+            <button id="btnExportCsv" class="btn-export">
+              Export CSV
+            </button>
+          </div>
+        </header>
+
+        <div id="reportTableWrap" class="report-table-wrap">
+          <div class="flow-loading">Loading executive snapshot…</div>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="./SurfaceWIP.js?v=20260526-operator-command-no-line-constraints"></script>
+
+</body>
+</html>

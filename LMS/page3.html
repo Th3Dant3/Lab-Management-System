@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  
+  <script src="../authGuard.js"></script>
+<meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Investigation Hold Dashboard</title>
+  <link rel="stylesheet" href="./style-page3.css"/>
+</head>
+<body>
+
+<main class="wrap">
+
+  <!-- TOP NAV -->
+  <nav class="topnav">
+    <button class="nav-back" onclick="goDashboard()">← Dashboard</button>
+    <div class="nav-brand">INV · HOLD · OPS</div>
+    <div class="nav-live">
+      <span class="live-dot"></span>
+      <span>Live</span>
+    </div>
+  </nav>
+
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="hdr-left">
+      <div class="hdr-tag">Operational Review</div>
+      <h1 class="hdr-title">Investigation <em>Hold</em> Dashboard</h1>
+      <p class="hdr-sub">Exception monitoring &amp; root cause analysis</p>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-stat">
+        <div class="hdr-sl">Status</div>
+        <div class="hdr-sv green" id="headerStatus">—</div>
+      </div>
+      <div class="hdr-stat">
+        <div class="hdr-sl">Coverage</div>
+        <div class="hdr-sv white" id="headerCoverage">—</div>
+      </div>
+      <div class="hdr-stat">
+        <div class="hdr-sl">Last sync</div>
+        <div class="hdr-sv sm" id="headerSync">—</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- FILTER BAR -->
+  <section class="filterbar">
+    <div class="fb-group">
+      <label class="fb-lbl">Report date</label>
+      <div class="fb-inputs">
+        <input type="date" id="dateFilter" class="fb-date"/>
+        <button id="clearDate" class="fb-clear">✕ Clear</button>
+      </div>
+    </div>
+    <div class="fb-divider"></div>
+    <div class="fb-yrs">
+      <button class="fb-yr active" data-year="all">All time</button>
+      <button class="fb-yr" data-year="2025">2025</button>
+      <button class="fb-yr" data-year="2026">2026</button>
+    </div>
+  </section>
+
+  <!-- PRIMARY KPIs -->
+  <section class="kpi4">
+    <div class="kcard hero">
+      <div class="kc-label">Active holds</div>
+      <div class="kc-val" id="activeHolds">—</div>
+      <div class="kc-bar"><div class="kc-fill" id="activeBar"></div></div>
+    </div>
+    <div class="kcard">
+      <div class="kc-label">Total evaluated</div>
+      <div class="kc-val" id="evaluatedCount">—</div>
+    </div>
+    <div class="kcard">
+      <div class="kc-label">Coverage</div>
+      <div class="kc-val" id="coveragePct">—</div>
+    </div>
+    <div class="kcard">
+      <div class="kc-label">Last refresh</div>
+      <div class="kc-val sm" id="lastUpdated">—</div>
+    </div>
+  </section>
+
+  <!-- SECONDARY KPIs -->
+  <section class="kpi7">
+    <div class="ksm">
+      <div class="ksm-label">Avg investigation</div>
+      <div class="ksm-val" id="avgInvestigationTime">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Arrive to Inv Hold</div>
+      <div class="ksm-val" id="arrivedToday">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Evaluated completed</div>
+      <div class="ksm-val" id="evaluatedToday">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Previous scan</div>
+      <div class="ksm-val" id="priorDayIntake">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Avg delay</div>
+      <div class="ksm-val" id="avgArrivalDelayDays">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Oldest</div>
+      <div class="ksm-val mono" id="oldestInvestigation">—</div>
+    </div>
+    <div class="ksm">
+      <div class="ksm-label">Latest</div>
+      <div class="ksm-val mono" id="latestInvestigation">—</div>
+    </div>
+  </section>
+
+  <!-- SHIFT PERFORMANCE -->
+  <section class="section">
+    <div class="sec-eyebrow">Shift performance</div>
+    <div id="shiftStatsWrap"></div>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section class="insights-wrap">
+    <div class="ins-header">
+      <div>
+        <h2 class="ins-title">Investigation Insights</h2>
+        <p class="ins-sub">Root causes · Return destinations · Delay patterns</p>
+      </div>
+      <div class="ins-tabs">
+        <button id="tabReasons" class="ins-tab active">⚡ Root causes</button>
+        <button id="tabSentBack" class="ins-tab">↩ Returned to</button>
+        <button id="tabDelay" class="ins-tab">⏱ Delay overview</button>
+        <button id="tabTrend" class="ins-tab">📈 Trend</button>
+        <button id="tabPipeline" class="ins-tab">→ Job journey</button>
+      </div>
+    </div>
+
+    <!-- ROOT CAUSES -->
+    <div id="reasonsView" style="display:block;">
+      <div id="reasonBubbles"></div>
+    </div>
+
+    <!-- RETURNED TO -->
+    <div id="sentBackView" style="display:none;">
+      <div id="sentBackBubbles"></div>
+    </div>
+
+    <!-- DELAY -->
+    <div id="delayView" style="display:none;">
+      <div class="stabs">
+        <button id="delayTabSummary" class="stab active">Summary</button>
+        <button id="delayTabDept" class="stab">By department</button>
+        <button id="delayTabTable" class="stab">Timeline</button>
+      </div>
+
+      <div id="delaySummaryView">
+        <div class="delay-buckets">
+          <div class="dbucket db-low delay-filter" data-range="1-2">
+            <div class="dbucket-range">1–2 Days</div>
+            <div class="dbucket-num" id="bucket-1-2">0</div>
+            <div class="dbucket-sub">Short delay</div>
+          </div>
+          <div class="dbucket db-mid delay-filter" data-range="3-5">
+            <div class="dbucket-range">3–5 Days</div>
+            <div class="dbucket-num" id="bucket-3-5">0</div>
+            <div class="dbucket-sub">Medium delay</div>
+          </div>
+          <div class="dbucket db-hi delay-filter" data-range="5+">
+            <div class="dbucket-range">5+ Days</div>
+            <div class="dbucket-num" id="bucket-5plus">0</div>
+            <div class="dbucket-sub">Critical</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="delayDeptView" style="display:none;">
+        <div id="delayByDept"></div>
+      </div>
+
+      <div id="delayTableView" style="display:none;">
+        <div class="tbl-wrap">
+          <table class="dtbl">
+            <thead>
+              <tr>
+                <th>RX</th>
+                <th>Returned to</th>
+                <th>Scan date</th>
+                <th>Arrived</th>
+                <th>Days</th>
+              </tr>
+            </thead>
+            <tbody id="delayTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- TREND TAB -->
+    <div id="trendView" style="display:none;">
+      <div class="trend-tab-inner">
+        <div class="trend-tab-card">
+          <div class="trend-eyebrow">Scan trend</div>
+          <div class="trend-title">Previous Scan</div>
+          <div class="trend-legend">
+            <span class="tleg-line" style="background:#4a7ab0;"></span>
+            Previous Scan
+          </div>
+          <div class="chart-wrap-tab">
+            <canvas id="scanTrendChart"></canvas>
+          </div>
+        </div>
+        <div class="trend-tab-card">
+          <div class="trend-eyebrow">Arrival trend</div>
+          <div class="trend-title">Arrive to Inv Hold</div>
+          <div class="trend-legend">
+            <span class="tleg-line" style="background:#00e87a;"></span>
+            Date received at IH
+          </div>
+          <div class="chart-wrap-tab">
+            <canvas id="arrivalTrendChart"></canvas>
+          </div>
+        </div>
+        <div class="trend-tab-card">
+          <div class="trend-eyebrow">Evaluated trend</div>
+          <div class="trend-title">Evaluated Completed</div>
+          <div class="trend-legend">
+            <span class="tleg-line" style="background:#f5a623;"></span>
+            Date investigation resolved
+          </div>
+          <div class="chart-wrap-tab">
+            <canvas id="evaluatedTrendChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PIPELINE TAB -->
+    <div id="pipelineView" style="display:none;">
+
+      <!-- STAGE SUMMARY -->
+      <div class="pipe-stages">
+        <div class="pipe-stage pipe-stage-scan">
+          <div class="pipe-stage-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="4" height="16" rx="1"/><rect x="8" y="4" width="2" height="16" rx="1"/>
+              <rect x="12" y="4" width="4" height="16" rx="1"/><rect x="18" y="4" width="4" height="16" rx="1"/>
+            </svg>
+          </div>
+          <div class="pipe-stage-label">Previous Scan</div>
+          <div class="pipe-stage-val" id="pipeTotal">—</div>
+          <div class="pipe-stage-sub">rx jobs scanned</div>
+        </div>
+        <div class="pipe-connector">
+          <div class="pipe-connector-line"></div>
+          <div class="pipe-connector-gap">
+            <div class="pipe-connector-label">Transit time</div>
+            <div class="pipe-connector-val blue" id="pipeGap1">—</div>
+          </div>
+          <div class="pipe-connector-arrow">→</div>
+        </div>
+        <div class="pipe-stage pipe-stage-arrive">
+          <div class="pipe-stage-icon" style="background:rgba(0,232,122,.1);color:#00e87a;border-color:rgba(0,232,122,.2)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </div>
+          <div class="pipe-stage-label">Received at IH</div>
+          <div class="pipe-stage-val" id="pipeArrived">—</div>
+          <div class="pipe-stage-sub">rx jobs received</div>
+        </div>
+        <div class="pipe-connector">
+          <div class="pipe-connector-line" style="background:linear-gradient(90deg,#00e87a,#f5a623)"></div>
+          <div class="pipe-connector-gap">
+            <div class="pipe-connector-label">Investigation time</div>
+            <div class="pipe-connector-val amber" id="pipeGap2">—</div>
+          </div>
+          <div class="pipe-connector-arrow">→</div>
+        </div>
+        <div class="pipe-stage pipe-stage-hold">
+          <div class="pipe-stage-icon" style="background:rgba(245,166,35,.1);color:#f5a623;border-color:rgba(245,166,35,.2)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+            </svg>
+          </div>
+          <div class="pipe-stage-label">Investigation Complete</div>
+          <div class="pipe-stage-val" id="pipeCompleted">—</div>
+          <div class="pipe-stage-sub">rx jobs resolved</div>
+        </div>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="pipe-legend">
+        <div class="pipe-leg-item"><div class="pipe-leg-sq" style="background:#1e3a5a"></div>Transit delay</div>
+        <div class="pipe-leg-item"><div class="pipe-leg-sq" style="background:#00e87a"></div>Received at IH</div>
+        <div class="pipe-leg-item"><div class="pipe-leg-sq" style="background:#3a2808"></div>Investigation duration</div>
+        <div class="pipe-leg-item"><span class="gbadge gbadge-ok">≤1d</span>On time</div>
+        <div class="pipe-leg-item"><span class="gbadge gbadge-warn">2–3d</span>Moderate delay</div>
+        <div class="pipe-leg-item"><span class="gbadge gbadge-bad">4d+</span>Critical delay</div>
+      </div>
+
+      <!-- JOB TABLE -->
+      <div class="pipe-tbl-wrap">
+        <table class="pipe-tbl">
+          <thead>
+            <tr>
+              <th>RX Number</th>
+              <th>Returned to</th>
+              <th>Previous Scan</th>
+              <th>Transit time</th>
+              <th>Received at IH</th>
+              <th>Investigation</th>
+              <th>Resolved</th>
+              <th>Journey</th>
+            </tr>
+          </thead>
+          <tbody id="pipelineTableBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- FOOTER -->
+  <div class="page-foot">
+    <button class="nav-back" onclick="goDashboard()">← Dashboard</button>
+    <div class="foot-stamp">INV-HOLD · OPS System</div>
+  </div>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="./page3.js"></script>
+<script>
+function goDashboard() { window.location.href = "../index.html"; }
+</script>
+</body>
+</html>

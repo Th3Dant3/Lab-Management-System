@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drill Frames — Shape Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0c10; --surface:#13141a; --surface2:#1a1c24; --border:#252830;
+  --text:#dde1ed; --muted:#585d70; --accent:#7c6aff;
+  --pend-bg:#2a2100; --pend-border:#c89200aa; --pend-text:#f5c518;
+  --conf-bg:#002419; --conf-border:#00c870aa; --conf-text:#00e89c;
+  --def-bg:#1c1e27;  --def-border:#2e3040;    --def-text:#8890a8;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh}
+
+/* HEADER */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.logo{width:34px;height:34px;background:var(--accent);border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+header h1{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800}
+header h1 em{color:var(--accent);font-style:normal}
+.sync{margin-left:auto;display:flex;align-items:center;gap:7px;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:5px 13px}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.sync.ok   .sync-dot{background:var(--conf-text)}
+.sync.busy .sync-dot{background:var(--pend-text);animation:pulse 1s infinite}
+.sync.err  .sync-dot{background:#ff5555}
+.sync.ok  {border-color:#00e89c40;color:var(--conf-text)}
+.sync.busy{border-color:#f5c51840;color:var(--pend-text)}
+.sync.err {border-color:#ff555540;color:#ff5555}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* LAYOUT */
+.app{display:flex;min-height:calc(100vh - 67px)}
+
+/* SIDEBAR */
+.sidebar{width:260px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:22px 18px;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
+.lbl{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:7px}
+.tabs{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px;display:flex;gap:3px}
+.tabs button{flex:1;background:transparent;border:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.78rem;font-weight:600;padding:7px 4px;border-radius:5px;cursor:pointer;transition:all .15s}
+.tabs button.on{background:var(--accent);color:#fff}
+select,input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;font-size:.85rem;padding:9px 11px;border-radius:8px;outline:none;appearance:none;transition:border-color .2s}
+select:focus,input:focus{border-color:var(--accent)}
+select option{background:#13141a}
+.clear{width:100%;background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:.8rem;padding:8px;border-radius:8px;cursor:pointer;transition:all .2s}
+.clear:hover{border-color:#ff5555;color:#ff5555}
+
+/* LEGEND */
+.legend{display:flex;flex-direction:column;gap:7px}
+.leg-row{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--muted)}
+.leg-chip{width:34px;height:22px;border-radius:4px;display:grid;place-items:center;font-family:'DM Mono',monospace;font-size:.65rem;font-weight:500;flex-shrink:0}
+.leg-chip.def {background:var(--def-bg);border:1px solid var(--def-border);color:var(--def-text)}
+.leg-chip.pend{background:var(--pend-bg);border:1px solid var(--pend-border);color:var(--pend-text)}
+.leg-chip.conf{background:var(--conf-bg);border:1px solid var(--conf-border);color:var(--conf-text)}
+
+/* STATS */
+.stats{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-top:auto;display:flex;flex-direction:column;gap:8px}
+.stat{display:flex;justify-content:space-between;align-items:center}
+.stat+.stat{padding-top:8px;border-top:1px solid var(--border)}
+.stat-lbl{font-size:.75rem;color:var(--muted)}
+.stat-val{font-family:'DM Mono',monospace;font-size:.85rem;font-weight:500;color:var(--accent)}
+.stat-val.y{color:var(--pend-text)}
+.stat-val.g{color:var(--conf-text)}
+
+/* MAIN */
+main{flex:1;overflow:auto;padding:22px 26px}
+.tbl-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:var(--surface2);position:sticky;top:0;z-index:2}
+th{font-family:'DM Mono',monospace;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:11px 13px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+td{padding:9px 13px;font-size:.84rem;vertical-align:top}
+.mono{font-family:'DM Mono',monospace;font-size:.8rem}
+.badge{display:inline-block;font-family:'DM Mono',monospace;font-size:.6rem;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+.badge.bushing{background:#7c6aff18;color:#a99aff;border:1px solid #7c6aff30}
+.badge.bolt   {background:#ff8c4218;color:#ffb07a;border:1px solid #ff8c4230}
+
+/* SHAPE TAGS */
+.shapes{display:flex;flex-wrap:wrap;gap:5px;max-width:520px}
+.stag{display:inline-flex;align-items:center;justify-content:center;min-width:36px;padding:4px 8px;border-radius:5px;font-family:'DM Mono',monospace;font-size:.72rem;font-weight:500;cursor:pointer;user-select:none;transition:transform .1s,box-shadow .2s,background .15s;border:1px solid var(--def-border);background:var(--def-bg);color:var(--def-text);position:relative}
+.stag:hover{transform:scale(1.1);border-color:#444}
+.stag:active{transform:scale(.95)}
+.stag.pending  {background:var(--pend-bg);border-color:var(--pend-border);color:var(--pend-text);animation:glow-y 2s ease-in-out infinite}
+.stag.confirmed{background:var(--conf-bg);border-color:var(--conf-border);color:var(--conf-text);box-shadow:0 0 8px #00e89c20}
+.stag.saving::after{content:'';position:absolute;inset:0;border-radius:4px;background:#0b0c10bb}
+.stag.saving::before{content:'';position:absolute;width:9px;height:9px;border:2px solid transparent;border-top-color:var(--pend-text);border-radius:50%;animation:spin .6s linear infinite;z-index:1}
+@keyframes glow-y{0%,100%{box-shadow:0 0 6px #f5c51820}50%{box-shadow:0 0 14px #f5c51840}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.no-shapes{font-size:.77rem;color:var(--muted);font-style:italic}
+
+/* TOAST */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:.75rem;padding:10px 16px;border-radius:9px;box-shadow:0 8px 24px #00000060;transform:translateY(70px);opacity:0;transition:all .3s cubic-bezier(.22,1,.36,1);z-index:999;max-width:300px}
+#toast.show   {transform:translateY(0);opacity:1}
+#toast.ok     {border-color:#00e89c55;color:var(--conf-text)}
+#toast.warn   {border-color:#f5c51855;color:var(--pend-text)}
+#toast.err    {border-color:#ff555555;color:#ff5555}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+@media(max-width:700px){.app{flex-direction:column}.sidebar{width:100%;border-right:none;border-bottom:1px solid var(--border)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="3" fill="white"/>
+      <path d="M10 3v3M10 14v3M3 10h3M14 10h3" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <h1>Drill Frames <em>·</em> Shape Tracker</h1>
+  <div class="sync" id="sync"><div class="sync-dot"></div><span id="syncTxt">Loading…</span></div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+    <div>
+      <span class="lbl">Frame Type</span>
+      <div class="tabs">
+        <button class="on" data-tab="all"     onclick="setTab(this)">All</button>
+        <button            data-tab="bushing" onclick="setTab(this)">Bushing</button>
+        <button            data-tab="bolt"    onclick="setTab(this)">Bolt/Slot</button>
+      </div>
+    </div>
+    <div><span class="lbl">Style</span><select id="fStyle" onchange="applyFilters()"><option value="">— All —</option></select></div>
+    <div><span class="lbl">Color</span><select id="fColor" onchange="applyFilters()"><option value="">— All —</option></select></div>
+    <div><span class="lbl">SKU</span><input id="fSKU" placeholder="Search SKU…" oninput="applyFilters()"></div>
+    <div><span class="lbl">Shape Number</span><input id="fShape" placeholder="e.g. 221" oninput="applyFilters()"></div>
+    <button class="clear" onclick="clearFilters()">✕ Clear Filters</button>
+    <div>
+      <span class="lbl">Tap to cycle</span>
+      <div class="legend">
+        <div class="leg-row"><div class="leg-chip def">221</div>Default</div>
+        <div class="leg-row"><div class="leg-chip pend">221</div>Pending — waiting</div>
+        <div class="leg-row"><div class="leg-chip conf">221</div>Confirmed — done</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">Rows shown</span><span class="stat-val" id="sRows">0</span></div>
+      <div class="stat"><span class="stat-lbl">● Pending</span><span class="stat-val y" id="sPend">0</span></div>
+      <div class="stat"><span class="stat-lbl">● Confirmed</span><span class="stat-val g" id="sConf">0</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortBy('style')">Style <span id="ss">↕</span></th>
+          <th onclick="sortBy('color')">Color <span id="sc">↕</span></th>
+          <th>SKU</th><th>Type</th>
+          <th>Shapes — tap to set status</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="empty" style="display:none;padding:50px;text-align:center;color:var(--muted)">No frames match filters.</div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAmHY0C59Q7DKGertdsiSkYmhI9zEmqweZUiZoYL8iEWDTdqN8n1WTxaYKgb8t9Zsq/exec';
+
+// ═══════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════
+const BUSHING = [
+['1336','21','2D04213060010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['1337','14','2D14143060010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['1380','12','2D04123040010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,510,511,512]],
+['1380','14','2D04143040010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,510,511,512]],
+['1380','16','2D04163040010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,510,511,512]],
+['1382','12','2104123040010',[221,223,226,227,321,326,327,328,329,330,331,333,324,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['1382','15','2104153040010',[221,223,226,227,321,326,327,328,329,330,331,333,324,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['1386','14','2104143360030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,512]],
+['1386','29','2104293370030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,512]],
+['1386','11','2D04113060030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,512]],
+['1388','11','2134113050030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,453,505,506,507,508,509,510,511,512]],
+['1388','17','2104173050030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,453,505,506,507,508,509,510,511,512]],
+['1388','19','2104193050030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,453,505,506,507,508,509,510,511,512]],
+['1389','11','2124113050030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,452,453,454,506,507,508,509,510,511,512]],
+['1389','14','2114143050030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,452,453,454,506,507,508,509,510,511,512]],
+['1389','16','2104163050030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,452,453,454,506,507,508,509,510,511,512]],
+['1391','12','2104123060030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['1391','14','2104143060030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['2105','17','2K05173011120',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['2105','18','2K05183011120',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['2105','19','2K05193011120',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['3620','11','2D07113010030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['3620','12','2D07123010030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['3675','30','2107303010030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521,227]],
+['3675','15','2107153010030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521,227]],
+['3751','11','2104113030020',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['3751','19','2104193030020',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['3772','15','2D04153040030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520]],
+['3772','12','2D04123040030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520]],
+['3772','16','2D04163040030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520]],
+['3780','15','2D04153060030',[221,223,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['3781','11','2114113050030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['3789','11','2D04113060010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['4665','21','2107213010010',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['4665','11','2107113010010',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['4665','16','2106163010030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['8105','11','2K05113010030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['8105','16','2K05163010030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['32127','21','2106213020030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521]],
+['32127','11','2106113020030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521]],
+['32127','19','2106193020020',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521]],
+['32137','14','2K06143020020',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521]],
+['32137','19','2K06193020020',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521]],
+['32138','21','2K06213020010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['32320','15','2106153020030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521]],
+['32320','24','2116243020030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521]],
+['32341','19','8E16193040020',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['32342','30','8E06303040020',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512,522]],
+['32343','24','8E06243040020',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,451,452,453,454,506,507,508,509,510,511,512]],
+['32343','29','8E06293040020',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,451,452,453,454,506,507,508,509,510,511,512]],
+['32393','19','1406193520020',[221,321,326,328,329,330,331,333,334,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521,522]],
+];
+const BOLT = [
+['1437','11','3208113010030',[223,226,227,321,326,327,331,335,336,445,453,505,506]],
+['1704','12','2K05123030010',[221,223,321,327,328,329,330,331,333,334,335,336,441,453,506,507,508,509,511,512]],
+['3158','11','2K15113021130',[221,223,226,227,321,326,327,330,331,333,334,335,336,441,444,445,449,451,453,505,506,509,510,511,512]],
+['3221','11','2D06113010030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521,522]],
+['3221','14','2D06143010030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,518,520,521,522]],
+['3258','12','2106123010030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,451,452,454,505,506,507,508,509,510,511,512]],
+['3481','12','2K06123025510',[]],
+['3722','29','2304293050020',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,451,452,453,454,506,507,508,509,510,511,512]],
+['3722','11','2D04113040030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,451,452,453,454,506,507,508,509,510,511,512]],
+['3728','11','2104113050030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,451,452,453,454,506,507,508,509,510,511,512]],
+['3728','12','2104123050030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,451,452,453,454,506,507,508,509,510,511,512]],
+['3728','14','2104143050030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,446,449,450,451,452,453,454,506,507,508,509,510,511,512]],
+['3743','12','2D04123060030',[221,223,226,227,321,326,327,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['3930','14','1606143020010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,451,453,505,506,507,508,509,510,511,512]],
+['3930','24','1603243020010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,451,453,505,506,507,508,509,510,511,512]],
+['3930','15','1603153020010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,451,453,505,506,507,508,509,510,511,512]],
+['3930','36','1603363020010',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,451,453,505,506,507,508,509,510,511,512]],
+['4157','14','5J06141340030',[221,226,321,327,328,329,330,331,333,334,335,336,441,444,446,445,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['4157','19','5J06191330030',[221,226,321,327,328,329,330,331,333,334,335,336,441,444,446,445,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['4157','11','5J06113340030',[221,226,321,327,328,329,330,331,333,334,335,336,441,444,446,445,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['4206','12','2107123010030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['4206','11','2107113010030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['4726','11','2107113020010',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['5845','14','2807143015510',[]],['5845','21','2807213015510',[]],['5845','11','2807113015510',[]],['5870','21','2807213014530',[]],
+['11518','30','2107303520030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,445,449,450,451,453,505,506,507,508,509,510,511,512]],
+['13029','14','2104143659330',[]],['13029','11','2104113659330',[]],['13029','21','2104213659330',[]],
+['19158','14','5J07143030011',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['19158','11','5J07113030011',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['19158','21','5J07213030011',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512,522]],
+['19159','14','5J07143030010',[518,520,521,522]],
+['19160','11','2107113020030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['19160','14','2107143020030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['19160','18','2107183020030',[221,223,226,321,326,327,328,329,330,331,333,334,335,336,441,444,446,449,450,451,452,453,454,505,506,507,508,509,510,511,512]],
+['32344','16','8E17163040030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,454,505,506,507,508,509,510,511,512]],
+['32344','15','8E07153040030',[221,223,226,227,321,326,327,328,329,330,331,333,334,335,336,441,444,445,446,449,450,451,452,454,505,506,507,508,509,510,511,512]],
+['32378','12','2106123629330',[]],['32378','11','2106113629330',[]],['32378','14','2106143629330',[]],
+];
+const ALL = [
+  ...BUSHING.map(r=>({style:r[0],color:r[1],sku:r[2],shapes:r[3],type:'bushing'})),
+  ...BOLT.map(r=>({style:r[0],color:r[1],sku:r[2],shapes:r[3],type:'bolt'}))
+];
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let tagStates = {};
+let tab='all', sortCol='style', sortDir=1, filtered=[...ALL];
+
+// ═══════════════════════════════════════════
+// SYNC UI
+// ═══════════════════════════════════════════
+function setSyncUI(state, msg) {
+  const el = document.getElementById('sync');
+  const tx = document.getElementById('syncTxt');
+  el.className = 'sync ' + state;
+  tx.textContent = msg;
+}
+
+// ═══════════════════════════════════════════
+// JSONP HELPER — all Apps Script calls go through here
+// ═══════════════════════════════════════════
+function jsonp(url, callback) {
+  const id  = '__cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  const old = document.getElementById('_jsonp');
+  if (old) old.remove();
+  if (window[id]) delete window[id];
+
+  const timer = setTimeout(() => {
+    const s = document.getElementById('_jsonp');
+    if (s) s.remove();
+    delete window[id];
+    callback(null, 'timeout');
+  }, 12000);
+
+  window[id] = (data) => {
+    clearTimeout(timer);
+    const s = document.getElementById('_jsonp');
+    if (s) s.remove();
+    delete window[id];
+    callback(data, null);
+  };
+
+  const sc = document.createElement('script');
+  sc.id  = '_jsonp';
+  sc.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + id;
+  sc.onerror = () => {
+    clearTimeout(timer);
+    delete window[id];
+    callback(null, 'script error');
+  };
+  document.head.appendChild(sc);
+}
+
+// ═══════════════════════════════════════════
+// LOAD from Sheets on page open
+// ═══════════════════════════════════════════
+function loadFromSheets() {
+  setSyncUI('busy', 'Loading…');
+  jsonp(SCRIPT_URL + '?action=load', (data, err) => {
+    if (err || !data || !data.success) {
+      setSyncUI('err', 'Load failed');
+      toast('Could not load from Sheets', 'err');
+      return;
+    }
+    tagStates = data.statuses || {};
+    const n = Object.keys(tagStates).length;
+    setSyncUI('ok', n > 0 ? 'Loaded ' + n + ' status' + (n>1?'es':'') : 'Connected');
+    render();
+    if (n > 0) toast('↓ Restored ' + n + ' shape status' + (n>1?'es':''), 'ok');
+  });
+}
+
+// ═══════════════════════════════════════════
+// SAVE on tap
+// ═══════════════════════════════════════════
+const CYCLE = {default:'pending', pending:'confirmed', confirmed:'default'};
+
+function tapShape(el, sku, shape, sheetTab) {
+  const key  = sku + '|' + shape;
+  const next = CYCLE[tagStates[key] || 'default'];
+
+  // Update UI immediately
+  tagStates[key] = next;
+  el.className   = 'stag' + (next === 'default' ? '' : ' ' + next);
+  updateStats();
+
+  // Save to Sheets
+  el.classList.add('saving');
+  setSyncUI('busy', 'Saving…');
+
+  const params = '?action=save&sku=' + encodeURIComponent(sku) +
+                 '&shape=' + encodeURIComponent(shape) +
+                 '&status=' + encodeURIComponent(next) +
+                 '&sheetTab=' + encodeURIComponent(sheetTab);
+
+  jsonp(SCRIPT_URL + params, (data, err) => {
+    el.classList.remove('saving');
+    if (err || !data || !data.success) {
+      setSyncUI('err', 'Save failed');
+      toast('✗ Save failed — ' + (err || 'unknown'), 'err');
+    } else {
+      setSyncUI('ok', 'Saved ✓');
+      toast('✓ ' + sku + ' · ' + shape + ' → ' + next, 'ok');
+    }
+    setTimeout(() => setSyncUI('ok', 'Connected'), 2500);
+  });
+}
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function render() {
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  const shapeFilter = parseInt(document.getElementById('fShape').value, 10);
+  tbody.innerHTML = '';
+  if (!filtered.length) { empty.style.display='block'; updateStats(); return; }
+  empty.style.display = 'none';
+
+  filtered.forEach(row => {
+    const tr = document.createElement('tr');
+    ['style','color','sku'].forEach(f => {
+      const td = document.createElement('td');
+      td.className = 'mono'; td.textContent = row[f]; tr.appendChild(td);
+    });
+    const tdT = document.createElement('td');
+    const b = document.createElement('span');
+    b.className = 'badge ' + row.type;
+    b.textContent = row.type === 'bushing' ? 'Bushing' : 'Bolt/Slot';
+    tdT.appendChild(b); tr.appendChild(tdT);
+
+    const tdS = document.createElement('td');
+    if (!row.shapes.length) {
+      tdS.innerHTML = '<span class="no-shapes">—</span>';
+    } else {
+      const wrap = document.createElement('div');
+      wrap.className = 'shapes';
+      const sheetTab = row.type === 'bushing' ? 'Bushing' : 'BoltSlot';
+      row.shapes.forEach(shape => {
+        if (!isNaN(shapeFilter) && shape !== shapeFilter) return;
+        const tag = document.createElement('span');
+        const st  = tagStates[row.sku + '|' + shape] || 'default';
+        tag.className   = 'stag' + (st === 'default' ? '' : ' ' + st);
+        tag.textContent = shape;
+        tag.title       = row.sku + ' · ' + shape;
+        tag.onclick     = () => tapShape(tag, row.sku, shape, sheetTab);
+        wrap.appendChild(tag);
+      });
+      if (!wrap.children.length) { tdS.innerHTML = '<span class="no-shapes">—</span>'; }
+      else tdS.appendChild(wrap);
+    }
+    tr.appendChild(tdS);
+    tbody.appendChild(tr);
+  });
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('sRows').textContent = filtered.length;
+  const v = Object.values(tagStates);
+  document.getElementById('sPend').textContent = v.filter(x=>x==='pending').length;
+  document.getElementById('sConf').textContent = v.filter(x=>x==='confirmed').length;
+}
+
+// ═══════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════
+function applyFilters() {
+  const sv = document.getElementById('fStyle').value;
+  const cv = document.getElementById('fColor').value;
+  const kv = document.getElementById('fSKU').value.trim().toLowerCase();
+  const shv= document.getElementById('fShape').value.trim();
+  filtered = ALL.filter(r => {
+    if (tab==='bushing' && r.type!=='bushing') return false;
+    if (tab==='bolt'    && r.type!=='bolt')    return false;
+    if (sv && r.style!==sv) return false;
+    if (cv && r.color!==cv) return false;
+    if (kv && !r.sku.toLowerCase().includes(kv)) return false;
+    if (shv && !isNaN(+shv) && !r.shapes.includes(+shv)) return false;
+    return true;
+  });
+  filtered.sort((a,b)=>((+a[sortCol])-(+b[sortCol]))*sortDir);
+  render();
+}
+function clearFilters(){
+  ['fStyle','fColor'].forEach(id=>document.getElementById(id).value='');
+  ['fSKU','fShape'].forEach(id=>document.getElementById(id).value='');
+  applyFilters();
+}
+function setTab(btn){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on'); tab=btn.dataset.tab; applyFilters();
+}
+function sortBy(col){
+  sortDir = sortCol===col ? sortDir*-1 : 1; sortCol=col;
+  document.getElementById('ss').textContent = sortCol==='style'?(sortDir>0?'↑':'↓'):'↕';
+  document.getElementById('sc').textContent = sortCol==='color'?(sortDir>0?'↑':'↓'):'↕';
+  applyFilters();
+}
+
+// ═══════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════
+let toastTimer;
+function toast(msg, type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+type;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.className=''},3000);
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+(function init(){
+  const styles=[...new Set(ALL.map(r=>r.style))].sort((a,b)=>+a-+b);
+  const colors=[...new Set(ALL.map(r=>r.color))].sort((a,b)=>+a-+b);
+  const se=document.getElementById('fStyle');
+  styles.forEach(s=>se.add(new Option(s,s)));
+  const ce=document.getElementById('fColor');
+  colors.forEach(c=>ce.add(new Option(c,c)));
+  applyFilters();
+  loadFromSheets();
+})();
+</script>
+</body>
+</html>

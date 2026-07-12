@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#08090a;overflow:hidden;height:100vh;width:100vw;}
+
+/* Warm charcoal + teal accent */
+.bg{position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(0,160,140,.1) 0%,transparent 65%),radial-gradient(ellipse 100% 30% at 50% 100%,rgba(0,120,100,.08) 0%,transparent 55%),#08090a;}
+
+/* Corner accent lines */
+.corner-tl,.corner-tr,.corner-bl,.corner-br{position:fixed;width:80px;height:80px;pointer-events:none;z-index:2;}
+.corner-tl{top:18px;left:18px;border-top:2px solid rgba(0,200,180,.35);border-left:2px solid rgba(0,200,180,.35);}
+.corner-tr{top:18px;right:18px;border-top:2px solid rgba(0,200,180,.35);border-right:2px solid rgba(0,200,180,.35);}
+.corner-bl{bottom:18px;left:18px;border-bottom:2px solid rgba(0,200,180,.35);border-left:2px solid rgba(0,200,180,.35);}
+.corner-br{bottom:18px;right:18px;border-bottom:2px solid rgba(0,200,180,.35);border-right:2px solid rgba(0,200,180,.35);}
+
+/* Floating tick marks along corners */
+.tick{position:fixed;background:rgba(0,200,180,.25);pointer-events:none;z-index:1;}
+
+.scan{position:fixed;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,200,180,.15),transparent);animation:sc 6s linear infinite;pointer-events:none;z-index:2;}
+@keyframes sc{from{top:0}to{top:100vh}}
+
+.page{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;gap:0;}
+
+/* Large Z emblem */
+.emblem-wrap{margin-bottom:20px;animation:embIn .8s ease both;}
+@keyframes embIn{from{opacity:0;transform:scale(.5) rotate(-10deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+.emblem{
+  width:88px;height:88px;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+/* Outer square frame */
+.emblem::before{
+  content:'';position:absolute;inset:0;
+  border:2px solid rgba(0,200,180,.4);
+  transform:rotate(45deg);
+  animation:embPulse 3s 1s ease-in-out infinite;
+}
+@keyframes embPulse{0%,100%{box-shadow:0 0 10px rgba(0,200,180,.2)}50%{box-shadow:0 0 28px rgba(0,200,180,.6)}}
+.emblem::after{
+  content:'';position:absolute;inset:8px;
+  border:1px solid rgba(0,200,180,.2);
+  transform:rotate(45deg);
+}
+.emblem-z{font-family:'Bebas Neue',sans-serif;font-size:44px;color:#00c8b4;text-shadow:0 0 20px rgba(0,200,180,.7);position:relative;z-index:2;letter-spacing:-2px;}
+
+/* Name block */
+.name-block{display:flex;flex-direction:column;align-items:center;margin-bottom:10px;}
+.welcome-txt{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:6px;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:4px;animation:fu .4s .45s ease both;}
+.fullname{font-family:'Bebas Neue',sans-serif;font-size:62px;color:#ffffff;letter-spacing:5px;line-height:1;animation:nameIn .6s .55s ease both;text-shadow:0 0 20px rgba(0,200,180,.25);}
+@keyframes nameIn{from{opacity:0;letter-spacing:18px}to{opacity:1;letter-spacing:5px}}
+
+/* Role card */
+.role-card{
+  border:1px solid rgba(0,200,180,.25);
+  background:rgba(0,200,180,.04);
+  padding:12px 32px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  margin-bottom:20px;
+  animation:fu .4s .7s ease both;
+  position:relative;overflow:hidden;
+}
+.role-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,200,180,.6),transparent);}
+.role-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,200,180,.3),transparent);}
+.role-main{font-family:'Barlow Condensed',sans-serif;font-size:18px;letter-spacing:5px;color:#00c8b4;text-transform:uppercase;font-weight:600;}
+.role-sub{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:3px;color:rgba(255,255,255,.5);text-transform:uppercase;}
+.role-co{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:3px;color:rgba(0,200,180,.45);text-transform:uppercase;}
+
+.pbar-wrap{width:280px;animation:fu .4s .85s ease both;}
+.pbar-top{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:6px;}
+.pbar-track{width:100%;height:3px;background:rgba(0,200,180,.1);border:1px solid rgba(0,200,180,.22);overflow:hidden;}
+.pbar-fill{height:100%;width:0%;background:linear-gradient(90deg,#003830,#00c8b4,#60e8d8);animation:pf 6s .9s ease forwards;position:relative;}
+.pbar-fill::after{content:'';position:absolute;right:0;top:0;width:12px;height:100%;background:rgba(100,240,220,.6);filter:blur(2px);}
+@keyframes pf{0%{width:0%}40%{width:50%}70%{width:76%}90%{width:91%}100%{width:100%}}
+@keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="scan"></div>
+<!-- HUD corners -->
+<div class="corner-tl"></div>
+<div class="corner-tr"></div>
+<div class="corner-bl"></div>
+<div class="corner-br"></div>
+<!-- Corner ticks -->
+<div class="tick" style="top:18px;left:98px;width:8px;height:1px;"></div>
+<div class="tick" style="top:98px;left:18px;width:1px;height:8px;"></div>
+<div class="tick" style="top:18px;right:98px;width:8px;height:1px;"></div>
+<div class="tick" style="top:98px;right:18px;width:1px;height:8px;"></div>
+<div class="tick" style="bottom:18px;left:98px;width:8px;height:1px;"></div>
+<div class="tick" style="bottom:98px;left:18px;width:1px;height:8px;"></div>
+<div class="tick" style="bottom:18px;right:98px;width:8px;height:1px;"></div>
+<div class="tick" style="bottom:98px;right:18px;width:1px;height:8px;"></div>
+
+<div class="page">
+  <div class="emblem-wrap">
+    <div class="emblem">
+      <div class="emblem-z">Z</div>
+    </div>
+  </div>
+  <div class="name-block">
+    <div class="welcome-txt">Welcome back</div>
+    <div class="fullname" id="displayName">Kim Manack</div>
+  </div>
+  <div class="role-card">
+    <div class="role-main">Production Supervisor</div>
+    <div class="role-sub">Manufacturing Operations</div>
+    <div class="role-co">Zenni USA · Ohio</div>
+  </div>
+  <div class="pbar-wrap">
+    <div class="pbar-top"><span>Loading Dashboard</span><span id="pct">0%</span></div>
+    <div class="pbar-track"><div class="pbar-fill"></div></div>
+  </div>
+</div>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Kim Manack";
+  document.getElementById("displayName").textContent=n;
+  let p=0;const pEl=document.getElementById("pct");
+  const iv=setInterval(()=>{p=Math.min(99,p+Math.floor(Math.random()*2)+1);pEl.textContent=p+"%";if(p>=99)clearInterval(iv);},100);
+  const MIN_TIME=6000;const startTime=Date.now();
+  const preload=document.createElement("link");preload.rel="prefetch";preload.href="index.html";document.head.appendChild(preload);
+  function go(){const e=Date.now()-startTime;const r=Math.max(0,MIN_TIME-e);setTimeout(()=>{p=100;pEl.textContent="100%";clearInterval(iv);setTimeout(()=>{window.location.replace("../../index.html");},400);},r);}
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(()=>go()).catch(()=>go());
+  setTimeout(()=>{window.location.replace("../../index.html");},10000);
+</script>
+</body>
+</html>
