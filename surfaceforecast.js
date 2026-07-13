@@ -1,21 +1,3 @@
-/* Surface Forecast Command Center
- * File: surfaceforecast.js
- * Version: 30 - Futuristic Pace Tab + Minute Clear-Time Restore
- *
- * New V7:
- * - Forecast is driven by BOS WIP plus hidden average incoming/remake planning ranges, usable station capacity, machines running, associates assigned, and downtime.
- * - Incoming/remake assumptions stay in the background and are not displayed as setup inputs.
- * - Projected OUT no longer falls to 0 when hourly data is missing.
- * - Projected range is capped by available work and today's bottleneck capacity.
- * - Live WIP bottleneck now uses last-scan -> next-process pressure routing.
- * - Area Bottleneck Detail table is organized in Surface process flow order from SF Unbox to AR41 inspection.
- * - Engraving -> Manual Deblock / Detaping uses Engraving capacity because Manual Deblock / Detaping has no reliable LMS scan/JPH feed.
- * - Pace vs Expected and Hourly Outlook are now supported as their own HTML tab.
- * - Area Bottleneck Detail table stays in Surface process flow order.
- * - Time To Clear uses operational minute ranges instead of decimal hours.
- * - Futuristic Pace / Hourly tab enhancements remain intact.
- */
-
 const SURFACE_DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec';
 const SURFACE_DASHBOARD_REFRESH_MS = 5 * 60 * 1000;
 
@@ -41,20 +23,40 @@ const SURFACE_EXTRA_WORK_DEFAULTS = {
   remakeHigh: 200
 };
 
+const SURFACE_BOS_WIP_STORAGE_KEY = 'productionGoalForecast.surface.bosByDate.v1';
+const SURFACE_STARTUP_OUTPUT_DELAY_MIN = 90;
+
+// Minimum estimated travel time from each last-scan WIP location to Surface OUT.
+// These are planning assumptions and can be tuned after comparing forecast vs actual.
+const SURFACE_STAGE_TIME_RANGES = Object.freeze({
+  unbox: { low: 20, high: 30, label: '20–30 min' },
+  autoblocker: { low: 5, high: 10, label: '5–10 min' },
+  cooling: { low: 25, high: 50, label: '25–50 min dwell' },
+  orb: { low: 20, high: 30, label: '20–30 min' },
+  polisher: { low: 20, high: 30, label: '20–30 min' },
+  engraving: { low: 10, high: 15, label: '10–15 min' },
+  detaping: { low: 5, high: 10, label: '5–10 min' },
+  coater: { low: 5, high: 10, label: '5–10 min' },
+  inspection: { low: 0, high: 0, label: '0 min' }
+});
+
+// Cumulative midpoint travel time from each last-scan station to AR41 OUT.
+// The card displays the direct station time-to-clear range above.
+const SURFACE_MATURITY_MINUTES = Object.freeze({
+  inspection: 0,
+  coater: 8,
+  detaping: 16,
+  engraving: 29,
+  polisher: 54,
+  orb: 79,
+  cooling: 117,
+  autoblocker: 125,
+  unbox: 150
+});
+
+
 const SURFACE_AREAS = [
-  // capacityMode:
-  // operator = capacity is driven by associates assigned.
-  // machine = capacity is driven by machines running, but requires at least 1 associate assigned to run/clear the area.
-  // buffer = dwell/buffer area; shown for WIP pressure, not used as the main route bottleneck.
-  //
-  // machinesPerAssociate (machine areas only): these machines are fully automatic — the associate's
-  // job is starting/feeding them, clearing errors/jams, and keeping WIP flowing to the next station.
-  // This ratio is NOT a hard "cannot run more than N machines" cap. It's the number of machines one
-  // associate can realistically keep clear of errors before backlog builds and machines start sitting
-  // idle waiting on intervention. Going over it is a DOWNTIME RISK, not an immediate capacity loss —
-  // treat any gap the Goal Plan shows as "watch this area," not "this machine physically cannot run."
-  // Inferred starting point from your existing defaultUnits/defaultAssociates ratio — confirm/correct
-  // per area in the Setup tab (editable).
+ 
   { key: 'unbox', label: 'SF Unbox', group: 'SF Unbox', type: 'operator', capacityMode: 'operator', jphPerUnit: 150, required: true, defaultUnits: 1.5, defaultAssociates: 1.5 },
   { key: 'autoblocker', label: 'Auto Blocker', group: 'Auto Blocker & Generator', type: 'machine', capacityMode: 'machine', jphPerUnit: 50, required: true, defaultUnits: 4, defaultAssociates: 1, machinesPerAssociate: 4 },
   { key: 'cooling', label: 'IQ Star / Cooling', group: 'Auto Blocker & Generator', type: 'buffer', capacityMode: 'buffer', jphPerUnit: 0, required: false, defaultUnits: 2, defaultAssociates: 0, bufferCapacity: 180, coolingLowMin: 25, coolingHighMin: 50 },
@@ -151,7 +153,7 @@ let shiftModeManualOverride = false;
 let downtimeCounter = 0;
 let latestForecastResult = null;
 
-const SURFACE_STORAGE_KEY = 'surfaceForecastCommandCenter.v7';
+const SURFACE_STORAGE_KEY = 'surfaceForecastCommandCenter.v17-ar-goal-comparison';
 let isRestoringState = false;
 
 document.addEventListener('DOMContentLoaded', async function () {
@@ -164,19 +166,44 @@ document.addEventListener('DOMContentLoaded', async function () {
   updateForecastRuleCopy();
   wireButtons();
 
-  const restoredFromCloud = await loadCurrentStateFromApi();
-  const restored = restoredFromCloud || restorePageState();
+  const initialDepartment =
+    localStorage.getItem('productionGoalForecast.department') === 'AR'
+      ? 'AR'
+      : 'Surface';
 
-  if (!restored) {
-    addDowntimeRow();
+  // Do not open the Surface Forecast storage API when the page starts in AR.
+  // AR has its own local setup and reads live data from Production Flow.
+  if (initialDepartment === 'Surface') {
+    const restoredFromCloud = await loadCurrentStateFromApi();
+    const restored = restoredFromCloud || restorePageState();
+
+    if (!restored) {
+      addDowntimeRow();
+    }
+
+    calculateForecast();
+    savePageState();
+    await syncSurfaceDashboardData(true);
+  } else {
+    if (!document.querySelector('.downtime-row')) {
+      addDowntimeRow();
+    }
+
+    await syncARForecastData(true);
   }
 
-  calculateForecast();
-  savePageState();
-
-  await syncSurfaceDashboardData(true);
+  // One refresh timer. It refreshes only the department currently being viewed.
   window.setInterval(function () {
-    syncSurfaceDashboardData(false);
+    const department =
+      window.AR_FORECAST_APP?.getDepartment?.() ||
+      localStorage.getItem('productionGoalForecast.department') ||
+      'Surface';
+
+    if (department === 'AR') {
+      syncARForecastData(false);
+    } else {
+      syncSurfaceDashboardData(false);
+    }
   }, SURFACE_DASHBOARD_REFRESH_MS);
 });
 
@@ -205,8 +232,10 @@ function activateTab(target, buttons, panels) {
     btn.classList.toggle('active', btn.dataset.tabTarget === target);
   });
 
+  const department = window.AR_FORECAST_APP ? window.AR_FORECAST_APP.getDepartment() : 'Surface';
   panels.forEach(function (panel) {
-    panel.hidden = panel.dataset.tabPanel !== target;
+    const panelDepartment = panel.dataset.department || 'Surface';
+    panel.hidden = panel.dataset.tabPanel !== target || panelDepartment !== department;
   });
 }
 
@@ -219,7 +248,9 @@ function wireButtons() {
     saveDowntimeBtn: saveDowntime,
     clearHourlyBtn: clearHourlyRows,
     saveHourlyBtn: saveHourly,
-    syncDashboardBtn: function () { syncSurfaceDashboardData(true); }
+    syncDashboardBtn: function () { syncSurfaceDashboardData(true); },
+    saveSurfaceBosBtn: saveSurfaceBosSnapshot,
+    resetSurfaceBosBtn: resetSurfaceBosSnapshot
   };
 
   Object.keys(buttons).forEach(function (id) {
@@ -227,7 +258,14 @@ function wireButtons() {
     if (el) el.addEventListener('click', buttons[id]);
   });
 
-  ['shiftMode', 'productionDate', 'perfShiftModeSelect', 'perfDateInput', 'bosWip', 'shipGoal', 'incomingLow', 'incomingHigh', 'remakeLow', 'remakeHigh', 'floaterCount', 'floaterAssign'].forEach(function (id) {
+  const bosTotalInput = document.getElementById('bosWip');
+  if (bosTotalInput) {
+    bosTotalInput.addEventListener('input', function () {
+      setText('surfaceBosStartupMeta', 'Unsaved total BOS change — click Save BOS.');
+    });
+  }
+
+  ['shiftMode', 'productionDate', 'perfShiftModeSelect', 'perfDateInput', 'shipGoal', 'incomingLow', 'incomingHigh', 'remakeLow', 'remakeHigh', 'floaterCount', 'floaterAssign'].forEach(function (id) {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', calculateForecast);
@@ -243,7 +281,7 @@ function updateForecastRuleCopy() {
     'Incoming and remake/breakage are not guessed. Forecast range uses current BOS WIP and capacity ceiling. Hourly input tells you if actual AR41 output is on track.',
     'Forecast range uses BOS WIP + average incoming Surface jobs + average breakage/remake jobs, capped by usable bottleneck capacity. Hourly input tells you if actual AR41 output is on track.'
   ];
-  const newText = 'Forecast range uses BOS WIP plus background incoming/remake planning averages, capped by usable bottleneck capacity. Hourly input tells you if actual AR41 output is on track.';
+  const newText = 'Forecast uses BOS SF WIP, route-specific capacity, 300–500 incoming jobs, 150–200 breakage/remake jobs, machine ceilings, associate coverage, downtime, and actual AR41 output.';
 
   Array.from(document.querySelectorAll('body *')).forEach(function (el) {
     if (!el || !el.childNodes || el.children.length > 0) return;
@@ -628,15 +666,197 @@ function calculateForecast() {
   }
 }
 
+
+const SURFACE_CAPACITY_ROUTE_EXCLUSIONS = new Set([
+  'cooling',
+  'detaping'
+]);
+
+function getSurfaceCapacityRoute(sourceKey, includeSource) {
+  const sourceIndex = SURFACE_FLOW_ORDER.indexOf(sourceKey);
+  if (sourceIndex < 0) return [];
+
+  let route = includeSource
+    ? SURFACE_FLOW_ORDER.slice(sourceIndex)
+    : SURFACE_FLOW_ORDER.slice(sourceIndex + 1);
+
+  // Cooling is a dwell-time buffer and Detaping is not a reliable hard-cap
+  // station because jobs may move through manual deblock without an ODT scan.
+  // Both remain visible for WIP pressure and timing, but neither caps forecast OUT.
+  route = route.filter(function (key) {
+    return !SURFACE_CAPACITY_ROUTE_EXCLUSIONS.has(key);
+  });
+
+  // Surface Inspection WIP is already at the final output station.
+  if (sourceKey === 'inspection' && !route.length) {
+    route = ['inspection'];
+  }
+
+  return route;
+}
+
+function getSurfaceRouteCapacity(capacityMap, sourceKey, includeSource) {
+  const route = getSurfaceCapacityRoute(sourceKey, includeSource);
+  if (!route.length) return 0;
+
+  return route.reduce(function (lowest, key) {
+    const value = Math.max(0, Number(capacityMap[key]) || 0);
+    return Math.min(lowest, value);
+  }, Infinity);
+}
+
+function buildSurfaceRemainingCapacityMap(areas, remainingHours) {
+  const map = {};
+
+  (areas || []).forEach(function (area) {
+    if (area.key === 'cooling') {
+      map[area.key] = Infinity;
+      return;
+    }
+
+    map[area.key] = Math.max(
+      0,
+      (Number(area.effectiveJph) || 0) * Math.max(0, remainingHours)
+    );
+  });
+
+  return map;
+}
+
+function cloneSurfaceCapacityMap(source) {
+  const copy = {};
+
+  Object.keys(source || {}).forEach(function (key) {
+    copy[key] = source[key] === Infinity
+      ? Infinity
+      : Math.max(0, Number(source[key]) || 0);
+  });
+
+  return copy;
+}
+
+function consumeCompletedSurfaceBos(bosByStation, completedOutput) {
+  const remaining = normalizeSurfaceBosMap(bosByStation || {});
+  let jobsToConsume = Math.max(0, Number(completedOutput) || 0);
+
+  // Morning output normally comes from the most downstream BOS first.
+  SURFACE_FLOW_ORDER.slice().reverse().forEach(function (key) {
+    if (jobsToConsume <= 0) return;
+
+    const available = Math.max(0, Number(remaining[key]) || 0);
+    const consumed = Math.min(available, jobsToConsume);
+
+    remaining[key] = available - consumed;
+    jobsToConsume -= consumed;
+  });
+
+  return remaining;
+}
+
+function allocateSurfaceWorkPools(pools, startingCapacityMap, options) {
+  const settings = options || {};
+  const capacityMap = cloneSurfaceCapacityMap(startingCapacityMap);
+  const allocations = {};
+  let totalAllocated = 0;
+
+  const orderedPools = (pools || []).slice().sort(function (a, b) {
+    // Protect work that is already furthest downstream.
+    return getSurfaceFlowOrderIndex(b.sourceKey) -
+      getSurfaceFlowOrderIndex(a.sourceKey);
+  });
+
+  orderedPools.forEach(function (pool) {
+    const sourceKey = String(pool.sourceKey || '');
+    const requestedJobs = Math.max(0, Number(pool.jobs) || 0);
+    const includeSource = Boolean(pool.includeSource);
+
+    if (!requestedJobs) {
+      allocations[sourceKey] = 0;
+      return;
+    }
+
+    const maturityMinutes = includeSource
+      ? Number(SURFACE_MATURITY_MINUTES.unbox || 0)
+      : Number(SURFACE_MATURITY_MINUTES[sourceKey] || 0);
+
+    if (
+      Number.isFinite(Number(settings.availableMinutes)) &&
+      Number(settings.availableMinutes) < maturityMinutes
+    ) {
+      allocations[sourceKey] = 0;
+      return;
+    }
+
+    const route = getSurfaceCapacityRoute(sourceKey, includeSource);
+    if (!route.length) {
+      allocations[sourceKey] = 0;
+      return;
+    }
+
+    const routeCapacity = route.reduce(function (lowest, key) {
+      const available = capacityMap[key] === Infinity
+        ? Infinity
+        : Math.max(0, Number(capacityMap[key]) || 0);
+
+      return Math.min(lowest, available);
+    }, Infinity);
+
+    const allocated = Math.max(
+      0,
+      Math.min(
+        requestedJobs,
+        Number.isFinite(routeCapacity) ? routeCapacity : requestedJobs
+      )
+    );
+
+    allocations[sourceKey] = allocated;
+    totalAllocated += allocated;
+
+    route.forEach(function (key) {
+      if (capacityMap[key] === Infinity) return;
+      capacityMap[key] = Math.max(
+        0,
+        (Number(capacityMap[key]) || 0) - allocated
+      );
+    });
+  });
+
+  return {
+    totalAllocated,
+    allocations,
+    remainingCapacityMap: capacityMap
+  };
+}
+
+function buildSurfaceBosPools(bosByStation) {
+  return SURFACE_FLOW_ORDER.map(function (key) {
+    return {
+      sourceKey: key,
+      jobs: Math.max(0, Number(bosByStation && bosByStation[key]) || 0),
+      includeSource: false
+    };
+  });
+}
+
 function calculateLocalForecast(payload) {
   const shiftMode = payload.shiftMode || 'Weekday';
   const shiftHours = getShiftHours(shiftMode);
-  const bosWip = Number(payload.bosWip) || 0;
+  const bosByStation = captureSurfaceBosSnapshotIfMissing(
+    payload.productionDate,
+    payload.currentWip || {}
+  );
+  const bosWip = getSurfaceBosTotal(bosByStation);
   const shipGoal = Number(payload.shipGoal) || 0;
   const incomingRange = normalizeForecastRange(payload.incomingLow, payload.incomingHigh);
   const remakeRange = normalizeForecastRange(payload.remakeLow, payload.remakeHigh);
-  const availableWorkLow = bosWip + incomingRange.low + remakeRange.low;
-  const availableWorkHigh = bosWip + incomingRange.high + remakeRange.high;
+
+  // Daily work pool:
+  // Low = BOS + conservative incoming + conservative breakage/remake.
+  // High = BOS + upper incoming + upper breakage/remake.
+  const availableWorkLow =
+    bosWip + incomingRange.low + remakeRange.low;
+  const availableWorkHigh =
+    bosWip + incomingRange.high + remakeRange.high;
   const floaterCount = Number(payload.floaterCount) || 0;
   const floaterAssign = payload.floaterAssign || 'none';
 
@@ -672,18 +892,31 @@ function calculateLocalForecast(payload) {
       associatesAssigned,
       activeCapacityUnits: capacityInfo.activeCapacityUnits,
       capacityBasis: capacityInfo.capacityBasis,
+      machineCeilingJph: Number(capacityInfo.machineCeilingJph || capacityInfo.totalJph || 0),
+      requiredAssociates: Number(capacityInfo.requiredAssociates || 0),
+      coverageFactor: capacityInfo.coverageFactor === undefined ? 1 : Number(capacityInfo.coverageFactor || 0),
       totalJph: capacityInfo.totalJph,
       normalCapacity,
       downtimeLostJobs,
       adjustedCapacity,
       currentWip,
       effectiveJph,
-      timeToClear
+      timeToClear,
+      forecastCapacityRole:
+        area.key === 'detaping'
+          ? 'wip-pressure-only'
+          : area.key === 'cooling'
+            ? 'dwell-time-only'
+            : 'hard-cap'
     };
   });
 
   const requiredAreas = areas.filter(function (area) {
-    return area.required && area.effectiveJph > 0;
+    return (
+      area.required &&
+      area.effectiveJph > 0 &&
+      area.key !== 'detaping'
+    );
   });
 
   let bottleneck = null;
@@ -705,23 +938,186 @@ function calculateLocalForecast(payload) {
     return sum + area.associatesAssigned;
   }, 0);
 
-  const hourlySummary = calculateHourlySummary(payload.hourly || [], shiftHours, effectiveBottleneckJph, shipGoal, capacityCeiling, availableWorkLow, availableWorkHigh);
+  const hourlySummary = calculateHourlySummary(
+    payload.hourly || [],
+    shiftHours,
+    effectiveBottleneckJph,
+    shipGoal,
+    capacityCeiling,
+    availableWorkLow,
+    availableWorkHigh
+  );
   const liveWipBottleneck = getLiveWipBottleneck(areas);
 
   const currentOut = Number(hourlySummary.actualAr41SoFar || 0);
-  const projectedOut = Number(hourlySummary.projectedActualOut || 0);
-  const capacityProjectedOut = Number(hourlySummary.capacityProjectedOutHigh || hourlySummary.capacityProjectedOut || 0);
-  const bosRemainingAfterActual = Math.max(0, bosWip - currentOut);
-  const availableWorkRemainingLow = Math.max(0, availableWorkLow - currentOut);
-  const availableWorkRemainingHigh = Math.max(0, availableWorkHigh - currentOut);
+  const progress = getSurfaceClockProgress(shiftMode);
+  const maturity = getSurfaceBosMaturity(
+    bosByStation,
+    progress.elapsedMinutes,
+    progress.totalMinutes
+  );
 
-  // Low = current pace projection.
-  // High = best case from BOS + average incoming + average remake/breakage, capped by bottleneck capacity.
-  const knownWipForecast = Number(hourlySummary.capacityProjectedOutLow || 0);
-  const forecastRangeLow = projectedOut;
-  const forecastRangeHigh = capacityProjectedOut;
-  const extraCapacityForUnknownWork = Math.max(0, capacityCeiling - availableWorkHigh);
-  const expectedEosWipIfNoExtraWork = Math.max(0, availableWorkLow - knownWipForecast);
+  const remainingHours = progress.remainingMinutes / 60;
+  const remainingCapacityMap = buildSurfaceRemainingCapacityMap(
+    areas,
+    remainingHours
+  );
+
+  // Remove completed output from BOS beginning with the most downstream work.
+  // This prevents Current OUT from being added on top of the same BOS jobs twice.
+  const remainingBosByStation = consumeCompletedSurfaceBos(
+    bosByStation,
+    currentOut
+  );
+
+  // Allocate remaining BOS from downstream to upstream. Each pool is limited
+  // only by the stations it still must pass, not by an upstream station it
+  // already cleared.
+  const bosAllocation = allocateSurfaceWorkPools(
+    buildSurfaceBosPools(remainingBosByStation),
+    remainingCapacityMap,
+    {
+      // BOS was present at shift start, so use the full shift maturity window.
+      availableMinutes: progress.totalMinutes
+    }
+  );
+
+  const bosAdditionalOut = bosAllocation.totalAllocated;
+  const knownWipForecast = Math.round(
+    currentOut + bosAdditionalOut
+  );
+
+  const lowExtraWork = Math.max(
+    0,
+    incomingRange.low + remakeRange.low
+  );
+  const highExtraWork = Math.max(
+    0,
+    incomingRange.high + remakeRange.high
+  );
+
+  // New incoming and breakage/remake work enters the full Surface route.
+  // Run low and high scenarios independently from the capacity remaining
+  // after BOS so the range represents two real workload cases.
+  const lowExtraAllocation = allocateSurfaceWorkPools(
+    [{
+      sourceKey: 'unbox',
+      jobs: lowExtraWork,
+      includeSource: true
+    }],
+    bosAllocation.remainingCapacityMap,
+    {
+      availableMinutes: progress.remainingMinutes
+    }
+  );
+
+  const highExtraAllocation = allocateSurfaceWorkPools(
+    [{
+      sourceKey: 'unbox',
+      jobs: highExtraWork,
+      includeSource: true
+    }],
+    bosAllocation.remainingCapacityMap,
+    {
+      availableMinutes: progress.remainingMinutes
+    }
+  );
+
+  // Low case uses conservative execution: 90% of the additional route-capacity
+  // result after Current OUT. High case uses the full route-capacity result.
+  // This keeps the range useful even when low/high workload both hit the same ceiling.
+  const lowCaseFull =
+    currentOut +
+    bosAdditionalOut +
+    lowExtraAllocation.totalAllocated;
+
+  const highCaseFull =
+    currentOut +
+    bosAdditionalOut +
+    highExtraAllocation.totalAllocated;
+
+  const forecastRangeLow = Math.round(
+    currentOut + Math.max(0, lowCaseFull - currentOut) * 0.90
+  );
+
+  const forecastRangeHigh = Math.round(
+    Math.max(
+      forecastRangeLow + 1,
+      highCaseFull
+    )
+  );
+
+  const paceProjection = Number(
+    hourlySummary.projectedActualOut || 0
+  );
+
+  // Pace selects the working projection, but it can never fall below the
+  // conservative route-capacity case or exceed the high workload case.
+  const projectedOut = Math.round(
+    Math.max(
+      forecastRangeLow,
+      Math.min(
+        forecastRangeHigh,
+        paceProjection > currentOut
+          ? paceProjection
+          : (forecastRangeLow + forecastRangeHigh) / 2
+      )
+    )
+  );
+
+  const capacityProjectedOut = forecastRangeHigh;
+  const remainingCapacity = getSurfaceRouteCapacity(
+    bosAllocation.remainingCapacityMap,
+    'unbox',
+    true
+  );
+
+  const bosRemainingAfterActual = Math.max(
+    0,
+    bosWip - currentOut
+  );
+  const availableWorkRemainingLow = Math.max(
+    0,
+    availableWorkLow - currentOut
+  );
+  const availableWorkRemainingHigh = Math.max(
+    0,
+    availableWorkHigh - currentOut
+  );
+
+  const extraCapacityForUnknownWork = Math.max(
+    0,
+    Number.isFinite(remainingCapacity)
+      ? remainingCapacity
+      : 0
+  );
+
+  const expectedEosWipIfNoExtraWork = Math.max(
+    0,
+    bosWip - knownWipForecast
+  );
+
+  // During the morning startup window, expected output begins only after the
+  // first physically possible downstream release.
+  const productiveElapsedAfterStartup = Math.max(
+    0,
+    progress.elapsedMinutes -
+      (maturity.startupDelayApplied
+        ? SURFACE_STARTUP_OUTPUT_DELAY_MIN
+        : 0)
+  );
+  const expectedHoursAfterStartup =
+    productiveElapsedAfterStartup / 60;
+  const targetPaceForExpected = shipGoal > 0
+    ? shipGoal / shiftHours
+    : effectiveBottleneckJph;
+
+  hourlySummary.expectedByNow =
+    targetPaceForExpected * expectedHoursAfterStartup;
+  hourlySummary.paceGap =
+    currentOut - hourlySummary.expectedByNow;
+  hourlySummary.remainingHours = remainingHours;
+  hourlySummary.projectedActualOut = projectedOut;
 
   let requiredJph = 0;
   let goalRisk = 'NO GOAL';
@@ -729,10 +1125,10 @@ function calculateLocalForecast(payload) {
 
   if (shipGoal > 0) {
     requiredJph = shipGoal / shiftHours;
-    goalGap = shipGoal - capacityProjectedOut;
+    goalGap = shipGoal - forecastRangeHigh;
 
-    if (shipGoal <= knownWipForecast) goalRisk = 'GREEN';
-    else if (shipGoal <= capacityProjectedOut) goalRisk = 'YELLOW';
+    if (shipGoal <= forecastRangeLow) goalRisk = 'GREEN';
+    else if (shipGoal <= forecastRangeHigh) goalRisk = 'YELLOW';
     else goalRisk = 'RED';
   }
 
@@ -740,6 +1136,15 @@ function calculateLocalForecast(payload) {
     shiftMode,
     shiftHours,
     bosWip,
+    bosByStation,
+    bosMaturity: maturity,
+    startupDelayRemaining: maturity.startupDelayRemaining,
+    remainingCapacity,
+    remainingCapacityMap,
+    remainingBosByStation,
+    bosRouteAdditionalOut: bosAdditionalOut,
+    lowExtraProjected: lowExtraAllocation.totalAllocated,
+    highExtraProjected: highExtraAllocation.totalAllocated,
     incomingLow: incomingRange.low,
     incomingHigh: incomingRange.high,
     remakeLow: remakeRange.low,
@@ -773,6 +1178,12 @@ function calculateLocalForecast(payload) {
     shiftMode,
     shiftHours,
     bosWip,
+    bosByStation,
+    remainingBosByStation,
+    bosRouteAdditionalOut: bosAdditionalOut,
+    lowExtraProjected: lowExtraAllocation.totalAllocated,
+    highExtraProjected: highExtraAllocation.totalAllocated,
+    remainingCapacityMap,
     incomingLow: incomingRange.low,
     incomingHigh: incomingRange.high,
     remakeLow: remakeRange.low,
@@ -1009,22 +1420,44 @@ function renderForecast(result) {
   const actionPlan = buildGoalActionPlan(result);
 
   renderCommandKpis(result, actionPlan);
+  renderSurfaceBosSnapshot();
   updatePerformanceUI(result);
   renderGoalStaffingPlan(result);
 
   setText('forecastStatus', status || 'READY');
-  setText('forecastRange', `${formatNumber(Math.max(actual, projected))} - ${formatNumber(Math.max(Math.max(actual, projected), Number(result.forecastRangeHigh || result.capacityCeiling || projected || 0)))}`);
+  const displayRangeLow = Math.max(
+    actual,
+    Number(result.forecastRangeLow ?? result.knownWipForecast ?? projected ?? 0)
+  );
+  const displayRangeHigh = Math.max(
+    displayRangeLow,
+    Number(result.forecastRangeHigh ?? result.capacityProjectedOut ?? projected ?? 0)
+  );
+
+  setText(
+    'forecastRange',
+    `${formatNumber(displayRangeLow)} - ${formatNumber(displayRangeHigh)}`
+  );
   setText('shipGoalDisplay', shipGoal > 0 ? formatNumber(shipGoal) : '0');
   setText('projectedGap', buildProjectedGapText(shipGoal, projected));
   setText('pacePercent', expected > 0 ? `${round1(pacePercent)}%` : '0%');
   setText('paceGap', `${paceGap >= 0 ? '+' : ''}${formatNumber(paceGap)} jobs`);
   setText('lastUpdated', nowText);
 
-  setText('summaryRangeValue', `${formatNumber(Math.max(actual, projected))} - ${formatNumber(Math.max(Math.max(actual, projected), Number(result.forecastRangeHigh || result.capacityCeiling || projected || 0)))}`);
+  setText(
+    'summaryRangeValue',
+    `${formatNumber(displayRangeLow)} - ${formatNumber(displayRangeHigh)}`
+  );
   setText('summaryProjectedOutValue', formatNumber(projected));
   setText('summaryTargetValue', shipGoal > 0 ? formatNumber(shipGoal) : '0');
   setText('summaryDowntimeValue', formatNumber(result.downtimeLostTotal));
-  setText('summaryFootnote', buildSummaryFootnote(result, actionPlan));
+  setText(
+    'summaryFootnote',
+    result.startupDelayRemaining > 0
+      ? `${Math.round(result.startupDelayRemaining)} min startup delay remains before normal Surface OUT. ` +
+        buildSummaryFootnote(result, actionPlan)
+      : buildSummaryFootnote(result, actionPlan)
+  );
 
   setText('topPaceValue', expected > 0 ? `${round1(pacePercent)}%` : '0%');
   setText('topPaceSub', hourly.onTrackStatus && hourly.onTrackStatus !== 'NO HOURLY' ? 'of expected' : 'waiting on hourly data');
@@ -1149,17 +1582,26 @@ function renderCommandKpis(result, actionPlan) {
   const actual = Number(hourly.actualAr41SoFar || 0);
   const expected = Number(hourly.expectedByNow || 0);
   const projected = Number(result.projectedOut ?? hourly.projectedActualOut ?? 0);
-  const capacityHigh = Number(result.forecastRangeHigh ?? result.capacityProjectedOut ?? result.capacityCeiling ?? projected ?? 0);
+  const calculatedLow = Number(
+    result.forecastRangeLow ??
+    result.knownWipForecast ??
+    projected ??
+    0
+  );
+  const calculatedHigh = Number(
+    result.forecastRangeHigh ??
+    result.capacityProjectedOut ??
+    result.capacityCeiling ??
+    projected ??
+    0
+  );
   const remainingHours = Math.max(0, Number(hourly.remainingHours || 0));
   const downtimeLost = Number(result.downtimeLostTotal || 0);
 
-  /*
-    Do not use the old BOS/capacity "forecast range" for the KPI.
-    That was causing 1,425 - 1,425 and giving no real decision value.
-    KPI range now shows: current pace projection low -> best available capacity high.
-  */
-  const projectedLow = Math.max(actual, projected);
-  const projectedHigh = Math.max(projectedLow, capacityHigh);
+  // Display the route-specific conservative and high-workload cases.
+  // Projected OUT is a working point inside this range; it must not replace the low.
+  const projectedLow = Math.max(actual, Math.min(calculatedLow, calculatedHigh));
+  const projectedHigh = Math.max(projectedLow, calculatedHigh);
 
   const goalGap = shipGoal > 0 ? projected - shipGoal : 0;
   const paceGap = actual - expected;
@@ -2004,6 +2446,255 @@ function setRowValue(row, selector, value) {
 
 
 
+
+function loadSurfaceBosSnapshots() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SURFACE_BOS_WIP_STORAGE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function saveSurfaceBosSnapshots(snapshots) {
+  localStorage.setItem(
+    SURFACE_BOS_WIP_STORAGE_KEY,
+    JSON.stringify(snapshots || {})
+  );
+}
+
+function normalizeSurfaceBosMap(source) {
+  const result = {};
+  SURFACE_FLOW_ORDER.forEach(function (key) {
+    result[key] = Math.max(0, Number(source && source[key]) || 0);
+  });
+  return result;
+}
+
+function getSurfaceBosTotal(snapshot) {
+  return SURFACE_FLOW_ORDER.reduce(function (sum, key) {
+    return sum + (Number(snapshot && snapshot[key]) || 0);
+  }, 0);
+}
+
+function getSurfaceBosSnapshot(dateKey, fallbackCurrentWip) {
+  const snapshots = loadSurfaceBosSnapshots();
+  const saved = snapshots[String(dateKey || '')];
+
+  if (saved && typeof saved === 'object') {
+    return normalizeSurfaceBosMap(saved);
+  }
+
+  return normalizeSurfaceBosMap(fallbackCurrentWip || {});
+}
+
+function captureSurfaceBosSnapshotIfMissing(dateKey, currentWip) {
+  const key = String(dateKey || '').trim();
+  if (!key) return normalizeSurfaceBosMap(currentWip || {});
+
+  const snapshots = loadSurfaceBosSnapshots();
+
+  if (!snapshots[key]) {
+    snapshots[key] = normalizeSurfaceBosMap(currentWip || {});
+    saveSurfaceBosSnapshots(snapshots);
+  }
+
+  const snapshot = normalizeSurfaceBosMap(snapshots[key]);
+  setValue('bosWip', Math.round(getSurfaceBosTotal(snapshot)));
+  return snapshot;
+}
+
+
+function readSurfaceBosInputs() {
+  const snapshot = {};
+
+  SURFACE_FLOW_ORDER.forEach(function (key) {
+    const input = document.querySelector(
+      `.surface-bos-value-input[data-surface-bos-key="${key}"]`
+    );
+    snapshot[key] = Math.max(0, Number(input && input.value) || 0);
+  });
+
+  return normalizeSurfaceBosMap(snapshot);
+}
+
+function updateSurfaceBosTotalFromInputs() {
+  const snapshot = readSurfaceBosInputs();
+  const total = getSurfaceBosTotal(snapshot);
+  setValue('bosWip', Math.round(total));
+  setText('surfaceBosStartupMeta', 'Unsaved BOS changes — click Save BOS.');
+  return snapshot;
+}
+
+function saveSurfaceBosSnapshot() {
+  const dateKey = getValue('productionDate', getLocalDateInputValue(new Date()));
+  let snapshot = readSurfaceBosInputs();
+  const enteredTotal = Math.max(0, Number(getValue('bosWip', 0)) || 0);
+  const stationTotal = getSurfaceBosTotal(snapshot);
+
+  // When the user changes only the total BOS field, preserve the station mix
+  // by scaling all station values proportionally. If every station is zero,
+  // place the total in SF Unbox so the forecast does not invent downstream WIP.
+  if (Math.round(enteredTotal) !== Math.round(stationTotal)) {
+    if (stationTotal > 0) {
+      const scale = enteredTotal / stationTotal;
+      let allocated = 0;
+
+      SURFACE_FLOW_ORDER.forEach(function (key, index) {
+        if (index === SURFACE_FLOW_ORDER.length - 1) {
+          snapshot[key] = Math.max(0, Math.round(enteredTotal - allocated));
+        } else {
+          snapshot[key] = Math.max(
+            0,
+            Math.round((Number(snapshot[key]) || 0) * scale)
+          );
+          allocated += snapshot[key];
+        }
+      });
+    } else {
+      snapshot = normalizeSurfaceBosMap({});
+      snapshot.unbox = Math.round(enteredTotal);
+    }
+  }
+
+  const snapshots = loadSurfaceBosSnapshots();
+  snapshots[dateKey] = snapshot;
+  saveSurfaceBosSnapshots(snapshots);
+
+  setValue('bosWip', Math.round(getSurfaceBosTotal(snapshot)));
+  renderSurfaceBosSnapshot();
+  calculateForecast();
+
+  alert(
+    `Surface BOS WIP saved at ${formatNumber(getSurfaceBosTotal(snapshot))} jobs for ${dateKey}.`
+  );
+}
+
+function resetSurfaceBosSnapshot() {
+  const dateKey = getValue('productionDate', getLocalDateInputValue(new Date()));
+  const currentWip = normalizeSurfaceBosMap(window.surfaceDashboardCurrentWip || {});
+  const snapshots = loadSurfaceBosSnapshots();
+
+  snapshots[dateKey] = currentWip;
+  saveSurfaceBosSnapshots(snapshots);
+  setValue('bosWip', Math.round(getSurfaceBosTotal(currentWip)));
+  renderSurfaceBosSnapshot();
+  calculateForecast();
+
+  alert(
+    `Surface BOS WIP reset to ${formatNumber(getSurfaceBosTotal(currentWip))} jobs for ${dateKey}.`
+  );
+}
+
+function getSurfaceClockProgress(shiftMode) {
+  const windowInfo = getShiftWindow(shiftMode || 'Weekday');
+  const start = parseTimeToMinutes(windowInfo.start) || 420;
+  const end = parseTimeToMinutes(windowInfo.end) || 1050;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  return {
+    start,
+    end,
+    totalMinutes: Math.max(1, end - start),
+    elapsedMinutes: Math.max(0, Math.min(end - start, nowMinutes - start)),
+    remainingMinutes: Math.max(0, end - nowMinutes)
+  };
+}
+
+function getSurfaceBosMaturity(snapshot, elapsedMinutes, totalShiftMinutes) {
+  const byNow = {};
+  const byEos = {};
+  let maturedNow = 0;
+  let maturedByEos = 0;
+
+  SURFACE_FLOW_ORDER.forEach(function (key) {
+    const jobs = Math.max(0, Number(snapshot && snapshot[key]) || 0);
+    const travel = Number(SURFACE_MATURITY_MINUTES[key]) || 0;
+
+    byNow[key] = elapsedMinutes >= travel ? jobs : 0;
+    byEos[key] = totalShiftMinutes >= travel ? jobs : 0;
+    maturedNow += byNow[key];
+    maturedByEos += byEos[key];
+  });
+
+  const downstreamBos =
+    (Number(snapshot.polisher) || 0) +
+    (Number(snapshot.engraving) || 0) +
+    (Number(snapshot.detaping) || 0) +
+    (Number(snapshot.coater) || 0) +
+    (Number(snapshot.inspection) || 0);
+
+  return {
+    byNow,
+    byEos,
+    maturedNow,
+    maturedByEos,
+    downstreamBos,
+    startupDelayApplied: downstreamBos <= 0,
+    startupDelayRemaining: downstreamBos <= 0
+      ? Math.max(0, SURFACE_STARTUP_OUTPUT_DELAY_MIN - elapsedMinutes)
+      : 0
+  };
+}
+
+function renderSurfaceBosSnapshot() {
+  const holder = document.getElementById('surfaceBosStationGrid');
+  if (!holder) return;
+
+  const dateKey = getValue('productionDate', getLocalDateInputValue(new Date()));
+  const snapshot = getSurfaceBosSnapshot(
+    dateKey,
+    window.surfaceDashboardCurrentWip || {}
+  );
+  const progress = getSurfaceClockProgress(getValue('shiftMode', 'Weekday'));
+  const maturity = getSurfaceBosMaturity(
+    snapshot,
+    progress.elapsedMinutes,
+    progress.totalMinutes
+  );
+
+  const bosTotalInput = document.getElementById('bosWip');
+  if (!bosTotalInput || document.activeElement !== bosTotalInput) {
+    setValue('bosWip', Math.round(getSurfaceBosTotal(snapshot)));
+  }
+  setText(
+    'surfaceBosStartupMeta',
+    maturity.startupDelayRemaining > 0
+      ? `${Math.round(maturity.startupDelayRemaining)} min until normal first output window`
+      : `BOS saved for ${dateKey}. Edit station values and click Save BOS.`
+  );
+
+  holder.innerHTML = SURFACE_FLOW_ORDER.map(function (key) {
+    const area = SURFACE_AREAS.find(function (row) { return row.key === key; });
+    const label = area ? area.label : key;
+    const jobs = Number(snapshot[key]) || 0;
+    const range = SURFACE_STAGE_TIME_RANGES[key] || {
+      label: '0 min'
+    };
+    const travel = Number(SURFACE_MATURITY_MINUTES[key]) || 0;
+    const ready = progress.elapsedMinutes >= travel;
+
+    return `
+      <label class="surface-bos-station ${ready ? 'ready' : 'waiting'}">
+        <span>${escapeHtml(label)}</span>
+        <input
+          class="surface-bos-value-input"
+          data-surface-bos-key="${escapeHtml(key)}"
+          type="number"
+          min="0"
+          step="1"
+          value="${Math.round(jobs)}">
+        <small>Time to clear: ${escapeHtml(range.label)}</small>
+      </label>
+    `;
+  }).join('');
+
+  holder.querySelectorAll('.surface-bos-value-input').forEach(function (input) {
+    input.addEventListener('input', updateSurfaceBosTotalFromInputs);
+  });
+}
+
 async function syncSurfaceDashboardData(showAlert) {
   setText('dashboardApiState', 'Syncing...');
   setText('dashboardSyncStatus', 'Pulling Surface Dashboard API...');
@@ -2017,6 +2708,11 @@ async function syncSurfaceDashboardData(showAlert) {
 
     const wipMap = mapDashboardWip(flowData);
     window.surfaceDashboardCurrentWip = wipMap;
+    captureSurfaceBosSnapshotIfMissing(
+      getValue('productionDate', getLocalDateInputValue(new Date())),
+      wipMap
+    );
+    renderSurfaceBosSnapshot();
 
     const hourlyRows = mapOperatorActivityToHourly(operatorData);
     applyDashboardHourlyRows(hourlyRows);
@@ -2467,15 +3163,28 @@ function getAreaCapacityInfo(area, unitsRunning, associatesAssigned, shiftHours)
     };
   }
 
-  // Machine areas are driven by machines running, but an area with 0 associates should not produce.
-  // One associate can run/clear multiple machines, so do NOT cap machines with associate count.
+  // Machine output is capped by the installed/running machines.
+  // Associates provide coverage and uptime; extra associates above required coverage
+  // do not create fake machine JPH.
   if (mode === 'machine') {
-    const activeMachines = associates > 0 ? machines : 0;
+    const machineCeilingJph = machines * jph;
+    const machinesPerAssociate = Math.max(0.25, Number(area.machinesPerAssociate || 1));
+    const requiredAssociates = machines > 0 ? machines / machinesPerAssociate : 0;
+    const coverageFactor = requiredAssociates > 0
+      ? Math.min(1, associates / requiredAssociates)
+      : 0;
+    const effectiveMachineJph = machineCeilingJph * coverageFactor;
+
     return {
-      activeCapacityUnits: activeMachines,
-      capacityBasis: associates > 0 ? 'machines + associate coverage' : 'no associate assigned',
-      totalJph: activeMachines * jph,
-      normalCapacity: activeMachines * jph * shiftHours
+      activeCapacityUnits: machines,
+      capacityBasis: coverageFactor >= 1
+        ? 'machine ceiling fully covered'
+        : `${round1(coverageFactor * 100)}% labor coverage`,
+      machineCeilingJph,
+      requiredAssociates,
+      coverageFactor,
+      totalJph: effectiveMachineJph,
+      normalCapacity: effectiveMachineJph * shiftHours
     };
   }
 
@@ -2888,3 +3597,1301 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
 }
+
+/* =========================================================
+   AR FORECAST MODULE V2
+   Live Production WIP + RAW_ACTIVITY_CURRENT live staffing + AR Forecast storage.
+========================================================= */
+const AR_FORECAST_API_URL = 'https://script.google.com/macros/s/AKfycbz3ZhvArQTxy4y_LLmEaDXEYxaZsBDSP5JNGr_H8wvFl5qg5Aofe1zf9QQRdBvVUY3Y/exec';
+const AR_FORECAST_STORAGE_KEY = 'productionGoalForecast.ar.v2';
+const AR_STAFFING_CAPACITY_OVERRIDES_KEY = 'productionGoalForecast.ar.staffingCapacityOverrides.v1';
+const AR_BOS_WIP_STORAGE_KEY = 'productionGoalForecast.ar.bosWipByDate.v1';
+const AR_FORECAST_FRONTEND_VERSION = '2026-07-13-ar-bos-stable-v7';
+const AR_DEFAULT_CONFIG = Object.freeze({goal:0,runSize:84,maintenanceDelay:50,arIn:40,basket:60,t40:45,oven:60,sectoring:40,chamber:45,deRing:20,arOut:30});
+const AR_DEFAULT_JPH = Object.freeze({'AR-IN':120,'Basket':64,'Oven':0,'Sectoring':48,'DeRing':120,'AR-OUT':100});
+const AR_DEFAULT_STAFFING_EXCLUSIONS = Object.freeze([
+  'CALEB DAY'
+]);
+const AR_LOCAL_STAFFING_EXCLUSIONS_KEY = 'productionGoalForecast.ar.staffingExclusions.v1';
+const AR_STATION_ORDER=['AR-IN','Basket','Oven','Sectoring','DeRing','AR-OUT'];
+const AR_FORECAST_STATE={
+  department:localStorage.getItem('productionGoalForecast.department')||'Surface',
+  config:{...AR_DEFAULT_CONFIG},
+  flow:null,
+  operatorActivity:null,
+  staffingExclusions:loadARLocalStaffingExclusions(),
+  staffingCapacityOverrides:loadARStaffingCapacityOverrides(),
+  bosWipByDate:loadARBosWipByDate(),
+  liveStaff:[],
+  hourly:{},
+  manualHourly:{},
+  calculated:null,
+  lastSync:null,
+  syncPromise:null,
+  syncRequestId:0
+};
+window.AR_FORECAST_APP={getDepartment:()=>AR_FORECAST_STATE.department};
+
+document.addEventListener('DOMContentLoaded',function initARForecastModuleV2(){restoreARLocalState();wireARForecastControls();setDepartmentMode(AR_FORECAST_STATE.department,false);buildARHourlyRows();calculateARForecast();});
+
+function wireARForecastControls(){const dep=document.getElementById('departmentMode');if(dep){dep.value=AR_FORECAST_STATE.department;dep.addEventListener('change',()=>setDepartmentMode(dep.value,true));}document.getElementById('arStaffingCards')?.addEventListener('click',handleARStaffingClick);document.getElementById('arStaffingCards')?.addEventListener('change',handleARStaffingCapacityChange);document.getElementById('arExcludedAssociates')?.addEventListener('click',handleARStaffingClick);['arGoal','arRunSize','arMaintenanceDelay','arTimeArIn','arTimeBasket','arTimeT40','arTimeOven','arTimeSectoring','arTimeChamber','arTimeDeRing','arTimeArOut'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.addEventListener('input',()=>{readARConfigFromInputs();saveARLocalState();calculateARForecast();});});document.getElementById('arSaveBosBtn')?.addEventListener('click',saveARBosWip);document.getElementById('arResetBosBtn')?.addEventListener('click',resetARBosWip);document.getElementById('arBosWip')?.addEventListener('input',()=>{setTextSafe('arBosSetupMeta','Unsaved BOS change — click Save BOS.');});document.getElementById('arSaveSetupBtn')?.addEventListener('click',saveARSetup);document.getElementById('arResetSetupBtn')?.addEventListener('click',resetARSetup);document.getElementById('arSaveHourlyBtn')?.addEventListener('click',saveARHourly);document.getElementById('arClearHourlyBtn')?.addEventListener('click',clearARManualHourly);document.getElementById('arSaveForecastBtn')?.addEventListener('click',saveARForecast);const btn=document.getElementById('calculateBtn');btn?.addEventListener('click',e=>{if(AR_FORECAST_STATE.department==='AR'){e.stopImmediatePropagation();syncARForecastData(true);}},true);document.getElementById('shiftMode')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR'){buildARHourlyRows();calculateARForecast();}});document.getElementById('productionDate')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR')syncARForecastData(false);});}
+function setDepartmentMode(mode,shouldSync){
+  const d=mode==='AR'?'AR':'Surface';
+  AR_FORECAST_STATE.department=d;
+  localStorage.setItem('productionGoalForecast.department',d);
+  document.body.dataset.department=d;
+
+  const s=document.getElementById('departmentMode');
+  if(s)s.value=d;
+
+  setTextSafe('departmentBrandMark',d==='AR'?'AR':'SF');
+  setTextSafe('departmentBrandName',d==='AR'?'AR':'SURFACE');
+  setTextSafe('pageForecastTitle',d==='AR'?'AR Goal Forecast':'Surface Goal Forecast');
+  setTextSafe('departmentModeStatus',d==='AR'?'AR WIP + live activity staffing':'Surface engine');
+
+  const tab=document.querySelector('.tab-btn.active')?.dataset.tabTarget||'status';
+  activateTab(
+    tab,
+    Array.from(document.querySelectorAll('.tab-btn')),
+    Array.from(document.querySelectorAll('.tab-panel'))
+  );
+
+  if(!shouldSync)return;
+
+  if(d==='AR'){
+    syncARForecastData(true);
+  }else{
+    // Surface should refresh its own source only when Surface is selected.
+    syncSurfaceDashboardData(true);
+    calculateForecast();
+  }
+}
+
+async function fetchARJson(url){
+  const response=await fetch(url,{
+    method:'GET',
+    cache:'default',
+    credentials:'omit'
+  });
+
+  if(!response.ok)throw new Error(`API ${response.status}`);
+
+  const payload=await response.json();
+
+  if(payload?.status==='error'){
+    throw new Error(payload.message||'Production Flow API error');
+  }
+
+  if(payload?.ok===false){
+    throw new Error(payload.error||payload.message||'API error');
+  }
+
+  return payload;
+}
+
+function getARShiftType(){
+  return getValue('shiftMode','Weekday').includes('Weekend')?'Weekend':'Weekday';
+}
+
+async function syncARForecastData(showStatus){
+  // Do not start another Google Apps Script request while one is already running.
+  if(AR_FORECAST_STATE.syncPromise){
+    if(showStatus)setARSyncState('syncing','AR refresh already running');
+    return AR_FORECAST_STATE.syncPromise;
+  }
+
+  const requestId=++AR_FORECAST_STATE.syncRequestId;
+
+  AR_FORECAST_STATE.syncPromise=(async()=>{
+    if(showStatus)setARSyncState('syncing','Syncing AR WIP + live staffing');
+
+    readARConfigFromInputs();
+
+    try{
+      // These two endpoints are independent, so request them together.
+      // debug=true was intentionally removed so the Apps Script 30-second cache works.
+      const [flowResult,operatorResult]=await Promise.allSettled([
+        fetchARJson(`${SURFACE_DASHBOARD_API_URL}?action=productionFlow&area=AR`),
+        fetchARJson(`${SURFACE_DASHBOARD_API_URL}?action=operatorActivity&area=AR`)
+      ]);
+
+      // Ignore a result only if a newer request somehow superseded this one.
+      if(requestId!==AR_FORECAST_STATE.syncRequestId)return;
+
+      if(flowResult.status==='fulfilled'){
+        AR_FORECAST_STATE.flow=flowResult.value;
+      }else{
+        console.warn('[AR Forecast] Flow request failed:',flowResult.reason);
+      }
+
+      if(operatorResult.status==='fulfilled'){
+        AR_FORECAST_STATE.operatorActivity=operatorResult.value;
+      }else{
+        console.warn('[AR Forecast] Operator request failed:',operatorResult.reason);
+      }
+
+      AR_FORECAST_STATE.staffingExclusions=loadARLocalStaffingExclusions();
+
+      if(!AR_FORECAST_STATE.flow){
+        throw new Error('Live AR WIP unavailable');
+      }
+
+      AR_FORECAST_STATE.liveStaff=buildARLiveStaffing(
+        AR_FORECAST_STATE.operatorActivity
+      ).filter(person=>!isARStaffingExcluded(person.name));
+
+      mergeARHourlyFromLiveSources(
+        AR_FORECAST_STATE.flow,
+        AR_FORECAST_STATE.operatorActivity
+      );
+
+      AR_FORECAST_STATE.lastSync=new Date();
+
+      // Render each expensive section once, after both API responses are resolved.
+      buildARHourlyRows();
+      renderARStaffingCards();
+      renderARExcludedAssociates();
+      calculateARForecast();
+
+      setARSyncState(
+        'ok',
+        AR_FORECAST_STATE.liveStaff.length
+          ? `AR live · ${AR_FORECAST_STATE.liveStaff.length} associates`
+          : 'AR live · waiting for first scans'
+      );
+    }catch(err){
+      console.error('[AR Forecast]',err);
+
+      setARSyncState('error','AR sync failed');
+
+      // Keep and display the last successful data instead of blanking the page.
+      renderARStaffingCards();
+      renderARExcludedAssociates();
+      calculateARForecast();
+    }finally{
+      AR_FORECAST_STATE.syncPromise=null;
+    }
+  })();
+
+  return AR_FORECAST_STATE.syncPromise;
+}
+
+function setARSyncState(state,text){if(AR_FORECAST_STATE.department!=='AR')return;setTextSafe('heroSyncState',text);setTextSafe('heroSyncTime',new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}));setTextSafe('arRosterSyncStatus',text);const dot=document.getElementById('heroSyncDot');if(dot)dot.className=`hero-sync-dot dot-${state}`;}
+
+
+function loadARStaffingCapacityOverrides(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(AR_STAFFING_CAPACITY_OVERRIDES_KEY)||'{}');
+    const out={};
+    AR_STATION_ORDER.forEach(station=>{
+      if(raw[station]===undefined||raw[station]===null||raw[station]==='')return;
+      const value=Number(raw[station]);
+      if(Number.isFinite(value)&&value>=0)out[station]=Math.round(value*2)/2;
+    });
+    return out;
+  }catch{
+    return {};
+  }
+}
+
+function saveARStaffingCapacityOverrides(){
+  localStorage.setItem(
+    AR_STAFFING_CAPACITY_OVERRIDES_KEY,
+    JSON.stringify(AR_FORECAST_STATE.staffingCapacityOverrides||{})
+  );
+}
+
+function getARCapacityAssociateCount(station,detectedCount){
+  const value=AR_FORECAST_STATE.staffingCapacityOverrides?.[station];
+  return Number.isFinite(Number(value))
+    ? Math.max(0,Math.round(Number(value)*2)/2)
+    : detectedCount;
+}
+
+function setARCapacityAssociateOverride(station,value){
+  if(!AR_STATION_ORDER.includes(station)||station==='Oven')return;
+
+  const numeric=Number(value);
+  if(!Number.isFinite(numeric)||numeric<0)return;
+
+  AR_FORECAST_STATE.staffingCapacityOverrides[station]=Math.round(numeric*2)/2;
+  saveARStaffingCapacityOverrides();
+}
+
+function clearARCapacityAssociateOverride(station){
+  if(!AR_FORECAST_STATE.staffingCapacityOverrides)return;
+  delete AR_FORECAST_STATE.staffingCapacityOverrides[station];
+  saveARStaffingCapacityOverrides();
+}
+
+function handleARStaffingCapacityChange(event){
+  const input=event.target.closest('[data-ar-capacity-station]');
+  if(!input)return;
+
+  const station=String(input.dataset.arCapacityStation||'').trim();
+  setARCapacityAssociateOverride(station,input.value);
+  calculateARForecast();
+  renderARStaffingCards();
+  showARMessage(`${station} capacity count set to ${round1(input.value)} associate(s).`);
+}
+
+function normalizeAROperatorKey(name){return String(name||'').trim().replace(/\s+/g,' ').toUpperCase();}
+function loadARLocalStaffingExclusions(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(AR_LOCAL_STAFFING_EXCLUSIONS_KEY)||'[]');
+    return Array.isArray(saved)?saved.map(normalizeAROperatorKey).filter(Boolean):[];
+  }catch{return [];}
+}
+function saveARLocalStaffingExclusions(){
+  const cleaned=Array.from(new Set((AR_FORECAST_STATE.staffingExclusions||[]).map(normalizeAROperatorKey).filter(Boolean)));
+  AR_FORECAST_STATE.staffingExclusions=cleaned;
+  localStorage.setItem(AR_LOCAL_STAFFING_EXCLUSIONS_KEY,JSON.stringify(cleaned));
+}
+function isARDefaultStaffingExclusion(name){
+  const key=normalizeAROperatorKey(name);
+  return AR_DEFAULT_STAFFING_EXCLUSIONS.some(item=>normalizeAROperatorKey(item)===key);
+}
+function isARStaffingExcluded(name){
+  const key=normalizeAROperatorKey(name);
+  return isARDefaultStaffingExclusion(key)||(AR_FORECAST_STATE.staffingExclusions||[]).some(item=>normalizeAROperatorKey(item)===key);
+}
+function refreshARStaffingAfterExclusionChange(){
+  AR_FORECAST_STATE.liveStaff=buildARLiveStaffing(AR_FORECAST_STATE.operatorActivity).filter(person=>!isARStaffingExcluded(person.name));
+  calculateARForecast();
+  renderARStaffingCards();
+  renderARExcludedAssociates();
+  setARSyncState('ok',AR_FORECAST_STATE.liveStaff.length?`AR live · ${AR_FORECAST_STATE.liveStaff.length} associates`:'AR live · waiting for first scans');
+}
+function handleARStaffingClick(event){
+  const button=event.target.closest('[data-ar-staff-action]');
+  if(!button)return;
+  const action=button.dataset.arStaffAction;
+
+  if(action==='reset-capacity'){
+    const station=String(button.dataset.station||'').trim();
+    clearARCapacityAssociateOverride(station);
+    calculateARForecast();
+    renderARStaffingCards();
+    showARMessage(`${station} capacity count returned to automatic live count.`);
+    return;
+  }
+
+  const operator=String(button.dataset.operator||'').trim();
+  if(!operator)return;
+  const key=normalizeAROperatorKey(operator);
+  if(action==='hide'){
+    if(!AR_FORECAST_STATE.staffingExclusions.includes(key))AR_FORECAST_STATE.staffingExclusions.push(key);
+    saveARLocalStaffingExclusions();
+    showARMessage(`${operator} hidden from AR staffing on this browser.`);
+  }else if(action==='restore'){
+    if(isARDefaultStaffingExclusion(key)){
+      showARMessage(`${operator} is a default JS exclusion and cannot be restored from the page.`);
+      return;
+    }
+    AR_FORECAST_STATE.staffingExclusions=(AR_FORECAST_STATE.staffingExclusions||[]).filter(item=>normalizeAROperatorKey(item)!==key);
+    saveARLocalStaffingExclusions();
+    showARMessage(`${operator} restored to AR staffing on this browser.`);
+  }
+  refreshARStaffingAfterExclusionChange();
+}
+function renderARExcludedAssociates(){
+  const box=document.getElementById('arExcludedAssociates');
+  const count=document.getElementById('arExcludedCount');
+  if(!box)return;
+  const defaults=AR_DEFAULT_STAFFING_EXCLUSIONS.map(normalizeAROperatorKey).filter(Boolean);
+  const local=(AR_FORECAST_STATE.staffingExclusions||[]).map(normalizeAROperatorKey).filter(Boolean).filter(name=>!defaults.includes(name));
+  const excluded=[...defaults.map(name=>({name,source:'Default JS exclusion'})),...local.map(name=>({name,source:'Hidden on this browser'}))];
+  if(count)count.textContent=String(excluded.length);
+  box.innerHTML=excluded.length?excluded.map(item=>`<div class="ar-excluded-row"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source)}</small></div>${item.source==='Default JS exclusion'?'<span class="ar-default-exclusion-badge">DEFAULT</span>':`<button type="button" class="ar-restore-btn" data-ar-staff-action="restore" data-operator="${escapeHtml(item.name)}">Restore</button>`}</div>`).join(''):'<div class="ar-excluded-empty">No associates are hidden.</div>';
+}
+function getARRowsFromFlow(){const rows=Array.isArray(AR_FORECAST_STATE.flow?.productionFlow)?AR_FORECAST_STATE.flow.productionFlow:[];return rows.filter(r=>String(r.Area||'').trim().toUpperCase()==='AR');}
+function findARFlowRow(names,bridgeRole){const rows=getARRowsFromFlow();if(bridgeRole){const x=rows.find(r=>String(r.BridgeRole||'').toUpperCase()===bridgeRole);if(x)return x;}const wanted=names.map(n=>n.toUpperCase());return rows.find(r=>wanted.includes(String(r.FlowStep||r.DisplayName||'').trim().toUpperCase()))||{};}
+
+function loadARBosWipByDate(){
+  try{
+    const value=JSON.parse(localStorage.getItem(AR_BOS_WIP_STORAGE_KEY)||'{}');
+    return value&&typeof value==='object'?value:{};
+  }catch{
+    return {};
+  }
+}
+
+function saveARBosWipByDate(){
+  localStorage.setItem(
+    AR_BOS_WIP_STORAGE_KEY,
+    JSON.stringify(AR_FORECAST_STATE.bosWipByDate||{})
+  );
+}
+
+function getARProductionDateKey(){
+  return getValue('productionDate',getLocalDateInputValue(new Date()));
+}
+
+function calculateCurrentARInsideWip(live){
+  return toARNumber(live?.arIn)+
+    toARNumber(live?.basket)+
+    toARNumber(live?.oven)+
+    toARNumber(live?.sectoring)+
+    toARNumber(live?.deRing);
+}
+
+function captureARBosWipIfMissing(live){
+  const dateKey=getARProductionDateKey();
+  if(!dateKey)return 0;
+
+  const saved=AR_FORECAST_STATE.bosWipByDate?.[dateKey];
+  if(Number.isFinite(Number(saved))){
+    return Math.max(0,toARNumber(saved));
+  }
+
+  const captured=calculateCurrentARInsideWip(live);
+  AR_FORECAST_STATE.bosWipByDate[dateKey]=captured;
+  saveARBosWipByDate();
+  return captured;
+}
+
+function getARBosWip(live){
+  return captureARBosWipIfMissing(live);
+}
+
+
+function saveARBosWip(){
+  const dateKey=getARProductionDateKey();
+  const bosInput=document.getElementById('arBosWip');
+  const value=Math.max(0,toARNumber(bosInput?.value));
+
+  AR_FORECAST_STATE.bosWipByDate[dateKey]=value;
+  saveARBosWipByDate();
+  calculateARForecast();
+
+  showARMessage(
+    `BOS AR WIP saved at ${formatARNumber(value)} jobs for ${dateKey}.`
+  );
+
+  setTextSafe(
+    'arBosSetupMeta',
+    `BOS saved for ${dateKey}. Reset Live pulls current AR WIP.`
+  );
+}
+
+function resetARBosWip(){
+  const live=getARLiveValues();
+  const dateKey=getARProductionDateKey();
+  const captured=calculateCurrentARInsideWip(live);
+
+  AR_FORECAST_STATE.bosWipByDate[dateKey]=captured;
+  saveARBosWipByDate();
+  calculateARForecast();
+
+  showARMessage(
+    `BOS AR WIP reset from live WIP to ${formatARNumber(captured)} jobs for ${dateKey}.`
+  );
+}
+
+function renderARBosSetup(live,bosWip){
+  const bosInput=document.getElementById('arBosWip');
+  const feedInput=document.getElementById('arSurfaceFeedLive');
+  const dateKey=getARProductionDateKey();
+
+  if(bosInput&&document.activeElement!==bosInput){
+    bosInput.value=Math.round(bosWip);
+  }
+  if(feedInput)feedInput.value=Math.round(toARNumber(live?.surface));
+
+  if(document.activeElement!==bosInput){
+    setTextSafe(
+      'arBosSetupMeta',
+      `BOS saved for ${dateKey}. Reset Live pulls current AR WIP.`
+    );
+  }
+}
+
+function getARLiveValues(){const row=(n,r)=>findARFlowRow(n,r);return{surface:toARNumber(row(['Surface Inspection','Surface Inspection Input WIP'],'AR_INPUT').CurrentWIP),arIn:toARNumber(row(['AR-IN']).CurrentWIP),basket:toARNumber(row(['Basket']).CurrentWIP),oven:toARNumber(row(['Oven']).CurrentWIP),sectoring:toARNumber(row(['Sectoring']).CurrentWIP),deRing:toARNumber(row(['DeRing']).CurrentWIP),arOut:toARNumber(row(['AR-OUT'],'AR_OUTPUT').ActivityToday)};}
+function toARBool(v){return v===true||String(v).toLowerCase()==='true'||String(v)==='1'||String(v).toLowerCase()==='yes';}
+function normalizeARRole(value){const s=String(value||'').trim().toUpperCase().replace(/_/g,'-');if(s==='AR IN'||s.includes('AR-IN'))return'AR-IN';if(s.includes('BASKET'))return'Basket';if(s.includes('OVEN'))return'Oven';if(s.includes('SECTOR'))return'Sectoring';if(s.includes('DERING')||s.includes('DE-RING'))return'DeRing';if(s==='AR OUT'||s.includes('AR-OUT'))return'AR-OUT';return String(value||'').trim();}
+function getARHourRank(value){const key=normalizeARHourKey(value);const parts=key.split(':').map(Number);return (parts[0]||0)*60+(parts[1]||0);}
+function isValidAROperator(name){const key=String(name||'').trim().toUpperCase();return Boolean(key&&key!=='UNASSIGNED / NO OPERATOR'&&!key.includes('NO OPERATOR')&&!key.includes('UNASSIGNED'));}
+function buildARLiveStaffing(payload){
+  const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
+  const byOperator={};
+
+  rows.forEach(row=>{
+    const name=String(row.Operator??row.operator??'').trim();
+    if(!isValidAROperator(name))return;
+
+    const station=normalizeARRole(
+      row.FlowStation??row.flowStation??row.AccessPoint??row.accessPoint??''
+    );
+
+    if(!AR_STATION_ORDER.includes(station))return;
+
+    const hours=row.Hours??row.hours??{};
+
+    Object.entries(hours).forEach(([hour,value])=>{
+      const output=toARNumber(value);
+      if(output<=0)return;
+
+      const rank=getARHourRank(hour);
+      const stationRank=AR_STATION_ORDER.indexOf(station);
+      const key=name.toUpperCase();
+      const current=byOperator[key];
+
+      const candidate={
+        name,
+        station,
+        lastHour:normalizeARHourKey(hour),
+        lastHourLabel:formatARHourLabel(hour),
+        lastHourOutput:output,
+        dailyOutput:toARNumber(
+          row.Total??row.total??row.HourlyTotal??row.hourlyTotal
+        ),
+        accessPoint:String(row.AccessPoint??row.accessPoint??station),
+        rank,
+        stationRank,
+        otherStations:[]
+      };
+
+      if(!current){
+        byOperator[key]=candidate;
+        return;
+      }
+
+      // A newer hour always wins.
+      if(rank>current.rank){
+        byOperator[key]=candidate;
+        return;
+      }
+
+      if(rank<current.rank)return;
+
+      // During the same hour, the furthest downstream AR station wins.
+      // This prevents a large Oven batch from keeping somebody assigned to Oven
+      // after they have already scanned work at DeRing or AR-OUT.
+      if(station!==current.station){
+        const currentStationRank=AR_STATION_ORDER.indexOf(current.station);
+
+        if(stationRank>currentStationRank){
+          candidate.otherStations=[
+            {station:current.station,output:current.lastHourOutput},
+            ...(current.otherStations||[])
+          ];
+          byOperator[key]=candidate;
+        }else{
+          const exists=(current.otherStations||[]).some(
+            item=>item.station===station
+          );
+
+          if(!exists){
+            current.otherStations.push({station,output});
+          }
+        }
+
+        return;
+      }
+
+      // Same hour and same station: retain the strongest row.
+      if(output>current.lastHourOutput){
+        current.lastHourOutput=output;
+        current.dailyOutput=Math.max(
+          current.dailyOutput,
+          candidate.dailyOutput
+        );
+        current.accessPoint=candidate.accessPoint;
+      }
+    });
+  });
+
+  return Object.values(byOperator)
+    .map(person=>({
+      ...person,
+      finalJph:
+        person.station==='Oven'
+          ? 0
+          : (AR_DEFAULT_JPH[person.station]||0),
+      status:person.otherStations.length
+        ? 'Moved / Multi-area'
+        : 'Active'
+    }))
+    .sort((a,b)=>
+      AR_STATION_ORDER.indexOf(a.station)-
+      AR_STATION_ORDER.indexOf(b.station)||
+      a.name.localeCompare(b.name)
+    );
+}
+function getARStationRoster(){const out={};AR_STATION_ORDER.forEach(s=>out[s]=[]);AR_FORECAST_STATE.liveStaff.forEach(person=>{if(out[person.station])out[person.station].push({...person,weight:1,effectiveJph:person.finalJph});});return out;}
+function getARStationCapacities(remainingHours){
+  const roster=getARStationRoster();
+
+  return AR_STATION_ORDER.map(station=>{
+    const associates=roster[station]||[];
+    const detectedAssociates=associates.length;
+    const currentAssociates=station==='Oven'
+      ? detectedAssociates
+      : getARCapacityAssociateCount(station,detectedAssociates);
+    const stationJph=station==='Oven'?0:(AR_DEFAULT_JPH[station]||0);
+    const usableJph=station==='Oven'?0:currentAssociates*stationJph;
+
+    return{
+      station,
+      associates,
+      detectedAssociates,
+      currentAssociates,
+      stationJph,
+      usableJph,
+      isManual:
+        station!=='Oven'&&
+        Number.isFinite(Number(AR_FORECAST_STATE.staffingCapacityOverrides?.[station])),
+      remainingCapacity:station==='Oven'
+        ? Infinity
+        : Math.max(0,usableJph*remainingHours)
+    };
+  });
+}
+function mergeARHourlyFromLiveSources(flowPayload,operatorPayload){
+  const combined={};
+  const flowRows=Array.isArray(flowPayload?.hourlyActivity)?flowPayload.hourlyActivity:[];
+  flowRows.forEach(row=>{
+    const station=normalizeARRole(row.FlowStep??row.DisplayName??row.AccessPoint??'');
+    if(station!=='AR-IN'&&station!=='AR-OUT')return;
+    const hours=row.Hours??row.hours??{};
+    Object.entries(hours).forEach(([hour,value])=>addARHour(combined,hour,station==='AR-IN'?toARNumber(value):0,station==='AR-OUT'?toARNumber(value):0));
+  });
+  if(!Object.keys(combined).length){
+    const rows=Array.isArray(operatorPayload?.operatorActivity)?operatorPayload.operatorActivity:[];
+    rows.forEach(row=>{
+      const station=normalizeARRole(row.FlowStation??row.flowStation??row.AccessPoint??row.accessPoint??'');
+      if(station!=='AR-IN'&&station!=='AR-OUT')return;
+      Object.entries(row.Hours??row.hours??{}).forEach(([hour,value])=>addARHour(combined,hour,station==='AR-IN'?toARNumber(value):0,station==='AR-OUT'?toARNumber(value):0));
+    });
+  }
+  AR_FORECAST_STATE.hourly=combined;
+}
+function addARHour(target,key,arin,arout){const h=normalizeARHourKey(key);if(!target[h])target[h]={arIn:0,arOut:0};target[h].arIn+=arin;target[h].arOut+=arout;}
+function buildARHourlyRows(){
+  const body=document.getElementById('arHourlyRows');
+  if(!body)return;
+
+  const w=getShiftWindow(getValue('shiftMode','Weekday'));
+  const start=parseTimeToMinutes(w.start)||420;
+  const end=parseTimeToMinutes(w.end)||1050;
+  const slots=buildPerformanceHourSlots(start,end);
+
+  body.innerHTML='';
+
+  slots.forEach(slot=>{
+    const key=minutesToHourKey(Math.floor(slot.start/60)*60);
+    const api=AR_FORECAST_STATE.hourly[key]||{};
+    const manual=AR_FORECAST_STATE.manualHourly[key]||{};
+
+    // AR-IN and AR-OUT always come from RAW_ACTIVITY_CURRENT.
+    // Old saved manual zeroes are intentionally ignored.
+    const arIn=toARNumber(api.arIn);
+    const arOut=toARNumber(api.arOut);
+
+    const maint=Boolean(manual.maintenance);
+    const delay=maint
+      ? toARNumber(manual.delay||AR_FORECAST_STATE.config.maintenanceDelay)
+      : 0;
+
+    const tr=document.createElement('tr');
+    tr.className='ar-hour-row';
+    tr.dataset.hour=key;
+
+    tr.innerHTML=`
+      <td><input class="ar-hour-label" value="${escapeHtml(slot.label)}" readonly></td>
+      <td>
+        <input class="ar-hour-in ar-hour-auto" type="number" min="0" step="1"
+          value="${arIn||''}" readonly title="Automatic from RAW_ACTIVITY_CURRENT">
+      </td>
+      <td>
+        <input class="ar-hour-out ar-hour-auto" type="number" min="0" step="1"
+          value="${arOut||''}" readonly title="Automatic from RAW_ACTIVITY_CURRENT">
+      </td>
+      <td class="ar-runs-in">${completeARRuns(arIn)}</td>
+      <td class="ar-runs-out">${completeARRuns(arOut)}</td>
+      <td><input class="ar-hour-maint" type="checkbox" ${maint?'checked':''}></td>
+      <td>
+        <input class="ar-delay-input" type="number" min="0" step="5"
+          value="${delay||AR_FORECAST_STATE.config.maintenanceDelay}" ${maint?'':'disabled'}>
+      </td>
+      <td class="ar-projection-cell">--</td>
+      <td><input class="ar-hour-note" type="text" value="${escapeHtml(manual.note||'')}"></td>`;
+
+    body.appendChild(tr);
+
+    tr.querySelector('.ar-hour-maint')?.addEventListener('change',()=>updateARHourlyRow(tr));
+    tr.querySelector('.ar-delay-input')?.addEventListener('input',()=>updateARHourlyRow(tr));
+    tr.querySelector('.ar-hour-note')?.addEventListener('input',()=>updateARHourlyRow(tr));
+
+    updateARHourlyRow(tr,false);
+  });
+}
+
+function updateARHourlyRow(row,save=true){
+  const key=row.dataset.hour;
+  const maintenance=row.querySelector('.ar-hour-maint')?.checked;
+  const delayInput=row.querySelector('.ar-delay-input');
+
+  if(delayInput)delayInput.disabled=!maintenance;
+
+  const api=AR_FORECAST_STATE.hourly[key]||{};
+  const arIn=toARNumber(api.arIn);
+  const arOut=toARNumber(api.arOut);
+
+  const data={
+    maintenance,
+    delay:maintenance
+      ? toARNumber(delayInput?.value||AR_FORECAST_STATE.config.maintenanceDelay)
+      : 0,
+    note:String(row.querySelector('.ar-hour-note')?.value||'')
+  };
+
+  // Save only maintenance, delay, and note.
+  // AR-IN / AR-OUT are always refreshed from the Production Flow API.
+  AR_FORECAST_STATE.manualHourly[key]=data;
+
+  const arInInput=row.querySelector('.ar-hour-in');
+  const arOutInput=row.querySelector('.ar-hour-out');
+
+  if(arInInput)arInInput.value=arIn||'';
+  if(arOutInput)arOutInput.value=arOut||'';
+
+  row.querySelector('.ar-runs-in').textContent=completeARRuns(arIn);
+  row.querySelector('.ar-runs-out').textContent=completeARRuns(arOut);
+  row.querySelector('.ar-projection-cell').textContent=getARProjectedCompletionLabel(
+    key,
+    {arIn,arOut,maintenance,delay:data.delay,note:data.note}
+  );
+
+  if(save){
+    saveARLocalState();
+    calculateARForecast();
+  }
+}
+
+function getARProjectedCompletionLabel(key,data){if(!data.arIn)return'--';const[h,m]=key.split(':').map(Number),d=new Date();d.setHours(h,m||0,0,0);d.setMinutes(d.getMinutes()+getARTotalPipelineMinutes()+toARNumber(data.delay));return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+
+function estimateARMaturedJobs(live,remainingMinutes,totalDelayMinutes){
+  const c=AR_FORECAST_STATE.config;
+  const usableMinutes=Math.max(
+    0,
+    toARNumber(remainingMinutes)-toARNumber(totalDelayMinutes)
+  );
+
+  // RAW WIP represents the last completed scan location.
+  // Count a station's current WIP only when enough shift time remains
+  // for that work to clear every downstream AR process and AR-OUT.
+  const stages=[
+    {
+      jobs:toARNumber(live?.deRing),
+      minutes:c.arOut
+    },
+    {
+      jobs:toARNumber(live?.sectoring),
+      minutes:c.chamber+c.deRing+c.arOut
+    },
+    {
+      jobs:toARNumber(live?.oven),
+      minutes:c.sectoring+c.chamber+c.deRing+c.arOut
+    },
+    {
+      jobs:toARNumber(live?.basket),
+      minutes:c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut
+    },
+    {
+      jobs:toARNumber(live?.arIn),
+      minutes:c.basket+c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut
+    }
+  ];
+
+  return stages.reduce((sum,stage)=>{
+    return sum+(usableMinutes>=stage.minutes?stage.jobs:0);
+  },0);
+}
+
+
+function projectAROutFromHourly(currentOut,hourly,remainingHours){
+  const rows=Array.isArray(hourly)?hourly:[];
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  const completedRows=rows.filter(row=>{
+    const hourMinutes=parseTimeToMinutes(row.hour);
+    return hourMinutes!==null&&hourMinutes<=nowMinutes;
+  });
+
+  const usableRows=completedRows.length?completedRows:rows;
+  const outputs=usableRows.map(row=>toARNumber(row.arOut));
+
+  // Use elapsed scheduled hours, including zero-output hours, so the pace
+  // projection does not become artificially high by ignoring downtime.
+  const elapsedHours=Math.max(0,usableRows.length);
+  const produced=outputs.reduce((sum,value)=>sum+value,0);
+
+  if(elapsedHours<=0||produced<=0){
+    return Math.max(0,toARNumber(currentOut));
+  }
+
+  const averageOutPerHour=produced/elapsedHours;
+  const additionalProjection=Math.max(
+    0,
+    averageOutPerHour*Math.max(0,toARNumber(remainingHours))
+  );
+
+  return Math.max(
+    toARNumber(currentOut),
+    toARNumber(currentOut)+additionalProjection
+  );
+}
+
+
+function getARWipFocus(live){
+  return [
+    ['AR-IN',toARNumber(live?.arIn)],
+    ['Basket / T40',toARNumber(live?.basket)],
+    ['Oven / Cooling',toARNumber(live?.oven)],
+    ['Sector / Chamber',toARNumber(live?.sectoring)],
+    ['DeRing',toARNumber(live?.deRing)]
+  ].sort((a,b)=>b[1]-a[1])[0]||['No WIP',0];
+}
+
+function getARLaborFocus(caps,live){
+  const wipByStation={
+    'AR-IN':toARNumber(live?.arIn),
+    'Basket':toARNumber(live?.basket),
+    'Oven':toARNumber(live?.oven),
+    'Sectoring':toARNumber(live?.sectoring),
+    'DeRing':toARNumber(live?.deRing),
+    'AR-OUT':toARNumber(live?.deRing)
+  };
+
+  const ranked=(Array.isArray(caps)?caps:[])
+    .filter(row=>row.station!=='Oven')
+    .map(row=>{
+      const wip=wipByStation[row.station]||0;
+      const usableJph=toARNumber(row.usableJph);
+
+      return{
+        ...row,
+        wip,
+        clearMin:usableJph>0?(wip/usableJph)*60:Infinity
+      };
+    })
+    .sort((a,b)=>b.clearMin-a.clearMin);
+
+  const focus=ranked[0];
+
+  if(!focus){
+    return{
+      name:'No staffing',
+      reason:'No AR station capacity available'
+    };
+  }
+
+  return{
+    name:focus.station,
+    reason:Number.isFinite(focus.clearMin)
+      ? `${Math.round(focus.clearMin)} min to clear ${formatARNumber(focus.wip)} WIP at ${round1(focus.usableJph)} JPH`
+      : 'No usable JPH assigned'
+  };
+}
+
+function getARExpectedByNow(goal){
+  const numericGoal=toARNumber(goal);
+  if(numericGoal<=0)return 0;
+
+  const shift=getShiftWindow(getValue('shiftMode','Weekday'));
+  const start=parseTimeToMinutes(shift.start)||420;
+  const end=parseTimeToMinutes(shift.end)||1050;
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  const ratio=Math.max(
+    0,
+    Math.min(1,(nowMinutes-start)/Math.max(1,end-start))
+  );
+
+  return numericGoal*ratio;
+}
+
+function calculateARForecast(){
+  readARConfigFromInputs();
+
+  const live=getARLiveValues();
+  const runSize=Math.max(1,AR_FORECAST_STATE.config.runSize);
+  const liveInside=calculateCurrentARInsideWip(live);
+  const bosWip=getARBosWip(live);
+  const surfaceFeed=toARNumber(live.surface);
+  const totalWorkAvailable=Math.max(0,bosWip+surfaceFeed);
+
+  const hourly=collectARHourlyData();
+  const totalDelay=hourly.reduce(
+    (sum,row)=>sum+(row.maintenance?row.delay:0),
+    0
+  );
+
+  const currentOut=Math.max(
+    toARNumber(live.arOut),
+    hourly.reduce((sum,row)=>sum+toARNumber(row.arOut),0)
+  );
+
+  const windowInfo=getShiftWindow(getValue('shiftMode','Weekday'));
+  const now=new Date();
+  const endMinutes=parseTimeToMinutes(windowInfo.end)||1050;
+  const endDate=new Date();
+  endDate.setHours(Math.floor(endMinutes/60),endMinutes%60,0,0);
+
+  const remainingMin=Math.max(0,(endDate-now)/60000);
+  const remainingHours=remainingMin/60;
+
+  const maturedJobs=estimateARMaturedJobs(live,remainingMin,totalDelay);
+  const stationCaps=getARStationCapacities(remainingHours);
+  const laborCaps=stationCaps
+    .filter(row=>row.station!=='Oven')
+    .map(row=>row.remainingCapacity);
+  const laborCeiling=laborCaps.length?Math.min(...laborCaps):0;
+
+  const remainingAvailableWork=Math.max(
+    0,
+    totalWorkAvailable-currentOut
+  );
+
+  const paceProjection=projectAROutFromHourly(
+    currentOut,
+    hourly,
+    remainingHours
+  );
+
+  const pipelinePotential=Math.max(
+    0,
+    Math.min(
+      remainingAvailableWork,
+      maturedJobs+surfaceFeed
+    )
+  );
+
+  const laborAdditional=laborCeiling>0
+    ? Math.min(pipelinePotential,laborCeiling)
+    : 0;
+
+  const projectedAdditional=Math.max(
+    0,
+    Math.min(
+      remainingAvailableWork,
+      pipelinePotential,
+      laborAdditional||pipelinePotential
+    )
+  );
+
+  const capacityProjection=currentOut+projectedAdditional;
+  const projectedOut=Math.max(
+    currentOut,
+    Math.round(
+      Math.min(
+        totalWorkAvailable,
+        paceProjection>currentOut
+          ? Math.max(capacityProjection,paceProjection)
+          : capacityProjection
+      )
+    )
+  );
+
+  const low=Math.max(
+    currentOut,
+    Math.round(Math.min(projectedOut,paceProjection||projectedOut))
+  );
+  const high=Math.max(
+    projectedOut,
+    Math.round(Math.min(totalWorkAvailable,capacityProjection))
+  );
+
+  const runsCompleted=completeARRuns(currentOut);
+  const runsProjected=completeARRuns(projectedOut);
+  const bosRuns=bosWip/runSize;
+  const feedRuns=surfaceFeed/runSize;
+  const projectedRunsExact=projectedOut/runSize;
+  const projectedEosWip=Math.max(0,totalWorkAvailable-projectedOut);
+
+  const focus=getARLaborFocus(stationCaps,live);
+  const wipFocus=getARWipFocus(live);
+  const goal=AR_FORECAST_STATE.config.goal;
+  const expectedNow=getARExpectedByNow(goal,currentOut);
+  const pacePct=expectedNow>0?currentOut/expectedNow:0;
+
+  AR_FORECAST_STATE.calculated={
+    live,
+    liveInside,
+    bosWip,
+    bosRuns,
+    surfaceFeed,
+    feedRuns,
+    totalWorkAvailable,
+    remainingAvailableWork,
+    projectedEosWip,
+    projectedRunsExact,
+    currentOut,
+    projectedOut,
+    low,
+    high,
+    runsCompleted,
+    runsProjected,
+    totalDelay,
+    focus,
+    wipFocus,
+    remainingMin,
+    remainingHours,
+    stationCaps,
+    maturedJobs,
+    laborCeiling,
+    availableJobs:totalWorkAvailable,
+    goal,
+    expectedNow
+  };
+
+  renderARBosSetup(live,bosWip);
+  renderARForecastAll(AR_FORECAST_STATE.calculated,hourly,pacePct);
+}
+function renderARForecastAll(r,hourly,pacePct){
+  setTextSafe('arKpiCurrentOut',formatARNumber(r.currentOut));
+  setTextSafe('arKpiProjectedOut',formatARNumber(r.projectedOut));
+
+  const arGoal=Math.max(0,toARNumber(r.goal));
+  const arExpectedNow=Math.max(0,toARNumber(r.expectedNow));
+  const arProjectedGap=arGoal>0?r.projectedOut-arGoal:0;
+  const arPaceGap=r.currentOut-arExpectedNow;
+  const arRemainingHours=Math.max(0,toARNumber(r.remainingHours));
+  const arJobsNeeded=Math.max(0,arGoal-r.currentOut);
+  const arRecoveryJph=arGoal>0&&arRemainingHours>0
+    ? arJobsNeeded/arRemainingHours
+    : 0;
+
+  setTextSafe('arKpiGoal',formatARNumber(arGoal));
+  setTextSafe(
+    'arKpiGoalMeta',
+    arGoal>0
+      ? `${Math.abs(Math.round(arProjectedGap))} jobs ${arProjectedGap>=0?'above':'below'} projected goal`
+      : 'No AR goal entered'
+  );
+
+  setTextSafe('arKpiExpectedNow',formatARNumber(Math.round(arExpectedNow)));
+  setTextSafe(
+    'arKpiPaceMeta',
+    arGoal>0
+      ? `${Math.abs(Math.round(arPaceGap))} jobs ${arPaceGap>=0?'ahead of':'behind'} pace`
+      : 'Enter an AR goal to compare pace'
+  );
+
+  setTextSafe('arKpiRecoveryJph',`${Math.round(arRecoveryJph)} JPH`);
+  setTextSafe(
+    'arKpiRecoveryMeta',
+    arGoal<=0
+      ? 'No AR goal entered'
+      : arProjectedGap>=0
+        ? 'No recovery needed at projected pace'
+        : `${formatARNumber(Math.max(0,arGoal-r.projectedOut))} projected jobs still needed`
+  );
+
+  setTextSafe(
+    'arKpiGoalGap',
+    arGoal>0
+      ? `${arProjectedGap>=0?'+':'-'}${formatARNumber(Math.abs(Math.round(arProjectedGap)))}`
+      : '0'
+  );
+  setTextSafe(
+    'arKpiGoalGapMeta',
+    arGoal>0
+      ? `Projected ${formatARNumber(r.projectedOut)} vs target ${formatARNumber(arGoal)}`
+      : 'Projected vs target'
+  );
+
+  const arGoalCard=document.getElementById('arKpiGoalCard');
+  const arExpectedCard=document.getElementById('arKpiExpectedCard');
+  const arRecoveryCard=document.getElementById('arKpiRecoveryCard');
+  const arGapCard=document.getElementById('arKpiGapCard');
+
+  [arGoalCard,arExpectedCard,arRecoveryCard,arGapCard].forEach(card=>{
+    if(!card)return;
+    card.classList.remove('danger','success','warning');
+  });
+
+  if(arGoal>0){
+    const paceRatio=arExpectedNow>0?r.currentOut/arExpectedNow:0;
+
+    if(arProjectedGap>=0){
+      arGoalCard?.classList.add('success');
+      arGapCard?.classList.add('success');
+      arRecoveryCard?.classList.add('success');
+    }else{
+      arGoalCard?.classList.add('danger');
+      arGapCard?.classList.add('danger');
+      arRecoveryCard?.classList.add('danger');
+    }
+
+    if(paceRatio>=1){
+      arExpectedCard?.classList.add('success');
+    }else if(paceRatio>=0.9){
+      arExpectedCard?.classList.add('warning');
+    }else{
+      arExpectedCard?.classList.add('danger');
+    }
+  }
+  setTextSafe('arKpiRunsCompleted',r.runsCompleted);
+  setTextSafe('arKpiRunsProjected',round1(r.projectedRunsExact));
+  setTextSafe('arKpiWip',formatARNumber(r.bosWip));
+  setTextSafe(
+    'arBosWipMeta',
+    `${round1(r.bosRuns)} BOS runs · ${formatARNumber(r.liveInside)} live AR WIP now`
+  );
+  setTextSafe('arKpiSurfaceFeed',formatARNumber(r.surfaceFeed));
+  setTextSafe('arKpiMaintenance',`${r.totalDelay} min`);
+  setTextSafe(
+    'arMaintenanceMeta',
+    r.totalDelay
+      ? `${hourly.filter(row=>row.maintenance).length} affected hour(s)`
+      : 'No affected hours'
+  );
+  setTextSafe('arKpiFocus',r.focus.name);
+  setTextSafe('arFocusMeta',r.focus.reason);
+
+  setTextSafe('arSummaryRange',`${formatARNumber(r.low)} - ${formatARNumber(r.high)}`);
+  setTextSafe('arSummaryProjected',formatARNumber(r.projectedOut));
+  setTextSafe('arSummaryGoal',round1(r.bosRuns));
+  setTextSafe(
+    'arSummaryBosRunsMeta',
+    `${formatARNumber(r.bosWip)} BOS jobs ÷ ${AR_FORECAST_STATE.config.runSize}`
+  );
+  setTextSafe(
+    'arSummaryCapacity',
+    formatARNumber(
+      Math.min(
+        r.totalWorkAvailable,
+        r.currentOut+Math.max(0,r.laborCeiling)
+      )
+    )
+  );
+
+  setTextSafe(
+    'arSummaryNarrative',
+    `BOS AR WIP is ${formatARNumber(r.bosWip)} jobs (${round1(r.bosRuns)} runs). `+
+    `Surface Inspection currently adds up to ${formatARNumber(r.surfaceFeed)} jobs (${round1(r.feedRuns)} runs) of incoming feed. `+
+    `Projected AR-OUT is ${formatARNumber(r.projectedOut)} with ${formatARNumber(r.projectedEosWip)} jobs projected to remain.`
+  );
+
+  setTextSafe('arStructuralBottleneck',r.focus.name);
+  setTextSafe('arStructuralMeta',r.focus.reason);
+  setTextSafe('arLiveWipFocus',r.wipFocus[0]);
+  setTextSafe('arLiveWipMeta',`${formatARNumber(r.wipFocus[1])} live WIP`);
+
+  const next=getARNextRunCompletion(r.live,r.totalDelay);
+  setTextSafe('arSummaryNextCompletion',next.label);
+  setTextSafe('arSummaryNextCompletionMeta',next.meta);
+
+  const gap=r.goal?r.projectedOut-r.goal:0;
+  setTextSafe(
+    'arSummaryGoalGap',
+    r.goal
+      ? `${Math.abs(gap)} jobs ${gap>=0?'above':'below'}`
+      : `${formatARNumber(r.projectedEosWip)} jobs`
+  );
+  setTextSafe(
+    'arSummaryGoalMeta',
+    r.goal
+      ? `Goal ${formatARNumber(r.goal)}`
+      : 'Projected EOS AR WIP'
+  );
+
+  setTextSafe(
+    'arProjectedOutMeta',
+    `${round1(r.projectedRunsExact)} projected runs · ${Math.round(r.remainingMin)} min remain`
+  );
+  setTextSafe(
+    'arRunsProjectedMeta',
+    `${Math.max(0,round1(r.projectedRunsExact-r.currentOut/AR_FORECAST_STATE.config.runSize))} additional runs`
+  );
+
+  renderARStage('ArIn',r.live.arIn);
+  renderARStage('Basket',r.live.basket);
+  renderARStage('Oven',r.live.oven);
+  renderARStage('Sectoring',r.live.sectoring);
+  renderARStage('DeRing',r.live.deRing);
+  renderARStage('ArOut',r.currentOut);
+
+  highlightARStage(r.focus.name);
+  renderARGoalPlan(r);
+  renderARBottleneckTable(r);
+  renderARRecommendations(r);
+  renderARHourlyCards(hourly,r);
+  renderARPace(r,pacePct);
+  renderARStaffingCards();
+
+  setTextSafe(
+    'arPipelineStatus',
+    `${getARTotalPipelineMinutes()} min normal flow · ${AR_FORECAST_STATE.config.runSize} jobs = 1 run`
+  );
+
+  if(AR_FORECAST_STATE.department==='AR'){
+    setTextSafe(
+      'lastUpdated',
+      new Date().toLocaleString(
+        'en-US',
+        {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}
+      )
+    );
+  }
+}
+function renderARGoalPlan(r){const body=document.getElementById('arGoalPlanTable'),summary=document.getElementById('arGoalPlanSummary');if(!body||!summary)return;const remainingGoal=Math.max(0,r.goal-r.currentOut),requiredJph=r.remainingHours>0?remainingGoal/r.remainingHours:0;const rows=r.stationCaps.filter(x=>x.station!=='Oven').map(x=>{const defaultJph=AR_DEFAULT_JPH[x.station]||1,requiredAssociates=requiredJph/defaultJph,gap=Math.max(0,requiredAssociates-x.currentAssociates),status=x.usableJph>=requiredJph?'OK':x.usableJph>=requiredJph*.9?'WATCH':'AT RISK';return{...x,requiredJph,requiredAssociates,gap,status};});body.innerHTML=rows.map(x=>`<tr><td><strong>${escapeHtml(x.station)}</strong></td><td>${round1(x.requiredJph)}</td><td>${round1(x.usableJph)}</td><td>${round1(x.requiredAssociates)}</td><td>${round1(x.currentAssociates)}</td><td>${x.gap>0?'+'+round1(x.gap):'—'}</td><td class="ar-status-pill ${x.status==='OK'?'ok':x.status==='WATCH'?'watch':'risk'}">${x.status}</td></tr>`).join('');const risks=rows.filter(x=>x.status!=='OK');summary.innerHTML=r.goal<=0?'<p class="muted-cell">Set an AR Goal above 0 to calculate required station JPH and associates.</p>':risks.length?`<p class="goal-plan-short"><strong>${risks.length}</strong> AR area(s) do not have comfortable Final JPH coverage for the remaining goal of <strong>${formatARNumber(remainingGoal)}</strong> jobs.</p>`:`<p class="goal-plan-ok">All labor-controlled AR stations have enough Final JPH to cover the remaining goal of ${formatARNumber(remainingGoal)} jobs.</p>`;}
+function renderARBottleneckTable(r){const body=document.getElementById('arBottleneckTable');if(!body)return;const liveMap={'AR-IN':r.live.arIn,'Basket':r.live.basket,'Oven':r.live.oven,'Sectoring':r.live.sectoring,'DeRing':r.live.deRing,'AR-OUT':r.live.deRing};body.innerHTML=r.stationCaps.map(x=>{const w=liveMap[x.station]||0,clear=x.station==='Oven'?`${AR_FORECAST_STATE.config.oven} min process`:x.usableJph>0?`${Math.round(w/x.usableJph*60)} min`:'No JPH',signal=x.station==='Oven'?'WATCH':x.usableJph<=0?'AT RISK':w/x.usableJph*60>120?'AT RISK':w/x.usableJph*60>60?'WATCH':'OK';return`<tr><td><strong>${escapeHtml(x.station)}</strong></td><td>${round1(x.currentAssociates)}</td><td>${x.station==='Oven'?'Process':round1(x.usableJph)}</td><td>${x.station==='Oven'?'60 min cycle':formatARNumber(x.remainingCapacity)}</td><td>${formatARNumber(w)}</td><td>${completeARRuns(w)}</td><td>${clear}</td><td class="${signal==='OK'?'ar-signal-ok':signal==='WATCH'?'ar-signal-watch':'ar-signal-risk'}"><strong>${signal}</strong></td></tr>`;}).join('');}
+function renderARStaffingCards(){
+  const box=document.getElementById('arStaffingCards');
+  if(!box)return;
+
+  const roster=getARStationRoster();
+
+  box.innerHTML=AR_STATION_ORDER.map(station=>{
+    const people=roster[station]||[];
+    const detectedCount=people.length;
+    const capacityCount=station==='Oven'
+      ? detectedCount
+      : getARCapacityAssociateCount(station,detectedCount);
+    const stationJph=station==='Oven'?0:(AR_DEFAULT_JPH[station]||0);
+    const liveCapacity=station==='Oven'?0:capacityCount*stationJph;
+    const isManual=
+      station!=='Oven'&&
+      Number.isFinite(Number(AR_FORECAST_STATE.staffingCapacityOverrides?.[station]));
+
+    const rows=people.length
+      ? people.map(p=>{
+          const movement=p.otherStations?.length
+            ? ` · Also ${p.otherStations.map(x=>`${x.station} ${formatARNumber(x.output)}`).join(', ')}`
+            : '';
+
+          return `<div class="ar-associate-row ${p.otherStations?.length?'floater':''}">
+            <div>
+              <strong>${escapeHtml(p.name)}</strong>
+              <small>${escapeHtml(p.status)} · ${escapeHtml(p.lastHourLabel)} · ${formatARNumber(p.lastHourOutput)} jobs${escapeHtml(movement)}</small>
+            </div>
+            <div class="ar-associate-actions">
+              <em>${station==='Oven'?'Process':round1(p.effectiveJph)+' JPH'}</em>
+              <button type="button" class="ar-hide-btn"
+                data-ar-staff-action="hide"
+                data-operator="${escapeHtml(p.name)}"
+                title="Hide from staffing capacity only">Hide</button>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="ar-associate-row">
+          <div>
+            <strong>No current associate</strong>
+            <small>No positive hourly activity at this station yet</small>
+          </div>
+          <em>${station==='Oven'?'Process':'0 JPH'}</em>
+        </div>`;
+
+    const countControl=station==='Oven'
+      ? `<div>
+          <small>Live Associates</small>
+          <b>${detectedCount}</b>
+        </div>`
+      : `<div class="ar-capacity-count-box ${isManual?'manual':''}">
+          <small>${isManual?'Manual Capacity Count':'Live Associates'}</small>
+          <div class="ar-capacity-input-row">
+            <input
+              class="ar-capacity-associate-input"
+              type="number"
+              min="0"
+              step="0.5"
+              value="${round1(capacityCount)}"
+              data-ar-capacity-station="${escapeHtml(station)}"
+              title="Adjust staffing capacity in 0.5 associate increments">
+            <button
+              type="button"
+              class="ar-capacity-auto-btn"
+              data-ar-staff-action="reset-capacity"
+              data-station="${escapeHtml(station)}"
+              ${isManual?'':'disabled'}
+              title="Return to detected live associate count">Auto</button>
+          </div>
+          <small class="ar-detected-count">Detected: ${detectedCount}</small>
+        </div>`;
+
+    return `<article class="ar-staff-card">
+      <div class="ar-staff-card-head">
+        <strong>${escapeHtml(station)}</strong>
+        <span>${station==='Oven'?'PROCESS':round1(liveCapacity)+' JPH'}</span>
+      </div>
+
+      <div class="ar-staff-summary">
+        ${countControl}
+        <div>
+          <small>Station JPH</small>
+          <b>${station==='Oven'?'N/A':stationJph}</b>
+        </div>
+        <div>
+          <small>Live Capacity</small>
+          <b>${station==='Oven'?'60 min':round1(liveCapacity)}</b>
+        </div>
+      </div>
+
+      <div class="ar-associate-list">${rows}</div>
+    </article>`;
+  }).join('');
+}
+function renderARRecommendations(r){const box=document.getElementById('arOperationalRecommendations');if(!box)return;const items=[];items.push(`<div class="recommendation-item"><strong>Primary focus: ${escapeHtml(r.focus.name)}</strong><span>${escapeHtml(r.focus.reason)}</span></div>`);if(r.live.surface>r.live.arIn&&r.live.surface>=AR_FORECAST_STATE.config.runSize)items.push(`<div class="recommendation-item"><strong>Protect AR-IN feed</strong><span>${formatARNumber(r.live.surface)} jobs are waiting from Surface while AR-IN has ${formatARNumber(r.live.arIn)} WIP.</span></div>`);if(r.totalDelay)items.push(`<div class="recommendation-item"><strong>Maintenance impact</strong><span>${r.totalDelay} total delay minutes are applied to affected pipeline work.</span></div>`);if(r.goal)items.push(`<div class="recommendation-item"><strong>${r.projectedOut>=r.goal?'Goal currently covered':'Recovery required'}</strong><span>Projected AR-OUT ${formatARNumber(r.projectedOut)} versus goal ${formatARNumber(r.goal)}.</span></div>`);box.innerHTML=items.join('');}
+function renderARHourlyCards(hourly,r){const box=document.getElementById('arHourlyCards');if(!box)return;const goal=r.goal,productive=SHIFT_PRODUCTIVE_HOURS[getValue('shiftMode','Weekday')]||9.5,expectedPerHour=goal>0?goal/productive:0;box.innerHTML=hourly.map(x=>{const pct=expectedPerHour>0?Math.round(x.arOut/expectedPerHour*100):0,cls=x.maintenance?'risk':pct>=100?'on-track':pct>=90?'at-risk':'behind';return`<div class="sector-row ${cls}"><span>${escapeHtml(formatARHourLabel(x.hour))}</span><strong>OUT ${formatARNumber(x.arOut)} / ${expectedPerHour?formatARNumber(expectedPerHour):'—'}</strong><em>${completeARRuns(x.arOut)} Runs${expectedPerHour?` · ${pct}%`:''}${x.maintenance?` · +${x.delay}m`:''}</em></div>`;}).join('')||'<div class="sector-row not-started">No AR hourly data yet.</div>';}
+function renderARPace(r,ratio){const pct=Math.max(0,Math.round(ratio*100)),gap=Math.round(r.currentOut-r.expectedNow);setTextSafe('arPacePercent',`${pct}%`);setTextSafe('arPaceGap',`${gap>=0?'+':''}${formatARNumber(gap)} jobs`);setTextSafe('arPaceStatus',ratio>=1?'ON TRACK':ratio>=.9?'AT RISK':'BEHIND');const actual=document.getElementById('arActualPaceBar'),expected=document.getElementById('arExpectedPaceBar'),gauge=document.getElementById('arPaceGauge');if(actual)actual.style.width=`${Math.min(100,pct)}%`;if(expected)expected.style.width='100%';if(gauge)gauge.style.background=`radial-gradient(circle at center,#06111f 0 58%,transparent 59%),conic-gradient(var(--${ratio>=1?'green':ratio>=.9?'yellow':'red'}) 0 ${Math.min(100,pct)}%,rgba(255,255,255,.12) ${Math.min(100,pct)}% 100%)`;}
+function highlightARStage(name){document.querySelectorAll('.ar-stage').forEach(x=>x.classList.remove('pressure'));const map={'AR-IN':'arin','Basket':'basket','Sectoring':'sectoring','DeRing':'dering','AR-OUT':'arout'};const key=map[name];if(key)document.querySelector(`[data-ar-stage="${key}"]`)?.classList.add('pressure');}
+function getARNextRunCompletion(live,totalDelay){const c=AR_FORECAST_STATE.config,stages=[['DeRing',live.deRing,c.arOut],['Sectoring',live.sectoring,c.deRing+c.arOut],['Oven',live.oven,c.sectoring+c.chamber+c.deRing+c.arOut],['Basket',live.basket,c.oven+c.sectoring+c.chamber+c.deRing+c.arOut],['AR-IN',live.arIn,c.basket+c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut]],hit=stages.find(x=>completeARRuns(x[1])>0);if(!hit)return{label:'--',meta:'No complete run available'};const d=new Date(Date.now()+(hit[2]+totalDelay)*60000);return{label:d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),meta:`From ${hit[0]} · ${hit[2]+totalDelay} min`};}
+function renderARStage(name,value){setTextSafe(`arStage${name}`,formatARNumber(value));setTextSafe(`arStage${name}Runs`,`${completeARRuns(value)} Runs`);}
+function collectARHourlyData(){
+  return Array.from(document.querySelectorAll('.ar-hour-row')).map(row=>({
+    hour:row.dataset.hour,
+    arIn:toARNumber(row.querySelector('.ar-hour-in')?.value),
+    arOut:toARNumber(row.querySelector('.ar-hour-out')?.value),
+    maintenance:Boolean(row.querySelector('.ar-hour-maint')?.checked),
+    delay:toARNumber(row.querySelector('.ar-delay-input')?.value),
+    note:String(row.querySelector('.ar-hour-note')?.value||'')
+  }));
+}
+function readARConfigFromInputs(){const map={goal:'arGoal',runSize:'arRunSize',maintenanceDelay:'arMaintenanceDelay',arIn:'arTimeArIn',basket:'arTimeBasket',t40:'arTimeT40',oven:'arTimeOven',sectoring:'arTimeSectoring',chamber:'arTimeChamber',deRing:'arTimeDeRing',arOut:'arTimeArOut'};Object.entries(map).forEach(([k,id])=>{const el=document.getElementById(id);if(!el)return;AR_FORECAST_STATE.config[k]=toARNumber(el.value);});}
+function writeARConfigInputs(){const map={goal:'arGoal',runSize:'arRunSize',maintenanceDelay:'arMaintenanceDelay',arIn:'arTimeArIn',basket:'arTimeBasket',t40:'arTimeT40',oven:'arTimeOven',sectoring:'arTimeSectoring',chamber:'arTimeChamber',deRing:'arTimeDeRing',arOut:'arTimeArOut'};Object.entries(map).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.value=AR_FORECAST_STATE.config[k];});}
+function getARTotalPipelineMinutes(){const c=AR_FORECAST_STATE.config;return c.arIn+c.basket+c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut;}
+function completeARRuns(jobs){return Math.floor(toARNumber(jobs)/Math.max(1,AR_FORECAST_STATE.config.runSize));}
+function resetARSetup(){AR_FORECAST_STATE.config={...AR_DEFAULT_CONFIG};writeARConfigInputs();saveARLocalState();calculateARForecast();}
+async function saveARSetup(){readARConfigFromInputs();saveARLocalState();await postARForecastApi('saveConfig',{config:AR_FORECAST_STATE.config});showARMessage('AR setup saved.');}
+async function saveARHourly(){const payload={date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),config:AR_FORECAST_STATE.config,hourly:collectARHourlyData()};saveARLocalState();await postARForecastApi('saveHourly',payload);showARMessage('AR hourly saved.');}
+async function saveARForecast(){if(!AR_FORECAST_STATE.calculated)return;const payload={date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),config:AR_FORECAST_STATE.config,result:AR_FORECAST_STATE.calculated,liveStaff:AR_FORECAST_STATE.liveStaff};await postARForecastApi('saveForecast',payload);showARMessage('AR forecast saved.');}
+function clearARManualHourly(){AR_FORECAST_STATE.manualHourly={};saveARLocalState();buildARHourlyRows();calculateARForecast();}
+async function postARForecastApi(action,payload){try{const r=await fetch(AR_FORECAST_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload})});return await r.json();}catch(e){console.warn('[AR Forecast API]',e);return{ok:false,error:e.message};}}
+function saveARLocalState(){
+  localStorage.setItem(
+    AR_FORECAST_STORAGE_KEY,
+    JSON.stringify({
+      config:AR_FORECAST_STATE.config,
+      manualHourly:AR_FORECAST_STATE.manualHourly,
+      staffingCapacityOverrides:AR_FORECAST_STATE.staffingCapacityOverrides
+    })
+  );
+  saveARStaffingCapacityOverrides();
+}
+function restoreARLocalState(){
+  try{
+    const x=JSON.parse(localStorage.getItem(AR_FORECAST_STORAGE_KEY)||'{}');
+    AR_FORECAST_STATE.config={...AR_DEFAULT_CONFIG,...(x.config||{})};
+    AR_FORECAST_STATE.manualHourly=x.manualHourly||{};
+
+    if(x.staffingCapacityOverrides&&typeof x.staffingCapacityOverrides==='object'){
+      AR_FORECAST_STATE.staffingCapacityOverrides={
+        ...AR_FORECAST_STATE.staffingCapacityOverrides,
+        ...x.staffingCapacityOverrides
+      };
+    }
+  }catch{}
+  writeARConfigInputs();
+}
+function normalizeARHourKey(key){const s=String(key||'').trim().replace(/^H/i,''),m=s.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);if(!m)return s;let h=Number(m[1]),min=Number(m[2]||0);if(m[3]){const ap=m[3].toUpperCase();if(ap==='PM'&&h<12)h+=12;if(ap==='AM'&&h===12)h=0;}return`${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;}
+function formatARHourLabel(key){const[h,m]=normalizeARHourKey(key).split(':').map(Number),d=new Date();d.setHours(h,m||0,0,0);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+function toARNumber(v){const n=Number(String(v??'').replace(/,/g,'').trim());return Number.isFinite(n)?n:0;}
+function formatARNumber(v){return Math.round(toARNumber(v)).toLocaleString('en-US');}
+function setTextSafe(id,value){const el=document.getElementById(id);if(el)el.textContent=String(value);}
+function showARMessage(text){if(typeof showToast==='function')showToast(text);else console.log(text);}
+

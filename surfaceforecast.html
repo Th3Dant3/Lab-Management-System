@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Surface Goal Forecast</title>
+  <title>Production Goal Forecast</title>
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./surfaceforecast.css?v=20260712-calendar-v1">
+  <link rel="stylesheet" href="./surfaceforecast.css?v=20260713-ar-goal-comparison-v7">
 </head>
 
 <body>
   <div class="command-shell">
     <aside class="side-rail">
       <div class="brand-block">
-        <div class="brand-mark">SF</div>
+        <div class="brand-mark" id="departmentBrandMark">SF</div>
         <div>
-          <strong>SURFACE</strong>
+          <strong id="departmentBrandName">SURFACE</strong>
           <span>Goal FORECAST</span>
         </div>
       </div>
@@ -42,10 +42,18 @@
     <div class="main-stage">
       <header class="topbar">
         <div>          
-          <h1>Surface Goal Forecast</h1>          
+          <h1 id="pageForecastTitle">Surface Goal Forecast</h1>          
         </div>
 
         <div class="topbar-actions">
+          <label class="compact-select department-select">
+            <span>Department Forecast</span>
+            <select id="departmentMode">
+              <option value="Surface">Surface Forecast</option>
+              <option value="AR">AR Forecast</option>
+            </select>
+            <small id="departmentModeStatus">Surface engine</small>
+          </label>
           <label class="compact-select compact-date">
             <span>Production Date</span>
             <input id="productionDate" type="date">
@@ -65,7 +73,7 @@
       </header>
 
       <main class="grid">
-        <div class="tab-panel" id="tabPanel-status" data-tab-panel="status">
+        <div class="tab-panel" id="tabPanel-status" data-tab-panel="status" data-department="Surface">
           <section class="forecast-kpi-grid wide" id="forecastKpiGrid">
             <div class="forecast-kpi-card" id="kpiCardCurrentOut">
               <span class="kpi-label">Current OUT</span>
@@ -255,7 +263,7 @@
           </section>
         </div>
 
-        <div class="tab-panel" id="tabPanel-performance" data-tab-panel="performance" hidden>
+        <div class="tab-panel" id="tabPanel-performance" data-tab-panel="performance" data-department="Surface" hidden>
           <section class="panel wide performance-hero-panel futuristic-hero scoreboard-frame">
             <div class="performance-tab-header">
               <div>
@@ -378,7 +386,7 @@
 
       <!-- ================= SETUP TIER: Setup & Inputs tab ================= -->
 
-      <div class="tab-panel" id="tabPanel-setup" data-tab-panel="setup" hidden>
+      <div class="tab-panel" id="tabPanel-setup" data-tab-panel="setup" data-department="Surface" hidden>
 
           <section class="panel input-panel">
             <div class="section-title">
@@ -399,7 +407,14 @@
 
               <label>
                 SF BOS WIP
-                <input id="bosWip" type="number" min="0" step="1" value="1310">
+                <div class="surface-bos-input-row">
+                  <input id="bosWip" type="number" min="0" step="1" value="0">
+                  <div class="surface-bos-actions">
+                    <button type="button" id="saveSurfaceBosBtn" class="primary">Save BOS</button>
+                    <button type="button" id="resetSurfaceBosBtn" class="secondary">Reset Live</button>
+                  </div>
+                </div>
+                <small class="label-note" id="surfaceBosStartupMeta">Type the total SF BOS WIP or edit station values below, then click Save BOS. Reset Live pulls the current API WIP.</small>
               </label>
 
               <label>
@@ -411,11 +426,14 @@
               <div class="info-box">
                 <strong>Forecast rule</strong>
                 <span>
-                  Forecast range uses BOS WIP plus background incoming/remake planning averages, capped by usable bottleneck capacity.
-                  Hourly input tells you if actual AR41 output is on track.
+                  Forecast uses BOS WIP by station, physical travel time to AR41 OUT, machine JPH ceilings,
+                  associate coverage, downtime, and actual hourly output. Extra associates only recover lost
+                  machine coverage; they do not create capacity above the installed machines.
                 </span>
               </div>
             </div>
+
+            <div class="surface-bos-grid" id="surfaceBosStationGrid" hidden aria-hidden="true"></div>
           </section>
 
           <section class="panel input-panel">
@@ -530,10 +548,171 @@
       </div>
 
 
+
+        <!-- ================= AR FORECAST: DASHBOARD ================= -->
+        <div class="tab-panel ar-forecast-panel" id="tabPanel-ar-status" data-tab-panel="status" data-department="AR" hidden>
+          <section class="forecast-kpi-grid wide">
+            <div class="forecast-kpi-card"><span class="kpi-label">Current AR-OUT</span><strong id="arKpiCurrentOut">0</strong><small>Completed output today</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Projected AR-OUT</span><strong id="arKpiProjectedOut">0</strong><small id="arProjectedOutMeta">Live WIP + activity staffing capacity</small></div>
+
+            <div class="forecast-kpi-card" id="arKpiGoalCard">
+              <span class="kpi-label">AR Goal / Target</span>
+              <strong id="arKpiGoal">0</strong>
+              <small id="arKpiGoalMeta">No AR goal entered</small>
+            </div>
+
+            <div class="forecast-kpi-card" id="arKpiExpectedCard">
+              <span class="kpi-label">Expected By Now</span>
+              <strong id="arKpiExpectedNow">0</strong>
+              <small id="arKpiPaceMeta">Waiting for shift progress</small>
+            </div>
+
+            <div class="forecast-kpi-card" id="arKpiRecoveryCard">
+              <span class="kpi-label">Recovery Needed</span>
+              <strong id="arKpiRecoveryJph">0 JPH</strong>
+              <small id="arKpiRecoveryMeta">Needed from now to EOS</small>
+            </div>
+
+            <div class="forecast-kpi-card" id="arKpiGapCard">
+              <span class="kpi-label">Projected Goal Gap</span>
+              <strong id="arKpiGoalGap">0</strong>
+              <small id="arKpiGoalGapMeta">Projected vs target</small>
+            </div>
+
+            <div class="forecast-kpi-card"><span class="kpi-label">Runs Completed</span><strong id="arKpiRunsCompleted">0</strong><small>84 jobs per complete run</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Runs Projected</span><strong id="arKpiRunsProjected">0</strong><small id="arRunsProjectedMeta">Expected by EOS</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">BOS AR WIP</span><strong id="arKpiWip">0</strong><small id="arBosWipMeta">Captured AR-IN through DeRing</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Surface Feed</span><strong id="arKpiSurfaceFeed">0</strong><small>Surface Inspection input WIP</small></div>
+            <div class="forecast-kpi-card danger"><span class="kpi-label">Maintenance Delay</span><strong id="arKpiMaintenance">0 min</strong><small id="arMaintenanceMeta">No affected hours</small></div>
+            <div class="forecast-kpi-card focus"><span class="kpi-label">Labor Bottleneck</span><strong id="arKpiFocus">-</strong><small id="arFocusMeta">Waiting for live activity and WIP</small></div>
+          </section>
+
+          <section class="panel summary-compact-panel dashboard-third">
+            <div class="section-title command-title"><h2>Forecast Summary</h2><span id="arForecastStatus">READY</span></div>
+            <div class="summary-mini-grid">
+              <div class="mini-kpi"><span>Projected Range</span><strong id="arSummaryRange">0 - 0</strong><small>Jobs</small></div>
+              <div class="mini-kpi"><span>Projected AR-OUT</span><strong id="arSummaryProjected">0</strong><small>Jobs</small></div>
+              <div class="mini-kpi"><span>BOS Runs Available</span><strong id="arSummaryGoal">0</strong><small id="arSummaryBosRunsMeta">84 jobs per run</small></div>
+              <div class="mini-kpi"><span>Capacity Ceiling</span><strong id="arSummaryCapacity">0</strong><small>Jobs</small></div>
+            </div>
+            <div class="summary-note" id="arSummaryNarrative">Forecast uses live AR WIP, process maturity, hourly AR-OUT pace, maintenance, and live associate station JPH.</div>
+          </section>
+
+          <section class="panel focus-panel dashboard-third">
+            <div class="section-title command-title"><h2>Operational Focus</h2><span>Live WIP + activity staffing</span></div>
+            <div class="focus-list">
+              <div class="focus-item"><span>Structural Bottleneck</span><strong id="arStructuralBottleneck">-</strong><small id="arStructuralMeta">Waiting for associate capacity</small></div>
+              <div class="focus-item"><span>Live WIP Focus</span><strong id="arLiveWipFocus">-</strong><small id="arLiveWipMeta">Waiting for AR WIP</small></div>
+              <div class="focus-item"><span>Next Complete Run</span><strong id="arSummaryNextCompletion">--</strong><small id="arSummaryNextCompletionMeta">No complete run available</small></div>
+              <div class="focus-item accent-loss"><span>Goal Gap</span><strong id="arSummaryGoalGap">0 jobs</strong><small id="arSummaryGoalMeta">No AR goal entered</small></div>
+            </div>
+          </section>
+
+          <section class="panel action-panel dashboard-third">
+            <div class="section-title command-title"><h2>Action Insight — How to Reach Goal</h2></div>
+            <div id="arOperationalRecommendations" class="recommendations-list"><div class="recommendation-item"><strong>Waiting for AR data</strong><span>Refresh to calculate the current pipeline and staffing plan.</span></div></div>
+          </section>
+
+          <section class="panel wide ar-pipeline-panel scoreboard-frame">
+            <div class="section-title command-title"><h2>AR Run Pipeline</h2><span id="arPipelineStatus">340 min normal flow · 84 jobs = 1 run</span></div>
+            <div class="ar-pipeline-track">
+              <article class="ar-stage" data-ar-stage="arin"><span>AR-IN</span><strong id="arStageArIn">0</strong><small>40 min</small><em id="arStageArInRuns">0 Runs</em></article><i>›</i>
+              <article class="ar-stage" data-ar-stage="basket"><span>Basket / T40</span><strong id="arStageBasket">0</strong><small>105 min</small><em id="arStageBasketRuns">0 Runs</em></article><i>›</i>
+              <article class="ar-stage" data-ar-stage="oven"><span>Oven / Cooling</span><strong id="arStageOven">0</strong><small>60 min</small><em id="arStageOvenRuns">0 Runs</em></article><i>›</i>
+              <article class="ar-stage" data-ar-stage="sectoring"><span>Sector / Flip / Chamber</span><strong id="arStageSectoring">0</strong><small>85 min</small><em id="arStageSectoringRuns">0 Runs</em></article><i>›</i>
+              <article class="ar-stage" data-ar-stage="dering"><span>DeRing</span><strong id="arStageDeRing">0</strong><small>20 min</small><em id="arStageDeRingRuns">0 Runs</em></article><i>›</i>
+              <article class="ar-stage output" data-ar-stage="arout"><span>AR-OUT</span><strong id="arStageArOut">0</strong><small>30 min</small><em id="arStageArOutRuns">0 Runs</em></article>
+            </div>
+          </section>
+
+          <section class="panel wide goal-plan-panel scoreboard-frame">
+            <div class="section-title command-title"><h2>AR Goal Achievement Plan</h2><span id="arGoalPlanStatus">Roster + Final JPH</span></div>
+            <div id="arGoalPlanSummary" class="goal-plan-summary"><p class="muted-cell">Set an AR goal and sync the roster to calculate required staffing.</p></div>
+            <div class="table-wrap"><table class="goal-plan-table ar-goal-table"><thead><tr><th>Area</th><th>Required JPH</th><th>Current JPH</th><th>Required Associates</th><th>Current Associates</th><th>Coverage Gap</th><th>Status</th></tr></thead><tbody id="arGoalPlanTable"></tbody></table></div>
+          </section>
+
+          <section class="panel wide bottleneck-table-panel scoreboard-frame">
+            <div class="section-title command-title"><h2>AR Area Bottleneck Detail</h2><span>Live WIP compared with usable labor capacity</span></div>
+            <div class="table-wrap"><table class="bottleneck-table ar-bottleneck-table"><thead><tr><th>Area</th><th>Associates</th><th>Usable JPH</th><th>Remaining Capacity</th><th>Live WIP</th><th>Complete Runs</th><th>Time to Clear</th><th>Signal</th></tr></thead><tbody id="arBottleneckTable"></tbody></table></div>
+            <div class="button-row"><button type="button" id="arSaveForecastBtn" class="secondary">Save AR Forecast</button></div>
+          </section>
+        </div>
+
+        <!-- ================= AR FORECAST: PERFORMANCE ================= -->
+        <div class="tab-panel ar-forecast-panel" id="tabPanel-ar-performance" data-tab-panel="performance" data-department="AR" hidden>
+          <section class="panel wide performance-hero-panel futuristic-hero scoreboard-frame">
+            <div class="performance-tab-header"><div><p class="eyebrow">AR live performance</p><h2>PACE & HOURLY RUN OUTLOOK</h2></div><div class="performance-tab-badge"><span class="status-led"></span>84 Jobs / Run</div></div>
+          </section>
+          <section class="panel wide ar-pace-panel scoreboard-frame">
+            <div class="section-title command-title"><h2>AR-OUT Pace vs Expected</h2><span id="arPaceStatus">TODAY</span></div>
+            <div class="ar-pace-layout"><div class="gauge-ring" id="arPaceGauge"><div><strong id="arPacePercent">0%</strong><span>OF EXPECTED</span></div></div><div class="pace-details"><span>Behind / Ahead Pace</span><strong id="arPaceGap">0 jobs</strong><label>Actual AR-OUT So Far</label><div class="bar"><i id="arActualPaceBar"></i></div><label>Expected By Now</label><div class="bar expected"><i id="arExpectedPaceBar"></i></div></div></div>
+          </section>
+          <section class="panel wide">
+            <div class="section-title command-title"><h2>Hourly AR-IN / AR-OUT</h2><span>Maintenance adds the selected delay to that hour</span></div>
+            <div class="table-wrap hourly-wrap"><table class="hourly-table ar-hourly-table"><thead><tr><th>Hour</th><th>AR-IN</th><th>AR-OUT</th><th>Runs In</th><th>Runs Out</th><th>Maintenance</th><th>Delay</th><th>Projected Completion</th><th>Note</th></tr></thead><tbody id="arHourlyRows"></tbody></table></div>
+            <div class="button-row"><button type="button" id="arClearHourlyBtn" class="secondary danger">Clear Manual Overrides</button><button type="button" id="arSaveHourlyBtn" class="secondary">Save AR Hourly</button></div>
+          </section>
+          <section class="panel wide hourly-performance-panel scoreboard-frame"><div class="section-title command-title"><h2>Hourly Performance</h2><span>Actual AR-OUT vs expected</span></div><div class="hourly-sector-strip" id="arHourlyCards"><div class="sector-row not-started">Waiting for AR hourly data…</div></div></section>
+        </div>
+
+        <!-- ================= AR FORECAST: SETUP ================= -->
+        <div class="tab-panel ar-forecast-panel" id="tabPanel-ar-setup" data-tab-panel="setup" data-department="AR" hidden>
+          <section class="panel input-panel wide">
+            <div class="section-title"><h2>AR Daily Setup</h2><span>Forecast control</span></div>
+            <div class="form-grid setup-grid ar-setup-grid">
+              
+              <label>AR Goal / Target<input id="arGoal" type="number" min="0" step="1" value="0"><small class="label-note">Daily AR-OUT target.</small></label>
+
+              <label>BOS AR WIP
+                <div class="ar-bos-input-row">
+                  <input id="arBosWip" type="number" min="0" step="1" value="0">
+                  <div class="ar-bos-actions">
+                    <button type="button" id="arSaveBosBtn" class="primary ar-save-bos-btn">Save BOS</button>
+                    <button type="button" id="arResetBosBtn" class="secondary ar-reset-bos-btn">Reset Live</button>
+                  </div>
+                </div>
+                <small class="label-note" id="arBosSetupMeta">Type the BOS AR WIP, then click Save BOS. Reset Live pulls current AR WIP.</small>
+              </label>
+
+              <label>Surface Inspection Feed
+                <input id="arSurfaceFeedLive" type="number" min="0" step="1" value="0" readonly>
+                <small class="label-note">Live upstream WIP available to feed AR-IN. Not tied to Surface goal.</small>
+              </label>
+
+              <label>Jobs Per Run<input id="arRunSize" type="number" min="1" step="1" value="84"></label>
+              <label>Default Maintenance Delay<input id="arMaintenanceDelay" type="number" min="0" step="5" value="50"><small class="label-note">Minutes added to affected hour.</small></label>
+            </div>
+          </section>
+          <section class="panel input-panel wide">
+            <div class="section-title"><h2>Live Associate Staffing</h2><span id="arRosterSyncStatus">Waiting for RAW_ACTIVITY_CURRENT</span></div>
+            <div id="arStaffingCards" class="ar-staffing-grid"><div class="recommendation-item"><strong>No live staffing loaded</strong><span>Switch to AR and press Refresh. Associates appear after their first hourly activity.</span></div></div>
+            <details class="ar-excluded-panel">
+              <summary>Excluded Associates <span id="arExcludedCount">0</span></summary>
+              <p>Hidden associates remain in hourly production totals but are removed from staffing count and capacity.</p>
+              <div id="arExcludedAssociates" class="ar-excluded-list"><div class="ar-excluded-empty">No associates are hidden.</div></div>
+            </details>
+          </section>
+          <section class="panel input-panel wide">
+            <div class="section-title"><h2>AR Process Time Setup</h2><span>Unscanned steps remain combined with their scan station</span></div>
+            <div class="form-grid setup-grid ar-setup-grid">
+              <label>AR-IN<input id="arTimeArIn" type="number" min="0" step="5" value="40"><small class="label-note">Minutes</small></label>
+              <label>Basket<input id="arTimeBasket" type="number" min="0" step="5" value="60"></label>
+              <label>T40<input id="arTimeT40" type="number" min="0" step="5" value="45"><small class="label-note">No scan; combined with Basket.</small></label>
+              <label>Oven / Cooling<input id="arTimeOven" type="number" min="0" step="5" value="60"><small class="label-note">Total stage time.</small></label>
+              <label>Sectoring / Flipping<input id="arTimeSectoring" type="number" min="0" step="5" value="40"></label>
+              <label>Chamber<input id="arTimeChamber" type="number" min="0" step="5" value="45"><small class="label-note">Combined with Sectoring.</small></label>
+              <label>DeRing<input id="arTimeDeRing" type="number" min="0" step="5" value="20"></label>
+              <label>AR-OUT<input id="arTimeArOut" type="number" min="0" step="5" value="30"></label>
+              <div class="info-box"><strong>AR forecast rule</strong><span>Live quantities come from real scan stations. Basket includes T40. Sectoring includes Flipping and Chamber. Oven is a 60-minute process constraint. Runs display as whole complete runs only.</span></div>
+            </div>
+            <div class="button-row"><button type="button" id="arResetSetupBtn" class="secondary danger">Reset AR Defaults</button><button type="button" id="arSaveSetupBtn" class="secondary">Save AR Setup</button></div>
+          </section>
+        </div>
+
       </main>
     </div>
   </div>
 
-  <script src="./surfaceforecast.js?v=20260712-calendar-v1"></script>
+  <script src="./surfaceforecast.js?v=20260713-ar-goal-comparison-v7"></script>
 </body>
 </html>

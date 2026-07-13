@@ -1588,3 +1588,317 @@ tr.row-risk td:first-child strong {
   .topbar-actions { flex-wrap: wrap; align-items: end; }
   .compact-select, .compact-date { min-width: min(100%, 250px); flex: 1 1 220px; }
 }
+
+
+/* =========================================================
+   AR FORECAST MODULE
+========================================================= */
+.department-select{min-width:190px}.ar-forecast-panel{grid-column:1/-1}.ar-dashboard-half{min-height:320px}.ar-pipeline-panel{overflow:hidden}.ar-pipeline-track{display:grid;grid-template-columns:repeat(11,auto);align-items:stretch;gap:8px}.ar-pipeline-track>i{display:grid;place-items:center;color:var(--cyan);font-size:28px;font-style:normal}.ar-stage{min-width:140px;padding:16px 12px;border:1px solid rgba(18,216,255,.22);border-radius:16px;background:linear-gradient(160deg,rgba(6,20,34,.96),rgba(4,11,21,.92));text-align:center}.ar-stage span,.ar-stage small,.ar-stage em{display:block}.ar-stage span{min-height:34px;color:var(--soft);font-weight:900;font-size:12px}.ar-stage strong{display:block;margin:8px 0;font-size:30px}.ar-stage small{color:var(--muted);font-size:11px}.ar-stage em{margin-top:8px;color:var(--cyan);font-style:normal;font-weight:900}.ar-stage.output{border-color:rgba(49,223,114,.42);box-shadow:inset 0 0 24px rgba(49,223,114,.06)}.ar-stage.pressure{border-color:var(--yellow);box-shadow:0 0 22px rgba(255,201,40,.13)}.ar-hourly-table th,.ar-hourly-table td{min-width:96px}.ar-hourly-table th:first-child,.ar-hourly-table td:first-child{min-width:130px}.ar-hourly-table input[type=checkbox]{width:20px;height:20px;accent-color:var(--orange)}.ar-delay-input{max-width:86px}.ar-projection-cell{font-family:'Share Tech Mono',monospace;color:var(--cyan);font-weight:700;white-space:nowrap}.ar-setup-grid{grid-template-columns:repeat(4,minmax(180px,1fr))}.recommendations-list{display:grid;gap:10px}.recommendation-item{padding:14px;border:1px solid var(--border2);border-radius:13px;background:rgba(4,13,24,.76)}.recommendation-item strong,.recommendation-item span{display:block}.recommendation-item span{margin-top:5px;color:var(--muted)}body[data-department='AR'] .brand-mark{background:linear-gradient(135deg,#ff9b3d,#b07fff);box-shadow:0 0 24px rgba(255,155,61,.3)}body[data-department='AR'] .tab-btn.active{box-shadow:inset 3px 0 0 var(--orange);border-color:rgba(255,155,61,.35)}
+@media(max-width:1250px){.ar-pipeline-track{grid-template-columns:repeat(3,minmax(0,1fr));}.ar-pipeline-track>i{display:none}.ar-setup-grid{grid-template-columns:repeat(2,minmax(180px,1fr))}}
+@media(max-width:760px){.ar-pipeline-track,.ar-setup-grid{grid-template-columns:1fr}.department-select{min-width:0}}
+
+
+/* =====================================================
+   AR FORECAST V3 — LIVE WIP + RAW ACTIVITY STAFFING
+===================================================== */
+.ar-pace-panel{min-height:360px}.ar-pace-layout{display:grid;grid-template-columns:230px 1fr;align-items:center;gap:28px}.ar-staffing-grid{display:grid;grid-template-columns:repeat(3,minmax(250px,1fr));gap:14px}.ar-staff-card{border:1px solid var(--border);border-radius:16px;background:rgba(4,13,24,.78);padding:15px}.ar-staff-card-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.ar-staff-card-head strong{font-size:17px}.ar-staff-card-head span{font-family:'Share Tech Mono',monospace;color:var(--cyan);font-weight:900}.ar-staff-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}.ar-staff-summary div{padding:9px;border:1px solid var(--border2);border-radius:10px;background:rgba(255,255,255,.025)}.ar-staff-summary small,.ar-associate-row small{display:block;color:var(--muted)}.ar-staff-summary b{display:block;margin-top:4px}.ar-associate-list{display:grid;gap:7px}.ar-associate-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.035)}.ar-associate-row strong{font-size:13px}.ar-associate-row em{font-style:normal;color:var(--green);font-family:'Share Tech Mono',monospace}.ar-associate-row.floater em{color:var(--yellow)}.ar-goal-table th,.ar-goal-table td,.ar-bottleneck-table th,.ar-bottleneck-table td{white-space:nowrap}.ar-signal-ok{color:var(--green)!important}.ar-signal-watch{color:var(--yellow)!important}.ar-signal-risk{color:var(--red)!important}.ar-status-pill{font-weight:900}.ar-status-pill.ok{color:var(--green)}.ar-status-pill.watch{color:var(--yellow)}.ar-status-pill.risk{color:var(--red)}.ar-stage.pressure{animation:arPressurePulse 1.8s ease-in-out infinite}@keyframes arPressurePulse{50%{box-shadow:0 0 30px rgba(255,201,40,.28)}}
+@media(max-width:1200px){.ar-staffing-grid{grid-template-columns:repeat(2,minmax(240px,1fr))}.ar-pace-layout{grid-template-columns:1fr}.ar-pipeline-track{overflow-x:auto}}
+@media(max-width:760px){.ar-staffing-grid{grid-template-columns:1fr}.ar-staff-summary{grid-template-columns:1fr}.ar-setup-grid{grid-template-columns:1fr}}
+
+/* Live AR activity status */
+.ar-associate-row small{line-height:1.35}.ar-associate-row.floater{border:1px solid rgba(255,201,40,.28);background:rgba(255,201,40,.06)}
+
+
+/* AR live staffing exclusions */
+.ar-associate-actions{display:flex;align-items:center;gap:10px}.ar-hide-btn,.ar-restore-btn{min-height:30px;padding:5px 9px;border-radius:8px;font-size:11px}.ar-hide-btn{color:#ffd6d6;background:rgba(255,77,95,.12);border:1px solid rgba(255,77,95,.3)}.ar-hide-btn:hover{background:rgba(255,77,95,.22)}.ar-excluded-panel{margin-top:14px;border:1px solid var(--border2);border-radius:12px;background:rgba(4,13,24,.55);padding:11px 13px}.ar-excluded-panel summary{cursor:pointer;color:var(--soft);font-weight:900}.ar-excluded-panel summary span{display:inline-grid;place-items:center;min-width:24px;height:24px;margin-left:7px;border-radius:999px;background:rgba(18,216,255,.12);color:var(--cyan)}.ar-excluded-panel>p{margin:9px 0;color:var(--muted);font-size:12px}.ar-excluded-list{display:grid;gap:7px}.ar-excluded-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 10px;border-radius:9px;background:rgba(255,255,255,.035)}.ar-excluded-row small{display:block;color:var(--muted);margin-top:2px}.ar-restore-btn{color:#dfffee;background:rgba(49,223,114,.12);border:1px solid rgba(49,223,114,.3)}.ar-excluded-empty{padding:8px 0;color:var(--muted);font-size:12px}
+
+
+/* AR hourly values populated automatically from RAW_ACTIVITY_CURRENT */
+.ar-hour-auto[readonly] {
+  cursor: default;
+  color: var(--cyan);
+  font-weight: 900;
+  border-color: rgba(18, 216, 255, 0.28);
+  background:
+    linear-gradient(90deg, rgba(18, 216, 255, 0.08), rgba(77, 141, 255, 0.04)),
+    #050d19;
+  box-shadow: inset 3px 0 0 rgba(18, 216, 255, 0.55);
+}
+
+.ar-hour-auto[readonly]:focus {
+  border-color: rgba(18, 216, 255, 0.28);
+  box-shadow: inset 3px 0 0 rgba(18, 216, 255, 0.55);
+}
+
+
+/* Manual AR staffing capacity override */
+.ar-capacity-count-box.manual {
+  border-color: rgba(255, 201, 40, 0.45);
+  background: rgba(255, 201, 40, 0.06);
+}
+
+.ar-capacity-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ar-capacity-associate-input {
+  width: 72px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: var(--cyan);
+  font-weight: 900;
+  text-align: center;
+}
+
+.ar-capacity-count-box.manual .ar-capacity-associate-input {
+  color: var(--yellow);
+  border-color: rgba(255, 201, 40, 0.55);
+}
+
+.ar-capacity-auto-btn {
+  min-height: 32px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--cyan);
+  background: rgba(18, 216, 255, 0.10);
+  border: 1px solid rgba(18, 216, 255, 0.26);
+}
+
+.ar-capacity-auto-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  transform: none;
+}
+
+.ar-detected-count {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+
+/* Surface BOS station maturity and staffing coverage */
+.surface-bos-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.surface-bos-input-row input[readonly] {
+  color: var(--cyan);
+  font-weight: 900;
+  border-color: rgba(18, 216, 255, 0.30);
+}
+
+.surface-bos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.surface-bos-station {
+  padding: 12px;
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  background: rgba(4, 13, 24, 0.72);
+}
+
+.surface-bos-station span,
+.surface-bos-station small {
+  display: block;
+}
+
+.surface-bos-station span {
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.surface-bos-station strong {
+  display: block;
+  margin: 5px 0;
+  font-size: 22px;
+}
+
+.surface-bos-station.ready {
+  border-color: rgba(49, 223, 114, 0.30);
+}
+
+.surface-bos-station.ready strong {
+  color: var(--green);
+}
+
+.surface-bos-station.waiting {
+  border-color: rgba(255, 201, 40, 0.28);
+}
+
+.surface-bos-station.waiting strong {
+  color: var(--yellow);
+}
+
+@media (max-width: 900px) {
+  .surface-bos-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Manual Surface BOS station editing */
+.surface-bos-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.surface-bos-actions button {
+  min-height: 45px;
+  white-space: nowrap;
+}
+
+.surface-bos-station {
+  display: block;
+}
+
+.surface-bos-value-input {
+  width: 100%;
+  min-height: 42px;
+  margin: 7px 0 6px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--cyan);
+  font-size: 21px;
+  font-weight: 900;
+  border: 1px solid rgba(18, 216, 255, 0.24);
+  background: #050d19;
+}
+
+.surface-bos-value-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(18, 216, 255, 0.12);
+}
+
+.surface-bos-station.ready .surface-bos-value-input {
+  color: var(--green);
+}
+
+.surface-bos-station.waiting .surface-bos-value-input {
+  color: var(--yellow);
+}
+
+@media (max-width: 700px) {
+  .surface-bos-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .surface-bos-actions {
+    width: 100%;
+  }
+
+  .surface-bos-actions button {
+    flex: 1;
+  }
+}
+
+
+/* Editable total Surface BOS input */
+#bosWip:not([readonly]) {
+  color: var(--cyan);
+  font-weight: 900;
+  border-color: rgba(18, 216, 255, 0.42);
+  background: #050d19;
+  cursor: text;
+}
+
+#bosWip:not([readonly]):focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(18, 216, 255, 0.12);
+}
+
+
+/* Editable AR BOS WIP */
+.ar-bos-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#arBosWip:not([readonly]) {
+  color: var(--cyan);
+  font-weight: 900;
+  border-color: rgba(18, 216, 255, 0.42);
+  background: #050d19;
+  cursor: text;
+}
+
+#arBosWip:not([readonly]):focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(18, 216, 255, 0.12);
+}
+
+.ar-save-bos-btn,
+.ar-reset-bos-btn {
+  min-height: 45px;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .ar-bos-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ar-bos-actions {
+    width: 100%;
+  }
+
+  .ar-bos-actions button {
+    flex: 1;
+  }
+}
+
+
+/* Keep the Surface station BOS snapshot internal without displaying the long editor. */
+#surfaceBosStationGrid[hidden] {
+  display: none !important;
+}
+
+/* Surface BOS station distribution is calculation-only. */
+#surfaceBosStationGrid,
+#surfaceBosStationGrid[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+
+/* AR goal comparison KPI states */
+.forecast-kpi-card.success {
+  border-color: rgba(49, 223, 114, 0.42);
+  background:
+    linear-gradient(160deg, rgba(49, 223, 114, 0.10), rgba(4, 12, 22, 0.94));
+}
+
+.forecast-kpi-card.success strong {
+  color: var(--green);
+}
+
+.forecast-kpi-card.warning {
+  border-color: rgba(255, 201, 40, 0.42);
+  background:
+    linear-gradient(160deg, rgba(255, 201, 40, 0.09), rgba(4, 12, 22, 0.94));
+}
+
+.forecast-kpi-card.warning strong {
+  color: var(--yellow);
+}
