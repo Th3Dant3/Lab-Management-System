@@ -7,7 +7,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./surfaceforecast.css?v=20260713-ar-goal-comparison-v7">
+  <link rel="stylesheet" href="./surfaceforecast.css?v=20260714-time-position-v5">
 </head>
 
 <body>
@@ -206,24 +206,24 @@
 
           <section class="panel wide goal-plan-panel">
             <div class="section-title command-title">
-              <h2>Goal Achievement Plan</h2>              
+              <h2>Goal Readiness Plan</h2>              
             </div>
             <div id="goalPlanSummary" class="goal-plan-summary">
-              <p class="muted-cell">Set a Ship Goal above 0 to see the staffing plan.</p>
+              <p class="muted-cell">Enter today's ship goal to see whether each production area is ready.</p>
             </div>
             <div class="table-wrap" id="goalPlanTableWrap" hidden>
               <table>
                 <thead>
                   <tr>
-                    <th>Area</th>
-                    <th>Required JPH</th>
-                    <th>Required Units</th>
-                    <th>Current Units</th>
-                    <th>Unit Gap</th>
-                    <th>Required Associates</th>
-                    <th>Current Associates</th>
-                    <th>Coverage Gap</th>
-                    <th>Status</th>
+                    <th>Production Area</th>
+                    <th>Pace Needed</th>
+                    <th>Current Operating Setup</th>
+                    <th>Staffing Needed</th>
+                    <th>Staffing Assigned</th>
+                    <th>Staffing Status</th>
+                    <th>Main Constraint</th>
+                    <th>Pace Shortfall</th>
+                    <th>Goal Readiness</th>
                   </tr>
                 </thead>
                 <tbody id="goalPlanTable">
@@ -419,8 +419,14 @@
 
               <label>
                 Ship Goal / Target
-                <small class="label-note">Optional. Leave 0 if unknown.</small>
-                <input id="shipGoal" type="number" min="0" step="1" value="0">
+                <small class="label-note">Enter today’s goal, then click Save Goal.</small>
+                <div class="surface-bos-input-row">
+                  <input id="shipGoal" type="number" min="0" step="1" value="0">
+                  <div class="surface-bos-actions">
+                    <button type="button" id="saveGoalBtn" class="primary">Save Goal</button>
+                  </div>
+                </div>
+                <small class="label-note" id="shipGoalSaveMeta">Goal has not been saved for this date.</small>
               </label>
 
               <div class="info-box">
@@ -661,7 +667,13 @@
             <div class="section-title"><h2>AR Daily Setup</h2><span>Forecast control</span></div>
             <div class="form-grid setup-grid ar-setup-grid">
               
-              <label>AR Goal / Target<input id="arGoal" type="number" min="0" step="1" value="0"><small class="label-note">Daily AR-OUT target.</small></label>
+              <label>AR Goal / Target
+                <div class="ar-goal-input-row">
+                  <input id="arGoal" type="number" min="0" step="1" value="0">
+                  <button type="button" id="arSaveGoalBtn" class="primary ar-save-goal-btn">Save Goal</button>
+                </div>
+                <small class="label-note" id="arGoalSaveMeta">Enter the daily AR-OUT target, then click Save Goal.</small>
+              </label>
 
               <label>BOS AR WIP
                 <div class="ar-bos-input-row">
@@ -683,6 +695,115 @@
               <label>Default Maintenance Delay<input id="arMaintenanceDelay" type="number" min="0" step="5" value="50"><small class="label-note">Minutes added to affected hour.</small></label>
             </div>
           </section>
+          <section class="panel input-panel wide ar-morning-plan-panel">
+            <div class="section-title">
+              <h2>Morning Staffing Plan</h2>
+              <span id="arMorningPlanStatus">Planned staffing drives the forecast until live scans begin</span>
+            </div>
+
+            <div class="ar-cell-plan-grid">
+              <article class="ar-cell-plan-card">
+                <div class="ar-cell-plan-head">
+                  <div>
+                    <small>OUTSIDE CELL</small>
+                    <strong>AR-IN / AR-OUT</strong>
+                  </div>
+                  <div class="ar-cell-total">
+                    <span>Planned on Cell</span>
+                    <b id="arPlanOutsideTotal">3</b>
+                  </div>
+                </div>
+
+                <div class="ar-cell-station-grid">
+                  <label>
+                    AR-IN Planned
+                    <input id="arPlanArIn" type="number" min="0" step="0.5" value="1.5">
+                    <small>120 JPH each</small>
+                  </label>
+                  <label>
+                    AR-OUT Planned
+                    <input id="arPlanArOut" type="number" min="0" step="0.5" value="1.5">
+                    <small>100 JPH each</small>
+                  </label>
+                </div>
+
+                <div class="ar-plan-comparison">
+                  <span>Planned Capacity <b id="arPlanOutsideCapacity">150 JPH</b></span>
+                  <span>Live Detected <b id="arLiveOutsideTotal">0</b></span>
+                  <span>Variance <b id="arOutsideVariance">-3</b></span>
+                </div>
+              </article>
+
+              <article class="ar-cell-plan-card">
+                <div class="ar-cell-plan-head">
+                  <div>
+                    <small>MIDDLE CELL</small>
+                    <strong>Basket</strong>
+                  </div>
+                  <div class="ar-cell-total">
+                    <span>Planned on Cell</span>
+                    <b id="arPlanMiddleTotal">3</b>
+                  </div>
+                </div>
+
+                <div class="ar-cell-station-grid one">
+                  <label>
+                    Basket Planned
+                    <input id="arPlanBasket" type="number" min="0" step="0.5" value="3">
+                    <small>64 JPH each</small>
+                  </label>
+                </div>
+
+                <div class="ar-plan-comparison">
+                  <span>Planned Capacity <b id="arPlanMiddleCapacity">192 JPH</b></span>
+                  <span>Live Detected <b id="arLiveMiddleTotal">0</b></span>
+                  <span>Variance <b id="arMiddleVariance">-3</b></span>
+                </div>
+              </article>
+
+              <article class="ar-cell-plan-card">
+                <div class="ar-cell-plan-head">
+                  <div>
+                    <small>INSIDE CELL</small>
+                    <strong>Oven / Sectoring / DeRing</strong>
+                  </div>
+                  <div class="ar-cell-total">
+                    <span>Planned on Cell</span>
+                    <b id="arPlanInsideTotal">4</b>
+                  </div>
+                </div>
+
+                <div class="ar-cell-station-grid">
+                  <label>
+                    Sectoring Planned
+                    <input id="arPlanSectoring" type="number" min="0" step="0.5" value="3">
+                    <small>48 JPH each</small>
+                  </label>
+                  <label>
+                    DeRing Planned
+                    <input id="arPlanDeRing" type="number" min="0" step="0.5" value="1">
+                    <small>120 JPH each</small>
+                  </label>
+                </div>
+
+                <div class="ar-plan-comparison">
+                  <span>Planned Capacity <b id="arPlanInsideCapacity">120 JPH</b></span>
+                  <span>Live Detected <b id="arLiveInsideTotal">0</b></span>
+                  <span>Variance <b id="arInsideVariance">-4</b></span>
+                </div>
+                <small class="ar-cell-note">Oven stays a timed process. Sectoring and DeRing determine labor-supported capacity.</small>
+              </article>
+            </div>
+
+            <div class="ar-plan-footer">
+              <div>
+                <strong id="arPlanForecastMode">Forecast using planned staffing</strong>
+                <small id="arPlanForecastMeta">The model switches station-by-station to live staffing after associates begin scanning.</small>
+              </div>
+              <button type="button" id="arSaveMorningPlanBtn" class="primary">Save Morning Plan</button>
+            </div>
+          </section>
+
           <section class="panel input-panel wide">
             <div class="section-title"><h2>Live Associate Staffing</h2><span id="arRosterSyncStatus">Waiting for RAW_ACTIVITY_CURRENT</span></div>
             <div id="arStaffingCards" class="ar-staffing-grid"><div class="recommendation-item"><strong>No live staffing loaded</strong><span>Switch to AR and press Refresh. Associates appear after their first hourly activity.</span></div></div>
@@ -713,6 +834,6 @@
     </div>
   </div>
 
-  <script src="./surfaceforecast.js?v=20260713-ar-goal-comparison-v7"></script>
+  <script src="./surfaceforecast.js?v=20260714-ar-cell-plan-v8-fixed"></script>
 </body>
 </html>

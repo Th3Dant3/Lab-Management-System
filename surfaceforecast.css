@@ -1,3 +1,4 @@
+/* BUILD: 20260714-cell-block-forecast-v3 */
 :root {
   --bg: #050b14;
   --bg2: #081425;
@@ -1901,4 +1902,264 @@ tr.row-risk td:first-child strong {
 
 .forecast-kpi-card.warning strong {
   color: var(--yellow);
+}
+
+/* ===== Cell-block staffing forecast ===== */
+.cell-block-group {
+  padding: 18px;
+  border: 1px solid rgba(18,216,255,.22);
+  border-radius: 18px;
+  background: rgba(4,13,24,.72);
+}
+.cell-block-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.cell-block-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.cell-block-header h3 { font-size: 18px; }
+.cell-associate-input {
+  min-width: 220px;
+  color: var(--soft);
+  font-weight: 900;
+}
+.cell-associate-input input { margin-top: 7px; }
+.cell-machine-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 12px;
+}
+.cell-machine-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  background: rgba(5,13,24,.82);
+}
+.cell-machine-card span { color: var(--text); font-weight: 900; }
+.cell-machine-card small { min-height: 16px; color: var(--muted); }
+.cell-machine-card b { color: var(--soft); font-size: 12px; }
+.cell-block-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.startup-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid rgba(255,201,40,.30);
+  border-radius: 14px;
+  background: rgba(255,201,40,.06);
+  cursor: pointer;
+}
+.startup-check input { width: 20px; height: 20px; accent-color: var(--green); }
+.startup-check span { display: grid; gap: 3px; }
+.startup-check strong { color: var(--text); }
+.startup-check small { color: var(--muted); }
+@media (max-width: 980px) {
+  .cell-machine-grid { grid-template-columns: 1fr; }
+  .cell-block-header { align-items: stretch; flex-direction: column; }
+  .cell-associate-input { min-width: 0; }
+}
+
+/* AR Save Goal controls */
+.ar-goal-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.ar-save-goal-btn {
+  min-height: 46px;
+  white-space: nowrap;
+  padding-inline: 20px;
+}
+
+.ar-save-goal-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+@media (max-width: 760px) {
+  .ar-goal-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ar-save-goal-btn {
+    width: 100%;
+  }
+}
+
+/* AR Morning Staffing Cell Plan */
+.ar-morning-plan-panel {
+  overflow: hidden;
+}
+
+.ar-cell-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ar-cell-plan-card {
+  padding: 16px;
+  border: 1px solid rgba(18, 216, 255, 0.24);
+  border-radius: 18px;
+  background: rgba(4, 13, 24, 0.78);
+}
+
+.ar-cell-plan-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.ar-cell-plan-head small {
+  display: block;
+  color: var(--cyan);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.ar-cell-plan-head strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 17px;
+}
+
+.ar-cell-total {
+  min-width: 96px;
+  text-align: right;
+}
+
+.ar-cell-total span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ar-cell-total b {
+  display: block;
+  margin-top: 4px;
+  color: var(--cyan);
+  font-size: 25px;
+}
+
+.ar-cell-station-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ar-cell-station-grid.one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ar-cell-station-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ar-cell-station-grid input {
+  width: 100%;
+}
+
+.ar-cell-station-grid small,
+.ar-cell-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ar-plan-comparison {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border2);
+}
+
+.ar-plan-comparison span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ar-plan-comparison b {
+  color: var(--text);
+}
+
+.ar-cell-note {
+  display: block;
+  margin-top: 10px;
+}
+
+.ar-plan-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(18, 216, 255, 0.2);
+  border-radius: 14px;
+  background: rgba(18, 216, 255, 0.05);
+}
+
+.ar-plan-footer strong,
+.ar-plan-footer small {
+  display: block;
+}
+
+.ar-plan-footer small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.ar-capacity-source {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+@media (max-width: 1180px) {
+  .ar-cell-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .ar-cell-station-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ar-plan-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ar-plan-footer button {
+    width: 100%;
+  }
 }

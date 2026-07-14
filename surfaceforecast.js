@@ -1,3 +1,4 @@
+// BUILD: 20260714-cell-block-forecast-v3
 const SURFACE_DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec';
 const SURFACE_DASHBOARD_REFRESH_MS = 5 * 60 * 1000;
 
@@ -67,6 +68,24 @@ const SURFACE_AREAS = [
   { key: 'coater', label: 'Coater / 54R', group: 'Coater & Surface Inspection', type: 'machine', capacityMode: 'machine', jphPerUnit: 55, required: true, defaultUnits: 4, defaultAssociates: 1, machinesPerAssociate: 4 },
   { key: 'inspection', label: 'Surface Inspection / AR41', group: 'Coater & Surface Inspection', type: 'machine', capacityMode: 'machine', jphPerUnit: 100, required: true, defaultUnits: 2, defaultAssociates: 2, machinesPerAssociate: 1.25 }
 ];
+
+const SURFACE_CELL_BLOCKS = Object.freeze([
+  { key: 'block1', label: 'Cell Block 1 — Taping / Blocking / Cooling / Generator', defaultAssociates: 2, areaKeys: ['autoblocker','cooling','orb'] },
+  { key: 'block2', label: 'Cell Block 2 — Polisher / Engraving / Deblock / Detaping', defaultAssociates: 2, areaKeys: ['polisher','engraving','detaping'] },
+  { key: 'block3', label: 'Cell Block 3 — Coater / Surface Inspection', defaultAssociates: 2, areaKeys: ['coater','inspection'] }
+]);
+
+const SURFACE_AREA_TO_CELL_BLOCK = Object.freeze(
+  SURFACE_CELL_BLOCKS.reduce(function (map, block) {
+    block.areaKeys.forEach(function (key) { map[key] = block.key; });
+    return map;
+  }, {})
+);
+
+function getCellBlockByAreaKey(areaKey) {
+  const blockKey = SURFACE_AREA_TO_CELL_BLOCK[areaKey];
+  return SURFACE_CELL_BLOCKS.find(function (block) { return block.key === blockKey; }) || null;
+}
 
 
 // Live WIP from the dashboard is treated as the LAST SCAN location.
@@ -250,7 +269,8 @@ function wireButtons() {
     saveHourlyBtn: saveHourly,
     syncDashboardBtn: function () { syncSurfaceDashboardData(true); },
     saveSurfaceBosBtn: saveSurfaceBosSnapshot,
-    resetSurfaceBosBtn: resetSurfaceBosSnapshot
+    resetSurfaceBosBtn: resetSurfaceBosSnapshot,
+    saveGoalBtn: saveShipGoal
   };
 
   Object.keys(buttons).forEach(function (id) {
@@ -262,6 +282,13 @@ function wireButtons() {
   if (bosTotalInput) {
     bosTotalInput.addEventListener('input', function () {
       setText('surfaceBosStartupMeta', 'Unsaved total BOS change — click Save BOS.');
+    });
+  }
+
+  const shipGoalInput = document.getElementById('shipGoal');
+  if (shipGoalInput) {
+    shipGoalInput.addEventListener('input', function () {
+      setText('shipGoalSaveMeta', 'Unsaved goal change — click Save Goal.');
     });
   }
 
@@ -347,61 +374,70 @@ function buildAreaGroups() {
 
   holder.innerHTML = '';
 
-  const groups = [
-    'SF Unbox',
-    'Auto Blocker & Generator',
-    'Polisher / Engraving / Detaping',
-    'Coater & Surface Inspection'
-  ];
-
-  groups.forEach(function (groupName) {
-    const groupAreas = SURFACE_AREAS.filter(function (area) {
-      return area.group === groupName;
-    });
-
+  // SF Unbox remains a separate labor input because it is outside the three machine cells.
+  const unbox = SURFACE_AREAS.find(function (area) { return area.key === 'unbox'; });
+  if (unbox) {
     const group = document.createElement('div');
-    group.className = 'area-group';
-    group.innerHTML = `<h3>${escapeHtml(groupName)}</h3>`;
+    group.className = 'area-group cell-block-group';
+    group.innerHTML = `
+      <div class="cell-block-header">
+        <div><span class="cell-block-kicker">FEED AREA</span><h3>SF Unbox</h3></div>
+        <label class="cell-associate-input">Associates<input id="assoc_unbox" type="number" min="0" step="0.5" value="${unbox.defaultAssociates}"></label>
+      </div>
+      <div class="cell-machine-grid">
+        <label class="cell-machine-card"><span>SF Unbox Associates</span><small>${unbox.jphPerUnit} JPH each</small><input id="area_unbox" type="number" min="0" step="0.5" value="${unbox.defaultUnits}"></label>
+      </div>`;
+    holder.appendChild(group);
+  }
 
-    groupAreas.forEach(function (area) {
-      const unitLabel = area.type === 'operator' ? 'Associate Count' : area.type === 'buffer' ? 'Towers / Buffer Running' : 'Machines Running';
+  SURFACE_CELL_BLOCKS.forEach(function (block, blockIndex) {
+    const group = document.createElement('div');
+    group.className = 'area-group cell-block-group';
 
-      const card = document.createElement('div');
-      card.className = 'area-card';
+    const machineCards = block.areaKeys.map(function (key) {
+      const area = SURFACE_AREAS.find(function (item) { return item.key === key; });
+      if (!area) return '';
 
-      card.innerHTML = `
-        <div>
-          <div class="area-card-title">${escapeHtml(area.label)}</div>
-          <small>${area.type === 'buffer' ? 'Cooling range 25–50 min · Buffer capacity 180 jobs' : area.jphPerUnit + ' JPH each'}</small>
-        </div>
+      // Deblocking has no reliable standalone scan/JPH input.
+      // Detaping is tracked and has a defined JPH, so it must remain visible in Cell Block 2.
 
-        <label>
-          Associates
-          <input id="assoc_${area.key}" type="number" min="0" step="0.5" value="${area.defaultAssociates}">
-        </label>
+      const unitLabel = area.type === 'buffer' ? 'Towers / Buffer Running' : 'Machines Running';
+      const detail = area.type === 'buffer'
+        ? 'Cooling 25–50 min · Buffer 180 jobs'
+        : `${area.jphPerUnit} JPH each`;
 
-        <label>
-          ${unitLabel}
+      return `
+        <label class="cell-machine-card">
+          <span>${escapeHtml(area.label)}</span>
+          <small>${escapeHtml(detail)}</small>
+          <b>${unitLabel}</b>
           <input id="area_${area.key}" type="number" min="0" step="0.5" value="${area.defaultUnits}">
-        </label>
+        </label>`;
+    }).join('');
 
-        ${area.type === 'machine' ? `
-        <label>
-          Machines One Associate Can Cover
-          <input id="ratio_${area.key}" type="number" min="0.25" step="0.25" value="${area.machinesPerAssociate}">
-          <small class="label-note">Errors/jams stay cleared up to this many machines. Above it: downtime risk, not a hard stop.</small>
-        </label>
-        ` : ''}
-      `;
+    const blockNote = block.key === 'block2'
+      ? '<p class="cell-block-note">Automatic Detaping / ODT is tracked at 100 JPH per machine. Manual deblocking or bypass work is excluded because it has no reliable scan/JPH feed.</p>'
+      : '';
 
-      group.appendChild(card);
+    const inspectionDelay = block.key === 'block3'
+      ? `<label class="startup-check"><input id="inspectionStartupDelay" type="checkbox" checked><span><strong>Apply 90-minute Inspection OUT slow start</strong><small>Deducts 90 minutes of AR41 capacity once for this forecast day.</small></span></label>`
+      : '';
 
-      card.querySelectorAll('input').forEach(function (input) {
-        input.addEventListener('input', calculateForecast);
-      });
-    });
+    group.innerHTML = `
+      <div class="cell-block-header">
+        <div><span class="cell-block-kicker">CELL BLOCK ${blockIndex + 1}</span><h3>${escapeHtml(block.label.replace(/^Cell Block \d+ — /, ''))}</h3></div>
+        <label class="cell-associate-input">Associates on this cell<input id="cellAssoc_${block.key}" type="number" min="0" step="0.5" value="${block.defaultAssociates}"></label>
+      </div>
+      <div class="cell-machine-grid">${machineCards}</div>
+      ${blockNote}
+      ${inspectionDelay}`;
 
     holder.appendChild(group);
+  });
+
+  holder.querySelectorAll('input').forEach(function (input) {
+    input.addEventListener('input', calculateForecast);
+    input.addEventListener('change', calculateForecast);
   });
 }
 
@@ -589,11 +625,16 @@ function collectPayload() {
   const ratios = {};
 
   SURFACE_AREAS.forEach(function (area) {
-    areas[area.key] = Number(getValue(`area_${area.key}`, 0)) || 0;
-    associates[area.key] = Number(getValue(`assoc_${area.key}`, 0)) || 0;
-    ratios[area.key] = area.type === 'machine'
-      ? (Number(getValue(`ratio_${area.key}`, area.machinesPerAssociate)) || area.machinesPerAssociate || 1)
-      : 0;
+    areas[area.key] = Number(getValue(`area_${area.key}`, area.defaultUnits || 0)) || 0;
+
+    const block = getCellBlockByAreaKey(area.key);
+    associates[area.key] = block
+      ? (Number(getValue(`cellAssoc_${block.key}`, block.defaultAssociates)) || 0)
+      : (Number(getValue(`assoc_${area.key}`, area.defaultAssociates || 0)) || 0);
+
+    // Coverage ratios remain engineering defaults in the background. Operators now
+    // enter people once per cell instead of assigning the same people to every machine.
+    ratios[area.key] = area.type === 'machine' ? (area.machinesPerAssociate || 1) : 0;
   });
 
   const downtime = [];
@@ -650,7 +691,8 @@ function collectPayload() {
     downtime,
     hourly,
     currentWip,
-    dashboardSync
+    dashboardSync,
+    inspectionStartupDelay: Boolean(document.getElementById('inspectionStartupDelay')?.checked)
   };
 }
 
@@ -870,7 +912,11 @@ function calculateLocalForecast(payload) {
     }
 
     const capacityInfo = getAreaCapacityInfo(area, unitsRunning, associatesAssigned, shiftHours);
-    const downtimeLostJobs = getDowntimeLossForArea(area, payload.downtime || [], shiftHours);
+    const recordedDowntimeLostJobs = getDowntimeLossForArea(area, payload.downtime || [], shiftHours);
+    const startupSlowStartLostJobs = area.key === 'inspection' && payload.inspectionStartupDelay
+      ? (Number(capacityInfo.totalJph || 0) * (SURFACE_STARTUP_OUTPUT_DELAY_MIN / 60))
+      : 0;
+    const downtimeLostJobs = recordedDowntimeLostJobs + startupSlowStartLostJobs;
     const normalCapacity = capacityInfo.normalCapacity;
     const adjustedCapacity = Math.max(0, normalCapacity - downtimeLostJobs);
     const currentWip = Number((payload.currentWip || {})[area.key]) || 0;
@@ -934,9 +980,12 @@ function calculateLocalForecast(payload) {
     return sum + area.downtimeLostJobs;
   }, 0);
 
-  const totalAssociates = areas.reduce(function (sum, area) {
-    return sum + area.associatesAssigned;
-  }, 0);
+  const totalAssociates =
+    (Number(payload.associates.unbox) || 0) +
+    SURFACE_CELL_BLOCKS.reduce(function (sum, block) {
+      const firstArea = block.areaKeys[0];
+      return sum + (Number(payload.associates[firstArea]) || 0);
+    }, 0);
 
   const hourlySummary = calculateHourlySummary(
     payload.hourly || [],
@@ -1234,73 +1283,68 @@ function calculateGoalStaffingPlan(payload, areas, shiftHours, shipGoal) {
   if (!(shipGoal > 0) || !(shiftHours > 0)) return null;
 
   const requiredJphOverall = shipGoal / shiftHours;
+  const rows = [];
 
-  const rows = SURFACE_AREAS.filter(function (area) {
-    return area.required;
-  }).map(function (area) {
-    const liveArea = areas.find(function (a) { return a.key === area.key; }) || {};
-    const requiredRawUnits = area.jphPerUnit > 0 ? requiredJphOverall / area.jphPerUnit : 0;
-
-    if (area.type === 'operator') {
-      const requiredAssociates = roundUpToStep(requiredRawUnits, 0.5);
-      const currentAssociates = Math.max(Number(payload.associates[area.key]) || 0, Number(payload.areas[area.key]) || 0);
-      const associateGap = Math.max(0, requiredAssociates - currentAssociates);
-
-      return {
-        key: area.key,
-        label: area.label,
-        type: area.type,
-        jphPerUnit: area.jphPerUnit,
-        requiredUnits: requiredAssociates,
-        currentUnits: currentAssociates,
-        unitGap: associateGap,
-        requiredAssociates,
-        currentAssociates,
-        associateGap,
-        onTrack: associateGap <= 0
-      };
-    }
-
-    const requiredMachines = roundUpToStep(requiredRawUnits, 0.5);
-    const currentMachines = Number(payload.areas[area.key]) || 0;
-    const machineGap = Math.max(0, requiredMachines - currentMachines);
-    const ratio = Number(payload.ratios[area.key]) || area.machinesPerAssociate || 1;
-    const requiredAssociates = roundUpToStep(requiredMachines / ratio, 0.5);
-    const currentAssociates = Number(payload.associates[area.key]) || 0;
-    const associateGap = Math.max(0, requiredAssociates - currentAssociates);
-
-    return {
-      key: area.key,
-      label: area.label,
-      type: area.type,
-      jphPerUnit: area.jphPerUnit,
-      requiredUnits: requiredMachines,
-      currentUnits: currentMachines,
-      unitGap: machineGap,
-      requiredAssociates,
-      currentAssociates,
-      associateGap,
-      onTrack: machineGap <= 0 && associateGap <= 0
-    };
+  const unboxArea = areas.find(function (area) { return area.key === 'unbox'; }) || {};
+  const unboxRequired = roundUpToStep(requiredJphOverall / 150, 0.5);
+  const unboxCurrent = Number(payload.associates.unbox || 0);
+  rows.push({
+    key: 'unbox', label: 'SF Unbox', requiredJph: requiredJphOverall,
+    machineSummary: 'Associate-paced feed', limitingProcess: 'SF Unbox',
+    requiredAssociates: unboxRequired, currentAssociates: unboxCurrent,
+    associateGap: Math.max(0, unboxRequired - unboxCurrent),
+    capacityGap: Math.max(0, requiredJphOverall - Number(unboxArea.effectiveJph || 0)),
+    onTrack: Number(unboxArea.effectiveJph || 0) >= requiredJphOverall
   });
 
-  const totalAdditionalAssociates = rows.reduce(function (sum, row) { return sum + row.associateGap; }, 0);
-  const totalAdditionalMachines = rows.reduce(function (sum, row) {
-    return sum + (row.type === 'machine' ? row.unitGap : 0);
-  }, 0);
-  const shortAreas = rows.filter(function (row) { return !row.onTrack; });
-  const operatorShortAreas = shortAreas.filter(function (row) { return row.type === 'operator'; });
-  const machineRiskAreas = shortAreas.filter(function (row) { return row.type === 'machine'; });
+  SURFACE_CELL_BLOCKS.forEach(function (block) {
+    const members = block.areaKeys.map(function (key) {
+      return areas.find(function (area) { return area.key === key; });
+    }).filter(Boolean).filter(function (area) { return area.key !== 'cooling' && area.key !== 'detaping'; });
 
+    const limiting = members.reduce(function (lowest, area) {
+      if (!lowest) return area;
+      return Number(area.effectiveJph || 0) < Number(lowest.effectiveJph || 0) ? area : lowest;
+    }, null);
+
+    const requiredCoverage = members.reduce(function (maxValue, area) {
+      const config = SURFACE_AREAS.find(function (item) { return item.key === area.key; }) || {};
+      const neededMachines = config.jphPerUnit > 0 ? Math.ceil(requiredJphOverall / config.jphPerUnit) : 0;
+      const neededPeople = neededMachines > 0 ? neededMachines / Math.max(0.25, Number(config.machinesPerAssociate || 1)) : 0;
+      return Math.max(maxValue, neededPeople);
+    }, 0);
+
+    const requiredAssociates = roundUpToStep(Math.max(block.defaultAssociates, requiredCoverage), 0.5);
+    const currentAssociates = Number(payload.associates[block.areaKeys[0]] || 0);
+    const blockJph = limiting ? Number(limiting.effectiveJph || 0) : 0;
+
+    rows.push({
+      key: block.key,
+      label: block.label,
+      requiredJph: requiredJphOverall,
+      machineSummary: block.areaKeys.filter(function (key) { return key !== 'cooling'; }).map(function (key) {
+        const area = areas.find(function (item) { return item.key === key; }) || {};
+        return `${area.label || key}: ${formatNumber(area.unitsRunning || 0)}`;
+      }).join(' · '),
+      limitingProcess: limiting ? limiting.label : 'No active process',
+      requiredAssociates,
+      currentAssociates,
+      associateGap: Math.max(0, requiredAssociates - currentAssociates),
+      capacityGap: Math.max(0, requiredJphOverall - blockJph),
+      onTrack: blockJph >= requiredJphOverall && currentAssociates >= requiredAssociates
+    });
+  });
+
+  const shortRows = rows.filter(function (row) { return !row.onTrack; });
   return {
     requiredJphOverall,
     rows,
-    totalAdditionalAssociates,
-    totalAdditionalMachines,
-    shortAreaCount: shortAreas.length,
-    operatorShortCount: operatorShortAreas.length,
-    machineRiskCount: machineRiskAreas.length,
-    achievable: shortAreas.length === 0
+    totalAdditionalAssociates: rows.reduce(function (sum, row) { return sum + row.associateGap; }, 0),
+    totalAdditionalMachines: 0,
+    shortAreaCount: shortRows.length,
+    operatorShortCount: shortRows.filter(function (row) { return row.associateGap > 0; }).length,
+    machineRiskCount: shortRows.filter(function (row) { return row.capacityGap > 0; }).length,
+    achievable: shortRows.length === 0
   };
 }
 
@@ -1535,44 +1579,71 @@ function renderGoalStaffingPlan(result) {
   if (!summaryHolder || !tableWrap || !tableBody) return;
 
   const plan = result.goalStaffingPlan;
-
   if (!plan) {
-    summaryHolder.innerHTML = '<p class="muted-cell">Set a Ship Goal above 0 to see the staffing plan.</p>';
+    summaryHolder.innerHTML = '<p class="muted-cell">Enter today\'s ship goal to see whether each production area is ready.</p>';
     tableWrap.hidden = true;
     return;
   }
 
   tableWrap.hidden = false;
 
+  const staffingRows = plan.rows.filter(function (row) {
+    return row.associateGap > 0;
+  });
+  const equipmentRows = plan.rows.filter(function (row) {
+    return row.capacityGap > 0 && row.associateGap <= 0;
+  });
+
   if (plan.achievable) {
-    summaryHolder.innerHTML = `<p class="goal-plan-ok">Every required area is staffed to hit ${formatNumber(result.shipGoal)} at ${round1(plan.requiredJphOverall)} JPH pace. No additional people or machines needed.</p>`;
+    summaryHolder.innerHTML = `<p class="goal-plan-ok">All production areas currently have enough staffing and equipment capacity to support today\'s goal of ${formatNumber(result.shipGoal)} jobs. Keep watching hourly output and downtime.</p>`;
+  } else if (staffingRows.length && equipmentRows.length) {
+    summaryHolder.innerHTML = `<p class="goal-plan-short"><strong>Today\'s goal is at risk in ${plan.shortAreaCount} production area(s).</strong> ${staffingRows.length} area(s) need additional staffing, and ${equipmentRows.length} area(s) are limited by equipment capacity. Review the highlighted rows before moving people.</p>`;
+  } else if (staffingRows.length) {
+    const totalGap = formatNumber(plan.totalAdditionalAssociates);
+    summaryHolder.innerHTML = `<p class="goal-plan-short"><strong>${staffingRows.length} production area(s) do not have enough staffing for the pace needed today.</strong> The current staffing shortage is ${totalGap} associate(s). Move associates by cell block based on the highlighted area.</p>`;
   } else {
-    const parts = [];
-    if (plan.operatorShortCount > 0) {
-      parts.push(`<strong>${plan.operatorShortCount}</strong> area(s) genuinely short-staffed to hit pace`);
-    }
-    if (plan.machineRiskCount > 0) {
-      parts.push(`<strong>${plan.machineRiskCount}</strong> automatic area(s) running above sustainable error-clearing coverage (downtime risk, not a hard stop)`);
-    }
-    summaryHolder.innerHTML = `<p class="goal-plan-short">${parts.join(' and ')} — add <strong>${formatNumber(plan.totalAdditionalAssociates)}</strong> associate(s)${plan.totalAdditionalMachines > 0 ? ` and <strong>${formatNumber(plan.totalAdditionalMachines)}</strong> machine(s)` : ''} to comfortably hit ${formatNumber(result.shipGoal)} at ${round1(plan.requiredJphOverall)} JPH pace.</p>`;
+    const lead = equipmentRows[0];
+    const areaName = lead ? lead.label : 'a production area';
+    const processName = lead ? lead.limitingProcess : 'equipment capacity';
+    const shortfall = lead ? `${formatNumber(lead.capacityGap)} JPH` : 'the required pace';
+    summaryHolder.innerHTML = `<p class="goal-plan-short"><strong>Staffing is sufficient, but ${escapeHtml(areaName)} is below the pace needed for today\'s goal.</strong> ${escapeHtml(processName)} is the main constraint and is approximately ${shortfall} short. Adding labor alone will not fix this gap.</p>`;
   }
 
   tableBody.innerHTML = plan.rows.map(function (row) {
-    const unitLabel = row.type === 'operator' ? 'associates' : 'machines';
-    const statusText = row.onTrack ? 'OK' : (row.type === 'operator' ? 'SHORT' : 'AT RISK');
+    let statusText = 'ON TRACK';
+    let statusClass = 'signal-ok';
+
+    if (!row.onTrack && row.associateGap > 0) {
+      statusText = 'NEEDS STAFFING';
+      statusClass = 'signal-risk';
+    } else if (!row.onTrack && row.capacityGap > 0) {
+      statusText = 'EQUIPMENT LIMIT';
+      statusClass = 'signal-risk';
+    } else if (!row.onTrack) {
+      statusText = 'NEEDS ATTENTION';
+      statusClass = 'signal-risk';
+    }
+
+    const staffingDifference = row.associateGap > 0
+      ? `${formatNumber(row.associateGap)} short`
+      : 'Fully staffed';
+
+    const paceShortfall = row.capacityGap > 0
+      ? `${formatNumber(row.capacityGap)} JPH below`
+      : 'No gap';
+
     return `
-      <tr class="${row.onTrack ? 'row-ok' : (row.type === 'operator' ? 'row-short' : 'row-risk')}">
+      <tr class="${row.onTrack ? 'row-ok' : 'row-risk'}">
         <td><strong>${escapeHtml(row.label)}</strong></td>
-        <td>${row.jphPerUnit}</td>
-        <td>${formatNumber(row.requiredUnits)} ${unitLabel}</td>
-        <td>${formatNumber(row.currentUnits)} ${unitLabel}</td>
-        <td>${row.unitGap > 0 ? '+' + formatNumber(row.unitGap) : '—'}</td>
+        <td>${round1(row.requiredJph)} JPH</td>
+        <td>${escapeHtml(row.machineSummary)}</td>
         <td>${formatNumber(row.requiredAssociates)}</td>
         <td>${formatNumber(row.currentAssociates)}</td>
-        <td>${row.associateGap > 0 ? '+' + formatNumber(row.associateGap) : '—'}</td>
-        <td class="${row.onTrack ? 'signal-ok' : (row.type === 'operator' ? 'signal-short' : 'signal-risk')}">${statusText}</td>
-      </tr>
-    `;
+        <td>${staffingDifference}</td>
+        <td>${escapeHtml(row.limitingProcess)}</td>
+        <td>${paceShortfall}</td>
+        <td class="${statusClass}">${statusText}</td>
+      </tr>`;
   }).join('');
 }
 
@@ -1826,7 +1897,6 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
   const slots = buildPerformanceHourSlots(startMinutes, endMinutes);
   const totalPoints = Math.max(2, slots.length);
   const rowOffset = getHourlyRowOffsetForShift(shiftMode);
-  const shiftHours = Number(result.shiftHours || 1);
 
   const displayRows = slots.map(function (slot, idx) {
     return rows[rowOffset + idx] || { hour: minutesToHourKey(slot.start), inspection: 0, active: 'Yes' };
@@ -1843,7 +1913,31 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
   const targetPace = Number(hourlySummary.targetPace || 0);
   const actualPace = Number(hourlySummary.actualPace || 0);
   const capacityCeiling = Number(result.capacityCeiling || 0);
-  const hoursEntered = Number(hourlySummary.hoursEntered || 0);
+  const actualSoFar = Number(hourlySummary.actualAr41SoFar || 0);
+
+  const todayKey = getLocalDateInputValue(new Date());
+  const selectedDate = getValue('productionDate', todayKey);
+  const now = new Date();
+  const clockMinutes = (now.getHours() * 60) + now.getMinutes() + (now.getSeconds() / 60);
+  let chartNowMinutes;
+
+  if (selectedDate < todayKey) {
+    chartNowMinutes = endMinutes;
+  } else if (selectedDate > todayKey) {
+    chartNowMinutes = startMinutes;
+  } else {
+    chartNowMinutes = Math.max(startMinutes, Math.min(endMinutes, clockMinutes));
+  }
+
+  const elapsedClockHours = Math.max(0, (chartNowMinutes - startMinutes) / 60);
+  const firstPointMinutes = slots.length ? slots[0].end : startMinutes;
+  const lastPointMinutes = slots.length ? slots[slots.length - 1].end : endMinutes;
+
+  function xHourForMinutes(minutes) {
+    if (lastPointMinutes <= firstPointMinutes) return 1;
+    const ratio = (Number(minutes) - firstPointMinutes) / (lastPointMinutes - firstPointMinutes);
+    return 1 + (Math.max(0, Math.min(1, ratio)) * (totalPoints - 1));
+  }
 
   let cumulative = 0;
   const actualPoints = [];
@@ -1859,20 +1953,28 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
   const expectedPoints = [];
   const projectedPoints = [];
   for (let i = 1; i <= totalPoints; i += 1) {
-    const slotEndHours = Math.max(0, (slots[i - 1].end - startMinutes) / 60);
+    const slotEndMinutes = slots[i - 1].end;
+    const slotEndHours = Math.max(0, (slotEndMinutes - startMinutes) / 60);
     expectedPoints.push({ xHour: i, yValue: targetPace * slotEndHours });
-    const actualSoFar = Number(hourlySummary.actualAr41SoFar || 0);
-    const projectedValue = i <= hoursEntered
-      ? (actualPoints[i - 1] ? actualPoints[i - 1].yValue : 0)
-      : actualSoFar + (actualPace * Math.max(0, slotEndHours - hoursEntered));
-    projectedPoints.push({ xHour: i, yValue: Math.min(capacityCeiling || projectedValue, projectedValue) });
+
+    let projectedValue;
+    if (slotEndMinutes <= chartNowMinutes) {
+      projectedValue = actualPoints[i - 1] ? actualPoints[i - 1].yValue : 0;
+    } else {
+      projectedValue = actualSoFar + (actualPace * Math.max(0, slotEndHours - elapsedClockHours));
+    }
+
+    projectedPoints.push({
+      xHour: i,
+      yValue: Math.min(capacityCeiling || projectedValue, projectedValue)
+    });
   }
 
   const rawMax = Math.max(
     capacityCeiling,
     Number(hourlySummary.projectedActualOut || 0),
     Number(hourlySummary.expectedByNow || 0),
-    Number(hourlySummary.actualAr41SoFar || 0),
+    actualSoFar,
     100
   );
   const maxY = getNiceChartMax(rawMax * 1.1);
@@ -1896,6 +1998,25 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
     return `${line} L ${lastX} ${baseline} L ${firstX} ${baseline} Z`;
   }
 
+  const actualVisiblePoints = [];
+  slots.forEach(function (slot, index) {
+    if (slot.end <= chartNowMinutes && actualPoints[index]) {
+      actualVisiblePoints.push(actualPoints[index]);
+    }
+  });
+
+  if (selectedDate === todayKey && chartNowMinutes > startMinutes && chartNowMinutes < endMinutes) {
+    const currentXHour = xHourForMinutes(chartNowMinutes);
+    const lastVisible = actualVisiblePoints[actualVisiblePoints.length - 1];
+    if (!lastVisible || Math.abs(lastVisible.xHour - currentXHour) > 0.001) {
+      actualVisiblePoints.push({ xHour: currentXHour, yValue: actualSoFar });
+    } else {
+      lastVisible.yValue = actualSoFar;
+    }
+  } else if (actualVisiblePoints.length && selectedDate <= todayKey) {
+    actualVisiblePoints[actualVisiblePoints.length - 1].yValue = actualSoFar || actualVisiblePoints[actualVisiblePoints.length - 1].yValue;
+  }
+
   let html = '';
   html += `<defs><linearGradient id="chartActualGrad" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0%" class="chart-grad-stop-top"></stop>
@@ -1913,13 +2034,6 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
     if (i < totalPoints) {
       html += `<line class="chart-grid" x1="${xx}" y1="${padTop}" x2="${xx}" y2="${height - padBottom}"></line>`;
     }
-    // Every point on this chart is a cumulative value computed through
-    // slot.end (see expectedCum/slotEndHours above) — so the tick under it
-    // must always say slot.end too. The table/setup grid intentionally keep
-    // slots[].label start-based for readability; reusing that here caused a
-    // partial edge slot's forced end-label to collide with the very next
-    // slot's start-label at the same clock time (duplicate "7a" ticks) while
-    // the true shift-start time never showed up anywhere.
     const label = slots[i - 1] ? formatHourLabel(formatMinutesAsClock(slots[i - 1].end)) : '';
     const anchor = i === 1 ? 'start' : (i === totalPoints ? 'end' : 'middle');
     html += `<text class="chart-label" x="${xx}" y="${height - 12}" text-anchor="${anchor}">${label}</text>`;
@@ -1927,24 +2041,21 @@ function renderHourlyChart(hourlyRows, hourlySummary, result) {
 
   html += `<line class="chart-axis" x1="${padLeft}" y1="${height - padBottom}" x2="${width - padRight}" y2="${height - padBottom}"></line>`;
   html += `<line class="chart-axis" x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${height - padBottom}"></line>`;
-  const realActualPoints = hoursEntered > 0 ? actualPoints.slice(0, Math.min(actualPoints.length, hoursEntered)) : [];
-  if (realActualPoints.length > 1) {
-    html += `<path class="chart-area-actual" d="${areaPath(realActualPoints)}"></path>`;
+
+  if (actualVisiblePoints.length > 1) {
+    html += `<path class="chart-area-actual" d="${areaPath(actualVisiblePoints)}"></path>`;
   }
   html += `<path class="chart-line-expected" d="${path(expectedPoints)}"></path>`;
   html += `<path class="chart-line-projected" d="${path(projectedPoints)}"></path>`;
-  html += `<path class="chart-line-actual" d="${path(actualPoints)}"></path>`;
+  html += `<path class="chart-line-actual" d="${path(actualVisiblePoints)}"></path>`;
 
-  if (hoursEntered > 0) {
-    const dotPoint = actualPoints[Math.min(actualPoints.length, hoursEntered) - 1];
-    if (dotPoint) {
-      html += `<circle class="chart-actual-dot" cx="${x(dotPoint.xHour).toFixed(1)}" cy="${y(dotPoint.yValue).toFixed(1)}" r="4"></circle>`;
-    }
+  const dotPoint = actualVisiblePoints[actualVisiblePoints.length - 1];
+  if (dotPoint) {
+    html += `<circle class="chart-actual-dot" cx="${x(dotPoint.xHour).toFixed(1)}" cy="${y(dotPoint.yValue).toFixed(1)}" r="4"></circle>`;
   }
 
-  if (hoursEntered > 0) {
-    const nowIndex = Math.min(totalPoints, Math.max(1, hoursEntered + 1));
-    const nowX = x(nowIndex);
+  if (selectedDate === todayKey && clockMinutes >= startMinutes && clockMinutes <= endMinutes) {
+    const nowX = x(xHourForMinutes(chartNowMinutes));
     html += `<line class="chart-now" x1="${nowX}" y1="${padTop}" x2="${nowX}" y2="${height - padBottom}"></line>`;
     html += `<rect class="chart-now-tag" x="${nowX - 16}" y="4" width="32" height="14" rx="3"></rect>`;
     html += `<text class="chart-now-label" x="${nowX}" y="14" text-anchor="middle">NOW</text>`;
@@ -2106,6 +2217,48 @@ function renderBottleneckTable(areas) {
   body.innerHTML = rows.join('') || '<tr><td colspan="9">No live WIP pressure yet.</td></tr>';
 }
 
+async function saveShipGoal() {
+  const goal = Number(getValue('shipGoal', 0)) || 0;
+  const productionDate = getValue('productionDate', getLocalDateInputValue(new Date()));
+
+  if (goal <= 0) {
+    alert('Enter a Ship Goal greater than 0 before saving.');
+    return;
+  }
+
+  const button = document.getElementById('saveGoalBtn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Saving…';
+  }
+
+  try {
+    if (!latestForecastResult) calculateForecast();
+    const payload = collectPayload();
+
+    const response = await fetch(SURFACE_API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'saveGoal', payload })
+    });
+    const data = await response.json();
+
+    if (!data.ok) throw new Error(data.error || 'Goal save failed.');
+
+    latestForecastResult = { payload, result: data.result || latestForecastResult?.result || null };
+    savePageState();
+    setText('shipGoalSaveMeta', `Goal ${formatNumber(goal)} saved for ${productionDate}.`);
+    alert(`Ship Goal ${formatNumber(goal)} saved for ${productionDate}.`);
+  } catch (err) {
+    setText('shipGoalSaveMeta', 'Goal was not saved. Try again.');
+    alert(`Goal save failed: ${err.message || err}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Save Goal';
+    }
+  }
+}
+
 async function saveForecast() {
   await postToApi('saveForecast', 'Forecast saved.');
 }
@@ -2261,6 +2414,9 @@ function restorePayloadToPage(payload) {
     setValue('shiftMode', payload.shiftMode || getAutomaticShiftMode(payload.productionDate));
   setValue('bosWip', payload.bosWip || 0);
   setValue('shipGoal', payload.shipGoal || 0);
+  if (Number(payload.shipGoal) > 0) {
+    setText('shipGoalSaveMeta', `Saved goal ${formatNumber(payload.shipGoal)} loaded for ${payload.productionDate || 'this date'}.`);
+  }
   setValue('incomingLow', payload.incomingLow ?? SURFACE_EXTRA_WORK_DEFAULTS.incomingLow);
   setValue('incomingHigh', payload.incomingHigh ?? SURFACE_EXTRA_WORK_DEFAULTS.incomingHigh);
   setValue('remakeLow', payload.remakeLow ?? SURFACE_EXTRA_WORK_DEFAULTS.remakeLow);
@@ -2278,6 +2434,10 @@ function restorePayloadToPage(payload) {
     Object.keys(payload.associates).forEach(function (key) {
       setValue(`assoc_${key}`, payload.associates[key]);
     });
+  }
+
+  if (document.getElementById('inspectionStartupDelay') && payload.inspectionStartupDelay !== undefined) {
+    document.getElementById('inspectionStartupDelay').checked = Boolean(payload.inspectionStartupDelay);
   }
 
   if (payload.ratios) {
@@ -2344,6 +2504,9 @@ function restorePageState() {
     setValue('shiftMode', payload.shiftMode || getAutomaticShiftMode(payload.productionDate));
     setValue('bosWip', payload.bosWip || 0);
     setValue('shipGoal', payload.shipGoal || 0);
+  if (Number(payload.shipGoal) > 0) {
+    setText('shipGoalSaveMeta', `Saved goal ${formatNumber(payload.shipGoal)} loaded for ${payload.productionDate || 'this date'}.`);
+  }
     setValue('floaterCount', payload.floaterCount || 0);
     setValue('floaterAssign', payload.floaterAssign || 'none');
 
@@ -2359,7 +2522,11 @@ function restorePageState() {
       });
     }
 
-    if (payload.ratios) {
+    if (document.getElementById('inspectionStartupDelay') && payload.inspectionStartupDelay !== undefined) {
+    document.getElementById('inspectionStartupDelay').checked = Boolean(payload.inspectionStartupDelay);
+  }
+
+  if (payload.ratios) {
       Object.keys(payload.ratios).forEach(function (key) {
         if (document.getElementById(`ratio_${key}`)) setValue(`ratio_${key}`, payload.ratios[key]);
       });
@@ -3614,6 +3781,13 @@ const AR_DEFAULT_STAFFING_EXCLUSIONS = Object.freeze([
 ]);
 const AR_LOCAL_STAFFING_EXCLUSIONS_KEY = 'productionGoalForecast.ar.staffingExclusions.v1';
 const AR_STATION_ORDER=['AR-IN','Basket','Oven','Sectoring','DeRing','AR-OUT'];
+const AR_DEFAULT_MORNING_PLAN=Object.freeze({
+  arIn:1.5,
+  basket:3,
+  sectoring:3,
+  deRing:1,
+  arOut:1.5
+});
 const AR_FORECAST_STATE={
   department:localStorage.getItem('productionGoalForecast.department')||'Surface',
   config:{...AR_DEFAULT_CONFIG},
@@ -3621,6 +3795,7 @@ const AR_FORECAST_STATE={
   operatorActivity:null,
   staffingExclusions:loadARLocalStaffingExclusions(),
   staffingCapacityOverrides:loadARStaffingCapacityOverrides(),
+  morningPlan:{...AR_DEFAULT_MORNING_PLAN},
   bosWipByDate:loadARBosWipByDate(),
   liveStaff:[],
   hourly:{},
@@ -3634,7 +3809,22 @@ window.AR_FORECAST_APP={getDepartment:()=>AR_FORECAST_STATE.department};
 
 document.addEventListener('DOMContentLoaded',function initARForecastModuleV2(){restoreARLocalState();wireARForecastControls();setDepartmentMode(AR_FORECAST_STATE.department,false);buildARHourlyRows();calculateARForecast();});
 
-function wireARForecastControls(){const dep=document.getElementById('departmentMode');if(dep){dep.value=AR_FORECAST_STATE.department;dep.addEventListener('change',()=>setDepartmentMode(dep.value,true));}document.getElementById('arStaffingCards')?.addEventListener('click',handleARStaffingClick);document.getElementById('arStaffingCards')?.addEventListener('change',handleARStaffingCapacityChange);document.getElementById('arExcludedAssociates')?.addEventListener('click',handleARStaffingClick);['arGoal','arRunSize','arMaintenanceDelay','arTimeArIn','arTimeBasket','arTimeT40','arTimeOven','arTimeSectoring','arTimeChamber','arTimeDeRing','arTimeArOut'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.addEventListener('input',()=>{readARConfigFromInputs();saveARLocalState();calculateARForecast();});});document.getElementById('arSaveBosBtn')?.addEventListener('click',saveARBosWip);document.getElementById('arResetBosBtn')?.addEventListener('click',resetARBosWip);document.getElementById('arBosWip')?.addEventListener('input',()=>{setTextSafe('arBosSetupMeta','Unsaved BOS change — click Save BOS.');});document.getElementById('arSaveSetupBtn')?.addEventListener('click',saveARSetup);document.getElementById('arResetSetupBtn')?.addEventListener('click',resetARSetup);document.getElementById('arSaveHourlyBtn')?.addEventListener('click',saveARHourly);document.getElementById('arClearHourlyBtn')?.addEventListener('click',clearARManualHourly);document.getElementById('arSaveForecastBtn')?.addEventListener('click',saveARForecast);const btn=document.getElementById('calculateBtn');btn?.addEventListener('click',e=>{if(AR_FORECAST_STATE.department==='AR'){e.stopImmediatePropagation();syncARForecastData(true);}},true);document.getElementById('shiftMode')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR'){buildARHourlyRows();calculateARForecast();}});document.getElementById('productionDate')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR')syncARForecastData(false);});}
+function wireARForecastControls(){const dep=document.getElementById('departmentMode');if(dep){dep.value=AR_FORECAST_STATE.department;dep.addEventListener('change',()=>setDepartmentMode(dep.value,true));}document.getElementById('arStaffingCards')?.addEventListener('click',handleARStaffingClick);document.getElementById('arStaffingCards')?.addEventListener('change',handleARStaffingCapacityChange);document.getElementById('arExcludedAssociates')?.addEventListener('click',handleARStaffingClick);['arGoal','arRunSize','arMaintenanceDelay','arTimeArIn','arTimeBasket','arTimeT40','arTimeOven','arTimeSectoring','arTimeChamber','arTimeDeRing','arTimeArOut'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.addEventListener('input',()=>{readARConfigFromInputs();saveARLocalState();calculateARForecast();});});document.getElementById('arSaveGoalBtn')?.addEventListener('click',saveARGoal);
+document.getElementById('arGoal')?.addEventListener('input',()=>{
+  setTextSafe('arGoalSaveMeta','Goal changed — click Save Goal.');
+});
+['arPlanArIn','arPlanBasket','arPlanSectoring','arPlanDeRing','arPlanArOut'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.addEventListener('input',()=>{
+    readARMorningPlanInputs();
+    setTextSafe('arMorningPlanStatus','Morning plan changed — click Save Morning Plan.');
+    saveARLocalState();
+    calculateARForecast();
+  });
+});
+document.getElementById('arSaveMorningPlanBtn')?.addEventListener('click',saveARMorningPlan);
+document.getElementById('arSaveBosBtn')?.addEventListener('click',saveARBosWip);document.getElementById('arResetBosBtn')?.addEventListener('click',resetARBosWip);document.getElementById('arBosWip')?.addEventListener('input',()=>{setTextSafe('arBosSetupMeta','Unsaved BOS change — click Save BOS.');});document.getElementById('arSaveSetupBtn')?.addEventListener('click',saveARSetup);document.getElementById('arResetSetupBtn')?.addEventListener('click',resetARSetup);document.getElementById('arSaveHourlyBtn')?.addEventListener('click',saveARHourly);document.getElementById('arClearHourlyBtn')?.addEventListener('click',clearARManualHourly);document.getElementById('arSaveForecastBtn')?.addEventListener('click',saveARForecast);const btn=document.getElementById('calculateBtn');btn?.addEventListener('click',e=>{if(AR_FORECAST_STATE.department==='AR'){e.stopImmediatePropagation();syncARForecastData(true);}},true);document.getElementById('shiftMode')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR'){buildARHourlyRows();calculateARForecast();}});document.getElementById('productionDate')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR')syncARForecastData(false);});}
 function setDepartmentMode(mode,shouldSync){
   const d=mode==='AR'?'AR':'Surface';
   AR_FORECAST_STATE.department=d;
@@ -4119,6 +4309,202 @@ function buildARLiveStaffing(payload){
     );
 }
 function getARStationRoster(){const out={};AR_STATION_ORDER.forEach(s=>out[s]=[]);AR_FORECAST_STATE.liveStaff.forEach(person=>{if(out[person.station])out[person.station].push({...person,weight:1,effectiveJph:person.finalJph});});return out;}
+
+function readARMorningPlanInputs(){
+  const map={
+    arIn:'arPlanArIn',
+    basket:'arPlanBasket',
+    sectoring:'arPlanSectoring',
+    deRing:'arPlanDeRing',
+    arOut:'arPlanArOut'
+  };
+
+  Object.entries(map).forEach(([key,id])=>{
+    const el=document.getElementById(id);
+    if(el)AR_FORECAST_STATE.morningPlan[key]=Math.max(0,toARNumber(el.value));
+  });
+}
+
+function writeARMorningPlanInputs(){
+  const map={
+    arIn:'arPlanArIn',
+    basket:'arPlanBasket',
+    sectoring:'arPlanSectoring',
+    deRing:'arPlanDeRing',
+    arOut:'arPlanArOut'
+  };
+
+  Object.entries(map).forEach(([key,id])=>{
+    const el=document.getElementById(id);
+    if(el)el.value=AR_FORECAST_STATE.morningPlan[key];
+  });
+}
+
+function getARPlannedStationCounts(){
+  const p=AR_FORECAST_STATE.morningPlan||AR_DEFAULT_MORNING_PLAN;
+  return{
+    'AR-IN':Math.max(0,toARNumber(p.arIn)),
+    'Basket':Math.max(0,toARNumber(p.basket)),
+    'Oven':0,
+    'Sectoring':Math.max(0,toARNumber(p.sectoring)),
+    'DeRing':Math.max(0,toARNumber(p.deRing)),
+    'AR-OUT':Math.max(0,toARNumber(p.arOut))
+  };
+}
+
+function getARPlannedStationCapacities(remainingHours){
+  const counts=getARPlannedStationCounts();
+
+  return AR_STATION_ORDER.map(station=>{
+    const currentAssociates=counts[station]||0;
+    const stationJph=station==='Oven'?0:(AR_DEFAULT_JPH[station]||0);
+    const usableJph=station==='Oven'?0:currentAssociates*stationJph;
+
+    return{
+      station,
+      associates:[],
+      detectedAssociates:0,
+      currentAssociates,
+      stationJph,
+      usableJph,
+      isManual:true,
+      source:'planned',
+      remainingCapacity:station==='Oven'
+        ? Infinity
+        : Math.max(0,usableJph*remainingHours)
+    };
+  });
+}
+
+function getAREffectiveStationCapacities(remainingHours){
+  const live=getARStationCapacities(remainingHours);
+  const planned=getARPlannedStationCapacities(remainingHours);
+  const plannedMap=Object.fromEntries(planned.map(row=>[row.station,row]));
+
+  return live.map(row=>{
+    if(row.station==='Oven')return{...row,source:'process'};
+
+    // Switch station-by-station. A station keeps its morning plan until
+    // at least one associate has produced a positive live scan there.
+    if(row.detectedAssociates>0){
+      return{...row,source:'live'};
+    }
+
+    return{...plannedMap[row.station],detectedAssociates:0,source:'planned'};
+  });
+}
+
+function getARCellMetrics(){
+  const roster=getARStationRoster();
+  const plan=getARPlannedStationCounts();
+
+  const liveCounts={
+    outside:(roster['AR-IN']||[]).length+(roster['AR-OUT']||[]).length,
+    middle:(roster['Basket']||[]).length,
+    inside:(roster['Oven']||[]).length+(roster['Sectoring']||[]).length+(roster['DeRing']||[]).length
+  };
+
+  const plannedCounts={
+    outside:plan['AR-IN']+plan['AR-OUT'],
+    middle:plan['Basket'],
+    inside:plan['Sectoring']+plan['DeRing']
+  };
+
+  const plannedCapacity={
+    outside:Math.min(
+      plan['AR-IN']*(AR_DEFAULT_JPH['AR-IN']||0),
+      plan['AR-OUT']*(AR_DEFAULT_JPH['AR-OUT']||0)
+    ),
+    middle:plan['Basket']*(AR_DEFAULT_JPH['Basket']||0),
+    inside:Math.min(
+      plan['Sectoring']*(AR_DEFAULT_JPH['Sectoring']||0),
+      plan['DeRing']*(AR_DEFAULT_JPH['DeRing']||0)
+    )
+  };
+
+  return{liveCounts,plannedCounts,plannedCapacity};
+}
+
+function renderARMorningPlan(){
+  const m=getARCellMetrics();
+
+  setTextSafe('arPlanOutsideTotal',round1(m.plannedCounts.outside));
+  setTextSafe('arPlanMiddleTotal',round1(m.plannedCounts.middle));
+  setTextSafe('arPlanInsideTotal',round1(m.plannedCounts.inside));
+
+  setTextSafe('arPlanOutsideCapacity',`${round1(m.plannedCapacity.outside)} JPH`);
+  setTextSafe('arPlanMiddleCapacity',`${round1(m.plannedCapacity.middle)} JPH`);
+  setTextSafe('arPlanInsideCapacity',`${round1(m.plannedCapacity.inside)} JPH`);
+
+  setTextSafe('arLiveOutsideTotal',round1(m.liveCounts.outside));
+  setTextSafe('arLiveMiddleTotal',round1(m.liveCounts.middle));
+  setTextSafe('arLiveInsideTotal',round1(m.liveCounts.inside));
+
+  const variance=(live,planned)=>live-planned;
+  const formatVariance=value=>`${value>0?'+':''}${round1(value)}`;
+
+  setTextSafe('arOutsideVariance',formatVariance(variance(m.liveCounts.outside,m.plannedCounts.outside)));
+  setTextSafe('arMiddleVariance',formatVariance(variance(m.liveCounts.middle,m.plannedCounts.middle)));
+  setTextSafe('arInsideVariance',formatVariance(variance(m.liveCounts.inside,m.plannedCounts.inside)));
+
+  const liveStations=new Set((AR_FORECAST_STATE.liveStaff||[]).map(person=>person.station));
+  const totalLive=AR_FORECAST_STATE.liveStaff.length;
+
+  setTextSafe(
+    'arPlanForecastMode',
+    totalLive
+      ? 'Forecast blending planned and live staffing'
+      : 'Forecast using planned morning staffing'
+  );
+
+  setTextSafe(
+    'arPlanForecastMeta',
+    totalLive
+      ? `${liveStations.size} station(s) are using live staffing. Stations without scans still use the morning plan.`
+      : 'Live scanning has not started. The forecast is using the saved morning plan.'
+  );
+}
+
+async function saveARMorningPlan(){
+  readARMorningPlanInputs();
+  saveARLocalState();
+
+  const payload={
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    config:{...AR_FORECAST_STATE.config},
+    morningPlan:{...AR_FORECAST_STATE.morningPlan}
+  };
+
+  const btn=document.getElementById('arSaveMorningPlanBtn');
+  const originalText=btn?.textContent||'Save Morning Plan';
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Saving...';
+  }
+
+  const response=await postARForecastApi('saveCurrentState',payload);
+
+  if(btn){
+    btn.disabled=false;
+    btn.textContent=originalText;
+  }
+
+  if(!response||!response.ok){
+    const message=response?.error||'Morning staffing plan could not be saved.';
+    setTextSafe('arMorningPlanStatus',message);
+    showARMessage(message);
+    return;
+  }
+
+  setTextSafe(
+    'arMorningPlanStatus',
+    `Morning staffing plan saved for ${payload.date||'current date'}.`
+  );
+  showARMessage('AR morning staffing plan saved.');
+}
+
 function getARStationCapacities(remainingHours){
   const roster=getARStationRoster();
 
@@ -4445,7 +4831,9 @@ function calculateARForecast(){
   const remainingHours=remainingMin/60;
 
   const maturedJobs=estimateARMaturedJobs(live,remainingMin,totalDelay);
-  const stationCaps=getARStationCapacities(remainingHours);
+  const liveStationCaps=getARStationCapacities(remainingHours);
+  const plannedStationCaps=getARPlannedStationCapacities(remainingHours);
+  const stationCaps=getAREffectiveStationCapacities(remainingHours);
   const laborCaps=stationCaps
     .filter(row=>row.station!=='Oven')
     .map(row=>row.remainingCapacity);
@@ -4541,6 +4929,9 @@ function calculateARForecast(){
     remainingMin,
     remainingHours,
     stationCaps,
+    liveStationCaps,
+    plannedStationCaps,
+    staffingMode:AR_FORECAST_STATE.liveStaff.length?'blended':'planned',
     maturedJobs,
     laborCeiling,
     availableJobs:totalWorkAvailable,
@@ -4723,6 +5114,7 @@ function renderARForecastAll(r,hourly,pacePct){
   renderARHourlyCards(hourly,r);
   renderARPace(r,pacePct);
   renderARStaffingCards();
+  renderARMorningPlan();
 
   setTextSafe(
     'arPipelineStatus',
@@ -4739,7 +5131,58 @@ function renderARForecastAll(r,hourly,pacePct){
     );
   }
 }
-function renderARGoalPlan(r){const body=document.getElementById('arGoalPlanTable'),summary=document.getElementById('arGoalPlanSummary');if(!body||!summary)return;const remainingGoal=Math.max(0,r.goal-r.currentOut),requiredJph=r.remainingHours>0?remainingGoal/r.remainingHours:0;const rows=r.stationCaps.filter(x=>x.station!=='Oven').map(x=>{const defaultJph=AR_DEFAULT_JPH[x.station]||1,requiredAssociates=requiredJph/defaultJph,gap=Math.max(0,requiredAssociates-x.currentAssociates),status=x.usableJph>=requiredJph?'OK':x.usableJph>=requiredJph*.9?'WATCH':'AT RISK';return{...x,requiredJph,requiredAssociates,gap,status};});body.innerHTML=rows.map(x=>`<tr><td><strong>${escapeHtml(x.station)}</strong></td><td>${round1(x.requiredJph)}</td><td>${round1(x.usableJph)}</td><td>${round1(x.requiredAssociates)}</td><td>${round1(x.currentAssociates)}</td><td>${x.gap>0?'+'+round1(x.gap):'—'}</td><td class="ar-status-pill ${x.status==='OK'?'ok':x.status==='WATCH'?'watch':'risk'}">${x.status}</td></tr>`).join('');const risks=rows.filter(x=>x.status!=='OK');summary.innerHTML=r.goal<=0?'<p class="muted-cell">Set an AR Goal above 0 to calculate required station JPH and associates.</p>':risks.length?`<p class="goal-plan-short"><strong>${risks.length}</strong> AR area(s) do not have comfortable Final JPH coverage for the remaining goal of <strong>${formatARNumber(remainingGoal)}</strong> jobs.</p>`:`<p class="goal-plan-ok">All labor-controlled AR stations have enough Final JPH to cover the remaining goal of ${formatARNumber(remainingGoal)} jobs.</p>`;}
+function renderARGoalPlan(r){
+  const body=document.getElementById('arGoalPlanTable');
+  const summary=document.getElementById('arGoalPlanSummary');
+  if(!body||!summary)return;
+
+  const remainingGoal=Math.max(0,r.goal-r.currentOut);
+  const requiredJph=r.remainingHours>0?remainingGoal/r.remainingHours:0;
+
+  const rows=r.stationCaps
+    .filter(x=>x.station!=='Oven')
+    .map(x=>{
+      const defaultJph=AR_DEFAULT_JPH[x.station]||1;
+      const requiredAssociates=requiredJph/defaultJph;
+      const gap=Math.max(0,requiredAssociates-x.currentAssociates);
+      const status=x.usableJph>=requiredJph
+        ? 'ON TRACK'
+        : x.usableJph>=requiredJph*.9
+          ? 'WATCH'
+          : 'NEEDS ATTENTION';
+
+      return{...x,requiredJph,requiredAssociates,gap,status};
+    });
+
+  body.innerHTML=rows.map(x=>`
+    <tr>
+      <td>
+        <strong>${escapeHtml(x.station)}</strong>
+        <small class="ar-capacity-source">${x.source==='live'?'Live staffing':'Morning plan'}</small>
+      </td>
+      <td>${round1(x.requiredJph)}</td>
+      <td>${round1(x.usableJph)}</td>
+      <td>${round1(x.requiredAssociates)}</td>
+      <td>${round1(x.currentAssociates)}</td>
+      <td>${x.gap>0?'+'+round1(x.gap):'—'}</td>
+      <td class="ar-status-pill ${x.status==='ON TRACK'?'ok':x.status==='WATCH'?'watch':'risk'}">${x.status}</td>
+    </tr>
+  `).join('');
+
+  const risks=rows.filter(x=>x.status!=='ON TRACK');
+
+  if(r.goal<=0){
+    summary.innerHTML='<p class="muted-cell">Set an AR Goal above 0 to calculate the staffing pace needed.</p>';
+  }else if(risks.length){
+    const sourceText=r.staffingMode==='planned'
+      ? 'The morning staffing plan is currently driving the forecast.'
+      : 'Live staffing is used where associates have started scanning; the morning plan remains active at stations without scans.';
+
+    summary.innerHTML=`<p class="goal-plan-short"><strong>${risks.length}</strong> AR station(s) are below the staffing pace needed for the remaining <strong>${formatARNumber(remainingGoal)}</strong> jobs. ${sourceText}</p>`;
+  }else{
+    summary.innerHTML=`<p class="goal-plan-ok">Current planned/live staffing supports the remaining goal of ${formatARNumber(remainingGoal)} jobs.</p>`;
+  }
+}
 function renderARBottleneckTable(r){const body=document.getElementById('arBottleneckTable');if(!body)return;const liveMap={'AR-IN':r.live.arIn,'Basket':r.live.basket,'Oven':r.live.oven,'Sectoring':r.live.sectoring,'DeRing':r.live.deRing,'AR-OUT':r.live.deRing};body.innerHTML=r.stationCaps.map(x=>{const w=liveMap[x.station]||0,clear=x.station==='Oven'?`${AR_FORECAST_STATE.config.oven} min process`:x.usableJph>0?`${Math.round(w/x.usableJph*60)} min`:'No JPH',signal=x.station==='Oven'?'WATCH':x.usableJph<=0?'AT RISK':w/x.usableJph*60>120?'AT RISK':w/x.usableJph*60>60?'WATCH':'OK';return`<tr><td><strong>${escapeHtml(x.station)}</strong></td><td>${round1(x.currentAssociates)}</td><td>${x.station==='Oven'?'Process':round1(x.usableJph)}</td><td>${x.station==='Oven'?'60 min cycle':formatARNumber(x.remainingCapacity)}</td><td>${formatARNumber(w)}</td><td>${completeARRuns(w)}</td><td>${clear}</td><td class="${signal==='OK'?'ar-signal-ok':signal==='WATCH'?'ar-signal-watch':'ar-signal-risk'}"><strong>${signal}</strong></td></tr>`;}).join('');}
 function renderARStaffingCards(){
   const box=document.getElementById('arStaffingCards');
@@ -4857,9 +5300,54 @@ function writeARConfigInputs(){const map={goal:'arGoal',runSize:'arRunSize',main
 function getARTotalPipelineMinutes(){const c=AR_FORECAST_STATE.config;return c.arIn+c.basket+c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut;}
 function completeARRuns(jobs){return Math.floor(toARNumber(jobs)/Math.max(1,AR_FORECAST_STATE.config.runSize));}
 function resetARSetup(){AR_FORECAST_STATE.config={...AR_DEFAULT_CONFIG};writeARConfigInputs();saveARLocalState();calculateARForecast();}
+async function saveARGoal(){
+  readARConfigFromInputs();
+
+  const payload={
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    goal:Math.max(0,toARNumber(AR_FORECAST_STATE.config.goal)),
+    config:{...AR_FORECAST_STATE.config}
+  };
+
+  if(!payload.date){
+    showARMessage('Select a production date before saving the AR goal.');
+    return;
+  }
+
+  const btn=document.getElementById('arSaveGoalBtn');
+  const originalText=btn?.textContent || 'Save Goal';
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Saving...';
+  }
+
+  const response=await postARForecastApi('saveGoal',payload);
+
+  if(btn){
+    btn.disabled=false;
+    btn.textContent=originalText;
+  }
+
+  if(!response || !response.ok){
+    const message=response?.error || 'AR goal could not be saved.';
+    setTextSafe('arGoalSaveMeta',message);
+    showARMessage(message);
+    return;
+  }
+
+  saveARLocalState();
+  setTextSafe(
+    'arGoalSaveMeta',
+    `Goal ${formatARNumber(payload.goal)} saved for ${payload.date}.`
+  );
+  showARMessage(`AR goal saved for ${payload.date}.`);
+}
+
 async function saveARSetup(){readARConfigFromInputs();saveARLocalState();await postARForecastApi('saveConfig',{config:AR_FORECAST_STATE.config});showARMessage('AR setup saved.');}
 async function saveARHourly(){const payload={date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),config:AR_FORECAST_STATE.config,hourly:collectARHourlyData()};saveARLocalState();await postARForecastApi('saveHourly',payload);showARMessage('AR hourly saved.');}
-async function saveARForecast(){if(!AR_FORECAST_STATE.calculated)return;const payload={date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),config:AR_FORECAST_STATE.config,result:AR_FORECAST_STATE.calculated,liveStaff:AR_FORECAST_STATE.liveStaff};await postARForecastApi('saveForecast',payload);showARMessage('AR forecast saved.');}
+async function saveARForecast(){if(!AR_FORECAST_STATE.calculated)return;const payload={date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),config:AR_FORECAST_STATE.config,morningPlan:AR_FORECAST_STATE.morningPlan,result:AR_FORECAST_STATE.calculated,liveStaff:AR_FORECAST_STATE.liveStaff};await postARForecastApi('saveForecast',payload);showARMessage('AR forecast saved.');}
 function clearARManualHourly(){AR_FORECAST_STATE.manualHourly={};saveARLocalState();buildARHourlyRows();calculateARForecast();}
 async function postARForecastApi(action,payload){try{const r=await fetch(AR_FORECAST_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload})});return await r.json();}catch(e){console.warn('[AR Forecast API]',e);return{ok:false,error:e.message};}}
 function saveARLocalState(){
@@ -4868,6 +5356,7 @@ function saveARLocalState(){
     JSON.stringify({
       config:AR_FORECAST_STATE.config,
       manualHourly:AR_FORECAST_STATE.manualHourly,
+      morningPlan:AR_FORECAST_STATE.morningPlan,
       staffingCapacityOverrides:AR_FORECAST_STATE.staffingCapacityOverrides
     })
   );
@@ -4878,6 +5367,10 @@ function restoreARLocalState(){
     const x=JSON.parse(localStorage.getItem(AR_FORECAST_STORAGE_KEY)||'{}');
     AR_FORECAST_STATE.config={...AR_DEFAULT_CONFIG,...(x.config||{})};
     AR_FORECAST_STATE.manualHourly=x.manualHourly||{};
+    AR_FORECAST_STATE.morningPlan={
+      ...AR_DEFAULT_MORNING_PLAN,
+      ...(x.morningPlan||{})
+    };
 
     if(x.staffingCapacityOverrides&&typeof x.staffingCapacityOverrides==='object'){
       AR_FORECAST_STATE.staffingCapacityOverrides={
@@ -4887,6 +5380,7 @@ function restoreARLocalState(){
     }
   }catch{}
   writeARConfigInputs();
+  writeARMorningPlanInputs();
 }
 function normalizeARHourKey(key){const s=String(key||'').trim().replace(/^H/i,''),m=s.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);if(!m)return s;let h=Number(m[1]),min=Number(m[2]||0);if(m[3]){const ap=m[3].toUpperCase();if(ap==='PM'&&h<12)h+=12;if(ap==='AM'&&h===12)h=0;}return`${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;}
 function formatARHourLabel(key){const[h,m]=normalizeARHourKey(key).split(':').map(Number),d=new Date();d.setHours(h,m||0,0,0);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
