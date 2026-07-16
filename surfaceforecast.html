@@ -7,7 +7,7 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./surfaceforecast.css?v=20260714-time-position-v5">
+  <link rel="stylesheet" href="./surfaceforecast.css?v=20260715-finish-save-toast-v3">
 </head>
 
 <body>
@@ -51,6 +51,7 @@
             <select id="departmentMode">
               <option value="Surface">Surface Forecast</option>
               <option value="AR">AR Forecast</option>
+              <option value="Finish">Finish Forecast</option>
             </select>
             <small id="departmentModeStatus">Surface engine</small>
           </label>
@@ -830,10 +831,102 @@
           </section>
         </div>
 
+        <!-- ================= FINISH FORECAST: DASHBOARD ================= -->
+        <div class="tab-panel finish-forecast-panel" id="tabPanel-finish-status" data-tab-panel="status" data-department="Finish" hidden>
+          <section class="forecast-kpi-grid wide">
+            <div class="forecast-kpi-card"><span class="kpi-label">Current Finish OUT</span><strong id="finishCurrentOut">0</strong><small>Final Inspection output so far</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Projected Finish OUT</span><strong id="finishProjectedOut">0</strong><small>Planned/live staffing forecast</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Projected Range</span><strong id="finishProjectedRange">0 - 0</strong><small>Known work low / expected feed high</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Finish Goal</span><strong id="finishGoalCard">0</strong><small id="finishGoalGap">No goal entered</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Finish BOS</span><strong id="finishBosCard">0</strong><small>Available at shift start</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">AR BOS Feed</span><strong id="finishArBosCard">0</strong><small>Upstream work expected to feed Finish</small></div>
+            <div class="forecast-kpi-card"><span class="kpi-label">Previous Week Avg.</span><strong id="finishIncomingAvgCard">0</strong><small>Saved incoming daily average</small></div>
+            <div class="forecast-kpi-card focus"><span class="kpi-label">Main Constraint</span><strong id="finishConstraintCard">-</strong><small id="finishConstraintMeta">Waiting for setup</small></div>
+          </section>
+
+          <section class="panel wide">
+            <div class="section-title command-title"><h2>Finish Goal Readiness</h2><span id="finishForecastMode">Morning plan</span></div>
+            <div id="finishSummary" class="goal-plan-summary"><p class="muted-cell">Enter BOS, previous-week incoming, and the morning staffing plan.</p></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Production Area</th><th>Forecast Source</th><th>Planned / Live</th><th>Effective JPH</th><th>Pace Needed</th><th>Gap</th><th>Status</th></tr></thead>
+                <tbody id="finishReadinessTable"><tr><td colspan="7">No calculation yet.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="button-row"><button type="button" id="finishSaveForecastBtn" class="secondary">Save Finish Forecast</button></div>
+          </section>
+
+          <section class="panel wide">
+            <div class="section-title command-title"><h2>Live Associate Staffing</h2><span id="finishRosterStatus">Waiting for Finish activity</span></div>
+            <div id="finishLiveStaffCards" class="ar-staffing-grid"><div class="recommendation-item"><strong>No live Finish staffing loaded</strong><span>Associates appear after their first scan.</span></div></div>
+          </section>
+        </div>
+
+        <!-- ================= FINISH FORECAST: PERFORMANCE ================= -->
+        <div class="tab-panel finish-forecast-panel" id="tabPanel-finish-performance" data-tab-panel="performance" data-department="Finish" hidden>
+          <section class="panel wide performance-hero-panel futuristic-hero scoreboard-frame">
+            <div class="performance-tab-header"><div><p class="eyebrow">Finish live performance</p><h2>PACE &amp; HOURLY OUTLOOK</h2></div><div class="performance-tab-badge"><span class="status-led"></span>Final Inspection OUT</div></div>
+          </section>
+          <section class="panel wide">
+            <div class="section-title command-title"><h2>Finish Hourly Performance</h2><span>Automatic from Finish operator activity</span></div>
+            <div class="hourly-sector-strip" id="finishHourlyCards"><div class="sector-row not-started">Waiting for Finish hourly data…</div></div>
+          </section>
+        </div>
+
+        <!-- ================= FINISH FORECAST: SETUP ================= -->
+        <div class="tab-panel finish-forecast-panel" id="tabPanel-finish-setup" data-tab-panel="setup" data-department="Finish" hidden>
+          <section class="panel input-panel wide">
+            <div class="section-title"><h2>Finish Daily Setup</h2><span id="finishSetupStatus">Enter morning work and save</span></div>
+            <div class="form-grid setup-grid finish-setup-grid">
+              <label>Finish Goal / Target
+                <div class="ar-goal-input-row"><input id="finishGoal" type="number" min="0" step="1" value="0"><button type="button" id="finishSaveGoalBtn" class="primary">Save Goal</button></div>
+                <small class="label-note" id="finishGoalMeta">Daily Final Inspection target.</small>
+              </label>
+              <label>Finish BOS WIP<input id="finishBosWip" type="number" min="0" step="1" value="0"><small class="label-note">Available inside Finish at BOS.</small></label>
+              <label>AR BOS WIP<input id="finishArBosWip" type="number" min="0" step="1" value="0"><small class="label-note">Upstream AR work expected to feed Finish.</small></label>
+              <div class="info-box"><strong>Work forecast rule</strong><span>Low uses Finish BOS plus conservative AR feed. High adds expected AR feed and the previous-week incoming average.</span></div>
+            </div>
+            <div class="button-row"><button type="button" id="finishSaveBosBtn" class="primary">Save Finish / AR BOS</button></div>
+          </section>
+
+          <section class="panel input-panel wide">
+            <div class="section-title"><h2>Previous Week Incoming</h2><span id="finishIncomingStatus">Blank days are ignored</span></div>
+            <div class="finish-week-grid">
+              <label>Sunday<input class="finish-incoming-day" data-day="Sunday" type="number" min="0" step="1"></label>
+              <label>Monday<input class="finish-incoming-day" data-day="Monday" type="number" min="0" step="1"></label>
+              <label>Tuesday<input class="finish-incoming-day" data-day="Tuesday" type="number" min="0" step="1"></label>
+              <label>Wednesday<input class="finish-incoming-day" data-day="Wednesday" type="number" min="0" step="1"></label>
+              <label>Thursday<input class="finish-incoming-day" data-day="Thursday" type="number" min="0" step="1"></label>
+              <label>Friday<input class="finish-incoming-day" data-day="Friday" type="number" min="0" step="1"></label>
+              <label>Saturday<input class="finish-incoming-day" data-day="Saturday" type="number" min="0" step="1"></label>
+              <div class="finish-average-card"><span>Calculated Daily Average</span><strong id="finishIncomingAverage">0</strong><small id="finishIncomingCount">0 days entered</small></div>
+            </div>
+            <div class="button-row"><button type="button" id="finishSaveIncomingBtn" class="primary">Save Previous Week</button></div>
+          </section>
+
+          <section class="panel input-panel wide finish-morning-plan-panel">
+            <div class="section-title"><h2>Finish Morning Staffing Plan</h2><span id="finishMorningStatus">Used before live scans begin</span></div>
+            <div class="finish-area-plan-grid">
+              <article class="finish-area-card"><small>AREA 1</small><h3>Finish Unbox</h3><label>Planned Associates<input id="finishPlanUnbox" type="number" min="0" step="0.5" value="1"></label><p>150 JPH each</p><strong id="finishPlanUnboxCapacity">150 JPH</strong></article>
+              <article class="finish-area-card"><small>AREA 2</small><h3>MEI Machines</h3><label>Machines Running<input id="finishPlanMeiMachines" type="number" min="0" step="1" value="3"></label><label>Planned Coverage<input id="finishPlanMeiAssociates" type="number" min="0" step="0.5" value="1"></label><p>50 JPH per machine</p><strong id="finishPlanMeiCapacity">150 JPH</strong></article>
+              <article class="finish-area-card"><small>AREA 3</small><h3>Mounting</h3><label>Planned Associates<input id="finishPlanMounting" type="number" min="0" step="0.5" value="6"></label><p>25 JPH certified</p><strong id="finishPlanMountingCapacity">150 JPH</strong></article>
+              <article class="finish-area-card"><small>LIVE SPECIALTY</small><h3>Drill</h3><p>Drill is based only on live station login. A Drill associate is removed from Mounting while supporting Drill.</p><strong id="finishPlanDrillCapacity">Live only</strong></article>
+              <article class="finish-area-card"><small>AREA 4</small><h3>Final Inspection</h3><label>Planned Associates<input id="finishPlanFinal" type="number" min="0" step="0.5" value="2"></label><p>75 JPH certified</p><strong id="finishPlanFinalCapacity">150 JPH</strong></article>
+            </div>
+            <div class="button-row"><button type="button" id="finishSaveMorningBtn" class="primary">Save Morning Plan</button></div>
+          </section>
+
+          <section class="panel input-panel wide">
+            <div class="section-title"><h2>Associate JPH Database</h2><span>Training and custom JPH</span></div>
+            <div id="finishAssociateJphList" class="finish-associate-jph-list"><div class="recommendation-item"><strong>No Finish associates loaded yet</strong><span>Sync Finish activity to edit individual JPH.</span></div></div>
+          </section>
+        </div>
+
       </main>
     </div>
   </div>
 
-  <script src="./surfaceforecast.js?v=20260714-ar-cell-plan-v8-fixed"></script>
+  <script src="./surfaceforecast.js?v=20260715-finish-save-toast-v3"></script>
+  <div id="appToastHost" class="app-toast-host" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>

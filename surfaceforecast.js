@@ -185,10 +185,10 @@ document.addEventListener('DOMContentLoaded', async function () {
   updateForecastRuleCopy();
   wireButtons();
 
-  const initialDepartment =
-    localStorage.getItem('productionGoalForecast.department') === 'AR'
-      ? 'AR'
-      : 'Surface';
+  const savedDepartment=localStorage.getItem('productionGoalForecast.department');
+  const initialDepartment=['Surface','AR','Finish'].includes(savedDepartment)
+    ? savedDepartment
+    : 'Surface';
 
   // Do not open the Surface Forecast storage API when the page starts in AR.
   // AR has its own local setup and reads live data from Production Flow.
@@ -203,12 +203,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     calculateForecast();
     savePageState();
     await syncSurfaceDashboardData(true);
-  } else {
-    if (!document.querySelector('.downtime-row')) {
-      addDowntimeRow();
-    }
-
+  } else if(initialDepartment==='AR') {
+    if (!document.querySelector('.downtime-row')) addDowntimeRow();
     await syncARForecastData(true);
+  } else {
+    if (!document.querySelector('.downtime-row')) addDowntimeRow();
+    await syncFinishForecastData(true);
   }
 
   // One refresh timer. It refreshes only the department currently being viewed.
@@ -220,6 +220,8 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     if (department === 'AR') {
       syncARForecastData(false);
+    } else if(department==='Finish') {
+      syncFinishForecastData(false);
     } else {
       syncSurfaceDashboardData(false);
     }
@@ -3826,7 +3828,7 @@ document.getElementById('arGoal')?.addEventListener('input',()=>{
 document.getElementById('arSaveMorningPlanBtn')?.addEventListener('click',saveARMorningPlan);
 document.getElementById('arSaveBosBtn')?.addEventListener('click',saveARBosWip);document.getElementById('arResetBosBtn')?.addEventListener('click',resetARBosWip);document.getElementById('arBosWip')?.addEventListener('input',()=>{setTextSafe('arBosSetupMeta','Unsaved BOS change — click Save BOS.');});document.getElementById('arSaveSetupBtn')?.addEventListener('click',saveARSetup);document.getElementById('arResetSetupBtn')?.addEventListener('click',resetARSetup);document.getElementById('arSaveHourlyBtn')?.addEventListener('click',saveARHourly);document.getElementById('arClearHourlyBtn')?.addEventListener('click',clearARManualHourly);document.getElementById('arSaveForecastBtn')?.addEventListener('click',saveARForecast);const btn=document.getElementById('calculateBtn');btn?.addEventListener('click',e=>{if(AR_FORECAST_STATE.department==='AR'){e.stopImmediatePropagation();syncARForecastData(true);}},true);document.getElementById('shiftMode')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR'){buildARHourlyRows();calculateARForecast();}});document.getElementById('productionDate')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR')syncARForecastData(false);});}
 function setDepartmentMode(mode,shouldSync){
-  const d=mode==='AR'?'AR':'Surface';
+  const d=['Surface','AR','Finish'].includes(mode)?mode:'Surface';
   AR_FORECAST_STATE.department=d;
   localStorage.setItem('productionGoalForecast.department',d);
   document.body.dataset.department=d;
@@ -3834,24 +3836,21 @@ function setDepartmentMode(mode,shouldSync){
   const s=document.getElementById('departmentMode');
   if(s)s.value=d;
 
-  setTextSafe('departmentBrandMark',d==='AR'?'AR':'SF');
-  setTextSafe('departmentBrandName',d==='AR'?'AR':'SURFACE');
-  setTextSafe('pageForecastTitle',d==='AR'?'AR Goal Forecast':'Surface Goal Forecast');
-  setTextSafe('departmentModeStatus',d==='AR'?'AR WIP + live activity staffing':'Surface engine');
+  setTextSafe('departmentBrandMark',d==='AR'?'AR':d==='Finish'?'FN':'SF');
+  setTextSafe('departmentBrandName',d==='AR'?'AR':d==='Finish'?'FINISH':'SURFACE');
+  setTextSafe('pageForecastTitle',d==='AR'?'AR Goal Forecast':d==='Finish'?'Finish Goal Forecast':'Surface Goal Forecast');
+  setTextSafe('departmentModeStatus',d==='AR'?'AR WIP + live activity staffing':d==='Finish'?'Finish BOS + planned/live staffing':'Surface engine');
 
   const tab=document.querySelector('.tab-btn.active')?.dataset.tabTarget||'status';
-  activateTab(
-    tab,
-    Array.from(document.querySelectorAll('.tab-btn')),
-    Array.from(document.querySelectorAll('.tab-panel'))
-  );
+  activateTab(tab,Array.from(document.querySelectorAll('.tab-btn')),Array.from(document.querySelectorAll('.tab-panel')));
 
   if(!shouldSync)return;
 
   if(d==='AR'){
     syncARForecastData(true);
+  }else if(d==='Finish'){
+    syncFinishForecastData(true);
   }else{
-    // Surface should refresh its own source only when Surface is selected.
     syncSurfaceDashboardData(true);
     calculateForecast();
   }
@@ -5388,4 +5387,431 @@ function toARNumber(v){const n=Number(String(v??'').replace(/,/g,'').trim());ret
 function formatARNumber(v){return Math.round(toARNumber(v)).toLocaleString('en-US');}
 function setTextSafe(id,value){const el=document.getElementById(id);if(el)el.textContent=String(value);}
 function showARMessage(text){if(typeof showToast==='function')showToast(text);else console.log(text);}
+
+
+
+
+function showAppToast(message,type='success',duration=3200){
+  let host=document.getElementById('appToastHost');
+  if(!host){
+    host=document.createElement('div');
+    host.id='appToastHost';
+    host.className='app-toast-host';
+    host.setAttribute('aria-live','polite');
+    document.body.appendChild(host);
+  }
+
+  const toast=document.createElement('div');
+  toast.className=`app-toast app-toast-${type}`;
+  toast.innerHTML=`
+    <span class="app-toast-icon">${type==='success'?'✓':type==='error'?'!':'i'}</span>
+    <div>
+      <strong>${type==='success'?'Saved':type==='error'?'Could not save':'Notice'}</strong>
+      <small>${escapeHtml(String(message||''))}</small>
+    </div>`;
+
+  host.appendChild(toast);
+  requestAnimationFrame(()=>toast.classList.add('show'));
+
+  window.setTimeout(()=>{
+    toast.classList.remove('show');
+    window.setTimeout(()=>toast.remove(),220);
+  },duration);
+}
+
+/* =========================================================
+   FINISH FORECAST MODULE V1
+========================================================= */
+const FINISH_FORECAST_API_URL='https://script.google.com/macros/s/AKfycbxAGP8BMRvicY3UoRJvkwJQIT7KL-d9bEV8EQngtuaxi6wl5gKUhCVYWG3jBtk8nK9vFQ/exec';
+const FINISH_LOCAL_KEY='productionGoalForecast.finish.v1';
+const FINISH_JPH={unbox:150,mei:50,mounting:25,drill:6,final:75};
+const FINISH_STATE={
+  goal:0,finishBosWip:0,arBosWip:0,previousWeekAvgIncoming:0,
+  incomingEntries:{},
+  morningPlan:{finishUnboxPlanned:1,meiMachinesRunning:3,meiPlannedAssociates:1,mountingPlanned:6,finalInspectionPlanned:2},
+  associatesDb:{},liveStaff:[],hourly:{},lastSync:null,calculated:null
+};
+
+document.addEventListener('DOMContentLoaded',function initFinishForecast(){
+  restoreFinishLocal();
+  wireFinishControls();
+  writeFinishInputs();
+  renderFinishIncomingAverage();
+  calculateFinishForecast();
+});
+
+function wireFinishControls(){
+  ['finishGoal','finishBosWip','finishArBosWip','finishPlanUnbox','finishPlanMeiMachines','finishPlanMeiAssociates','finishPlanMounting','finishPlanFinal'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',()=>{
+      readFinishInputs(); saveFinishLocal(); calculateFinishForecast();
+    });
+  });
+  document.querySelectorAll('.finish-incoming-day').forEach(input=>input.addEventListener('input',()=>{
+    FINISH_STATE.incomingEntries[input.dataset.day]=input.value;
+    renderFinishIncomingAverage(); saveFinishLocal(); calculateFinishForecast();
+  }));
+  document.getElementById('finishSaveGoalBtn')?.addEventListener('click',saveFinishGoal);
+  document.getElementById('finishSaveBosBtn')?.addEventListener('click',saveFinishBos);
+  document.getElementById('finishSaveIncomingBtn')?.addEventListener('click',saveFinishIncomingWeek);
+  document.getElementById('finishSaveMorningBtn')?.addEventListener('click',saveFinishMorningPlan);
+  document.getElementById('finishSaveForecastBtn')?.addEventListener('click',saveFinishForecast);
+  document.getElementById('finishAssociateJphList')?.addEventListener('change',handleFinishJphChange);
+}
+
+function readFinishInputs(){
+  FINISH_STATE.goal=toARNumber(getValue('finishGoal',0));
+  FINISH_STATE.finishBosWip=toARNumber(getValue('finishBosWip',0));
+  FINISH_STATE.arBosWip=toARNumber(getValue('finishArBosWip',0));
+  FINISH_STATE.morningPlan={
+    finishUnboxPlanned:toARNumber(getValue('finishPlanUnbox',1)),
+    meiMachinesRunning:toARNumber(getValue('finishPlanMeiMachines',3)),
+    meiPlannedAssociates:toARNumber(getValue('finishPlanMeiAssociates',1)),
+    mountingPlanned:toARNumber(getValue('finishPlanMounting',6)),
+    finalInspectionPlanned:toARNumber(getValue('finishPlanFinal',2))
+  };
+}
+function writeFinishInputs(){
+  const map={finishGoal:FINISH_STATE.goal,finishBosWip:FINISH_STATE.finishBosWip,finishArBosWip:FINISH_STATE.arBosWip,
+    finishPlanUnbox:FINISH_STATE.morningPlan.finishUnboxPlanned,finishPlanMeiMachines:FINISH_STATE.morningPlan.meiMachinesRunning,
+    finishPlanMeiAssociates:FINISH_STATE.morningPlan.meiPlannedAssociates,finishPlanMounting:FINISH_STATE.morningPlan.mountingPlanned,
+    finishPlanFinal:FINISH_STATE.morningPlan.finalInspectionPlanned};
+  Object.entries(map).forEach(([id,v])=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=v;});
+  document.querySelectorAll('.finish-incoming-day').forEach(el=>{if(document.activeElement!==el)el.value=FINISH_STATE.incomingEntries[el.dataset.day]??'';});
+}
+function saveFinishLocal(){localStorage.setItem(FINISH_LOCAL_KEY,JSON.stringify(FINISH_STATE));}
+function restoreFinishLocal(){try{const x=JSON.parse(localStorage.getItem(FINISH_LOCAL_KEY)||'{}');Object.assign(FINISH_STATE,x||{});FINISH_STATE.morningPlan={...FINISH_STATE.morningPlan,...(x.morningPlan||{})};}catch{}}
+
+function getFinishPreviousWeekStart(){
+  const value=getValue('productionDate',getLocalDateInputValue(new Date()));
+  const d=new Date(value+'T12:00:00'); d.setDate(d.getDate()-d.getDay()-7);
+  return getLocalDateInputValue(d);
+}
+function getFinishIncomingValues(){
+  return Object.values(FINISH_STATE.incomingEntries).filter(v=>v!==''&&v!==null&&v!==undefined&&Number.isFinite(Number(v))).map(Number);
+}
+function renderFinishIncomingAverage(){
+  const values=getFinishIncomingValues();
+  const avg=values.length
+    ? values.reduce((a,b)=>a+b,0)/values.length
+    : toARNumber(FINISH_STATE.previousWeekAvgIncoming);
+
+  FINISH_STATE.previousWeekAvgIncoming=avg;
+  setTextSafe('finishIncomingAverage',formatARNumber(avg));
+  setTextSafe(
+    'finishIncomingCount',
+    values.length
+      ? `${values.length} day${values.length===1?'':'s'} entered`
+      : (avg>0?'Saved weekly average':'0 days entered')
+  );
+}
+
+function normalizeFinishStation(value){
+  const s=String(value||'').trim().toUpperCase();
+  if(s.includes('FINISH UNBOX')||s==='UNBOX')return'Finish Unbox';
+  if(s.includes('MEI'))return'MEI';
+  if(s.includes('DRILL'))return'Drill';
+  if(s.includes('MOUNT'))return'Mounting';
+  if(s.includes('FINAL INSPECTION')||s.includes('FINAL'))return'Final Inspection';
+  return'';
+}
+function isFinishMachineAlias(name){
+  const text=String(name||'').trim().toUpperCase();
+
+  // MEI 01 B, MEI 05 C, MEI-02-B, etc. are machine/operator aliases,
+  // not people. MEI capacity comes from the machine-count input.
+  return /^MEI[\s_-]*\d+[\s_-]*[ABC]?$/.test(text);
+}
+
+function buildFinishLiveStaffing(payload){
+  const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
+  const by={};
+  rows.forEach(row=>{
+    const name=String(row.Operator??row.operator??'').trim();
+    if(!isValidAROperator(name)||isFinishMachineAlias(name))return;
+    const station=normalizeFinishStation(row.FlowStation??row.AccessPoint??row.accessPoint??''); if(!station)return;
+    Object.entries(row.Hours??row.hours??{}).forEach(([hour,value])=>{
+      const output=toARNumber(value); if(output<=0)return;
+      const rank=getARHourRank(hour), key=name.toUpperCase();
+      if(!by[key]||rank>by[key].rank||(rank===by[key].rank&&station==='Drill')){
+        by[key]={name,station,lastHour:normalizeARHourKey(hour),lastHourLabel:formatARHourLabel(hour),lastHourOutput:output,rank};
+      }
+    });
+  });
+  return Object.values(by).map(p=>{
+    const db=FINISH_STATE.associatesDb[p.name.toUpperCase()]||{};
+    const standard=p.station==='Finish Unbox'?150:p.station==='MEI'?50:p.station==='Mounting'?25:p.station==='Drill'?6:75;
+    const effective=db.trainingStatus?toARNumber(db.trainingJph):(db.customJph!==''&&db.customJph!==undefined?toARNumber(db.customJph):standard);
+    return{...p,effectiveJph:effective,trainingStatus:Boolean(db.trainingStatus),trainingWeek:db.trainingWeek||0};
+  });
+}
+function getFinishLiveByArea(){
+  const out={'Finish Unbox':[],'MEI':[],'Mounting':[],'Drill':[],'Final Inspection':[]};
+  FINISH_STATE.liveStaff.forEach(p=>out[p.station]?.push(p)); return out;
+}
+function getFinishAreaCaps(){
+  const live=getFinishLiveByArea(), p=FINISH_STATE.morningPlan;
+  const sum=a=>a.reduce((s,x)=>s+toARNumber(x.effectiveJph),0);
+  const has=k=>live[k].length>0;
+  return[
+    {area:'Finish Unbox',source:has('Finish Unbox')?'Live staffing':'Morning plan',count:has('Finish Unbox')?live['Finish Unbox'].length:p.finishUnboxPlanned,jph:has('Finish Unbox')?sum(live['Finish Unbox']):p.finishUnboxPlanned*150,required:true},
+    {area:'MEI',source:has('MEI')?'Live staffing':'Morning plan',count:has('MEI')?live.MEI.length:p.meiPlannedAssociates,jph:p.meiMachinesRunning*50,required:true,detail:`${p.meiMachinesRunning} machine(s)`},
+    {area:'Mounting',source:has('Mounting')||has('Drill')?'Live staffing':'Morning plan',count:has('Mounting')?live.Mounting.length:p.mountingPlanned,jph:has('Mounting')||has('Drill')?sum(live.Mounting):p.mountingPlanned*25,required:true,detail:has('Drill')?`${live.Drill.length} moved to Drill`:''},
+    {area:'Drill',source:'Live only',count:live.Drill.length,jph:sum(live.Drill),required:false},
+    {area:'Final Inspection',source:has('Final Inspection')?'Live staffing':'Morning plan',count:has('Final Inspection')?live['Final Inspection'].length:p.finalInspectionPlanned,jph:has('Final Inspection')?sum(live['Final Inspection']):p.finalInspectionPlanned*75,required:true}
+  ];
+}
+function getFinishCurrentOut(){
+  return Object.values(FINISH_STATE.hourly).reduce((s,row)=>s+toARNumber(row.finalInspection),0);
+}
+function calculateFinishForecast(){
+  readFinishInputs(); renderFinishIncomingAverage();
+  const hours=getShiftHours(getValue('shiftMode','Weekday'));
+  const currentOut=getFinishCurrentOut();
+  const caps=getFinishAreaCaps();
+  const requiredCaps=caps.filter(x=>x.required&&x.jph>0);
+  const bottleneck=requiredCaps.length?requiredCaps.reduce((a,b)=>a.jph<=b.jph?a:b):null;
+  const capacity=bottleneck?bottleneck.jph*hours:0;
+  const arFeedLow=FINISH_STATE.arBosWip*.55, arFeedHigh=FINISH_STATE.arBosWip*.85;
+  const workLow=FINISH_STATE.finishBosWip+arFeedLow;
+  const workHigh=FINISH_STATE.finishBosWip+arFeedHigh+FINISH_STATE.previousWeekAvgIncoming;
+  const low=Math.min(workLow,capacity), high=Math.min(workHigh,capacity);
+  const projected=currentOut>0?Math.max(currentOut,high):high;
+  const paceNeeded=hours>0?FINISH_STATE.goal/hours:0;
+  const eos=Math.max(0,workHigh-high);
+  FINISH_STATE.calculated={goal:FINISH_STATE.goal,currentFinishOut:currentOut,projectedFinishOutLow:low,projectedFinishOutHigh:high,totalExpectedWork:workHigh,expectedEosWip:eos,bottleneckArea:bottleneck?.area||'',bottleneckJph:bottleneck?.jph||0,plannedStaffingTotal:0,liveStaffingTotal:FINISH_STATE.liveStaff.length,staffingVariance:0,forecastMode:FINISH_STATE.liveStaff.length?'Blended planned/live':'Morning plan',goalStatus:FINISH_STATE.goal&&high>=FINISH_STATE.goal?'ON TRACK':'AT RISK',recommendation:bottleneck?`Protect ${bottleneck.area}; it is the current limiting area at ${round1(bottleneck.jph)} JPH.`:'Enter morning staffing.'};
+  renderFinishForecast(caps,paceNeeded);
+}
+function renderFinishForecast(caps,paceNeeded){
+  const r=FINISH_STATE.calculated||{};
+  setTextSafe('finishCurrentOut',formatARNumber(r.currentFinishOut));
+  setTextSafe('finishProjectedOut',formatARNumber(r.projectedFinishOutHigh));
+  setTextSafe('finishProjectedRange',`${formatARNumber(r.projectedFinishOutLow)} - ${formatARNumber(r.projectedFinishOutHigh)}`);
+  setTextSafe('finishGoalCard',formatARNumber(FINISH_STATE.goal));
+  setTextSafe('finishBosCard',formatARNumber(FINISH_STATE.finishBosWip));
+  setTextSafe('finishArBosCard',formatARNumber(FINISH_STATE.arBosWip));
+  setTextSafe('finishIncomingAvgCard',formatARNumber(FINISH_STATE.previousWeekAvgIncoming));
+  setTextSafe('finishConstraintCard',r.bottleneckArea||'-');
+  setTextSafe('finishConstraintMeta',r.bottleneckArea?`${round1(r.bottleneckJph)} usable JPH`:'Waiting for staffing');
+  setTextSafe('finishGoalGap',FINISH_STATE.goal?`${formatARNumber(Math.max(0,FINISH_STATE.goal-r.projectedFinishOutHigh))} jobs below goal`:'No goal entered');
+  setTextSafe('finishForecastMode',r.forecastMode||'Morning plan');
+  setTextSafe('finishPlanUnboxCapacity',`${round1(FINISH_STATE.morningPlan.finishUnboxPlanned*150)} JPH`);
+  setTextSafe('finishPlanMeiCapacity',`${round1(FINISH_STATE.morningPlan.meiMachinesRunning*50)} JPH`);
+  setTextSafe('finishPlanMountingCapacity',`${round1(FINISH_STATE.morningPlan.mountingPlanned*25)} JPH`);
+  setTextSafe('finishPlanFinalCapacity',`${round1(FINISH_STATE.morningPlan.finalInspectionPlanned*75)} JPH`);
+  const body=document.getElementById('finishReadinessTable');
+  if(body)body.innerHTML=caps.map(x=>{const gap=x.required?Math.max(0,paceNeeded-x.jph):0;const ok=!x.required||x.jph>=paceNeeded;return`<tr><td><strong>${escapeHtml(x.area)}</strong>${x.detail?`<small>${escapeHtml(x.detail)}</small>`:''}</td><td>${x.source}</td><td>${round1(x.count)}</td><td>${round1(x.jph)}</td><td>${x.required?round1(paceNeeded):'Route only'}</td><td>${gap?round1(gap):'—'}</td><td class="${ok?'risk-green':'risk-red'}">${ok?'ON TRACK':'NEEDS ATTENTION'}</td></tr>`;}).join('');
+  setTextSafe('finishSummary',FINISH_STATE.goal?`${r.goalStatus}: projected range ${formatARNumber(r.projectedFinishOutLow)}–${formatARNumber(r.projectedFinishOutHigh)} against a goal of ${formatARNumber(FINISH_STATE.goal)}.`:'Enter a Finish goal to see readiness.');
+  renderFinishLiveStaff();
+  renderFinishHourly();
+}
+function renderFinishLiveStaff(){
+  const box=document.getElementById('finishLiveStaffCards');
+  if(!box)return;
+
+  const areaOrder=['Finish Unbox','MEI','Mounting','Drill','Final Inspection'];
+  const areaMap=getFinishLiveByArea();
+
+  if(!FINISH_STATE.liveStaff.length){
+    box.innerHTML='<div class="recommendation-item"><strong>No live Finish staffing loaded</strong><span>Morning plan remains active until associates begin scanning.</span></div>';
+    renderFinishAssociateJphList();
+    return;
+  }
+
+  box.innerHTML=areaOrder.map(area=>{
+    const associates=areaMap[area]||[];
+    const totalJph=associates.reduce((sum,p)=>sum+toARNumber(p.effectiveJph),0);
+    const isMei=area==='MEI';
+
+    const rows=associates.length
+      ? associates.map(p=>`
+          <div class="ar-associate-row">
+            <div>
+              <strong>${escapeHtml(p.name)} ${p.trainingStatus?'<span class="finish-training-badge">T</span>':''}</strong>
+              <small>${escapeHtml(p.lastHourLabel||'Live')} · ${formatARNumber(p.lastHourOutput||0)} jobs${p.trainingStatus?` · Training Week ${p.trainingWeek}`:''}</small>
+            </div>
+            <em>${round1(p.effectiveJph)} JPH</em>
+          </div>`).join('')
+      : `<div class="finish-empty-area">
+           <strong>No active associate</strong>
+           <small>${isMei?'MEI forecast still uses machines running.':'Morning staffing plan remains active for this area.'}</small>
+         </div>`;
+
+    return `
+      <article class="ar-staff-card finish-live-area-card">
+        <div class="ar-staff-card-head">
+          <strong>${escapeHtml(area)}</strong>
+          <span>${isMei?'MACHINE AREA':`${associates.length} LIVE`}</span>
+        </div>
+
+        <div class="ar-staff-summary">
+          <div><small>Live Associates</small><b>${associates.length}</b></div>
+          <div><small>Associate JPH</small><b>${round1(totalJph)}</b></div>
+          <div><small>Forecast Rule</small><b>${isMei?'Machines':'Live / Plan'}</b></div>
+        </div>
+
+        <div class="ar-associate-list">${rows}</div>
+      </article>`;
+  }).join('');
+
+  renderFinishAssociateJphList();
+}
+function renderFinishAssociateJphList(){
+  const box=document.getElementById('finishAssociateJphList'); if(!box)return;
+  const names=[...new Set(FINISH_STATE.liveStaff.map(p=>p.name).filter(name=>!isFinishMachineAlias(name)))];
+  box.innerHTML=names.length?names.map(name=>{const p=FINISH_STATE.liveStaff.find(x=>x.name===name),db=FINISH_STATE.associatesDb[name.toUpperCase()]||{};return`<div class="finish-jph-row" data-name="${escapeHtml(name)}"><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(p.station)}</small></div><label>Custom JPH<input data-finish-jph="custom" type="number" min="0" step="1" value="${db.customJph??''}"></label><label>Training <select data-finish-jph="training"><option value="No">No</option><option value="Yes" ${db.trainingStatus?'selected':''}>Yes</option></select></label><label>Week<input data-finish-jph="week" type="number" min="1" step="1" value="${db.trainingWeek||1}"></label><button type="button" class="secondary" data-finish-save-jph>Save</button></div>`;}).join(''):'<div class="recommendation-item"><strong>No Finish associates loaded</strong><span>Sync Finish activity first.</span></div>';
+  box.querySelectorAll('[data-finish-save-jph]').forEach(btn=>btn.addEventListener('click',()=>saveFinishAssociateJph(btn.closest('.finish-jph-row'))));
+}
+function handleFinishJphChange(){}
+async function saveFinishAssociateJph(row){
+  const name=row.dataset.name,p=FINISH_STATE.liveStaff.find(x=>x.name===name); if(!p)return;
+  const custom=row.querySelector('[data-finish-jph="custom"]').value;
+  const training=row.querySelector('[data-finish-jph="training"]').value==='Yes';
+  const week=toARNumber(row.querySelector('[data-finish-jph="week"]').value);
+  let trainingJph=0;
+  if(training&&p.station==='Mounting')trainingJph=[3,6,9,12,15,18,21,25][Math.max(0,Math.min(7,week-1))];
+  if(training&&p.station==='Final Inspection')trainingJph=[15,30,45,60,75][Math.max(0,Math.min(4,week-1))];
+  const payload={associateId:name,associateName:name,baseArea:p.station,defaultJph:p.station==='Mounting'?25:p.station==='Final Inspection'?75:p.station==='Drill'?6:p.station==='Finish Unbox'?150:50,customJph:custom,trainingStatus:training,trainingArea:p.station,trainingWeek:week};
+  const res=await postFinishApi('saveAssociateJph',payload); if(!res?.ok){showARMessage(res?.error||'Could not save Finish JPH.');return;}
+  FINISH_STATE.associatesDb[name.toUpperCase()]={...payload,trainingJph,effectiveJph:res.associate?.effectiveJph};
+  saveFinishLocal();
+  calculateFinishForecast();
+  showAppToast(`${name} JPH saved.`);
+}
+function renderFinishHourly(){
+  const box=document.getElementById('finishHourlyCards'); if(!box)return;
+  const rows=Object.entries(FINISH_STATE.hourly).sort((a,b)=>a[0].localeCompare(b[0]));
+  box.innerHTML=rows.length?rows.map(([h,x])=>`<div class="sector-row"><span>${formatARHourLabel(h)}</span><strong>${formatARNumber(x.finalInspection||0)}</strong><small>Final OUT</small></div>`).join(''):'<div class="sector-row not-started">Waiting for Finish hourly data…</div>';
+}
+function mergeFinishHourly(payload){
+  const out={}; const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
+  rows.forEach(row=>{const station=normalizeFinishStation(row.FlowStation??row.AccessPoint??'');if(station!=='Final Inspection')return;Object.entries(row.Hours??{}).forEach(([h,v])=>{const k=normalizeARHourKey(h);if(!out[k])out[k]={finalInspection:0};out[k].finalInspection+=toARNumber(v);});});
+  FINISH_STATE.hourly=out;
+}
+async function syncFinishForecastData(showStatus){
+  if(showStatus)setFinishSyncState('syncing','Syncing Finish staffing + output');
+  try{
+    const [activity,db,state,prev]=await Promise.all([
+      fetchARJson(`${SURFACE_DASHBOARD_API_URL}?action=operatorActivity&area=Finish`),
+      fetchARJson(`${FINISH_FORECAST_API_URL}?action=getAssociateJph`),
+      fetchARJson(`${FINISH_FORECAST_API_URL}?action=getCurrentState&date=${encodeURIComponent(getValue('productionDate',''))}`),
+      fetchARJson(`${FINISH_FORECAST_API_URL}?action=getPreviousWeekAverage&date=${encodeURIComponent(getValue('productionDate',''))}`)
+    ]);
+    FINISH_STATE.associatesDb=Object.fromEntries((db.associates||[]).map(x=>[String(x.associateName||x.associateId).toUpperCase(),x]));
+    if(state?.state)Object.assign(FINISH_STATE,state.state);
+    if(prev?.entries){FINISH_STATE.incomingEntries={};prev.entries.forEach(x=>FINISH_STATE.incomingEntries[x.dayName]=x.incomingJobs);FINISH_STATE.previousWeekAvgIncoming=prev.average||0;}
+    FINISH_STATE.liveStaff=buildFinishLiveStaffing(activity); mergeFinishHourly(activity); FINISH_STATE.lastSync=new Date();
+    writeFinishInputs();renderFinishIncomingAverage();calculateFinishForecast();saveFinishLocal();
+    setFinishSyncState('ok',FINISH_STATE.liveStaff.length?`Finish live · ${FINISH_STATE.liveStaff.length} associates`:'Finish live · waiting for first scans');
+  }catch(err){console.error('[Finish Forecast]',err);setFinishSyncState('error','Finish sync failed');calculateFinishForecast();}
+}
+function setFinishSyncState(state,text){
+  if(AR_FORECAST_STATE.department!=='Finish')return;
+  setTextSafe('heroSyncState',text);setTextSafe('heroSyncTime',new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}));setTextSafe('finishRosterStatus',text);
+  const dot=document.getElementById('heroSyncDot');if(dot)dot.className=`hero-sync-dot dot-${state}`;
+}
+async function postFinishApi(action,payload){
+  try{const r=await fetch(FINISH_FORECAST_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload}),credentials:'omit'});return await r.json();}catch(err){return{ok:false,error:err.message};}
+}
+function finishPayload(){return{date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),goal:FINISH_STATE.goal,finishBosWip:FINISH_STATE.finishBosWip,arBosWip:FINISH_STATE.arBosWip,previousWeekAvgIncoming:FINISH_STATE.previousWeekAvgIncoming,morningPlan:FINISH_STATE.morningPlan,result:FINISH_STATE.calculated};}
+async function saveFinishGoal(){
+  readFinishInputs();
+  const r=await postFinishApi('saveGoal',{
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    goal:FINISH_STATE.goal
+  });
+
+  if(r?.ok){
+    setTextSafe('finishGoalMeta',`Goal ${formatARNumber(FINISH_STATE.goal)} saved for ${getValue('productionDate','')}.`);
+    showAppToast(`Finish goal ${formatARNumber(FINISH_STATE.goal)} saved.`);
+  }else{
+    showAppToast(r?.error||'Finish goal was not saved.','error');
+  }
+}
+async function saveFinishBos(){
+  readFinishInputs();
+  const r=await postFinishApi('saveBOS',finishPayload());
+
+  if(r?.ok){
+    setTextSafe('finishSetupStatus',`BOS saved for ${getValue('productionDate','')}.`);
+    showAppToast(`Finish BOS ${formatARNumber(FINISH_STATE.finishBosWip)} and AR BOS ${formatARNumber(FINISH_STATE.arBosWip)} saved.`);
+  }else{
+    showAppToast(r?.error||'Finish BOS was not saved.','error');
+  }
+}
+async function saveFinishMorningPlan(){
+  readFinishInputs();
+  const r=await postFinishApi('saveMorningPlan',{
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    plan:FINISH_STATE.morningPlan
+  });
+
+  if(r?.ok){
+    setTextSafe('finishMorningStatus',`Morning plan saved for ${getValue('productionDate','')}.`);
+    showAppToast('Finish morning staffing plan saved.');
+  }else{
+    showAppToast(r?.error||'Morning staffing plan was not saved.','error');
+  }
+}
+async function saveFinishIncomingWeek(){
+  const start=getFinishPreviousWeekStart();
+  const d=new Date(start+'T12:00:00');
+
+  const entries=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day,i)=>{
+    const x=new Date(d);
+    x.setDate(d.getDate()+i);
+    const value=FINISH_STATE.incomingEntries[day];
+    const hasValue=value!==''&&value!==undefined&&value!==null;
+
+    return{
+      productionDate:getLocalDateInputValue(x),
+      dayName:day,
+      incomingJobs:hasValue?toARNumber(value):'',
+      included:hasValue
+    };
+  });
+
+  const r=await postFinishApi('saveIncomingWeek',{weekStart:start,entries});
+
+  if(!r?.ok){
+    showAppToast(r?.error||'Previous-week incoming was not saved.','error');
+    return;
+  }
+
+  const saved=r.incoming||{};
+  FINISH_STATE.previousWeekAvgIncoming=toARNumber(saved.average);
+
+  if(Array.isArray(saved.entries)){
+    FINISH_STATE.incomingEntries={};
+    saved.entries.forEach(entry=>{
+      if(entry?.dayName){
+        FINISH_STATE.incomingEntries[entry.dayName]=entry.incomingJobs;
+      }
+    });
+  }
+
+  writeFinishInputs();
+  renderFinishIncomingAverage();
+  calculateFinishForecast();
+  saveFinishLocal();
+
+  setTextSafe(
+    'finishIncomingStatus',
+    `Saved ${saved.count||0} day(s) · Average ${formatARNumber(saved.average||0)} jobs`
+  );
+
+  showAppToast(
+    `Previous-week incoming saved. Daily average: ${formatARNumber(saved.average||0)} jobs.`
+  );
+}
+async function saveFinishForecast(){
+  const r=await postFinishApi('saveForecast',finishPayload());
+
+  if(r?.ok){
+    showAppToast('Finish forecast snapshot saved.');
+  }else{
+    showAppToast(r?.error||'Finish forecast was not saved.','error');
+  }
+}
 
