@@ -1233,8 +1233,9 @@ const featureCardMap = {
   "Production_SurfaceWorkflow":    "#surfaceflow-card",
   "Production_SurfaceFlow":        "#surfaceflow-card",
   "Production_ARDashboard":        "#ar-card",
-  "Production_ARRunTracker":      "#arruntracker-card",
-  "Production_FinishDash":         "#finishdash-card",
+  "Production_ARRunTracker":       "#arruntracker-card",
+  "Production_ProductionForecast": "#productionforecast-card",
+  "Production_FinishDash":          "#finishdash-card",
    "Production_CoatingBreakage":    "#coating-card",
   "Production_PowerAnalysis":      "#power-card",
 

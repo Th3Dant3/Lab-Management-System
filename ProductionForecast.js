@@ -1,0 +1,9362 @@
+// BUILD: 20260714-cell-block-forecast-v3
+const SURFACE_DASHBOARD_API_URL = 'https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec';
+const SURFACE_DASHBOARD_REFRESH_MS = 5 * 60 * 1000;
+
+const SURFACE_API_URL = 'https://script.google.com/macros/s/AKfycbzaropKAS7ujmUgz88cjchj9lFCJS3VX-TCBFmaE8x449QtEiWV-3cbTvVuRXxIpedv/exec';
+
+
+// Productive hours use clock time minus unpaid/covered breaks.
+// Weekday: Mon-Thu 7:00 AM - 5:30 PM = 9.5 productive hrs.
+// 12-hour shifts: 12 clock hrs with standard planned non-productive time = 10.5 productive hrs.
+const SHIFT_PRODUCTIVE_HOURS = {
+  Weekday: 9.5,
+  'Weekday OT 12': 10.5,
+  Weekend: 10.5
+};
+
+// These are planning ranges, not exact promises.
+// Surface usually receives extra incoming jobs during the day and remake/breakage work.
+// The forecast uses low/high ranges so leadership sees risk instead of one fake number.
+const SURFACE_EXTRA_WORK_DEFAULTS = {
+  incomingLow: 300,
+  incomingHigh: 500,
+  remakeLow: 150,
+  remakeHigh: 200
+};
+
+const SURFACE_BOS_WIP_STORAGE_KEY = 'productionGoalForecast.surface.bosByDate.v1';
+const SURFACE_STARTUP_OUTPUT_DELAY_MIN = 90;
+
+// Minimum estimated travel time from each last-scan WIP location to Surface OUT.
+// These are planning assumptions and can be tuned after comparing forecast vs actual.
+const SURFACE_STAGE_TIME_RANGES = Object.freeze({
+  unbox: { low: 20, high: 30, label: '20–30 min' },
+  autoblocker: { low: 5, high: 10, label: '5–10 min' },
+  cooling: { low: 25, high: 50, label: '25–50 min dwell' },
+  orb: { low: 20, high: 30, label: '20–30 min' },
+  polisher: { low: 20, high: 30, label: '20–30 min' },
+  engraving: { low: 10, high: 15, label: '10–15 min' },
+  detaping: { low: 5, high: 10, label: '5–10 min' },
+  coater: { low: 5, high: 10, label: '5–10 min' },
+  inspection: { low: 0, high: 0, label: '0 min' }
+});
+
+// Cumulative midpoint travel time from each last-scan station to AR41 OUT.
+// The card displays the direct station time-to-clear range above.
+const SURFACE_MATURITY_MINUTES = Object.freeze({
+  inspection: 0,
+  coater: 8,
+  detaping: 16,
+  engraving: 29,
+  polisher: 54,
+  orb: 79,
+  cooling: 117,
+  autoblocker: 125,
+  unbox: 150
+});
+
+
+const SURFACE_AREAS = [
+ 
+  { key: 'unbox', label: 'SF Unbox', group: 'SF Unbox', type: 'operator', capacityMode: 'operator', jphPerUnit: 150, required: true, defaultUnits: 1.5, defaultAssociates: 1.5 },
+  { key: 'autoblocker', label: 'Auto Blocker', group: 'Auto Blocker & Generator', type: 'machine', capacityMode: 'machine', jphPerUnit: 50, required: true, defaultUnits: 4, defaultAssociates: 1, machinesPerAssociate: 4 },
+  { key: 'cooling', label: 'IQ Star / Cooling', group: 'Auto Blocker & Generator', type: 'buffer', capacityMode: 'buffer', jphPerUnit: 0, required: false, defaultUnits: 2, defaultAssociates: 0, bufferCapacity: 180, coolingLowMin: 25, coolingHighMin: 50 },
+  { key: 'orb', label: 'ORB / Generator', group: 'Auto Blocker & Generator', type: 'machine', capacityMode: 'machine', jphPerUnit: 35, required: true, defaultUnits: 6, defaultAssociates: 1, machinesPerAssociate: 6 },
+  { key: 'polisher', label: 'Polisher / Flex', group: 'Polisher / Engraving / Detaping', type: 'machine', capacityMode: 'machine', jphPerUnit: 35, required: true, defaultUnits: 6, defaultAssociates: 1, machinesPerAssociate: 6 },
+  { key: 'engraving', label: 'Engraving / OTL', group: 'Polisher / Engraving / Detaping', type: 'machine', capacityMode: 'machine', jphPerUnit: 75, required: true, defaultUnits: 2, defaultAssociates: 1, machinesPerAssociate: 2 },
+  { key: 'detaping', label: 'Detaping / ODT', group: 'Polisher / Engraving / Detaping', type: 'machine', capacityMode: 'machine', jphPerUnit: 100, required: true, defaultUnits: 2, defaultAssociates: 1, machinesPerAssociate: 2 },
+  { key: 'coater', label: 'Coater / 54R', group: 'Coater & Surface Inspection', type: 'machine', capacityMode: 'machine', jphPerUnit: 55, required: true, defaultUnits: 4, defaultAssociates: 1, machinesPerAssociate: 4 },
+  { key: 'inspection', label: 'Surface Inspection / AR41', group: 'Coater & Surface Inspection', type: 'machine', capacityMode: 'machine', jphPerUnit: 100, required: true, defaultUnits: 2, defaultAssociates: 2, machinesPerAssociate: 1.25 }
+];
+
+const SURFACE_CELL_BLOCKS = Object.freeze([
+  { key: 'block1', label: 'Cell Block 1 — Taping / Blocking / Cooling / Generator', defaultAssociates: 2, areaKeys: ['autoblocker','cooling','orb'] },
+  { key: 'block2', label: 'Cell Block 2 — Polisher / Engraving / Deblock / Detaping', defaultAssociates: 2, areaKeys: ['polisher','engraving','detaping'] },
+  { key: 'block3', label: 'Cell Block 3 — Coater / Surface Inspection', defaultAssociates: 2, areaKeys: ['coater','inspection'] }
+]);
+
+const SURFACE_AREA_TO_CELL_BLOCK = Object.freeze(
+  SURFACE_CELL_BLOCKS.reduce(function (map, block) {
+    block.areaKeys.forEach(function (key) { map[key] = block.key; });
+    return map;
+  }, {})
+);
+
+function getCellBlockByAreaKey(areaKey) {
+  const blockKey = SURFACE_AREA_TO_CELL_BLOCK[areaKey];
+  return SURFACE_CELL_BLOCKS.find(function (block) { return block.key === blockKey; }) || null;
+}
+
+
+// Live WIP from the dashboard is treated as the LAST SCAN location.
+// Bottleneck pressure is calculated against the NEXT process that must clear that WIP.
+
+const SURFACE_FLOW_ORDER = [
+  'unbox',
+  'autoblocker',
+  'cooling',
+  'orb',
+  'polisher',
+  'engraving',
+  'detaping',
+  'coater',
+  'inspection'
+];
+
+function getSurfaceFlowOrderIndex(key) {
+  const index = SURFACE_FLOW_ORDER.indexOf(String(key || ''));
+  return index >= 0 ? index : 999;
+}
+
+const SURFACE_PRESSURE_ROUTE = {
+  unbox: {
+    pressureAreaKey: 'autoblocker',
+    pressureLabel: 'Taping / Auto Blocker',
+    timeMode: 'sf_unbox_stage',
+    note: 'SF Unbox scan is feeding Taping / Auto Blocker'
+  },
+  autoblocker: {
+    pressureAreaKey: 'cooling',
+    pressureLabel: 'Cooling',
+    timeMode: 'cooling_transfer',
+    bufferSignalLimit: 200,
+    note: 'Auto Blocker scan is feeding Cooling'
+  },
+  cooling: {
+    pressureAreaKey: 'orb',
+    pressureLabel: 'ORB / Generator',
+    timeMode: 'cooling_dwell',
+    note: 'Cooling scan is feeding ORB / Generator'
+  },
+  orb: {
+    pressureAreaKey: 'polisher',
+    pressureLabel: 'Polisher / Flex',
+    note: 'ORB scan is feeding Polisher / Flex'
+  },
+  polisher: {
+    pressureAreaKey: 'engraving',
+    pressureLabel: 'Engraving / OTL',
+    note: 'Polisher scan is feeding Engraving / OTL'
+  },
+  engraving: {
+    pressureAreaKey: 'detaping',
+    pressureLabel: 'Manual Deblock / Detaping',
+    capacityAreaKey: 'engraving',
+    capacityLabel: 'Engraving / OTL',
+    note: 'Engraving scan is feeding Manual Deblock / Detaping. Capacity stays tied to Engraving because Manual Deblock / Detaping has no reliable LMS scan/JPH feed.'
+  },
+  detaping: {
+    pressureAreaKey: 'coater',
+    pressureLabel: 'Coater / 54R',
+    note: 'Detaping scan is feeding Coater / 54R'
+  },
+  coater: {
+    pressureAreaKey: 'inspection',
+    pressureLabel: 'AR41 / Surface OUT',
+    note: 'Coater scan is feeding AR41 / Surface OUT'
+  },
+  inspection: {
+    pressureAreaKey: 'inspection',
+    pressureLabel: 'AR41 / Surface OUT',
+    note: 'AR41 scan is final Surface OUT'
+  }
+};
+
+const HOURLY_DEFAULTS = [
+  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00',
+  '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'
+];
+
+let shiftModeManualOverride = false;
+
+let downtimeCounter = 0;
+let latestForecastResult = null;
+
+const SURFACE_STORAGE_KEY = 'surfaceForecastCommandCenter.v17-ar-goal-comparison';
+let isRestoringState = false;
+
+
+
+function ensureLivePerformanceTabStylesV22(){
+  if(document.getElementById('livePerformanceTabStylesV22'))return;
+
+  const style=document.createElement('style');
+  style.id='livePerformanceTabStylesV22';
+  style.textContent=`
+    .tab-btn[data-tab-target="live"]{
+      position:relative;
+    }
+
+    .tab-btn[data-tab-target="live"]::after{
+      position:absolute;
+      right:14px;
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#45e6a7;
+      box-shadow:0 0 10px rgba(69,230,167,.72);
+      content:'';
+      animation:liveTabPulseV22 1.8s ease-in-out infinite;
+    }
+
+    .tab-panel[data-tab-panel="live"]:not([hidden]){
+      display:grid!important;
+      width:100%;
+      min-width:0;
+      grid-template-columns:minmax(0,1fr)!important;
+      gap:20px;
+    }
+
+    .tab-panel[data-tab-panel="live"]>.panel,
+    .tab-panel[data-tab-panel="live"]>#surfaceMachinePerformanceSection{
+      width:100%;
+      max-width:none;
+      min-width:0;
+      grid-column:1/-1!important;
+      margin:0;
+    }
+
+    @keyframes liveTabPulseV22{
+      0%,100%{
+        opacity:.72;
+        transform:scale(.88);
+      }
+      50%{
+        opacity:1;
+        transform:scale(1.12);
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function ensureLivePerformanceNavigationV22(){
+  ensureLivePerformanceTabStylesV22();
+  const performanceButton=document.querySelector(
+    '.tab-btn[data-tab-target="performance"]'
+  );
+
+  if(
+    performanceButton&&
+    !document.querySelector('.tab-btn[data-tab-target="live"]')
+  ){
+    const liveButton=document.createElement('button');
+    liveButton.type='button';
+    liveButton.className='tab-btn';
+    liveButton.dataset.tabTarget='live';
+    liveButton.innerHTML='◉ Live Performance';
+
+    performanceButton.parentNode.insertBefore(
+      liveButton,
+      performanceButton
+    );
+  }
+
+  const tabHost=document.querySelector('.tab-panel')?.parentElement;
+  if(!tabHost)return;
+
+  ['Surface','AR','Finish'].forEach(department=>{
+    const selector=
+      `.tab-panel[data-tab-panel="live"][data-department="${department}"]`;
+
+    if(document.querySelector(selector))return;
+
+    const panel=document.createElement('section');
+    panel.className='tab-panel';
+    panel.dataset.tabPanel='live';
+    panel.dataset.department=department;
+    panel.hidden=true;
+    panel.id=`tabPanel-${department.toLowerCase()}-live`;
+    tabHost.appendChild(panel);
+  });
+}
+
+function getDepartmentLivePanelV22(department){
+  return document.querySelector(
+    `.tab-panel[data-tab-panel="live"][data-department="${department}"]`
+  );
+}
+
+function getLivePerformanceBlockV22(department){
+  if(department==='Surface'){
+    return document.getElementById('surfaceMachinePerformanceSection');
+  }
+
+  const targetId=department==='AR'
+    ?'arStaffingCards'
+    :'finishLiveStaffCards';
+
+  const target=document.getElementById(targetId);
+  if(!target)return null;
+
+  const panel=target.closest('.panel');
+
+  if(
+    panel&&
+    !panel.classList.contains('tab-panel')
+  ){
+    return panel;
+  }
+
+  return target.parentElement;
+}
+
+let livePerformanceMovePendingV22=false;
+
+function syncLivePerformancePanelsV22(){
+  if(livePerformanceMovePendingV22)return;
+  livePerformanceMovePendingV22=true;
+
+  requestAnimationFrame(()=>{
+    livePerformanceMovePendingV22=false;
+
+    ['Surface','AR','Finish'].forEach(department=>{
+      const livePanel=getDepartmentLivePanelV22(department);
+      const block=getLivePerformanceBlockV22(department);
+
+      if(!livePanel||!block||block.parentElement===livePanel)return;
+
+      livePanel.appendChild(block);
+    });
+
+    const buttons=Array.from(
+      document.querySelectorAll('.tab-btn')
+    );
+    const panels=Array.from(
+      document.querySelectorAll('.tab-panel')
+    );
+    const currentTarget=
+      document.querySelector('.tab-btn.active')?.dataset.tabTarget||
+      'status';
+
+    activateTab(currentTarget,buttons,panels);
+  });
+}
+
+function observeLivePerformanceSectionsV22(){
+  if(window.__livePerformanceObserverV22)return;
+
+  const observer=new MutationObserver(()=>{
+    syncLivePerformancePanelsV22();
+  });
+
+  observer.observe(document.body,{
+    childList:true,
+    subtree:true
+  });
+
+  window.__livePerformanceObserverV22=observer;
+}
+
+document.addEventListener('DOMContentLoaded', async function () {
+  ensureLivePerformanceNavigationV22();
+  initTabs();
+  observeLivePerformanceSectionsV22();
+  buildAreaGroups();
+  buildFloaterOptions();
+  buildHourlyRows();
+  initPerformanceControls();
+  ensureAdditionalWorkControls();
+  updateForecastRuleCopy();
+  wireButtons();
+
+  const savedDepartment=localStorage.getItem('productionGoalForecast.department');
+  const initialDepartment=['Surface','AR','Finish'].includes(savedDepartment)
+    ? savedDepartment
+    : 'Surface';
+
+  // Do not open the Surface Forecast storage API when the page starts in AR.
+  // AR has its own local setup and reads live data from Production Flow.
+  if (initialDepartment === 'Surface') {
+    const restoredFromCloud = await loadCurrentStateFromApi();
+    const restored = restoredFromCloud || restorePageState();
+
+    if (!restored) {
+      addDowntimeRow();
+    }
+
+    calculateForecast();
+    savePageState();
+    await syncSurfaceDashboardData(true);
+  } else if(initialDepartment==='AR') {
+    if (!document.querySelector('.downtime-row')) addDowntimeRow();
+    await syncARForecastData(true);
+  } else {
+    if (!document.querySelector('.downtime-row')) addDowntimeRow();
+    await syncFinishForecastData(true);
+  }
+
+  // One refresh timer. It refreshes only the department currently being viewed.
+  window.setInterval(function () {
+    const department =
+      window.AR_FORECAST_APP?.getDepartment?.() ||
+      localStorage.getItem('productionGoalForecast.department') ||
+      'Surface';
+
+    if (department === 'AR') {
+      syncARForecastData(false);
+    } else if(department==='Finish') {
+      syncFinishForecastData(false);
+    } else {
+      syncSurfaceDashboardData(false);
+    }
+  }, SURFACE_DASHBOARD_REFRESH_MS);
+
+  syncLivePerformancePanelsV22();
+});
+
+const SURFACE_TAB_STORAGE_KEY = 'surfaceForecastCommandCenter.activeTab';
+
+function initTabs() {
+  const buttons = Array.from(document.querySelectorAll('.tab-btn'));
+  const panels = Array.from(document.querySelectorAll('.tab-panel'));
+  if (!buttons.length || !panels.length) return;
+
+  const savedTab = localStorage.getItem(SURFACE_TAB_STORAGE_KEY);
+  const validTab = buttons.some(btn => btn.dataset.tabTarget === savedTab) ? savedTab : 'status';
+
+  activateTab(validTab, buttons, panels);
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      activateTab(btn.dataset.tabTarget, buttons, panels);
+      localStorage.setItem(SURFACE_TAB_STORAGE_KEY, btn.dataset.tabTarget);
+    });
+  });
+}
+
+function activateTab(target, buttons, panels) {
+  buttons.forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.tabTarget === target);
+  });
+
+  const department = window.AR_FORECAST_APP ? window.AR_FORECAST_APP.getDepartment() : 'Surface';
+  panels.forEach(function (panel) {
+    const panelDepartment = panel.dataset.department || 'Surface';
+    panel.hidden = panel.dataset.tabPanel !== target || panelDepartment !== department;
+  });
+}
+
+function wireButtons() {
+  const buttons = {
+    calculateBtn: calculateForecast,
+    addDowntimeBtn: addDowntimeRow,
+    clearDowntimeBtn: clearDowntimeRows,
+    saveBtn: saveForecast,
+    saveDowntimeBtn: saveDowntime,
+    clearHourlyBtn: clearHourlyRows,
+    saveHourlyBtn: saveHourly,
+    syncDashboardBtn: function () { syncSurfaceDashboardData(true); },
+    saveSurfaceBosBtn: saveSurfaceBosSnapshot,
+    resetSurfaceBosBtn: resetSurfaceBosSnapshot,
+    saveGoalBtn: saveShipGoal
+  };
+
+  Object.keys(buttons).forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', buttons[id]);
+  });
+
+  const bosTotalInput = document.getElementById('bosWip');
+  if (bosTotalInput) {
+    bosTotalInput.addEventListener('input', function () {
+      setText('surfaceBosStartupMeta', 'Unsaved total BOS change — click Save BOS.');
+    });
+  }
+
+  const shipGoalInput = document.getElementById('shipGoal');
+  if (shipGoalInput) {
+    shipGoalInput.addEventListener('input', function () {
+      setText('shipGoalSaveMeta', 'Unsaved goal change — click Save Goal.');
+    });
+  }
+
+  ['shiftMode', 'productionDate', 'perfShiftModeSelect', 'perfDateInput', 'shipGoal', 'incomingLow', 'incomingHigh', 'remakeLow', 'remakeHigh', 'floaterCount', 'floaterAssign'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', calculateForecast);
+    el.addEventListener('change', calculateForecast);
+  });
+
+  document.addEventListener('input', autoSavePageState);
+  document.addEventListener('change', autoSavePageState);
+}
+
+function updateForecastRuleCopy() {
+  const oldTexts = [
+    'Incoming and remake/breakage are not guessed. Forecast range uses current BOS WIP and capacity ceiling. Hourly input tells you if actual AR41 output is on track.',
+    'Forecast range uses BOS WIP + average incoming Surface jobs + average breakage/remake jobs, capped by usable bottleneck capacity. Hourly input tells you if actual AR41 output is on track.'
+  ];
+  const newText = 'Forecast uses BOS SF WIP, route-specific capacity, 300–500 incoming jobs, 150–200 breakage/remake jobs, machine ceilings, associate coverage, downtime, and actual AR41 output.';
+
+  Array.from(document.querySelectorAll('body *')).forEach(function (el) {
+    if (!el || !el.childNodes || el.children.length > 0) return;
+    const text = String(el.textContent || '').trim();
+    if (oldTexts.includes(text)) el.textContent = newText;
+  });
+}
+
+function ensureAdditionalWorkControls() {
+  // Keep incoming/remake assumptions in the background.
+  // The forecast engine still reads these values, but operators do not need to see or edit them in Daily Setup.
+  const hiddenValues = {
+    incomingLow: SURFACE_EXTRA_WORK_DEFAULTS.incomingLow,
+    incomingHigh: SURFACE_EXTRA_WORK_DEFAULTS.incomingHigh,
+    remakeLow: SURFACE_EXTRA_WORK_DEFAULTS.remakeLow,
+    remakeHigh: SURFACE_EXTRA_WORK_DEFAULTS.remakeHigh
+  };
+
+  Object.keys(hiddenValues).forEach(function (id) {
+    let input = document.getElementById(id);
+
+    if (!input) {
+      input = document.createElement('input');
+      input.id = id;
+      input.type = 'hidden';
+      document.body.appendChild(input);
+    }
+
+    input.type = 'hidden';
+    input.value = hiddenValues[id];
+    input.setAttribute('aria-hidden', 'true');
+    input.tabIndex = -1;
+  });
+
+  hideOldVisibleAdditionalWorkRows();
+}
+
+function hideOldVisibleAdditionalWorkRows() {
+  // Safety cleanup in case an older cached V20 script already injected the visible labels.
+  ['incomingLow', 'incomingHigh', 'remakeLow', 'remakeHigh'].forEach(function (id) {
+    const input = document.getElementById(id);
+    if (!input) return;
+
+    input.type = 'hidden';
+
+    const label = input.closest('label');
+    if (label) {
+      label.style.display = 'none';
+      label.setAttribute('aria-hidden', 'true');
+    }
+
+    const wrapper = input.closest('.range-input-pair');
+    if (wrapper) {
+      wrapper.style.display = 'none';
+      wrapper.setAttribute('aria-hidden', 'true');
+    }
+  });
+}
+
+function buildAreaGroups() {
+  const holder = document.getElementById('areaGroups');
+  if (!holder) return;
+
+  holder.innerHTML = '';
+
+  // SF Unbox remains a separate labor input because it is outside the three machine cells.
+  const unbox = SURFACE_AREAS.find(function (area) { return area.key === 'unbox'; });
+  if (unbox) {
+    const group = document.createElement('div');
+    group.className = 'area-group cell-block-group';
+    group.innerHTML = `
+      <div class="cell-block-header">
+        <div><span class="cell-block-kicker">FEED AREA</span><h3>SF Unbox</h3></div>
+        <label class="cell-associate-input">Associates<input id="assoc_unbox" type="number" min="0" step="0.5" value="${unbox.defaultAssociates}"></label>
+      </div>
+      <div class="cell-machine-grid">
+        <label class="cell-machine-card"><span>SF Unbox Associates</span><small>${unbox.jphPerUnit} JPH each</small><input id="area_unbox" type="number" min="0" step="0.5" value="${unbox.defaultUnits}"></label>
+      </div>`;
+    holder.appendChild(group);
+  }
+
+  SURFACE_CELL_BLOCKS.forEach(function (block, blockIndex) {
+    const group = document.createElement('div');
+    group.className = 'area-group cell-block-group';
+
+    const machineCards = block.areaKeys.map(function (key) {
+      const area = SURFACE_AREAS.find(function (item) { return item.key === key; });
+      if (!area) return '';
+
+      // Deblocking has no reliable standalone scan/JPH input.
+      // Detaping is tracked and has a defined JPH, so it must remain visible in Cell Block 2.
+
+      const unitLabel = area.type === 'buffer' ? 'Towers / Buffer Running' : 'Machines Running';
+      const detail = area.type === 'buffer'
+        ? 'Cooling 25–50 min · Buffer 180 jobs'
+        : `${area.jphPerUnit} JPH each`;
+
+      return `
+        <label class="cell-machine-card">
+          <span>${escapeHtml(area.label)}</span>
+          <small>${escapeHtml(detail)}</small>
+          <b>${unitLabel}</b>
+          <input id="area_${area.key}" type="number" min="0" step="0.5" value="${area.defaultUnits}">
+        </label>`;
+    }).join('');
+
+    const blockNote = block.key === 'block2'
+      ? '<p class="cell-block-note">Automatic Detaping / ODT is tracked at 100 JPH per machine. Manual deblocking or bypass work is excluded because it has no reliable scan/JPH feed.</p>'
+      : '';
+
+    const inspectionDelay = block.key === 'block3'
+      ? `<label class="startup-check"><input id="inspectionStartupDelay" type="checkbox" checked><span><strong>Apply 90-minute Inspection OUT slow start</strong><small>Deducts 90 minutes of AR41 capacity once for this forecast day.</small></span></label>`
+      : '';
+
+    group.innerHTML = `
+      <div class="cell-block-header">
+        <div><span class="cell-block-kicker">CELL BLOCK ${blockIndex + 1}</span><h3>${escapeHtml(block.label.replace(/^Cell Block \d+ — /, ''))}</h3></div>
+        <label class="cell-associate-input">Associates on this cell<input id="cellAssoc_${block.key}" type="number" min="0" step="0.5" value="${block.defaultAssociates}"></label>
+      </div>
+      <div class="cell-machine-grid">${machineCards}</div>
+      ${blockNote}
+      ${inspectionDelay}`;
+
+    holder.appendChild(group);
+  });
+
+  holder.querySelectorAll('input').forEach(function (input) {
+    input.addEventListener('input', calculateForecast);
+    input.addEventListener('change', calculateForecast);
+  });
+}
+
+function buildFloaterOptions() {
+  const select = document.getElementById('floaterAssign');
+  if (!select) return;
+
+  SURFACE_AREAS.forEach(function (area) {
+    const option = document.createElement('option');
+    option.value = area.key;
+    option.textContent = area.label;
+    select.appendChild(option);
+  });
+}
+
+function buildHourlyRows(shiftMode, preserveExisting = true) {
+  const body = document.getElementById('hourlyRows');
+  if (!body) return;
+
+  const selectedShift = shiftMode || getValue('shiftMode', 'Weekday');
+  const windowInfo = getShiftWindow(selectedShift);
+  const startMinutes = parseTimeToMinutes(windowInfo.start) || 420;
+  const endMinutes = parseTimeToMinutes(windowInfo.end) || 1050;
+  const slots = buildPerformanceHourSlots(startMinutes, endMinutes);
+  const previous = {};
+
+  if (preserveExisting) {
+    document.querySelectorAll('.hourly-row').forEach(function (row) {
+      const key = row.dataset.apiHour || normalizeHourKey(getRowValue(row, '.hr-hour'));
+      previous[key] = {
+        unbox: getRowValue(row, '.hr-unbox'), autoblocker: getRowValue(row, '.hr-autoblocker'),
+        cooling: getRowValue(row, '.hr-cooling'), orb: getRowValue(row, '.hr-orb'),
+        polisher: getRowValue(row, '.hr-polisher'), engraving: getRowValue(row, '.hr-engraving'),
+        detaping: getRowValue(row, '.hr-detaping'), coater: getRowValue(row, '.hr-coater'),
+        inspection: getRowValue(row, '.hr-inspection'), notes: getRowValue(row, '.hr-notes'),
+        active: getRowValue(row, '.hr-active') || 'Yes'
+      };
+    });
+  }
+
+  body.innerHTML = '';
+
+  slots.forEach(function (slot) {
+    const apiHour = minutesToHourKey(Math.floor(slot.start / 60) * 60);
+    const saved = previous[apiHour] || {};
+    const tr = document.createElement('tr');
+    tr.className = 'hourly-row';
+    tr.dataset.apiHour = apiHour;
+
+    tr.innerHTML = `
+      <td><input class="hour-input hr-hour" type="text" value="${escapeHtml(slot.label)}" readonly></td>
+      <td><input class="hr-unbox" type="number" min="0" step="1" value="${escapeHtml(saved.unbox || '')}"></td>
+      <td><input class="hr-autoblocker" type="number" min="0" step="1" value="${escapeHtml(saved.autoblocker || '')}"></td>
+      <td><input class="hr-cooling" type="number" min="0" step="1" value="${escapeHtml(saved.cooling || '')}"></td>
+      <td><input class="hr-orb" type="number" min="0" step="1" value="${escapeHtml(saved.orb || '')}"></td>
+      <td><input class="hr-polisher" type="number" min="0" step="1" value="${escapeHtml(saved.polisher || '')}"></td>
+      <td><input class="hr-engraving" type="number" min="0" step="1" value="${escapeHtml(saved.engraving || '')}"></td>
+      <td><input class="hr-detaping" type="number" min="0" step="1" value="${escapeHtml(saved.detaping || '')}"></td>
+      <td><input class="hr-coater" type="number" min="0" step="1" value="${escapeHtml(saved.coater || '')}"></td>
+      <td><input class="hr-inspection" type="number" min="0" step="1" value="${escapeHtml(saved.inspection || '')}"></td>
+      <td><input class="notes-input hr-notes" type="text" value="${escapeHtml(saved.notes || '')}"></td>
+      <td><select class="hr-active"><option value="Yes">Yes</option><option value="No">No</option></select></td>`;
+
+    body.appendChild(tr);
+    const active = tr.querySelector('.hr-active');
+    if (active) active.value = saved.active || 'Yes';
+    tr.querySelectorAll('input, select').forEach(function (input) {
+      input.addEventListener('input', calculateForecast);
+      input.addEventListener('change', calculateForecast);
+    });
+  });
+}
+
+function addDowntimeRow() {
+  downtimeCounter += 1;
+
+  const holder = document.getElementById('downtimeRows');
+  if (!holder) return;
+
+  const row = document.createElement('div');
+  row.className = 'downtime-row';
+  row.dataset.id = String(downtimeCounter);
+
+  const areaOptions = SURFACE_AREAS.map(function (area) {
+    return `<option value="${area.key}">${escapeHtml(area.label)}</option>`;
+  }).join('');
+
+  row.innerHTML = `
+    <label>
+      Area
+      <select class="dt-area">${areaOptions}</select>
+    </label>
+
+    <label>
+      Issue
+      <select class="dt-issue">
+        <option value="Machine Down">Machine Down</option>
+        <option value="Preventive Maintenance">Preventive Maintenance</option>
+        <option value="Low Work">Low Work / Starved</option>
+        <option value="Quality Issue">Quality Issue</option>
+        <option value="Operator Short">Operator Short</option>
+      </select>
+    </label>
+
+    <label>
+      Units Down
+      <input class="dt-units" type="number" min="0" step="0.5" value="1">
+    </label>
+
+    <label>
+      Start
+      <input class="dt-start" type="text" value="08:45">
+    </label>
+
+    <label>
+      End
+      <input class="dt-end" type="text" value="10:15">
+    </label>
+
+    <label>
+      Full Day
+      <select class="dt-fullday">
+        <option value="No">No</option>
+        <option value="Yes">Yes</option>
+      </select>
+    </label>
+
+    <label>
+      Notes
+      <input class="dt-notes" type="text" placeholder="Reason / machine #">
+    </label>
+
+    <label>
+      Active
+      <select class="dt-active">
+        <option value="No">No</option>
+        <option value="Yes">Yes</option>
+      </select>
+    </label>
+  `;
+
+  holder.appendChild(row);
+
+  row.querySelectorAll('input, select').forEach(function (el) {
+    el.addEventListener('input', calculateForecast);
+    el.addEventListener('change', calculateForecast);
+  });
+
+  if (!isRestoringState) {
+    calculateForecast();
+    savePageState();
+  }
+
+  return row;
+}
+
+function clearDowntimeRows() {
+  const holder = document.getElementById('downtimeRows');
+  if (!holder) return;
+
+  holder.innerHTML = '';
+  downtimeCounter = 0;
+  addDowntimeRow();
+  calculateForecast();
+  savePageState();
+}
+
+function clearHourlyRows() {
+  document.querySelectorAll('.hourly-row').forEach(function (row) {
+    row.querySelectorAll('input').forEach(function (input) {
+      if (input.classList.contains('hr-hour')) return;
+      input.value = '';
+    });
+    const active = row.querySelector('.hr-active');
+    if (active) active.value = 'Yes';
+  });
+
+  calculateForecast();
+  savePageState();
+}
+
+function collectPayload() {
+  const areas = {};
+  const associates = {};
+  const ratios = {};
+
+  SURFACE_AREAS.forEach(function (area) {
+    areas[area.key] = Number(getValue(`area_${area.key}`, area.defaultUnits || 0)) || 0;
+
+    const block = getCellBlockByAreaKey(area.key);
+    associates[area.key] = block
+      ? (Number(getValue(`cellAssoc_${block.key}`, block.defaultAssociates)) || 0)
+      : (Number(getValue(`assoc_${area.key}`, area.defaultAssociates || 0)) || 0);
+
+    // Coverage ratios remain engineering defaults in the background. Operators now
+    // enter people once per cell instead of assigning the same people to every machine.
+    ratios[area.key] = area.type === 'machine' ? (area.machinesPerAssociate || 1) : 0;
+  });
+
+  const downtime = [];
+
+  document.querySelectorAll('.downtime-row').forEach(function (row) {
+    downtime.push({
+      areaKey: getRowValue(row, '.dt-area'),
+      issue: getRowValue(row, '.dt-issue'),
+      unitsDown: Number(getRowValue(row, '.dt-units')) || 0,
+      startTime: getRowValue(row, '.dt-start'),
+      endTime: getRowValue(row, '.dt-end'),
+      fullDay: getRowValue(row, '.dt-fullday'),
+      notes: getRowValue(row, '.dt-notes'),
+      active: getRowValue(row, '.dt-active')
+    });
+  });
+
+  const hourly = [];
+
+  document.querySelectorAll('.hourly-row').forEach(function (row) {
+    hourly.push({
+      hour: row.dataset.apiHour || normalizeHourKey(getRowValue(row, '.hr-hour')),
+      unbox: Number(getRowValue(row, '.hr-unbox')) || 0,
+      autoblocker: Number(getRowValue(row, '.hr-autoblocker')) || 0,
+      cooling: Number(getRowValue(row, '.hr-cooling')) || 0,
+      orb: Number(getRowValue(row, '.hr-orb')) || 0,
+      polisher: Number(getRowValue(row, '.hr-polisher')) || 0,
+      engraving: Number(getRowValue(row, '.hr-engraving')) || 0,
+      detaping: Number(getRowValue(row, '.hr-detaping')) || 0,
+      coater: Number(getRowValue(row, '.hr-coater')) || 0,
+      inspection: Number(getRowValue(row, '.hr-inspection')) || 0,
+      notes: getRowValue(row, '.hr-notes'),
+      active: getRowValue(row, '.hr-active')
+    });
+  });
+
+  const currentWip = window.surfaceDashboardCurrentWip || {};
+  const dashboardSync = window.surfaceDashboardSync || null;
+
+  return {
+    productionDate: getValue('productionDate', getLocalDateInputValue(new Date())),
+    shiftMode: getValue('shiftMode', 'Weekday'),
+    bosWip: Number(getValue('bosWip', 0)) || 0,
+    shipGoal: Number(getValue('shipGoal', 0)) || 0,
+    incomingLow: Number(getValue('incomingLow', SURFACE_EXTRA_WORK_DEFAULTS.incomingLow)) || 0,
+    incomingHigh: Number(getValue('incomingHigh', SURFACE_EXTRA_WORK_DEFAULTS.incomingHigh)) || 0,
+    remakeLow: Number(getValue('remakeLow', SURFACE_EXTRA_WORK_DEFAULTS.remakeLow)) || 0,
+    remakeHigh: Number(getValue('remakeHigh', SURFACE_EXTRA_WORK_DEFAULTS.remakeHigh)) || 0,
+    floaterCount: Number(getValue('floaterCount', 0)) || 0,
+    floaterAssign: getValue('floaterAssign', 'none'),
+    areas,
+    associates,
+    ratios,
+    downtime,
+    hourly,
+    currentWip,
+    dashboardSync,
+    inspectionStartupDelay: Boolean(document.getElementById('inspectionStartupDelay')?.checked)
+  };
+}
+
+function calculateForecast() {
+  const payload = collectPayload();
+  const result = calculateLocalForecast(payload);
+
+  latestForecastResult = { payload, result };
+  renderForecast(result);
+
+  if (!isRestoringState) {
+    savePageState();
+  }
+}
+
+
+const SURFACE_CAPACITY_ROUTE_EXCLUSIONS = new Set([
+  'cooling',
+  'detaping'
+]);
+
+function getSurfaceCapacityRoute(sourceKey, includeSource) {
+  const sourceIndex = SURFACE_FLOW_ORDER.indexOf(sourceKey);
+  if (sourceIndex < 0) return [];
+
+  let route = includeSource
+    ? SURFACE_FLOW_ORDER.slice(sourceIndex)
+    : SURFACE_FLOW_ORDER.slice(sourceIndex + 1);
+
+  // Cooling is a dwell-time buffer and Detaping is not a reliable hard-cap
+  // station because jobs may move through manual deblock without an ODT scan.
+  // Both remain visible for WIP pressure and timing, but neither caps forecast OUT.
+  route = route.filter(function (key) {
+    return !SURFACE_CAPACITY_ROUTE_EXCLUSIONS.has(key);
+  });
+
+  // Surface Inspection WIP is already at the final output station.
+  if (sourceKey === 'inspection' && !route.length) {
+    route = ['inspection'];
+  }
+
+  return route;
+}
+
+function getSurfaceRouteCapacity(capacityMap, sourceKey, includeSource) {
+  const route = getSurfaceCapacityRoute(sourceKey, includeSource);
+  if (!route.length) return 0;
+
+  return route.reduce(function (lowest, key) {
+    const value = Math.max(0, Number(capacityMap[key]) || 0);
+    return Math.min(lowest, value);
+  }, Infinity);
+}
+
+function buildSurfaceRemainingCapacityMap(areas, remainingHours) {
+  const map = {};
+
+  (areas || []).forEach(function (area) {
+    if (area.key === 'cooling') {
+      map[area.key] = Infinity;
+      return;
+    }
+
+    map[area.key] = Math.max(
+      0,
+      (Number(area.effectiveJph) || 0) * Math.max(0, remainingHours)
+    );
+  });
+
+  return map;
+}
+
+function cloneSurfaceCapacityMap(source) {
+  const copy = {};
+
+  Object.keys(source || {}).forEach(function (key) {
+    copy[key] = source[key] === Infinity
+      ? Infinity
+      : Math.max(0, Number(source[key]) || 0);
+  });
+
+  return copy;
+}
+
+function consumeCompletedSurfaceBos(bosByStation, completedOutput) {
+  const remaining = normalizeSurfaceBosMap(bosByStation || {});
+  let jobsToConsume = Math.max(0, Number(completedOutput) || 0);
+
+  // Morning output normally comes from the most downstream BOS first.
+  SURFACE_FLOW_ORDER.slice().reverse().forEach(function (key) {
+    if (jobsToConsume <= 0) return;
+
+    const available = Math.max(0, Number(remaining[key]) || 0);
+    const consumed = Math.min(available, jobsToConsume);
+
+    remaining[key] = available - consumed;
+    jobsToConsume -= consumed;
+  });
+
+  return remaining;
+}
+
+function allocateSurfaceWorkPools(pools, startingCapacityMap, options) {
+  const settings = options || {};
+  const capacityMap = cloneSurfaceCapacityMap(startingCapacityMap);
+  const allocations = {};
+  let totalAllocated = 0;
+
+  const orderedPools = (pools || []).slice().sort(function (a, b) {
+    // Protect work that is already furthest downstream.
+    return getSurfaceFlowOrderIndex(b.sourceKey) -
+      getSurfaceFlowOrderIndex(a.sourceKey);
+  });
+
+  orderedPools.forEach(function (pool) {
+    const sourceKey = String(pool.sourceKey || '');
+    const requestedJobs = Math.max(0, Number(pool.jobs) || 0);
+    const includeSource = Boolean(pool.includeSource);
+
+    if (!requestedJobs) {
+      allocations[sourceKey] = 0;
+      return;
+    }
+
+    const maturityMinutes = includeSource
+      ? Number(SURFACE_MATURITY_MINUTES.unbox || 0)
+      : Number(SURFACE_MATURITY_MINUTES[sourceKey] || 0);
+
+    if (
+      Number.isFinite(Number(settings.availableMinutes)) &&
+      Number(settings.availableMinutes) < maturityMinutes
+    ) {
+      allocations[sourceKey] = 0;
+      return;
+    }
+
+    const route = getSurfaceCapacityRoute(sourceKey, includeSource);
+    if (!route.length) {
+      allocations[sourceKey] = 0;
+      return;
+    }
+
+    const routeCapacity = route.reduce(function (lowest, key) {
+      const available = capacityMap[key] === Infinity
+        ? Infinity
+        : Math.max(0, Number(capacityMap[key]) || 0);
+
+      return Math.min(lowest, available);
+    }, Infinity);
+
+    const allocated = Math.max(
+      0,
+      Math.min(
+        requestedJobs,
+        Number.isFinite(routeCapacity) ? routeCapacity : requestedJobs
+      )
+    );
+
+    allocations[sourceKey] = allocated;
+    totalAllocated += allocated;
+
+    route.forEach(function (key) {
+      if (capacityMap[key] === Infinity) return;
+      capacityMap[key] = Math.max(
+        0,
+        (Number(capacityMap[key]) || 0) - allocated
+      );
+    });
+  });
+
+  return {
+    totalAllocated,
+    allocations,
+    remainingCapacityMap: capacityMap
+  };
+}
+
+function buildSurfaceBosPools(bosByStation) {
+  return SURFACE_FLOW_ORDER.map(function (key) {
+    return {
+      sourceKey: key,
+      jobs: Math.max(0, Number(bosByStation && bosByStation[key]) || 0),
+      includeSource: false
+    };
+  });
+}
+
+function calculateLocalForecast(payload) {
+  const shiftMode = payload.shiftMode || 'Weekday';
+  const shiftHours = getShiftHours(shiftMode);
+  const bosByStation = captureSurfaceBosSnapshotIfMissing(
+    payload.productionDate,
+    payload.currentWip || {}
+  );
+  const bosWip = getSurfaceBosTotal(bosByStation);
+  const shipGoal = Number(payload.shipGoal) || 0;
+  const incomingRange = normalizeForecastRange(payload.incomingLow, payload.incomingHigh);
+  const remakeRange = normalizeForecastRange(payload.remakeLow, payload.remakeHigh);
+
+  // Daily work pool:
+  // Low = BOS + conservative incoming + conservative breakage/remake.
+  // High = BOS + upper incoming + upper breakage/remake.
+  const availableWorkLow =
+    bosWip + incomingRange.low + remakeRange.low;
+  const availableWorkHigh =
+    bosWip + incomingRange.high + remakeRange.high;
+  const floaterCount = Number(payload.floaterCount) || 0;
+  const floaterAssign = payload.floaterAssign || 'none';
+
+  const areas = SURFACE_AREAS.map(function (area) {
+    let unitsRunning = Number(payload.areas[area.key]) || 0;
+    let associatesAssigned = Number(payload.associates[area.key]) || 0;
+
+    // Floaters are people, not machines. Add them to the assigned associate side.
+    if (floaterAssign === area.key && floaterCount > 0) {
+      associatesAssigned += floaterCount;
+    }
+
+    const capacityInfo = getAreaCapacityInfo(area, unitsRunning, associatesAssigned, shiftHours);
+    const recordedDowntimeLostJobs = getDowntimeLossForArea(area, payload.downtime || [], shiftHours);
+    const startupSlowStartLostJobs = area.key === 'inspection' && payload.inspectionStartupDelay
+      ? (Number(capacityInfo.totalJph || 0) * (SURFACE_STARTUP_OUTPUT_DELAY_MIN / 60))
+      : 0;
+    const downtimeLostJobs = recordedDowntimeLostJobs + startupSlowStartLostJobs;
+    const normalCapacity = capacityInfo.normalCapacity;
+    const adjustedCapacity = Math.max(0, normalCapacity - downtimeLostJobs);
+    const currentWip = Number((payload.currentWip || {})[area.key]) || 0;
+    const effectiveJph = shiftHours > 0 ? adjustedCapacity / shiftHours : 0;
+    const timeToClear = effectiveJph > 0 ? currentWip / effectiveJph : 0;
+
+    return {
+      key: area.key,
+      label: area.label,
+      group: area.group,
+      type: area.type,
+      capacityMode: area.capacityMode || area.type,
+      jphPerUnit: area.jphPerUnit,
+      required: area.required,
+      bufferCapacity: area.bufferCapacity || 0,
+      coolingLowMin: area.coolingLowMin || 0,
+      coolingHighMin: area.coolingHighMin || 0,
+      unitsRunning,
+      associatesAssigned,
+      activeCapacityUnits: capacityInfo.activeCapacityUnits,
+      capacityBasis: capacityInfo.capacityBasis,
+      machineCeilingJph: Number(capacityInfo.machineCeilingJph || capacityInfo.totalJph || 0),
+      requiredAssociates: Number(capacityInfo.requiredAssociates || 0),
+      coverageFactor: capacityInfo.coverageFactor === undefined ? 1 : Number(capacityInfo.coverageFactor || 0),
+      totalJph: capacityInfo.totalJph,
+      normalCapacity,
+      downtimeLostJobs,
+      adjustedCapacity,
+      currentWip,
+      effectiveJph,
+      timeToClear,
+      forecastCapacityRole:
+        area.key === 'detaping'
+          ? 'wip-pressure-only'
+          : area.key === 'cooling'
+            ? 'dwell-time-only'
+            : 'hard-cap'
+    };
+  });
+
+  const requiredAreas = areas.filter(function (area) {
+    return (
+      area.required &&
+      area.effectiveJph > 0 &&
+      area.key !== 'detaping'
+    );
+  });
+
+  let bottleneck = null;
+
+  if (requiredAreas.length) {
+    bottleneck = requiredAreas.reduce(function (lowest, current) {
+      return current.adjustedCapacity < lowest.adjustedCapacity ? current : lowest;
+    }, requiredAreas[0]);
+  }
+
+  const capacityCeiling = bottleneck ? bottleneck.adjustedCapacity : 0;
+  const effectiveBottleneckJph = shiftHours > 0 ? capacityCeiling / shiftHours : 0;
+
+  const downtimeLostTotal = areas.reduce(function (sum, area) {
+    return sum + area.downtimeLostJobs;
+  }, 0);
+
+  const totalAssociates =
+    (Number(payload.associates.unbox) || 0) +
+    SURFACE_CELL_BLOCKS.reduce(function (sum, block) {
+      const firstArea = block.areaKeys[0];
+      return sum + (Number(payload.associates[firstArea]) || 0);
+    }, 0);
+
+  const hourlySummary = calculateHourlySummary(
+    payload.hourly || [],
+    shiftHours,
+    effectiveBottleneckJph,
+    shipGoal,
+    capacityCeiling,
+    availableWorkLow,
+    availableWorkHigh
+  );
+  const liveWipBottleneck = getLiveWipBottleneck(areas);
+
+  const currentOut = Number(hourlySummary.actualAr41SoFar || 0);
+  const progress = getSurfaceClockProgress(shiftMode);
+  const maturity = getSurfaceBosMaturity(
+    bosByStation,
+    progress.elapsedMinutes,
+    progress.totalMinutes
+  );
+
+  const remainingHours = progress.remainingMinutes / 60;
+  const remainingCapacityMap = buildSurfaceRemainingCapacityMap(
+    areas,
+    remainingHours
+  );
+
+  // Remove completed output from BOS beginning with the most downstream work.
+  // This prevents Current OUT from being added on top of the same BOS jobs twice.
+  const remainingBosByStation = consumeCompletedSurfaceBos(
+    bosByStation,
+    currentOut
+  );
+
+  // Allocate remaining BOS from downstream to upstream. Each pool is limited
+  // only by the stations it still must pass, not by an upstream station it
+  // already cleared.
+  const bosAllocation = allocateSurfaceWorkPools(
+    buildSurfaceBosPools(remainingBosByStation),
+    remainingCapacityMap,
+    {
+      // BOS was present at shift start, so use the full shift maturity window.
+      availableMinutes: progress.totalMinutes
+    }
+  );
+
+  const bosAdditionalOut = bosAllocation.totalAllocated;
+  const knownWipForecast = Math.round(
+    currentOut + bosAdditionalOut
+  );
+
+  const lowExtraWork = Math.max(
+    0,
+    incomingRange.low + remakeRange.low
+  );
+  const highExtraWork = Math.max(
+    0,
+    incomingRange.high + remakeRange.high
+  );
+
+  // New incoming and breakage/remake work enters the full Surface route.
+  // Run low and high scenarios independently from the capacity remaining
+  // after BOS so the range represents two real workload cases.
+  const lowExtraAllocation = allocateSurfaceWorkPools(
+    [{
+      sourceKey: 'unbox',
+      jobs: lowExtraWork,
+      includeSource: true
+    }],
+    bosAllocation.remainingCapacityMap,
+    {
+      availableMinutes: progress.remainingMinutes
+    }
+  );
+
+  const highExtraAllocation = allocateSurfaceWorkPools(
+    [{
+      sourceKey: 'unbox',
+      jobs: highExtraWork,
+      includeSource: true
+    }],
+    bosAllocation.remainingCapacityMap,
+    {
+      availableMinutes: progress.remainingMinutes
+    }
+  );
+
+  // Low case uses conservative execution: 90% of the additional route-capacity
+  // result after Current OUT. High case uses the full route-capacity result.
+  // This keeps the range useful even when low/high workload both hit the same ceiling.
+  const lowCaseFull =
+    currentOut +
+    bosAdditionalOut +
+    lowExtraAllocation.totalAllocated;
+
+  const highCaseFull =
+    currentOut +
+    bosAdditionalOut +
+    highExtraAllocation.totalAllocated;
+
+  const forecastRangeLow = Math.round(
+    currentOut + Math.max(0, lowCaseFull - currentOut) * 0.90
+  );
+
+  const forecastRangeHigh = Math.round(
+    Math.max(
+      forecastRangeLow + 1,
+      highCaseFull
+    )
+  );
+
+  const paceProjection = Number(
+    hourlySummary.projectedActualOut || 0
+  );
+
+  // Pace selects the working projection, but it can never fall below the
+  // conservative route-capacity case or exceed the high workload case.
+  const projectedOut = Math.round(
+    Math.max(
+      forecastRangeLow,
+      Math.min(
+        forecastRangeHigh,
+        paceProjection > currentOut
+          ? paceProjection
+          : (forecastRangeLow + forecastRangeHigh) / 2
+      )
+    )
+  );
+
+  const capacityProjectedOut = forecastRangeHigh;
+  const remainingCapacity = getSurfaceRouteCapacity(
+    bosAllocation.remainingCapacityMap,
+    'unbox',
+    true
+  );
+
+  const bosRemainingAfterActual = Math.max(
+    0,
+    bosWip - currentOut
+  );
+  const availableWorkRemainingLow = Math.max(
+    0,
+    availableWorkLow - currentOut
+  );
+  const availableWorkRemainingHigh = Math.max(
+    0,
+    availableWorkHigh - currentOut
+  );
+
+  const extraCapacityForUnknownWork = Math.max(
+    0,
+    Number.isFinite(remainingCapacity)
+      ? remainingCapacity
+      : 0
+  );
+
+  const expectedEosWipIfNoExtraWork = Math.max(
+    0,
+    bosWip - knownWipForecast
+  );
+
+  // During the morning startup window, expected output begins only after the
+  // first physically possible downstream release.
+  const productiveElapsedAfterStartup = Math.max(
+    0,
+    progress.elapsedMinutes -
+      (maturity.startupDelayApplied
+        ? SURFACE_STARTUP_OUTPUT_DELAY_MIN
+        : 0)
+  );
+  const expectedHoursAfterStartup =
+    productiveElapsedAfterStartup / 60;
+  const targetPaceForExpected = shipGoal > 0
+    ? shipGoal / shiftHours
+    : effectiveBottleneckJph;
+
+  hourlySummary.expectedByNow =
+    targetPaceForExpected * expectedHoursAfterStartup;
+  hourlySummary.paceGap =
+    currentOut - hourlySummary.expectedByNow;
+  hourlySummary.remainingHours = remainingHours;
+  hourlySummary.projectedActualOut = projectedOut;
+
+  let requiredJph = 0;
+  let goalRisk = 'NO GOAL';
+  let goalGap = 0;
+
+  if (shipGoal > 0) {
+    requiredJph = shipGoal / shiftHours;
+    goalGap = shipGoal - forecastRangeHigh;
+
+    if (shipGoal <= forecastRangeLow) goalRisk = 'GREEN';
+    else if (shipGoal <= forecastRangeHigh) goalRisk = 'YELLOW';
+    else goalRisk = 'RED';
+  }
+
+  const recommendation = buildRecommendation({
+    shiftMode,
+    shiftHours,
+    bosWip,
+    bosByStation,
+    bosMaturity: maturity,
+    startupDelayRemaining: maturity.startupDelayRemaining,
+    remainingCapacity,
+    remainingCapacityMap,
+    remainingBosByStation,
+    bosRouteAdditionalOut: bosAdditionalOut,
+    lowExtraProjected: lowExtraAllocation.totalAllocated,
+    highExtraProjected: highExtraAllocation.totalAllocated,
+    incomingLow: incomingRange.low,
+    incomingHigh: incomingRange.high,
+    remakeLow: remakeRange.low,
+    remakeHigh: remakeRange.high,
+    availableWorkLow,
+    availableWorkHigh,
+    bosRemainingAfterActual,
+    availableWorkRemainingLow,
+    availableWorkRemainingHigh,
+    shipGoal,
+    knownWipForecast,
+    capacityCeiling,
+    capacityProjectedOut,
+    projectedOut,
+    extraCapacityForUnknownWork,
+    expectedEosWipIfNoExtraWork,
+    bottleneck,
+    effectiveBottleneckJph,
+    requiredJph,
+    goalRisk,
+    downtimeLostTotal,
+    totalAssociates,
+    hourlySummary,
+    liveWipBottleneck
+  });
+
+  const goalStaffingPlan = calculateGoalStaffingPlan(payload, areas, shiftHours, shipGoal);
+
+  return {
+    ok: true,
+    shiftMode,
+    shiftHours,
+    bosWip,
+    bosByStation,
+    remainingBosByStation,
+    bosRouteAdditionalOut: bosAdditionalOut,
+    lowExtraProjected: lowExtraAllocation.totalAllocated,
+    highExtraProjected: highExtraAllocation.totalAllocated,
+    remainingCapacityMap,
+    incomingLow: incomingRange.low,
+    incomingHigh: incomingRange.high,
+    remakeLow: remakeRange.low,
+    remakeHigh: remakeRange.high,
+    availableWorkLow,
+    availableWorkHigh,
+    bosRemainingAfterActual,
+    availableWorkRemainingLow,
+    availableWorkRemainingHigh,
+    shipGoal,
+    knownWipForecast,
+    projectedOut,
+    capacityProjectedOut,
+    capacityCeiling,
+    forecastRangeLow,
+    forecastRangeHigh,
+    extraCapacityForUnknownWork,
+    expectedEosWipIfNoExtraWork,
+    bottleneck,
+    effectiveBottleneckJph,
+    downtimeLostTotal,
+    totalAssociates,
+    requiredJph,
+    goalRisk,
+    goalGap,
+    areas,
+    hourlySummary,
+    liveWipBottleneck,
+    goalStaffingPlan,
+    recommendation
+  };
+}
+
+function roundUpToStep(value, step) {
+  if (!(value > 0) || !(step > 0)) return 0;
+  return Math.ceil(value / step) * step;
+}
+
+// Reverses the forecast: given the Ship Goal, what does EVERY required area need
+// (machines and associates) to hold that pace for the full shift — not just the
+// single current bottleneck. Machine areas are fully automatic; associates clear
+// errors and keep WIP flowing rather than physically operating each machine. So
+// an "AT RISK" area here means it's running above sustainable error-clearing
+// coverage, not that a machine literally cannot run — treat it as a downtime-risk
+// flag. (Follow-up: tie this into the real Downtime Loss / WIP mechanism instead
+// of a flat gap number — not done yet.)
+function calculateGoalStaffingPlan(payload, areas, shiftHours, shipGoal) {
+  if (!(shipGoal > 0) || !(shiftHours > 0)) return null;
+
+  const requiredJphOverall = shipGoal / shiftHours;
+  const rows = [];
+
+  const unboxArea = areas.find(function (area) { return area.key === 'unbox'; }) || {};
+  const unboxRequired = roundUpToStep(requiredJphOverall / 150, 0.5);
+  const unboxCurrent = Number(payload.associates.unbox || 0);
+  rows.push({
+    key: 'unbox', label: 'SF Unbox', requiredJph: requiredJphOverall,
+    machineSummary: 'Associate-paced feed', limitingProcess: 'SF Unbox',
+    requiredAssociates: unboxRequired, currentAssociates: unboxCurrent,
+    associateGap: Math.max(0, unboxRequired - unboxCurrent),
+    capacityGap: Math.max(0, requiredJphOverall - Number(unboxArea.effectiveJph || 0)),
+    onTrack: Number(unboxArea.effectiveJph || 0) >= requiredJphOverall
+  });
+
+  SURFACE_CELL_BLOCKS.forEach(function (block) {
+    const members = block.areaKeys.map(function (key) {
+      return areas.find(function (area) { return area.key === key; });
+    }).filter(Boolean).filter(function (area) { return area.key !== 'cooling' && area.key !== 'detaping'; });
+
+    const limiting = members.reduce(function (lowest, area) {
+      if (!lowest) return area;
+      return Number(area.effectiveJph || 0) < Number(lowest.effectiveJph || 0) ? area : lowest;
+    }, null);
+
+    const requiredCoverage = members.reduce(function (maxValue, area) {
+      const config = SURFACE_AREAS.find(function (item) { return item.key === area.key; }) || {};
+      const neededMachines = config.jphPerUnit > 0 ? Math.ceil(requiredJphOverall / config.jphPerUnit) : 0;
+      const neededPeople = neededMachines > 0 ? neededMachines / Math.max(0.25, Number(config.machinesPerAssociate || 1)) : 0;
+      return Math.max(maxValue, neededPeople);
+    }, 0);
+
+    const requiredAssociates = roundUpToStep(Math.max(block.defaultAssociates, requiredCoverage), 0.5);
+    const currentAssociates = Number(payload.associates[block.areaKeys[0]] || 0);
+    const blockJph = limiting ? Number(limiting.effectiveJph || 0) : 0;
+
+    rows.push({
+      key: block.key,
+      label: block.label,
+      requiredJph: requiredJphOverall,
+      machineSummary: block.areaKeys.filter(function (key) { return key !== 'cooling'; }).map(function (key) {
+        const area = areas.find(function (item) { return item.key === key; }) || {};
+        return `${area.label || key}: ${formatNumber(area.unitsRunning || 0)}`;
+      }).join(' · '),
+      limitingProcess: limiting ? limiting.label : 'No active process',
+      requiredAssociates,
+      currentAssociates,
+      associateGap: Math.max(0, requiredAssociates - currentAssociates),
+      capacityGap: Math.max(0, requiredJphOverall - blockJph),
+      onTrack: blockJph >= requiredJphOverall && currentAssociates >= requiredAssociates
+    });
+  });
+
+  const shortRows = rows.filter(function (row) { return !row.onTrack; });
+  return {
+    requiredJphOverall,
+    rows,
+    totalAdditionalAssociates: rows.reduce(function (sum, row) { return sum + row.associateGap; }, 0),
+    totalAdditionalMachines: 0,
+    shortAreaCount: shortRows.length,
+    operatorShortCount: shortRows.filter(function (row) { return row.associateGap > 0; }).length,
+    machineRiskCount: shortRows.filter(function (row) { return row.capacityGap > 0; }).length,
+    achievable: shortRows.length === 0
+  };
+}
+
+function calculateHourlySummary(hourly, shiftHours, effectiveBottleneckJph, shipGoal, capacityCeiling, availableWorkLow, availableWorkHigh) {
+  const totals = {
+    unbox: 0,
+    autoblocker: 0,
+    cooling: 0,
+    orb: 0,
+    polisher: 0,
+    engraving: 0,
+    detaping: 0,
+    coater: 0,
+    inspection: 0
+  };
+
+  let hoursEntered = 0;
+
+  hourly.forEach(function (row) {
+    if (!row || row.active === 'No') return;
+
+    const anyValue =
+      Number(row.unbox || 0) +
+      Number(row.autoblocker || 0) +
+      Number(row.cooling || 0) +
+      Number(row.orb || 0) +
+      Number(row.polisher || 0) +
+      Number(row.engraving || 0) +
+      Number(row.detaping || 0) +
+      Number(row.coater || 0) +
+      Number(row.inspection || 0);
+
+    if (anyValue <= 0) return;
+
+    totals.unbox += Number(row.unbox || 0);
+    totals.autoblocker += Number(row.autoblocker || 0);
+    totals.cooling += Number(row.cooling || 0);
+    totals.orb += Number(row.orb || 0);
+    totals.polisher += Number(row.polisher || 0);
+    totals.engraving += Number(row.engraving || 0);
+    totals.detaping += Number(row.detaping || 0);
+    totals.coater += Number(row.coater || 0);
+    totals.inspection += Number(row.inspection || 0);
+
+    if (Number(row.inspection || 0) > 0) {
+      hoursEntered += 1;
+    }
+  });
+
+  const actualAr41SoFar = totals.inspection;
+  const actualPace = hoursEntered > 0 ? actualAr41SoFar / hoursEntered : 0;
+  const remainingHours = Math.max(0, shiftHours - hoursEntered);
+
+  const targetPace = shipGoal > 0
+    ? shipGoal / shiftHours
+    : effectiveBottleneckJph;
+
+  const expectedByNow = targetPace * hoursEntered;
+  const paceGap = actualAr41SoFar - expectedByNow;
+
+  let onTrackStatus = 'NO HOURLY';
+
+  if (hoursEntered > 0) {
+    if (actualAr41SoFar >= expectedByNow) onTrackStatus = 'GREEN';
+    else if (actualAr41SoFar >= expectedByNow * 0.90) onTrackStatus = 'YELLOW';
+    else onTrackStatus = 'RED';
+  }
+
+  // Available work = BOS WIP + average incoming Surface work + average remake/breakage work.
+  // Current OUT is already part of today's available work pool.
+  const availableRemainingLow = Math.max(0, Number(availableWorkLow || 0) - actualAr41SoFar);
+  const availableRemainingHigh = Math.max(0, Number(availableWorkHigh || availableWorkLow || 0) - actualAr41SoFar);
+  const capacityRemainingAfterActual = Math.max(0, Number(capacityCeiling || 0) - actualAr41SoFar);
+  const capacityProjectedOutLow = actualAr41SoFar + Math.min(availableRemainingLow, capacityRemainingAfterActual);
+  const capacityProjectedOutHigh = actualAr41SoFar + Math.min(availableRemainingHigh, capacityRemainingAfterActual);
+
+  const currentPaceProjectedOut = hoursEntered > 0
+    ? actualAr41SoFar + (actualPace * remainingHours)
+    : capacityProjectedOutLow;
+
+  const projectedActualOut = Math.min(capacityProjectedOutHigh, currentPaceProjectedOut);
+
+  return {
+    totals,
+    hoursEntered,
+    actualAr41SoFar,
+    actualPace,
+    targetPace,
+    expectedByNow,
+    paceGap,
+    remainingHours,
+    onTrackStatus,
+    availableRemainingLow,
+    availableRemainingHigh,
+    capacityProjectedOutLow,
+    capacityProjectedOutHigh,
+    capacityProjectedOut: capacityProjectedOutHigh,
+    projectedActualOut
+  };
+}
+
+
+function ensureSurfaceMachineV19Styles(){
+  if(document.getElementById('surfaceMachineV19Styles'))return;
+  const style=document.createElement('style');
+  style.id='surfaceMachineV19Styles';
+  style.textContent=`
+    #surfaceMachineBreakdown.surface-machine-grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:18px;
+    }
+    #surfaceMachineBreakdown .surface-machine-card{
+      min-width:0;
+      min-height:470px;
+      overflow:hidden;
+      border:1px solid rgba(92,132,188,.26);
+      border-radius:18px;
+      background:linear-gradient(145deg,#101928,#08111e);
+    }
+    #surfaceMachineBreakdown .surface-machine-head{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+      padding:17px 17px 12px;
+    }
+    #surfaceMachineBreakdown .surface-machine-head strong{
+      color:#f3f7ff;
+      font-size:20px;
+    }
+    #surfaceMachineBreakdown .surface-machine-head span{
+      color:#4de6ff;
+      font-family:'Share Tech Mono',monospace;
+      font-size:13px;
+      font-weight:800;
+      text-align:right;
+    }
+    #surfaceMachineBreakdown .surface-machine-summary{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:8px;
+      padding:0 14px 11px;
+    }
+    #surfaceMachineBreakdown .surface-machine-summary>div{
+      min-width:0;
+      padding:11px 10px;
+      border:1px solid rgba(92,132,188,.18);
+      border-radius:11px;
+      background:rgba(255,255,255,.022);
+    }
+    #surfaceMachineBreakdown .surface-machine-summary small{
+      display:block;
+      color:#8d9bb0;
+      font-size:11px;
+    }
+    #surfaceMachineBreakdown .surface-machine-summary b{
+      display:block;
+      margin-top:5px;
+      color:#eef5ff;
+      font-size:17px;
+    }
+    #surfaceMachineBreakdown .surface-machine-list{
+      max-height:330px;
+      overflow:auto;
+      padding:0 14px 14px;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(0,229,255,.38) rgba(255,255,255,.03);
+    }
+    #surfaceMachineBreakdown .surface-machine-row{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:14px;
+      align-items:center;
+      margin-bottom:8px;
+      padding:12px;
+      border:1px solid rgba(92,132,188,.12);
+      border-radius:11px;
+      background:rgba(255,255,255,.025);
+    }
+    #surfaceMachineBreakdown .surface-machine-row:hover{
+      border-color:rgba(0,229,255,.28);
+      background:rgba(0,229,255,.035);
+    }
+    #surfaceMachineBreakdown .surface-machine-main{min-width:0}
+    #surfaceMachineBreakdown .surface-machine-main strong{color:#f2f6ff}
+    #surfaceMachineBreakdown .surface-machine-main small{
+      display:block;
+      margin-top:4px;
+      color:#8e9db2;
+      line-height:1.35;
+    }
+    #surfaceMachineBreakdown .surface-machine-progress{
+      position:relative;
+      height:6px;
+      margin-top:10px;
+      overflow:hidden;
+      border-radius:999px;
+      background:#182437;
+    }
+    #surfaceMachineBreakdown .surface-machine-progress::after{
+      position:absolute;
+      inset:-2px auto -2px 90%;
+      width:1px;
+      background:rgba(255,189,61,.72);
+      content:'';
+    }
+    #surfaceMachineBreakdown .surface-machine-progress i{
+      display:block;height:100%;border-radius:inherit
+    }
+    #surfaceMachineBreakdown i.green,#tabPanel-performance .surface-v19-track i.green{background:linear-gradient(90deg,#20bb84,#45e6a7)}
+    #surfaceMachineBreakdown i.amber,#tabPanel-performance .surface-v19-track i.amber{background:linear-gradient(90deg,#df8d12,#ffbd3d)}
+    #surfaceMachineBreakdown i.red,#tabPanel-performance .surface-v19-track i.red{background:linear-gradient(90deg,#e44455,#ff6675)}
+    #surfaceMachineBreakdown .surface-machine-result{
+      display:grid;justify-items:end;gap:7px;min-width:142px
+    }
+    #surfaceMachineBreakdown .surface-machine-result em{
+      color:#63f0c2;font-style:normal;font-family:'Share Tech Mono',monospace;font-size:13px;font-weight:800
+    }
+    #surfaceMachineBreakdown .surface-machine-note{
+      padding:0 16px 15px;color:#718198;font-size:11px;line-height:1.4
+    }
+    #tabPanel-performance .surface-v19-summary,
+    #tabPanel-performance .surface-v19-charts{
+      display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px
+    }
+    #tabPanel-performance .surface-v19-pace,
+    #tabPanel-performance .surface-v19-chart-card{
+      min-width:0;padding:20px;border:1px solid rgba(92,132,188,.25);border-radius:18px;
+      background:radial-gradient(circle at 100% 0%,rgba(0,229,255,.05),transparent 40%),linear-gradient(145deg,#111a2a,#091220)
+    }
+    #tabPanel-performance .surface-v19-pace.inspection,
+    #tabPanel-performance .surface-v19-chart-card.inspection{
+      background:radial-gradient(circle at 100% 0%,rgba(69,230,167,.05),transparent 40%),linear-gradient(145deg,#111a2a,#091220)
+    }
+    #tabPanel-performance .surface-v19-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+    #tabPanel-performance .surface-v19-head span{display:block;color:#8e9db3;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    #tabPanel-performance .surface-v19-head strong{display:block;margin-top:5px;color:#fff;font-family:'Rajdhani',sans-serif;font-size:25px}
+    #tabPanel-performance .surface-v19-value{display:flex;align-items:flex-end;gap:14px;margin:20px 0 14px}
+    #tabPanel-performance .surface-v19-value b{color:#fff;font-family:'Rajdhani',sans-serif;font-size:48px;line-height:.9}
+    #tabPanel-performance .surface-v19-value small{color:#8e9db3;line-height:1.4}
+    #tabPanel-performance .surface-v19-track{position:relative;height:8px;overflow:hidden;border-radius:999px;background:#19263a}
+    #tabPanel-performance .surface-v19-track::after{position:absolute;inset:-2px auto -2px 90%;width:1px;background:rgba(255,189,61,.70);content:''}
+    #tabPanel-performance .surface-v19-track i{display:block;height:100%;border-radius:inherit}
+    #tabPanel-performance .surface-v19-chart-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}
+    #tabPanel-performance .surface-v19-chart-meta div{padding:10px 12px;border:1px solid rgba(92,132,188,.17);border-radius:10px;background:rgba(255,255,255,.02)}
+    #tabPanel-performance .surface-v19-chart-meta span{display:block;color:#8190a6;font-size:10px;text-transform:uppercase}
+    #tabPanel-performance .surface-v19-chart-meta strong{display:block;margin-top:4px;color:#eaf2ff}
+    #tabPanel-performance .surface-v19-chart-shell{min-height:290px;padding:10px;border:1px solid rgba(92,132,188,.2);border-radius:15px;background:linear-gradient(rgba(0,229,255,.024) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.024) 1px,transparent 1px),#080f1b;background-size:32px 32px;overflow:hidden}
+    #tabPanel-performance .surface-v19-chart-shell svg{display:block;width:100%;height:270px}
+    #tabPanel-performance .surface-v19-actual{fill:none;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+    #tabPanel-performance .surface-v19-expected{fill:none;stroke-width:3;stroke-dasharray:9 8;stroke-linecap:round;opacity:.75;animation:chartDashFlow 1.5s linear infinite}
+    #tabPanel-performance .surface-v19-hourly{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    #tabPanel-performance .surface-v19-hour-card{min-width:0;padding:14px;border:1px solid rgba(92,132,188,.22);border-radius:13px;background:linear-gradient(145deg,#111a2a,#0a1220)}
+    #tabPanel-performance .surface-v19-hour-card.now{border-color:rgba(0,229,255,.55);box-shadow:0 0 20px rgba(0,229,255,.08)}
+    #tabPanel-performance .surface-v19-hour-head{display:flex;justify-content:space-between;margin-bottom:12px}
+    #tabPanel-performance .surface-v19-hour-metric{display:grid;grid-template-columns:72px minmax(0,1fr) 105px;gap:9px;align-items:center;margin-top:10px}
+    #tabPanel-performance .surface-v19-hour-metric label{color:#9aa8bb;font-size:12px}
+    #tabPanel-performance .surface-v19-hour-value{color:#eaf2ff;font-size:12px;text-align:right}
+    #tabPanel-performance .surface-v19-hour-value span{display:block;margin-top:2px;font-size:11px;font-weight:900}
+    #tabPanel-performance .surface-v19-hour-value span.green{color:#45e6a7}
+    #tabPanel-performance .surface-v19-hour-value span.amber{color:#ffbd3d}
+    #tabPanel-performance .surface-v19-hour-value span.red{color:#ff6675}
+    #tabPanel-performance .surface-v19-hour-foot{display:flex;justify-content:flex-end;margin-top:12px}
+    @media(max-width:1250px){
+      #surfaceMachineBreakdown.surface-machine-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      #tabPanel-performance .surface-v19-hourly{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media(max-width:800px){
+      #surfaceMachineBreakdown.surface-machine-grid,
+      #tabPanel-performance .surface-v19-summary,
+      #tabPanel-performance .surface-v19-charts,
+      #tabPanel-performance .surface-v19-hourly{grid-template-columns:1fr}
+      #surfaceMachineBreakdown .surface-machine-row{grid-template-columns:1fr}
+      #surfaceMachineBreakdown .surface-machine-result{justify-items:start}
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+const SURFACE_LIVE_MACHINE_CONFIG_V20={
+  unbox:{
+    combined:false,
+    displayType:'associate',
+    accessPoints:['Surface Unbox']
+  },
+  autoblocker:{
+    accessPoints:['Auto Blockers','Auto Blocker']
+  },
+  cooling:{
+    combined:true,
+    combinedName:'IQ Star / Cooling',
+    accessPoints:['IQ Star']
+  },
+  orb:{
+    accessPoints:['Orbit Generator','ORB / Generator']
+  },
+  polisher:{
+    accessPoints:['Polisher']
+  },
+  engraving:{
+    accessPoints:['Engraver']
+  },
+  detaping:{
+    accessPoints:['Detaper','Detaping']
+  },
+  coater:{
+    accessPoints:['54R Coater','Coater']
+  },
+  inspection:{
+    combined:true,
+    combinedName:'Surface Inspection / AR41',
+    accessPoints:['Surface Inspection']
+  }
+};
+
+function getSurfaceV19Status(actual,expected){
+  const ratio=expected>0?actual/expected:1;
+  return{
+    ratio,
+    percent:Math.round(ratio*100),
+    className:ratio>=1?'green':ratio>=.9?'amber':'red',
+    label:ratio>=1?'ON TRACK':ratio>=.9?'WATCH':'BEHIND'
+  };
+}
+
+function getSurfaceLiveOperatorRowsV20(){
+  return Array.isArray(window.surfaceDashboardOperatorRows)
+    ?window.surfaceDashboardOperatorRows
+    :[];
+}
+
+function getSurfaceRowAccessPointV20(row){
+  return String(
+    row.AccessPoint??
+    row['Access Point']??
+    row.FlowStation??
+    row.flowStation??
+    row.DisplayName??
+    row.FlowStep??
+    ''
+  ).trim();
+}
+
+function getSurfaceRowMachineNameV20(row){
+  return String(
+    row.Operator??
+    row.operator??
+    ''
+  ).trim();
+}
+
+function getSurfaceRowHoursV20(row){
+  if(row?.Hours&&typeof row.Hours==='object')return row.Hours;
+  if(row?.hours&&typeof row.hours==='object')return row.hours;
+
+  const hours={};
+  Object.keys(row||{}).forEach(key=>{
+    if(
+      /^H?\d{1,2}$/i.test(String(key))||
+      /^\d{1,2}:\d{2}\s*(AM|PM)?$/i.test(String(key))||
+      /^\d{1,2}\s*(AM|PM)$/i.test(String(key))
+    ){
+      hours[key]=row[key];
+    }
+  });
+  return hours;
+}
+
+function getSurfaceRowTotalV20(row){
+  const explicit=Number(String(row?.Total??row?.total??'').replace(/,/g,''));
+  if(Number.isFinite(explicit))return Math.max(0,explicit);
+
+  return Object.values(getSurfaceRowHoursV20(row))
+    .reduce((sum,value)=>sum+Math.max(0,Number(String(value).replace(/,/g,''))||0),0);
+}
+
+function getSurfaceMachineElapsedHoursV20(row){
+  const slots=getFinishShiftSlots();
+  if(!slots.length)return 0;
+
+  const hourSource=getSurfaceRowHoursV20(row);
+  let firstRank=Infinity;
+
+  Object.entries(hourSource).forEach(([hour,value])=>{
+    const jobs=Math.max(0,Number(String(value).replace(/,/g,''))||0);
+    if(jobs<=0)return;
+
+    const normalized=normalizeHourKey(hour);
+    const slotIndex=slots.findIndex(slot=>slot.key===normalized);
+    if(slotIndex>=0)firstRank=Math.min(firstRank,slotIndex);
+  });
+
+  if(!Number.isFinite(firstRank))firstRank=0;
+
+  const productionDate=getValue('productionDate',getLocalDateInputValue(new Date()));
+  const today=getLocalDateInputValue(new Date());
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+  const firstStart=slots[firstRank]?.start??slots[0].start;
+
+  let endMinutes=slots[slots.length-1].end;
+
+  if(productionDate===today){
+    endMinutes=Math.max(firstStart,Math.min(nowMinutes,slots[slots.length-1].end));
+  }else if(productionDate>today){
+    endMinutes=firstStart;
+  }
+
+  return Math.max(0,(endMinutes-firstStart)/60);
+}
+
+function surfaceAccessPointMatchesV20(accessPoint,allowed){
+  const normalized=String(accessPoint||'').trim().toUpperCase();
+
+  return (allowed||[]).some(name=>{
+    const candidate=String(name||'').trim().toUpperCase();
+    return normalized===candidate||normalized.includes(candidate);
+  });
+}
+
+function getSurfaceAreaLiveRowsV20(areaKey){
+  const config=SURFACE_LIVE_MACHINE_CONFIG_V20[areaKey]||{};
+  const rows=getSurfaceLiveOperatorRowsV20();
+
+  return rows.filter(row=>{
+    const accessPoint=getSurfaceRowAccessPointV20(row);
+    if(!surfaceAccessPointMatchesV20(accessPoint,config.accessPoints))return false;
+
+    // Manual Blocker is intentionally excluded from the machine dashboard.
+    if(/MANUAL BLOCKER/i.test(accessPoint))return false;
+
+    return getSurfaceRowTotalV20(row)>0;
+  });
+}
+
+function getSurfaceLiveAreaDataV20(areaKey,area,config){
+  const liveRows=getSurfaceAreaLiveRowsV20(areaKey);
+  const machineJph=Math.max(0,Number(config?.jphPerUnit)||0);
+  const combined=Boolean(SURFACE_LIVE_MACHINE_CONFIG_V20[areaKey]?.combined);
+
+  if(combined){
+    const actual=liveRows.reduce(
+      (sum,row)=>sum+getSurfaceRowTotalV20(row),
+      0
+    );
+
+    const configuredUnits=Math.max(
+      1,
+      Math.round(Number(area?.unitsRunning)||1)
+    );
+
+    const elapsedHours=liveRows.length
+      ?Math.max(...liveRows.map(getSurfaceMachineElapsedHoursV20))
+      :0;
+
+    return{
+      combined:true,
+      rows:liveRows,
+      liveUnits:configuredUnits,
+      actual,
+      expected:machineJph*configuredUnits*elapsedHours,
+      elapsedHours,
+      areaJph:machineJph*configuredUnits
+    };
+  }
+
+  const byMachine=new Map();
+
+  liveRows.forEach(row=>{
+    const machineName=getSurfaceRowMachineNameV20(row);
+    if(
+      !machineName||
+      /UNASSIGNED|NO OPERATOR/i.test(machineName)
+    )return;
+
+    const key=machineName.toUpperCase();
+
+    if(!byMachine.has(key)){
+      byMachine.set(key,{
+        name:machineName,
+        totalOutput:0,
+        lastHour:'',
+        lastHourOutput:0,
+        lastRank:-Infinity,
+        rows:[]
+      });
+    }
+
+    const machine=byMachine.get(key);
+    machine.rows.push(row);
+    machine.totalOutput+=getSurfaceRowTotalV20(row);
+
+    Object.entries(getSurfaceRowHoursV20(row)).forEach(([hour,value])=>{
+      const jobs=Math.max(0,Number(String(value).replace(/,/g,''))||0);
+      if(jobs<=0)return;
+
+      const normalized=normalizeHourKey(hour);
+      const rank=getFinishShiftSlots().findIndex(slot=>slot.key===normalized);
+
+      if(rank>machine.lastRank){
+        machine.lastRank=rank;
+        machine.lastHour=normalized;
+        machine.lastHourOutput=jobs;
+      }else if(rank===machine.lastRank){
+        machine.lastHourOutput+=jobs;
+      }
+    });
+  });
+
+  const machines=Array.from(byMachine.values())
+    .map(machine=>{
+      const elapsedHours=Math.max(
+        0,
+        ...machine.rows.map(getSurfaceMachineElapsedHoursV20)
+      );
+      const expected=machineJph*elapsedHours;
+
+      return{
+        ...machine,
+        elapsedHours,
+        expected,
+        status:getSurfaceV19Status(machine.totalOutput,expected)
+      };
+    })
+    .sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+
+  const detectedUnits=machines.length;
+  const elapsedHours=machines.length
+    ?Math.max(...machines.map(machine=>machine.elapsedHours))
+    :0;
+
+  // SF Unbox capacity must come from Daily Setup.
+  // Activity can contain several people who scanned at different times,
+  // which does not mean they were all assigned simultaneously.
+  const configuredUnits=areaKey==='unbox'
+    ?Math.max(0,Number(area?.unitsRunning)||0)
+    :detectedUnits;
+
+  return{
+    combined:false,
+    machines,
+    detectedUnits,
+    liveUnits:configuredUnits,
+    actual:machines.reduce((sum,machine)=>sum+machine.totalOutput,0),
+    expected:machineJph*configuredUnits*elapsedHours,
+    elapsedHours,
+    areaJph:machineJph*configuredUnits
+  };
+}
+
+function getSurfaceV20HourlyTotalsByArea(){
+  const hourly={};
+
+  HOURLY_DEFAULTS.forEach(hour=>{
+    hourly[hour]={
+      hour,
+      unbox:0,
+      autoblocker:0,
+      cooling:0,
+      orb:0,
+      polisher:0,
+      engraving:0,
+      detaping:0,
+      coater:0,
+      inspection:0
+    };
+  });
+
+  getSurfaceLiveOperatorRowsV20().forEach(row=>{
+    const accessPoint=getSurfaceRowAccessPointV20(row);
+    const areaKey=stationToForecastKey(accessPoint);
+    if(!areaKey||!hourly)return;
+
+    Object.entries(getSurfaceRowHoursV20(row)).forEach(([hour,value])=>{
+      const normalized=normalizeHourKey(hour);
+      if(!hourly[normalized])return;
+
+      hourly[normalized][areaKey]+=
+        Math.max(0,Number(String(value).replace(/,/g,''))||0);
+    });
+  });
+
+  return Object.values(hourly);
+}
+
+function renderSurfaceMachineBreakdown(result){
+  ensureSurfaceMachineV19Styles();
+
+  const statusPanel=document.getElementById('tabPanel-status');
+  if(!statusPanel)return;
+
+  let section=document.getElementById('surfaceMachinePerformanceSection');
+
+  if(!section){
+    section=document.createElement('section');
+    section.id='surfaceMachinePerformanceSection';
+    section.className='panel wide';
+
+    const kpis=statusPanel.querySelector('.forecast-kpi-grid');
+
+    if(kpis&&kpis.nextSibling){
+      statusPanel.insertBefore(section,kpis.nextSibling);
+    }else{
+      statusPanel.prepend(section);
+    }
+  }
+
+  const areaMap=Object.fromEntries(
+    (result?.areas||[]).map(area=>[area.key,area])
+  );
+
+  const cards=SURFACE_AREAS.map(config=>{
+    const area=areaMap[config.key]||{};
+    const live=getSurfaceLiveAreaDataV20(
+      config.key,
+      area,
+      config
+    );
+
+    const areaStatus=getSurfaceV19Status(
+      live.actual,
+      live.expected
+    );
+
+    let rows='';
+
+    if(config.key==='cooling'){
+      rows=`<div class="surface-machine-row">
+        <div class="surface-machine-main">
+          <strong>IQ Star / Cooling</strong>
+          <small>
+            Combined output ${formatNumber(live.actual)} jobs ·
+            ${live.liveUnits} tower(s) running ·
+            Buffer WIP ${formatNumber(area.currentWip||0)} ·
+            Expected dwell ${config.coolingLowMin||25}–${config.coolingHighMin||50} min
+          </small>
+        </div>
+        <div class="surface-machine-result">
+          <em>${formatNumber(live.areaJph)} JPH</em>
+          <span class="status-pill status-${
+            areaStatus.className==='green'
+              ?'green'
+              :areaStatus.className==='amber'
+                ?'amber'
+                :'red'
+          }">${areaStatus.percent}% · ${areaStatus.label}</span>
+        </div>
+      </div>`;
+    }else if(live.combined){
+      const combinedName=
+        SURFACE_LIVE_MACHINE_CONFIG_V20[config.key]?.combinedName||
+        config.label;
+
+      rows=`<div class="surface-machine-row">
+        <div class="surface-machine-main">
+          <strong>${escapeHtml(combinedName)}</strong>
+          <small>
+            Total ${formatNumber(live.actual)} jobs ·
+            Expected ${formatNumber(live.expected)} ·
+            ${live.liveUnits} machine/unit(s) used
+          </small>
+          <div class="surface-machine-progress">
+            <i class="${areaStatus.className}"
+              style="width:${Math.min(100,areaStatus.ratio*100)}%">
+            </i>
+          </div>
+        </div>
+        <div class="surface-machine-result">
+          <em>${formatNumber(live.areaJph)} JPH</em>
+          <span class="status-pill status-${
+            areaStatus.className==='green'
+              ?'green'
+              :areaStatus.className==='amber'
+                ?'amber'
+                :'red'
+          }">${areaStatus.percent}% · ${areaStatus.label}</span>
+        </div>
+      </div>`;
+    }else if(live.machines.length){
+      rows=live.machines.map(machine=>`
+        <div class="surface-machine-row">
+          <div class="surface-machine-main">
+            <strong>${escapeHtml(machine.name)}</strong>
+            <small>
+              Total ${formatNumber(machine.totalOutput)} jobs ·
+              Expected ${formatNumber(machine.expected)} ·
+              Last ${escapeHtml(formatHourLabel(machine.lastHour)||'Live')}:
+              ${formatNumber(machine.lastHourOutput)}
+            </small>
+            <div class="surface-machine-progress">
+              <i class="${machine.status.className}"
+                style="width:${Math.min(100,machine.status.ratio*100)}%">
+              </i>
+            </div>
+          </div>
+          <div class="surface-machine-result">
+            <em>${formatNumber(config.jphPerUnit)} JPH</em>
+            <span class="status-pill status-${
+              machine.status.className==='green'
+                ?'green'
+                :machine.status.className==='amber'
+                  ?'amber'
+                  :'red'
+            }">${machine.status.percent}% · ${machine.status.label}</span>
+          </div>
+        </div>
+      `).join('');
+    }else{
+      rows=`<div class="surface-machine-row">
+        <div class="surface-machine-main">
+          <strong>No live machine activity</strong>
+          <small>No positive RAW_ACTIVITY_CURRENT output for this area yet.</small>
+        </div>
+        <div class="surface-machine-result">
+          <em>${formatNumber(config.jphPerUnit)} JPH</em>
+        </div>
+      </div>`;
+    }
+
+    const rule=config.key==='cooling'
+      ?'Dwell / Buffer'
+      :config.key==='unbox'
+        ?'Associate JPH'
+        :'Live Machines';
+
+    return`<article class="surface-machine-card">
+      <div class="surface-machine-head">
+        <strong>${escapeHtml(config.label)}</strong>
+        <span>${
+          config.key==='unbox'
+            ?`${live.liveUnits} ASSOCIATE(S) ASSIGNED`
+            :`${live.liveUnits} ${
+              config.key==='cooling'
+                ?'TOWER(S) LIVE'
+                :'MACHINE(S) LIVE'
+            }`
+        }</span>
+      </div>
+
+      <div class="surface-machine-summary">
+        <div>
+          <small>${
+            config.key==='cooling'
+              ?'Towers Running'
+              :config.key==='unbox'
+                ?'Assigned Associates'
+                :'Live Machines'
+          }</small>
+          <b>${live.liveUnits}</b>
+        </div>
+
+        <div>
+          <small>Live Area JPH</small>
+          <b>${formatNumber(live.areaJph)}</b>
+        </div>
+
+        <div>
+          <small>${
+            config.key==='unbox'
+              ?'Scanners Today'
+              :'Forecast Rule'
+          }</small>
+          <b>${
+            config.key==='unbox'
+              ?formatNumber(live.detectedUnits||0)
+              :rule
+          }</b>
+        </div>
+      </div>
+
+      <div class="surface-machine-list">${rows}</div>
+    </article>`;
+  }).join('');
+
+  section.innerHTML=`
+    <div class="section-title command-title">
+      <h2>Live Machine Performance</h2>
+      <span>
+        Exact live output from RAW_ACTIVITY_CURRENT ·
+        SF Unbox associates + Surface machines ·
+        Red &lt;90% · Amber 90–99.9% · Green 100%+
+      </span>
+    </div>
+
+    <div id="surfaceMachineBreakdown"
+      class="surface-machine-grid">
+      ${cards}
+    </div>`;
+
+  syncLivePerformancePanelsV22();
+}
+
+function buildSurfaceV19Path(values,xAt,yAt){
+  let p='';values.forEach((v,i)=>{if(v===null||v===undefined||!Number.isFinite(Number(v)))return;p+=`${p?' L':'M'} ${xAt(i).toFixed(1)} ${yAt(Number(v)).toFixed(1)}`});return p;
+}
+
+function buildSurfaceV19Chart(rows,config){
+  const W=760,H=270,left=54,right=18,top=20,bottom=40,plotW=W-left-right,plotH=H-top-bottom;
+  const actual=rows.map(r=>r[config.actualKey]),expected=rows.map(r=>r[config.expectedKey]);
+  const maxY=Math.max(100,...actual,...expected),rounded=Math.ceil(maxY/100)*100;
+  const xAt=i=>left+(rows.length<=1?0:i/(rows.length-1)*plotW),yAt=v=>top+plotH-(Math.max(0,v)/rounded)*plotH;
+  const grid=Array.from({length:5},(_,i)=>{const val=rounded/4*i,y=yAt(val);return`<line class="chart-grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line><text class="chart-y-label" x="${left-8}" y="${y+4}" text-anchor="end">${formatNumber(val)}</text>`}).join('');
+  const labels=rows.map((r,i)=>i%2&&i!==rows.length-1?'':`<text class="chart-label" x="${xAt(i)}" y="${H-12}" text-anchor="middle">${escapeHtml(formatHourLabel(r.hour).replace(':00 ',''))}</text>`).join('');
+  const idx=Math.max(0,rows.findLastIndex(r=>r.started)),cur=rows[idx]||rows[0];
+  const status=getSurfaceV19Status(Number(cur?.[config.actualKey])||0,Number(cur?.[config.expectedKey])||0);
+  return`<article class="surface-v19-chart-card ${config.cardClass||''}"><div class="surface-v19-head"><div><span>${escapeHtml(config.kicker)}</span><strong>${escapeHtml(config.title)}</strong></div><span class="status-pill status-${status.className==='green'?'green':status.className==='amber'?'amber':'red'}">${status.percent}% · ${status.label}</span></div><div class="surface-v19-chart-meta"><div><span>Actual</span><strong>${formatNumber(cur?.[config.actualKey]||0)}</strong></div><div><span>Expected</span><strong>${formatNumber(cur?.[config.expectedKey]||0)}</strong></div><div><span>Variance</span><strong>${formatNumber((cur?.[config.actualKey]||0)-(cur?.[config.expectedKey]||0))}</strong></div></div><div class="surface-v19-chart-shell"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${grid}<line class="chart-axis" x1="${left}" y1="${top}" x2="${left}" y2="${H-bottom}"></line><line class="chart-axis" x1="${left}" y1="${H-bottom}" x2="${W-right}" y2="${H-bottom}"></line>${labels}<path class="surface-v19-expected" d="${buildSurfaceV19Path(expected,xAt,yAt)}" stroke="${config.expectedColor}"></path><path class="surface-v19-actual" d="${buildSurfaceV19Path(actual,xAt,yAt)}" stroke="${config.actualColor}" style="filter:drop-shadow(0 0 5px ${config.glow})"></path><line class="chart-now" x1="${xAt(idx)}" y1="${top}" x2="${xAt(idx)}" y2="${H-bottom}"></line><circle class="chart-actual-dot" cx="${xAt(idx)}" cy="${yAt(cur?.[config.actualKey]||0)}" r="5" fill="${config.actualColor}"></circle></svg></div></article>`;
+}
+
+
+function ensureSurfaceFlowPaceV24Styles(){
+  if(document.getElementById('surfaceFlowPaceV24Styles'))return;
+
+  const style=document.createElement('style');
+  style.id='surfaceFlowPaceV24Styles';
+  style.textContent=`
+    #tabPanel-performance .surface-flow-summary-v24{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:18px;
+    }
+
+    #tabPanel-performance .surface-flow-card-v24{
+      min-width:0;
+      padding:20px;
+      border:1px solid rgba(94,135,192,.25);
+      border-radius:18px;
+      background:
+        radial-gradient(circle at 100% 0%,rgba(0,229,255,.045),transparent 40%),
+        linear-gradient(145deg,#111a2a,#091220);
+    }
+
+    #tabPanel-performance .surface-flow-card-v24.orb{
+      background:
+        radial-gradient(circle at 100% 0%,rgba(177,78,255,.055),transparent 40%),
+        linear-gradient(145deg,#111a2a,#091220);
+    }
+
+    #tabPanel-performance .surface-flow-card-v24.inspection{
+      background:
+        radial-gradient(circle at 100% 0%,rgba(69,230,167,.05),transparent 40%),
+        linear-gradient(145deg,#111a2a,#091220);
+    }
+
+    #tabPanel-performance .surface-flow-card-head-v24{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+    }
+
+    #tabPanel-performance .surface-flow-card-head-v24 span:first-child{
+      color:#8fa0b7;
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    #tabPanel-performance .surface-flow-card-head-v24 strong{
+      display:block;
+      margin-top:5px;
+      color:#fff;
+      font-family:'Rajdhani',sans-serif;
+      font-size:25px;
+    }
+
+    #tabPanel-performance .surface-flow-value-v24{
+      display:flex;
+      align-items:flex-end;
+      gap:14px;
+      margin:20px 0 14px;
+    }
+
+    #tabPanel-performance .surface-flow-value-v24 b{
+      color:#fff;
+      font-family:'Rajdhani',sans-serif;
+      font-size:48px;
+      line-height:.9;
+    }
+
+    #tabPanel-performance .surface-flow-value-v24 small{
+      color:#8e9db3;
+      font-size:12px;
+      line-height:1.45;
+    }
+
+    #tabPanel-performance .surface-flow-meta-v24{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:8px;
+      margin-top:14px;
+    }
+
+    #tabPanel-performance .surface-flow-meta-v24 div{
+      min-width:0;
+      padding:10px 11px;
+      border:1px solid rgba(94,135,192,.16);
+      border-radius:10px;
+      background:rgba(255,255,255,.02);
+    }
+
+    #tabPanel-performance .surface-flow-meta-v24 span{
+      display:block;
+      color:#7e8ca2;
+      font-size:9px;
+      font-weight:800;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+    }
+
+    #tabPanel-performance .surface-flow-meta-v24 strong{
+      display:block;
+      margin-top:4px;
+      color:#eaf2ff;
+      font-size:14px;
+    }
+
+    #tabPanel-performance .surface-flow-main-chart-v24{
+      position:relative;
+      min-height:430px;
+      overflow:hidden;
+      border:1px solid rgba(94,135,192,.22);
+      border-radius:18px;
+      background:
+        linear-gradient(rgba(0,229,255,.022) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,229,255,.022) 1px,transparent 1px),
+        radial-gradient(circle at 50% 35%,rgba(0,229,255,.035),transparent 52%),
+        #080f1b;
+      background-size:38px 38px,38px 38px,auto,auto;
+    }
+
+    #tabPanel-performance .surface-flow-main-chart-v24 svg{
+      display:block;
+      width:100%;
+      height:430px;
+    }
+
+    #tabPanel-performance .surface-flow-zone-green-v24{
+      fill:rgba(46,230,166,.045);
+    }
+
+    #tabPanel-performance .surface-flow-zone-amber-v24{
+      fill:rgba(255,176,32,.055);
+    }
+
+    #tabPanel-performance .surface-flow-zone-red-v24{
+      fill:rgba(255,71,87,.035);
+    }
+
+    #tabPanel-performance .surface-flow-line-v24{
+      fill:none;
+      stroke-width:5;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      stroke-dasharray:1900;
+      stroke-dashoffset:1900;
+      animation:surfaceFlowDrawV24 1s ease forwards;
+    }
+
+    #tabPanel-performance .surface-flow-target-v24{
+      fill:none;
+      stroke-width:2;
+      stroke-dasharray:9 8;
+      opacity:.72;
+    }
+
+    #tabPanel-performance .surface-flow-legend-v24{
+      display:flex;
+      flex-wrap:wrap;
+      gap:18px;
+      margin:0 0 14px;
+      color:#8e9db3;
+      font-size:12px;
+    }
+
+    #tabPanel-performance .surface-flow-legend-v24 span{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    #tabPanel-performance .surface-flow-legend-v24 i{
+      width:20px;
+      height:4px;
+      border-radius:4px;
+      background:currentColor;
+    }
+
+    #tabPanel-performance .surface-flow-detail-tabs-v24{
+      display:flex;
+      flex-wrap:wrap;
+      gap:9px;
+      margin:18px 0;
+    }
+
+    #tabPanel-performance .surface-flow-detail-tab-v24{
+      min-height:42px;
+      padding:10px 15px!important;
+      border:1px solid rgba(94,135,192,.22);
+      border-radius:10px;
+      color:#8fa0b7;
+      background:#101928;
+    }
+
+    #tabPanel-performance .surface-flow-detail-tab-v24.active{
+      color:#fff;
+      border-color:rgba(0,229,255,.48);
+      background:
+        linear-gradient(135deg,rgba(0,229,255,.13),rgba(111,102,255,.10)),
+        #111c2d;
+      box-shadow:0 0 20px rgba(0,229,255,.08);
+    }
+
+    #tabPanel-performance .surface-flow-detail-panel-v24[hidden]{
+      display:none!important;
+    }
+
+    #tabPanel-performance .surface-flow-detail-panel-v24{
+      display:grid;
+      grid-template-columns:minmax(0,1.7fr) minmax(300px,.7fr);
+      gap:16px;
+      align-items:stretch;
+    }
+
+    #tabPanel-performance .surface-flow-detail-chart-v24{
+      min-height:330px;
+      border:1px solid rgba(94,135,192,.2);
+      border-radius:15px;
+      background:
+        linear-gradient(rgba(0,229,255,.022) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,229,255,.022) 1px,transparent 1px),
+        #080f1b;
+      background-size:34px 34px;
+      overflow:hidden;
+    }
+
+    #tabPanel-performance .surface-flow-detail-chart-v24 svg{
+      display:block;
+      width:100%;
+      height:330px;
+    }
+
+    #tabPanel-performance .surface-flow-detail-stats-v24{
+      display:grid;
+      gap:10px;
+    }
+
+    #tabPanel-performance .surface-flow-detail-stats-v24 div{
+      padding:14px;
+      border:1px solid rgba(94,135,192,.18);
+      border-radius:12px;
+      background:#111a29;
+    }
+
+    #tabPanel-performance .surface-flow-detail-stats-v24 span{
+      display:block;
+      color:#8190a6;
+      font-size:10px;
+      font-weight:800;
+      text-transform:uppercase;
+    }
+
+    #tabPanel-performance .surface-flow-detail-stats-v24 strong{
+      display:block;
+      margin-top:5px;
+      color:#eef5ff;
+      font-size:18px;
+    }
+
+    #tabPanel-performance .surface-flow-table-v24 .status-pill{
+      min-width:102px;
+    }
+
+    @keyframes surfaceFlowDrawV24{
+      to{stroke-dashoffset:0}
+    }
+
+    @media(max-width:1250px){
+      #tabPanel-performance .surface-flow-summary-v24{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+      }
+
+      #tabPanel-performance .surface-flow-summary-v24>:last-child{
+        grid-column:1/-1;
+      }
+    }
+
+    @media(max-width:900px){
+      #tabPanel-performance .surface-flow-summary-v24{
+        grid-template-columns:1fr;
+      }
+
+      #tabPanel-performance .surface-flow-summary-v24>:last-child{
+        grid-column:auto;
+      }
+
+      #tabPanel-performance .surface-flow-detail-panel-v24{
+        grid-template-columns:1fr;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function getSurfaceStageTravelDelayV24(targetKey,areaMap){
+  if(targetKey==='unbox')return 0;
+
+  const snapshot=getSurfaceBosSnapshot(
+    getValue('productionDate',getLocalDateInputValue(new Date())),
+    window.surfaceDashboardCurrentWip||{}
+  );
+
+  const targetRemaining=Math.max(
+    0,
+    Number(SURFACE_MATURITY_MINUTES[targetKey])||0
+  );
+
+  let bestDelay=Infinity;
+
+  SURFACE_FLOW_ORDER.forEach(sourceKey=>{
+    const jobs=Math.max(
+      0,
+      Number(snapshot?.[sourceKey])||
+      Number(areaMap?.[sourceKey]?.currentWip)||
+      0
+    );
+
+    if(jobs<=0)return;
+
+    const sourceIndex=SURFACE_FLOW_ORDER.indexOf(sourceKey);
+    const targetIndex=SURFACE_FLOW_ORDER.indexOf(targetKey);
+
+    if(sourceIndex>=targetIndex){
+      bestDelay=0;
+      return;
+    }
+
+    const sourceRemaining=Math.max(
+      0,
+      Number(SURFACE_MATURITY_MINUTES[sourceKey])||0
+    );
+
+    bestDelay=Math.min(
+      bestDelay,
+      Math.max(0,sourceRemaining-targetRemaining)
+    );
+  });
+
+  if(!Number.isFinite(bestDelay)){
+    bestDelay=Math.max(
+      0,
+      Number(SURFACE_MATURITY_MINUTES.unbox)-
+      targetRemaining
+    );
+  }
+
+  if(
+    targetKey==='inspection'&&
+    Boolean(document.getElementById('inspectionStartupDelay')?.checked)
+  ){
+    const downstreamBos=
+      Math.max(0,Number(snapshot?.polisher)||0)+
+      Math.max(0,Number(snapshot?.engraving)||0)+
+      Math.max(0,Number(snapshot?.detaping)||0)+
+      Math.max(0,Number(snapshot?.coater)||0)+
+      Math.max(0,Number(snapshot?.inspection)||0);
+
+    if(downstreamBos<=0){
+      bestDelay+=SURFACE_STARTUP_OUTPUT_DELAY_MIN;
+    }
+  }
+
+  return Math.max(0,bestDelay);
+}
+
+function getSurfaceExpectedAtMinuteV24(jph,elapsedMinutes,delayMinutes){
+  return Math.max(
+    0,
+    Number(jph)||0
+  )*
+  Math.max(
+    0,
+    (Math.max(0,elapsedMinutes)-Math.max(0,delayMinutes))/60
+  );
+}
+
+function getSurfacePaceStatusV24(actual,expected){
+  if(expected<=0){
+    return{
+      ratio:null,
+      percent:null,
+      className:'neutral',
+      label:'WAITING'
+    };
+  }
+
+  const ratio=Math.max(0,actual)/expected;
+
+  return{
+    ratio,
+    percent:Math.round(ratio*100),
+    className:ratio>=1?'green':ratio>=.9?'amber':'red',
+    label:ratio>=1?'ON TRACK':ratio>=.9?'WATCH':'BEHIND'
+  };
+}
+
+function buildSurfacePercentPathV24(values,xAt,yAt){
+  let path='';
+
+  values.forEach((value,index)=>{
+    if(value===null||value===undefined||!Number.isFinite(Number(value)))return;
+
+    path+=`${path?' L':'M'} ${xAt(index).toFixed(1)} ${yAt(Number(value)).toFixed(1)}`;
+  });
+
+  return path;
+}
+
+function buildSurfaceFlowPercentChartV24(rows){
+  const W=1320,H=430,left=68,right=30,top=28,bottom=54;
+  const plotW=W-left-right;
+  const plotH=H-top-bottom;
+  const minY=0;
+  const maxY=140;
+  const xAt=index=>left+(rows.length<=1?0:index/(rows.length-1)*plotW);
+  const yAt=value=>top+plotH-((Math.max(minY,Math.min(maxY,value))-minY)/(maxY-minY))*plotH;
+
+  const yTicks=[0,50,90,100,120,140];
+  const grid=yTicks.map(value=>`
+    <line class="chart-grid"
+      x1="${left}" y1="${yAt(value)}"
+      x2="${W-right}" y2="${yAt(value)}">
+    </line>
+    <text class="chart-y-label"
+      x="${left-10}" y="${yAt(value)+4}"
+      text-anchor="end">
+      ${value}%
+    </text>
+  `).join('');
+
+  const labels=rows.map((row,index)=>{
+    if(index%2!==0&&index!==rows.length-1)return'';
+
+    return`
+      <text class="chart-label"
+        x="${xAt(index)}"
+        y="${H-18}"
+        text-anchor="middle">
+        ${escapeHtml(formatHourLabel(row.hour).replace(':00 ',''))}
+      </text>`;
+  }).join('');
+
+  const currentIndex=Math.max(
+    0,
+    rows.findLastIndex(row=>row.started)
+  );
+
+  const currentX=xAt(currentIndex);
+
+  return`
+    <div class="surface-flow-main-chart-v24">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <rect class="surface-flow-zone-red-v24"
+          x="${left}" y="${yAt(90)}"
+          width="${plotW}" height="${yAt(0)-yAt(90)}">
+        </rect>
+
+        <rect class="surface-flow-zone-amber-v24"
+          x="${left}" y="${yAt(100)}"
+          width="${plotW}" height="${yAt(90)-yAt(100)}">
+        </rect>
+
+        <rect class="surface-flow-zone-green-v24"
+          x="${left}" y="${yAt(140)}"
+          width="${plotW}" height="${yAt(100)-yAt(140)}">
+        </rect>
+
+        ${grid}
+
+        <line class="chart-axis"
+          x1="${left}" y1="${top}"
+          x2="${left}" y2="${H-bottom}">
+        </line>
+
+        <line class="chart-axis"
+          x1="${left}" y1="${H-bottom}"
+          x2="${W-right}" y2="${H-bottom}">
+        </line>
+
+        ${labels}
+
+        <line class="surface-flow-target-v24"
+          x1="${left}" y1="${yAt(100)}"
+          x2="${W-right}" y2="${yAt(100)}"
+          stroke="#45e6a7">
+        </line>
+
+        <line class="surface-flow-target-v24"
+          x1="${left}" y1="${yAt(90)}"
+          x2="${W-right}" y2="${yAt(90)}"
+          stroke="#ffbd3d">
+        </line>
+
+        <path class="surface-flow-line-v24"
+          d="${buildSurfacePercentPathV24(rows.map(row=>row.unboxPace),xAt,yAt)}"
+          stroke="#00e5ff"
+          style="filter:drop-shadow(0 0 5px rgba(0,229,255,.55))">
+        </path>
+
+        <path class="surface-flow-line-v24"
+          d="${buildSurfacePercentPathV24(rows.map(row=>row.orbPace),xAt,yAt)}"
+          stroke="#b14eff"
+          style="filter:drop-shadow(0 0 5px rgba(177,78,255,.55));animation-delay:.08s">
+        </path>
+
+        <path class="surface-flow-line-v24"
+          d="${buildSurfacePercentPathV24(rows.map(row=>row.inspectionPace),xAt,yAt)}"
+          stroke="#45e6a7"
+          style="filter:drop-shadow(0 0 5px rgba(69,230,167,.55));animation-delay:.16s">
+        </path>
+
+        <line class="chart-now"
+          x1="${currentX}" y1="${top}"
+          x2="${currentX}" y2="${H-bottom}">
+        </line>
+      </svg>
+    </div>`;
+}
+
+function buildSurfaceDetailChartV24(rows,config){
+  const W=900,H=330,left=60,right=24,top=24,bottom=46;
+  const plotW=W-left-right;
+  const plotH=H-top-bottom;
+
+  const actual=rows.map(row=>row[config.actualKey]);
+  const expected=rows.map(row=>row[config.expectedKey]);
+
+  const maxY=Math.max(
+    100,
+    ...actual.filter(Number.isFinite),
+    ...expected.filter(Number.isFinite)
+  );
+
+  const rounded=Math.ceil(maxY/100)*100;
+  const xAt=index=>left+(rows.length<=1?0:index/(rows.length-1)*plotW);
+  const yAt=value=>top+plotH-(Math.max(0,value)/rounded)*plotH;
+
+  const grid=Array.from({length:5},(_,index)=>{
+    const value=rounded/4*index;
+    const y=yAt(value);
+
+    return`
+      <line class="chart-grid"
+        x1="${left}" y1="${y}"
+        x2="${W-right}" y2="${y}">
+      </line>
+
+      <text class="chart-y-label"
+        x="${left-9}" y="${y+4}"
+        text-anchor="end">
+        ${formatNumber(value)}
+      </text>`;
+  }).join('');
+
+  const labels=rows.map((row,index)=>{
+    if(index%2!==0&&index!==rows.length-1)return'';
+
+    return`
+      <text class="chart-label"
+        x="${xAt(index)}" y="${H-14}"
+        text-anchor="middle">
+        ${escapeHtml(formatHourLabel(row.hour).replace(':00 ',''))}
+      </text>`;
+  }).join('');
+
+  const currentIndex=Math.max(
+    0,
+    rows.findLastIndex(row=>row.started)
+  );
+
+  return`
+    <div class="surface-flow-detail-chart-v24">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        ${grid}
+
+        <line class="chart-axis"
+          x1="${left}" y1="${top}"
+          x2="${left}" y2="${H-bottom}">
+        </line>
+
+        <line class="chart-axis"
+          x1="${left}" y1="${H-bottom}"
+          x2="${W-right}" y2="${H-bottom}">
+        </line>
+
+        ${labels}
+
+        <path class="surface-v19-expected"
+          d="${buildSurfaceV19Path(expected,xAt,yAt)}"
+          stroke="${config.expectedColor}">
+        </path>
+
+        <path class="surface-v19-actual"
+          d="${buildSurfaceV19Path(actual,xAt,yAt)}"
+          stroke="${config.actualColor}"
+          style="filter:drop-shadow(0 0 5px ${config.glow})">
+        </path>
+
+        <line class="chart-now"
+          x1="${xAt(currentIndex)}" y1="${top}"
+          x2="${xAt(currentIndex)}" y2="${H-bottom}">
+        </line>
+      </svg>
+    </div>`;
+}
+
+function renderSurfaceMachinePerformance(result){
+  ensureSurfaceMachineV19Styles();
+  ensureSurfaceFlowPaceV24Styles();
+
+  const panel=document.getElementById('tabPanel-performance');
+  if(!panel)return;
+
+  const areaMap=Object.fromEntries(
+    (result?.areas||[]).map(area=>[area.key,area])
+  );
+
+  const slots=getFinishShiftSlots();
+  const hourlyMap=Object.fromEntries(
+    getSurfaceV20HourlyTotalsByArea()
+      .map(row=>[normalizeHourKey(row.hour),row])
+  );
+
+  const productionDate=getValue(
+    'productionDate',
+    getLocalDateInputValue(new Date())
+  );
+
+  const today=getLocalDateInputValue(new Date());
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  const shiftStart=slots[0]?.start||0;
+  const shiftEnd=slots[slots.length-1]?.end||shiftStart;
+
+  const effectiveNow=
+    productionDate<today
+      ?shiftEnd
+      :productionDate>today
+        ?shiftStart
+        :Math.max(shiftStart,Math.min(nowMinutes,shiftEnd));
+
+  const unboxConfig=SURFACE_AREAS.find(area=>area.key==='unbox')||{};
+  const orbConfig=SURFACE_AREAS.find(area=>area.key==='orb')||{};
+  const inspectionConfig=SURFACE_AREAS.find(area=>area.key==='inspection')||{};
+
+  const unboxLive=getSurfaceLiveAreaDataV20(
+    'unbox',
+    areaMap.unbox||{},
+    unboxConfig
+  );
+
+  const orbLive=getSurfaceLiveAreaDataV20(
+    'orb',
+    areaMap.orb||{},
+    orbConfig
+  );
+
+  const inspectionLive=getSurfaceLiveAreaDataV20(
+    'inspection',
+    areaMap.inspection||{},
+    inspectionConfig
+  );
+
+  const unboxJph=Math.max(
+    0,
+    Number(unboxLive.areaJph)||
+    Number(areaMap.unbox?.effectiveJph)||
+    0
+  );
+
+  const orbJph=Math.max(
+    0,
+    Number(orbLive.areaJph)||
+    Number(areaMap.orb?.effectiveJph)||
+    0
+  );
+
+  const inspectionJph=Math.max(
+    0,
+    Number(inspectionLive.areaJph)||
+    Number(areaMap.inspection?.effectiveJph)||
+    0
+  );
+
+  const unboxDelay=0;
+  const orbDelay=getSurfaceStageTravelDelayV24('orb',areaMap);
+  const inspectionDelay=getSurfaceStageTravelDelayV24('inspection',areaMap);
+
+  let unboxCum=0;
+  let orbCum=0;
+  let inspectionCum=0;
+
+  const rows=slots.map(slot=>{
+    const source=hourlyMap[slot.key]||{};
+    const pointMinute=Math.min(slot.end,effectiveNow);
+    const elapsedAtPoint=Math.max(0,pointMinute-shiftStart);
+    const started=pointMinute>slot.start;
+
+    if(started){
+      unboxCum+=Math.max(0,Number(source.unbox)||0);
+      orbCum+=Math.max(0,Number(source.orb)||0);
+      inspectionCum+=Math.max(0,Number(source.inspection)||0);
+    }
+
+    const unboxExpected=getSurfaceExpectedAtMinuteV24(
+      unboxJph,
+      elapsedAtPoint,
+      unboxDelay
+    );
+
+    const orbExpected=getSurfaceExpectedAtMinuteV24(
+      orbJph,
+      elapsedAtPoint,
+      orbDelay
+    );
+
+    const inspectionExpected=getSurfaceExpectedAtMinuteV24(
+      inspectionJph,
+      elapsedAtPoint,
+      inspectionDelay
+    );
+
+    const unboxStatus=getSurfacePaceStatusV24(unboxCum,unboxExpected);
+    const orbStatus=getSurfacePaceStatusV24(orbCum,orbExpected);
+    const inspectionStatus=getSurfacePaceStatusV24(
+      inspectionCum,
+      inspectionExpected
+    );
+
+    return{
+      hour:slot.key,
+      label:slot.label,
+      started,
+      isNow:
+        productionDate===today&&
+        nowMinutes>=slot.start&&
+        nowMinutes<slot.end,
+
+      unboxCum:started?unboxCum:null,
+      orbCum:started?orbCum:null,
+      inspectionCum:started?inspectionCum:null,
+
+      unboxExpected:started?unboxExpected:null,
+      orbExpected:started?orbExpected:null,
+      inspectionExpected:started?inspectionExpected:null,
+
+      unboxPace:
+        started&&unboxStatus.percent!==null
+          ?unboxStatus.percent
+          :null,
+
+      orbPace:
+        started&&orbStatus.percent!==null
+          ?orbStatus.percent
+          :null,
+
+      inspectionPace:
+        started&&inspectionStatus.percent!==null
+          ?inspectionStatus.percent
+          :null
+    };
+  });
+
+  const currentIndex=Math.max(
+    0,
+    rows.findLastIndex(row=>row.started)
+  );
+
+  const current=rows[currentIndex]||{};
+
+  const checkpoints=[
+    {
+      key:'unbox',
+      label:'SF Unbox',
+      cardClass:'unbox',
+      color:'#00e5ff',
+      expectedColor:'#6e7bff',
+      glow:'rgba(0,229,255,.55)',
+      live:unboxLive,
+      area:areaMap.unbox||{},
+      jph:unboxJph,
+      delay:unboxDelay,
+      actual:Number(current.unboxCum)||0,
+      expected:Number(current.unboxExpected)||0,
+      actualKey:'unboxCum',
+      expectedKey:'unboxExpected'
+    },
+    {
+      key:'orb',
+      label:'ORB / Generator',
+      cardClass:'orb',
+      color:'#b14eff',
+      expectedColor:'#ff8a3d',
+      glow:'rgba(177,78,255,.55)',
+      live:orbLive,
+      area:areaMap.orb||{},
+      jph:orbJph,
+      delay:orbDelay,
+      actual:Number(current.orbCum)||0,
+      expected:Number(current.orbExpected)||0,
+      actualKey:'orbCum',
+      expectedKey:'orbExpected'
+    },
+    {
+      key:'inspection',
+      label:'AR41 OUT',
+      cardClass:'inspection',
+      color:'#45e6a7',
+      expectedColor:'#ffbd3d',
+      glow:'rgba(69,230,167,.55)',
+      live:inspectionLive,
+      area:areaMap.inspection||{},
+      jph:inspectionJph,
+      delay:inspectionDelay,
+      actual:Number(current.inspectionCum)||0,
+      expected:Number(current.inspectionExpected)||0,
+      actualKey:'inspectionCum',
+      expectedKey:'inspectionExpected'
+    }
+  ].map(item=>({
+    ...item,
+    status:getSurfacePaceStatusV24(item.actual,item.expected)
+  }));
+
+  const summaryCards=checkpoints.map(item=>`
+    <article class="surface-flow-card-v24 ${item.cardClass}">
+      <div class="surface-flow-card-head-v24">
+        <div>
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${formatNumber(item.jph)} live JPH</strong>
+        </div>
+
+        <span class="status-pill ${
+          item.status.className==='neutral'
+            ?''
+            :`status-${
+              item.status.className==='green'
+                ?'green'
+                :item.status.className==='amber'
+                  ?'amber'
+                  :'red'
+            }`
+        }">
+          ${
+            item.status.percent===null
+              ?item.status.label
+              :`${item.status.percent}% · ${item.status.label}`
+          }
+        </span>
+      </div>
+
+      <div class="surface-flow-value-v24">
+        <b>${formatNumber(item.actual)}</b>
+
+        <small>
+          Actual by now<br>
+          ${formatNumber(item.expected)} expected by now
+        </small>
+      </div>
+
+      <div class="surface-flow-meta-v24">
+        <div>
+          <span>Available Units</span>
+          <strong>${formatNumber(item.live.liveUnits||0)}</strong>
+        </div>
+
+        <div>
+          <span>Travel Delay</span>
+          <strong>${Math.round(item.delay)} min</strong>
+        </div>
+
+        <div>
+          <span>Live WIP</span>
+          <strong>${formatNumber(item.area.currentWip||0)}</strong>
+        </div>
+      </div>
+    </article>
+  `).join('');
+
+  const detailTabs=checkpoints.map((item,index)=>`
+    <button type="button"
+      class="surface-flow-detail-tab-v24 ${index===0?'active':''}"
+      data-surface-flow-detail="${item.key}">
+      ${escapeHtml(item.label)} Detail
+    </button>
+  `).join('');
+
+  const detailPanels=checkpoints.map((item,index)=>`
+    <div class="surface-flow-detail-panel-v24"
+      data-surface-flow-panel="${item.key}"
+      ${index===0?'':'hidden'}>
+
+      ${buildSurfaceDetailChartV24(rows,{
+        actualKey:item.actualKey,
+        expectedKey:item.expectedKey,
+        actualColor:item.color,
+        expectedColor:item.expectedColor,
+        glow:item.glow
+      })}
+
+      <div class="surface-flow-detail-stats-v24">
+        <div>
+          <span>Actual by now</span>
+          <strong>${formatNumber(item.actual)}</strong>
+        </div>
+
+        <div>
+          <span>Expected by now</span>
+          <strong>${formatNumber(item.expected)}</strong>
+        </div>
+
+        <div>
+          <span>Variance</span>
+          <strong>${formatNumber(item.actual-item.expected)}</strong>
+        </div>
+
+        <div>
+          <span>Live capacity</span>
+          <strong>
+            ${formatNumber(item.live.liveUnits||0)} unit(s) ·
+            ${formatNumber(item.jph)} JPH
+          </strong>
+        </div>
+
+        <div>
+          <span>Travel adjustment</span>
+          <strong>${Math.round(item.delay)} min</strong>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  const flowRows=checkpoints.map(item=>`
+    <tr>
+      <td><strong>${escapeHtml(item.label)}</strong></td>
+      <td>${formatNumber(item.live.liveUnits||0)}</td>
+      <td>${formatNumber(item.jph)}</td>
+      <td>${Math.round(item.delay)} min</td>
+      <td>${formatNumber(item.actual)}</td>
+      <td>${formatNumber(item.expected)}</td>
+      <td>
+        ${
+          item.status.percent===null
+            ?'—'
+            :`${item.status.percent}%`
+        }
+      </td>
+      <td>${formatNumber(item.area.currentWip||0)}</td>
+      <td>
+        <span class="status-pill ${
+          item.status.className==='neutral'
+            ?''
+            :`status-${
+              item.status.className==='green'
+                ?'green'
+                :item.status.className==='amber'
+                  ?'amber'
+                  :'red'
+            }`
+        }">
+          ${item.status.label}
+        </span>
+      </td>
+    </tr>
+  `).join('');
+
+  panel.innerHTML=`
+    <section class="panel wide performance-hero-panel futuristic-hero scoreboard-frame">
+      <div class="performance-tab-header">
+        <div>
+          <p class="eyebrow">Surface flow performance</p>
+          <h2>PACE &amp; HOURLY OUTLOOK</h2>
+        </div>
+
+        <div class="performance-tab-badge">
+          <span class="status-led"></span>
+          Travel-adjusted live capacity
+        </div>
+      </div>
+    </section>
+
+    <section class="surface-flow-summary-v24 wide">
+      ${summaryCards}
+    </section>
+
+    <section class="panel wide">
+      <div class="section-title command-title">
+        <h2>Surface Flow Pace</h2>
+        <span>
+          Comparable percent-of-expected pace ·
+          expected output stops at NOW ·
+          downstream stages include travel delay
+        </span>
+      </div>
+
+      <div class="surface-flow-legend-v24">
+        <span style="color:#00e5ff"><i></i>SF Unbox</span>
+        <span style="color:#b14eff"><i></i>ORB / Generator</span>
+        <span style="color:#45e6a7"><i></i>AR41 OUT</span>
+        <span style="color:#ffbd3d"><i></i>90% warning</span>
+        <span style="color:#45e6a7"><i></i>100% target</span>
+      </div>
+
+      ${buildSurfaceFlowPercentChartV24(rows)}
+
+      <div class="surface-flow-detail-tabs-v24">
+        ${detailTabs}
+      </div>
+
+      ${detailPanels}
+    </section>
+
+    <section class="panel wide">
+      <div class="section-title command-title">
+        <h2>Flow Balance</h2>
+        <span>
+          JPH uses associates or machines currently available
+        </span>
+      </div>
+
+      <div class="table-wrap surface-flow-table-v24">
+        <table>
+          <thead>
+            <tr>
+              <th>Checkpoint</th>
+              <th>Available Units</th>
+              <th>Live JPH</th>
+              <th>Travel Delay</th>
+              <th>Actual by Now</th>
+              <th>Expected by Now</th>
+              <th>Pace</th>
+              <th>Live WIP</th>
+              <th>Signal</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${flowRows}
+          </tbody>
+        </table>
+      </div>
+    </section>`;
+
+  panel.querySelectorAll('.surface-flow-detail-tab-v24')
+    .forEach(button=>{
+      button.addEventListener('click',()=>{
+        const key=button.dataset.surfaceFlowDetail;
+
+        panel.querySelectorAll('.surface-flow-detail-tab-v24')
+          .forEach(item=>item.classList.toggle('active',item===button));
+
+        panel.querySelectorAll('.surface-flow-detail-panel-v24')
+          .forEach(detail=>{
+            detail.hidden=detail.dataset.surfaceFlowPanel!==key;
+          });
+      });
+    });
+}
+
+function renderForecast(result) {
+  const hourly = result.hourlySummary || {};
+  const status = hourly.onTrackStatus && hourly.onTrackStatus !== 'NO HOURLY' ? hourly.onTrackStatus : result.goalRisk;
+  const nowText = `Last calculated: ${new Date().toLocaleTimeString()}`;
+  const shipGoal = Number(result.shipGoal || 0);
+  const projected = Number(result.projectedOut ?? hourly.projectedActualOut ?? 0);
+  const expected = Number(hourly.expectedByNow || 0);
+  const actual = Number(hourly.actualAr41SoFar || 0);
+  const paceRatio = expected > 0 ? actual / expected : 0;
+  const pacePercent = expected > 0 ? paceRatio * 100 : 0;
+  const paceGap = actual - expected;
+  const live = result.liveWipBottleneck || null;
+  const real = result.realBottleneck || null;
+  const structural = result.bottleneck || real || null;
+  const downtimeArea = getTopDowntimeImpactArea(result.areas || []);
+  const actionPlan = buildGoalActionPlan(result);
+
+  renderCommandKpis(result, actionPlan);
+  renderSurfaceBosSnapshot();
+  updatePerformanceUI(result);
+  renderGoalStaffingPlan(result);
+  renderSurfaceMachineBreakdown(result);
+  renderSurfaceMachinePerformance(result);
+
+  setText('forecastStatus', status || 'READY');
+  const displayRangeLow = Math.max(
+    actual,
+    Number(result.forecastRangeLow ?? result.knownWipForecast ?? projected ?? 0)
+  );
+  const displayRangeHigh = Math.max(
+    displayRangeLow,
+    Number(result.forecastRangeHigh ?? result.capacityProjectedOut ?? projected ?? 0)
+  );
+
+  setText(
+    'forecastRange',
+    `${formatNumber(displayRangeLow)} - ${formatNumber(displayRangeHigh)}`
+  );
+  setText('shipGoalDisplay', shipGoal > 0 ? formatNumber(shipGoal) : '0');
+  setText('projectedGap', buildProjectedGapText(shipGoal, projected));
+  setText('pacePercent', expected > 0 ? `${round1(pacePercent)}%` : '0%');
+  setText('paceGap', `${paceGap >= 0 ? '+' : ''}${formatNumber(paceGap)} jobs`);
+  setText('lastUpdated', nowText);
+
+  setText(
+    'summaryRangeValue',
+    `${formatNumber(displayRangeLow)} - ${formatNumber(displayRangeHigh)}`
+  );
+  setText('summaryProjectedOutValue', formatNumber(projected));
+  setText('summaryTargetValue', shipGoal > 0 ? formatNumber(shipGoal) : '0');
+  setText('summaryDowntimeValue', formatNumber(result.downtimeLostTotal));
+  setText(
+    'summaryFootnote',
+    result.startupDelayRemaining > 0
+      ? `${Math.round(result.startupDelayRemaining)} min startup delay remains before normal Surface OUT. ` +
+        buildSummaryFootnote(result, actionPlan)
+      : buildSummaryFootnote(result, actionPlan)
+  );
+
+  setText('topPaceValue', expected > 0 ? `${round1(pacePercent)}%` : '0%');
+  setText('topPaceSub', hourly.onTrackStatus && hourly.onTrackStatus !== 'NO HOURLY' ? 'of expected' : 'waiting on hourly data');
+  setText('topGoalValue', shipGoal > 0 ? `${actionPlan.extraJobsNeeded > 0 ? '+' : ''}${formatNumber(actionPlan.extraJobsNeeded)}` : 'NO GOAL');
+  setText('topGoalSub', shipGoal > 0 ? (actionPlan.extraJobsNeeded > 0 ? 'jobs still needed' : 'goal covered') : 'enter ship goal');
+
+  setText('focusStructuralName', structural ? structural.label : '-');
+  setText('focusStructuralMeta', structural ? buildStructuralMeta(structural) : 'No structural bottleneck yet');
+  setText('focusLiveWipName', live ? live.label : '-');
+  setText('focusLiveWipMeta', live ? buildLivePressureMeta(live) : 'No live WIP pressure');
+  setText('focusDowntimeAreaName', downtimeArea ? downtimeArea.label : '-');
+  setText('focusDowntimeAreaMeta', downtimeArea ? `${formatNumber(downtimeArea.downtimeLostJobs || 0)} jobs lost` : 'No downtime recorded');
+  setText('focusDowntimeLossValue', `${formatNumber(result.downtimeLostTotal)} jobs`);
+
+  setText('actionExtraJobsNeeded', shipGoal > 0 ? `+${formatNumber(actionPlan.extraJobsNeeded)} jobs` : 'No target');
+  setText('actionExtraJphNeeded', shipGoal > 0 ? `+${round1(actionPlan.extraJphNeeded)} JPH` : 'No target');
+  setText('actionPrimaryFocusArea', actionPlan.primaryFocusArea || '-');
+  setText('actionDowntimeImpact', `${formatNumber(result.downtimeLostTotal)} jobs`);
+  setText('actionRecommendedAction', actionPlan.recommendedAction);
+  setText('actionBottomLine', actionPlan.bottomLine);
+
+  setText('knownWipForecast', formatNumber(result.knownWipForecast));
+  setText('capacityCeiling', formatNumber(result.capacityCeiling));
+  setText('actualAr41', formatNumber(actual));
+  setText('expectedByNow', formatNumber(expected));
+  setText('onTrackStatus', hourly.onTrackStatus || 'NO HOURLY');
+  setText('projectedActualOut', formatNumber(projected));
+  setText('actualPace', round1(hourly.actualPace || 0));
+  setText('bottleneckArea', real ? real.label : (structural ? structural.label : '-'));
+  setText('goalRisk', result.goalRisk || 'NO GOAL');
+  setText('goalRiskSub', buildGoalRiskSub(result, projected));
+  setText('shiftModeSetupText', getShiftModeDisplay(result.shiftMode));
+
+  const realPressure = real || live;
+  setText('resultLiveWipBottleneck', realPressure ? realPressure.label : '-');
+  setText(
+    'resultLiveWipHours',
+    realPressure && realPressure.pressureScore !== undefined
+      ? `${round1(realPressure.pressureScore)} hr pressure · ${round1(realPressure.wipHours || 0)} hr WIP · ${round1(realPressure.recoveryHours || 0)} hr recovery`
+      : (realPressure ? `${round1(realPressure.timeToClear)} hr to clear` : '0 hr to clear')
+  );
+  setText('liveWipBottleneck', live ? live.label : '—');
+  setText('liveWipBottleneckSub', live ? buildLivePressureMeta(live) : 'Waiting for WIP.');
+
+  setText('effectiveJph', round1(result.effectiveBottleneckJph));
+  setText('effectiveJphMirror', round1(result.effectiveBottleneckJph));
+  setText('totalAssociates', round1(result.totalAssociates));
+  setText('downtimeLost', formatNumber(result.downtimeLostTotal));
+  setText('recommendation', result.recommendation);
+
+  setRiskClass(document.getElementById('forecastStatus'), status);
+  setRiskClass(document.getElementById('onTrackStatus'), hourly.onTrackStatus || 'NO HOURLY');
+  setRiskClass(document.getElementById('goalRisk'), result.goalRisk || 'NO GOAL');
+  setRiskClass(document.getElementById('paceGap'), paceGap >= 0 ? 'GREEN' : (paceRatio >= 0.90 ? 'YELLOW' : 'RED'));
+  setRiskClass(document.getElementById('projectedGap'), shipGoal <= 0 ? 'NO GOAL' : (projected >= shipGoal ? 'GREEN' : 'RED'));
+  setRiskClass(document.getElementById('topPaceValue'), paceRatio >= 1 ? 'GREEN' : (paceRatio >= 0.90 ? 'YELLOW' : 'RED'));
+  setRiskClass(document.getElementById('topGoalValue'), shipGoal <= 0 ? 'NO GOAL' : (actionPlan.extraJobsNeeded <= 0 ? 'GREEN' : 'RED'));
+  setRiskClass(document.getElementById('summaryDowntimeValue'), result.downtimeLostTotal > 0 ? 'RED' : 'GREEN');
+  setRiskClass(document.getElementById('focusDowntimeLossValue'), result.downtimeLostTotal > 0 ? 'RED' : 'GREEN');
+
+  setPaceVisuals(paceRatio, actual, expected);
+
+  const hasHourly = hourly.onTrackStatus && hourly.onTrackStatus !== 'NO HOURLY';
+  setText('forecastStatusBasis', hasHourly ? 'Based on hourly pace vs. target' : 'Based on ship goal vs. capacity');
+
+  renderHourlyChart(latestForecastResult ? latestForecastResult.payload.hourly : [], hourly, result);
+  renderBottleneckTable(result.areas);
+}
+
+
+function renderGoalStaffingPlan(result) {
+  const summaryHolder = document.getElementById('goalPlanSummary');
+  const tableWrap = document.getElementById('goalPlanTableWrap');
+  const tableBody = document.getElementById('goalPlanTable');
+  if (!summaryHolder || !tableWrap || !tableBody) return;
+
+  const plan = result.goalStaffingPlan;
+  if (!plan) {
+    summaryHolder.innerHTML = '<p class="muted-cell">Enter today\'s ship goal to see whether each production area is ready.</p>';
+    tableWrap.hidden = true;
+    return;
+  }
+
+  tableWrap.hidden = false;
+
+  const staffingRows = plan.rows.filter(function (row) {
+    return row.associateGap > 0;
+  });
+  const equipmentRows = plan.rows.filter(function (row) {
+    return row.capacityGap > 0 && row.associateGap <= 0;
+  });
+
+  if (plan.achievable) {
+    summaryHolder.innerHTML = `<p class="goal-plan-ok">All production areas currently have enough staffing and equipment capacity to support today\'s goal of ${formatNumber(result.shipGoal)} jobs. Keep watching hourly output and downtime.</p>`;
+  } else if (staffingRows.length && equipmentRows.length) {
+    summaryHolder.innerHTML = `<p class="goal-plan-short"><strong>Today\'s goal is at risk in ${plan.shortAreaCount} production area(s).</strong> ${staffingRows.length} area(s) need additional staffing, and ${equipmentRows.length} area(s) are limited by equipment capacity. Review the highlighted rows before moving people.</p>`;
+  } else if (staffingRows.length) {
+    const totalGap = formatNumber(plan.totalAdditionalAssociates);
+    summaryHolder.innerHTML = `<p class="goal-plan-short"><strong>${staffingRows.length} production area(s) do not have enough staffing for the pace needed today.</strong> The current staffing shortage is ${totalGap} associate(s). Move associates by cell block based on the highlighted area.</p>`;
+  } else {
+    const lead = equipmentRows[0];
+    const areaName = lead ? lead.label : 'a production area';
+    const processName = lead ? lead.limitingProcess : 'equipment capacity';
+    const shortfall = lead ? `${formatNumber(lead.capacityGap)} JPH` : 'the required pace';
+    summaryHolder.innerHTML = `<p class="goal-plan-short"><strong>Staffing is sufficient, but ${escapeHtml(areaName)} is below the pace needed for today\'s goal.</strong> ${escapeHtml(processName)} is the main constraint and is approximately ${shortfall} short. Adding labor alone will not fix this gap.</p>`;
+  }
+
+  tableBody.innerHTML = plan.rows.map(function (row) {
+    const requiredJph = Math.max(0, Number(row.requiredJph) || 0);
+    const currentJph = Math.max(0, requiredJph - (Number(row.capacityGap) || 0));
+    const requiredAssociates = Math.max(0, Number(row.requiredAssociates) || 0);
+    const currentAssociates = Math.max(0, Number(row.currentAssociates) || 0);
+
+    const paceRatio = requiredJph > 0 ? currentJph / requiredJph : 1;
+    const staffingRatio = requiredAssociates > 0
+      ? currentAssociates / requiredAssociates
+      : 1;
+    const readinessRatio = Math.min(paceRatio, staffingRatio);
+
+    let statusText = 'ON TRACK';
+    let statusClass = 'status-green';
+    let rowClass = 'row-ok';
+
+    if (readinessRatio < 0.90) {
+      statusText = row.associateGap > 0
+        ? 'NEEDS STAFFING'
+        : row.capacityGap > 0
+          ? 'EQUIPMENT LIMIT'
+          : 'NOT ON TRACK';
+      statusClass = 'status-red';
+      rowClass = 'row-risk';
+    } else if (readinessRatio < 1) {
+      statusText = 'WATCH';
+      statusClass = 'status-amber';
+      rowClass = 'row-watch';
+    }
+
+    const staffingDifference = row.associateGap > 0
+      ? `${formatNumber(row.associateGap)} short`
+      : 'Fully staffed';
+
+    const paceShortfall = row.capacityGap > 0
+      ? `${formatNumber(row.capacityGap)} JPH below`
+      : 'No gap';
+
+    return `
+      <tr class="${rowClass}">
+        <td><strong>${escapeHtml(row.label)}</strong></td>
+        <td>${round1(row.requiredJph)} JPH</td>
+        <td>${escapeHtml(row.machineSummary)}</td>
+        <td>${formatNumber(row.requiredAssociates)}</td>
+        <td>${formatNumber(row.currentAssociates)}</td>
+        <td>${staffingDifference}</td>
+        <td>${escapeHtml(row.limitingProcess)}</td>
+        <td>${paceShortfall}</td>
+        <td><span class="status-pill ${statusClass}">${statusText}</span></td>
+      </tr>`;
+  }).join('');
+}
+
+function renderCommandKpis(result, actionPlan) {
+  const hourly = result.hourlySummary || {};
+  const shipGoal = Number(result.shipGoal || 0);
+  const actual = Number(hourly.actualAr41SoFar || 0);
+  const expected = Number(hourly.expectedByNow || 0);
+  const projected = Number(result.projectedOut ?? hourly.projectedActualOut ?? 0);
+  const calculatedLow = Number(
+    result.forecastRangeLow ??
+    result.knownWipForecast ??
+    projected ??
+    0
+  );
+  const calculatedHigh = Number(
+    result.forecastRangeHigh ??
+    result.capacityProjectedOut ??
+    result.capacityCeiling ??
+    projected ??
+    0
+  );
+  const remainingHours = Math.max(0, Number(hourly.remainingHours || 0));
+  const downtimeLost = Number(result.downtimeLostTotal || 0);
+
+  // Display the route-specific conservative and high-workload cases.
+  // Projected OUT is a working point inside this range; it must not replace the low.
+  const projectedLow = Math.max(actual, Math.min(calculatedLow, calculatedHigh));
+  const projectedHigh = Math.max(projectedLow, calculatedHigh);
+
+  const goalGap = shipGoal > 0 ? projected - shipGoal : 0;
+  const paceGap = actual - expected;
+  const recoveryNeededJph = shipGoal > 0 && remainingHours > 0
+    ? Math.ceil(Math.max(shipGoal - actual, 0) / remainingHours)
+    : 0;
+
+  const live = result.liveWipBottleneck || null;
+  const downtimeArea = getTopDowntimeImpactArea(result.areas || []);
+  const structural = result.bottleneck || result.realBottleneck || null;
+
+  let focusArea = '-';
+  let focusReason = 'Largest WIP / downtime pressure';
+
+  if (live && Number(live.currentWip || 0) > 0) {
+    focusArea = live.label;
+    focusReason = buildLivePressureMeta(live);
+  } else if (downtimeArea) {
+    focusArea = downtimeArea.label;
+    focusReason = `${formatNumber(downtimeArea.downtimeLostJobs || 0)} jobs lost from downtime`;
+  } else if (structural) {
+    focusArea = structural.label;
+    focusReason = buildStructuralMeta(structural);
+  }
+
+  setText('kpiCurrentOut', formatNumber(actual));
+  setText('kpiProjectedOut', formatNumber(projected));
+  setText('kpiProjectedRange', `${formatNumber(projectedLow)} - ${formatNumber(projectedHigh)}`);
+  setText('kpiShipGoal', shipGoal > 0 ? formatNumber(shipGoal) : '0');
+
+  setText(
+    'kpiGoalGap',
+    shipGoal > 0
+      ? (goalGap >= 0 ? `+${formatNumber(goalGap)} ahead of goal` : `${formatNumber(goalGap)} behind goal`)
+      : 'No target entered'
+  );
+
+  setText('kpiExpectedNow', formatNumber(expected));
+  setText(
+    'kpiPaceGap',
+    expected > 0
+      ? (paceGap >= 0 ? `+${formatNumber(paceGap)} ahead pace` : `${formatNumber(paceGap)} behind pace`)
+      : 'Waiting on hourly data'
+  );
+
+  setText('kpiRecoveryJph', `${formatNumber(recoveryNeededJph)} JPH`);
+  setText('kpiDowntimeLoss', `${formatNumber(downtimeLost)} jobs`);
+  setText('kpiFocusArea', focusArea);
+  setText('kpiFocusReason', focusReason);
+
+  setKpiCardStatus('kpiCardProjectedOut', shipGoal <= 0 ? 'neutral' : (projected >= shipGoal ? 'good' : (projected >= shipGoal * 0.90 ? 'warning' : 'bad')));
+  setKpiCardStatus('kpiCardShipGoal', shipGoal <= 0 ? 'neutral' : (projected >= shipGoal ? 'good' : 'bad'));
+  setKpiCardStatus('kpiCardExpectedNow', expected <= 0 ? 'neutral' : (actual >= expected ? 'good' : (actual >= expected * 0.90 ? 'warning' : 'bad')));
+  setKpiCardStatus('kpiCardRecovery', recoveryNeededJph <= 0 ? 'good' : (recoveryNeededJph <= Number(hourly.targetPace || 0) ? 'warning' : 'bad'));
+  setKpiCardStatus('kpiCardDowntime', downtimeLost > 0 ? 'bad' : 'good');
+}
+
+function setKpiCardStatus(cardId, status) {
+  const card = document.getElementById(cardId);
+  if (!card) return;
+  card.classList.remove('good', 'warning', 'bad');
+  if (status === 'good' || status === 'warning' || status === 'bad') {
+    card.classList.add(status);
+  }
+}
+
+
+
+function buildLivePressureMeta(live) {
+  if (!live) return 'No live WIP pressure';
+  const wip = Number(live.currentWip || live.sourceWip || 0);
+  const source = live.sourceLabel || (live.sourceArea && live.sourceArea.label) || '';
+  const pressure = live.pressureLabel || live.label || '';
+  return `${formatNumber(wip)} WIP from ${source} → ${pressure} · ${formatPressureClearText(live)}`;
+}
+
+function buildSummaryFootnote(result, actionPlan) {
+  const hourly = result.hourlySummary || {};
+  const actual = Number(hourly.actualAr41SoFar || 0);
+  const expected = Number(hourly.expectedByNow || 0);
+  const parts = [
+    `Actual AR41 is ${formatNumber(actual)} vs expected ${formatNumber(expected)}.`,
+    'Forecast range uses BOS WIP, machines running, associates assigned, live WIP pressure, and downtime impacts.'
+  ];
+  if (actionPlan.primaryFocusArea && actionPlan.primaryFocusArea !== '-') {
+    parts.push(`Primary focus right now is ${actionPlan.primaryFocusArea}.`);
+  }
+  return parts.join(' ');
+}
+
+function buildStructuralMeta(area) {
+  if (!area) return 'No structural bottleneck yet';
+  let msg = `at ${round1(area.effectiveJph || 0)} usable JPH`;
+  if (Number(area.routeLoadFactor || 1) < 1) msg += ' · route-adjusted';
+  if (area.supportCellLabel) msg += ` · ${area.supportCellLabel}`;
+  return msg;
+}
+
+function getTopDowntimeImpactArea(areas) {
+  const filtered = (areas || []).filter(function (area) {
+    return Number(area.downtimeLostJobs || 0) > 0;
+  });
+  if (!filtered.length) return null;
+  return filtered.sort(function (a, b) {
+    return Number(b.downtimeLostJobs || 0) - Number(a.downtimeLostJobs || 0);
+  })[0];
+}
+
+function buildGoalActionPlan(result) {
+  const hourly = result.hourlySummary || {};
+  const shipGoal = Number(result.shipGoal || 0);
+  const projected = Number(hourly.projectedActualOut || 0);
+  const remainingHours = Math.max(0, Number(hourly.remainingHours || 0));
+  const live = result.liveWipBottleneck || null;
+  const downtimeArea = getTopDowntimeImpactArea(result.areas || []);
+  const structural = result.bottleneck || result.realBottleneck || null;
+  const projectedGap = Math.max(0, shipGoal - projected);
+  const extraJphNeeded = shipGoal > 0 && remainingHours > 0 ? projectedGap / remainingHours : 0;
+
+  let primaryFocusArea = '-';
+  if (live && Number(live.timeToClear || 0) >= 1) primaryFocusArea = live.label;
+  else if (downtimeArea) primaryFocusArea = downtimeArea.label;
+  else if (structural) primaryFocusArea = structural.label;
+
+  let recommendedAction = 'Maintain current pace and hold the bottleneck stable.';
+  if (shipGoal <= 0) {
+    recommendedAction = primaryFocusArea !== '-' ? `Focus on ${primaryFocusArea} and keep downtime low.` : 'Enter a ship goal to unlock action guidance.';
+  } else if (projectedGap <= 0) {
+    recommendedAction = primaryFocusArea !== '-' ? `Goal is covered. Protect flow at ${primaryFocusArea} and prevent new downtime.` : 'Goal is covered. Maintain flow and protect machine uptime.';
+  } else {
+    const focusParts = [];
+    if (live) focusParts.push(`clear live WIP in ${live.label}`);
+    if (downtimeArea) focusParts.push(`cut downtime in ${downtimeArea.label}`);
+    if (!focusParts.length && structural) focusParts.push(`protect capacity at ${structural.label}`);
+    recommendedAction = focusParts.length ? `${capitalizeFirst(focusParts.join(', '))}.` : 'Raise usable JPH and remove local constraints.';
+  }
+
+  let bottomLine;
+  if (shipGoal <= 0) {
+    bottomLine = primaryFocusArea !== '-' ? `No ship goal is entered. Focus on ${primaryFocusArea} and keep downtime under control.` : 'No ship goal is entered. Add a target to get action guidance.';
+  } else if (projectedGap <= 0) {
+    bottomLine = `We are on pace to cover the ${formatNumber(shipGoal)} job goal. Protect uptime and keep the live WIP focus area stable.`;
+  } else {
+    const liveText = live ? `clear live WIP in ${live.label}` : 'clear the highest live WIP area';
+    const downtimeText = downtimeArea ? `reduce downtime in ${downtimeArea.label}` : 'protect machine uptime';
+    bottomLine = `We need ${formatNumber(projectedGap)} more jobs to hit the ${formatNumber(shipGoal)} goal. Focus first to ${liveText} and ${downtimeText}.`;
+  }
+
+  return {
+    extraJobsNeeded: projectedGap,
+    extraJphNeeded,
+    primaryFocusArea,
+    recommendedAction,
+    bottomLine
+  };
+}
+
+function capitalizeFirst(text) {
+  const value = String(text || '');
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+function buildGoalRiskSub(result, projected) {
+  const shipGoal = Number(result.shipGoal || 0);
+  if (shipGoal <= 0) return 'Enter ship goal';
+  if (result.goalRisk === 'GREEN') return 'Capacity can meet goal';
+  if (result.goalRisk === 'YELLOW') return 'Goal is tight';
+  if (result.goalRisk === 'RED') return 'Goal exceeds capacity';
+  return projected >= shipGoal ? 'Projection can meet goal' : 'Projection below goal';
+}
+
+function buildProjectedGapText(shipGoal, projected) {
+  if (Number(shipGoal || 0) <= 0) return 'No target entered';
+  const gap = Number(projected || 0) - Number(shipGoal || 0);
+  if (gap >= 0) return `+${formatNumber(gap)} ahead of goal`;
+  return `${formatNumber(gap)} behind goal`;
+}
+
+function getShiftModeDisplay(value) {
+  if (value === 'Weekday') return 'Weekday - 9.5 Hours';
+  if (value === 'Weekday OT 12') return 'Weekday OT 12 - 10.5 Hours';
+  if (value === 'Weekend') return 'Weekend - 10.5 Hours';
+  return value || 'Weekday - 9.5 Hours';
+}
+
+function setPaceVisuals(paceRatio, actual, expected) {
+  const safeRatio = Math.max(0, Number(paceRatio || 0));
+  const gauge = document.querySelector('.gauge-ring');
+  const statusDot = document.querySelector('.status-dot');
+  const statusColor = safeRatio >= 1 ? 'var(--green)' : safeRatio >= 0.90 ? 'var(--yellow)' : 'var(--red)';
+  const pct = Math.min(100, Math.round(safeRatio * 100));
+
+  if (gauge) {
+    gauge.style.background = `radial-gradient(circle at center, #06111f 0 58%, transparent 59%), conic-gradient(${statusColor} 0 ${pct}%, rgba(255,255,255,0.12) ${pct}% 100%)`;
+  }
+
+  if (statusDot) {
+    statusDot.style.background = statusColor;
+    statusDot.style.boxShadow = `0 0 22px ${statusColor}`;
+  }
+
+  const maxValue = Math.max(Number(actual || 0), Number(expected || 0), 1);
+  setBarWidth('paceBarActual', (Number(actual || 0) / maxValue) * 100);
+  setBarWidth('paceBarExpected', (Number(expected || 0) / maxValue) * 100);
+}
+
+function setBarWidth(id, percent) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.width = `${Math.max(0, Math.min(100, Number(percent || 0)))}%`;
+}
+
+function renderHourlyChart(hourlyRows, hourlySummary, result) {
+  const svg = document.getElementById('hourlyChartSvg');
+  if (!svg) return;
+
+  const rows = Array.isArray(hourlyRows) ? hourlyRows : [];
+  const shiftMode = result && result.shiftMode ? result.shiftMode : getValue('shiftMode', 'Weekday');
+  const windowInfo = getShiftWindow(shiftMode);
+  const startMinutes = parseTimeToMinutes(windowInfo.start) || 420;
+  const endMinutes = parseTimeToMinutes(windowInfo.end) || 1050;
+  const slots = buildPerformanceHourSlots(startMinutes, endMinutes);
+  const totalPoints = Math.max(2, slots.length);
+  const rowOffset = getHourlyRowOffsetForShift(shiftMode);
+
+  const displayRows = slots.map(function (slot, idx) {
+    return rows[rowOffset + idx] || { hour: minutesToHourKey(slot.start), inspection: 0, active: 'Yes' };
+  });
+
+  const width = 720;
+  const height = 230;
+  const padLeft = 56;
+  const padRight = 20;
+  const padTop = 20;
+  const padBottom = 36;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+  const targetPace = Number(hourlySummary.targetPace || 0);
+  const actualPace = Number(hourlySummary.actualPace || 0);
+  const capacityCeiling = Number(result.capacityCeiling || 0);
+  const actualSoFar = Number(hourlySummary.actualAr41SoFar || 0);
+
+  const todayKey = getLocalDateInputValue(new Date());
+  const selectedDate = getValue('productionDate', todayKey);
+  const now = new Date();
+  const clockMinutes = (now.getHours() * 60) + now.getMinutes() + (now.getSeconds() / 60);
+  let chartNowMinutes;
+
+  if (selectedDate < todayKey) {
+    chartNowMinutes = endMinutes;
+  } else if (selectedDate > todayKey) {
+    chartNowMinutes = startMinutes;
+  } else {
+    chartNowMinutes = Math.max(startMinutes, Math.min(endMinutes, clockMinutes));
+  }
+
+  const elapsedClockHours = Math.max(0, (chartNowMinutes - startMinutes) / 60);
+  const firstPointMinutes = slots.length ? slots[0].end : startMinutes;
+  const lastPointMinutes = slots.length ? slots[slots.length - 1].end : endMinutes;
+
+  function xHourForMinutes(minutes) {
+    if (lastPointMinutes <= firstPointMinutes) return 1;
+    const ratio = (Number(minutes) - firstPointMinutes) / (lastPointMinutes - firstPointMinutes);
+    return 1 + (Math.max(0, Math.min(1, ratio)) * (totalPoints - 1));
+  }
+
+  let cumulative = 0;
+  const actualPoints = [];
+  displayRows.forEach(function (row, index) {
+    if (!row || row.active === 'No') {
+      actualPoints.push({ xHour: index + 1, yValue: cumulative });
+      return;
+    }
+    cumulative += Number(row.inspection || 0);
+    actualPoints.push({ xHour: index + 1, yValue: cumulative });
+  });
+
+  const expectedPoints = [];
+  const projectedPoints = [];
+  for (let i = 1; i <= totalPoints; i += 1) {
+    const slotEndMinutes = slots[i - 1].end;
+    const slotEndHours = Math.max(0, (slotEndMinutes - startMinutes) / 60);
+    expectedPoints.push({ xHour: i, yValue: targetPace * slotEndHours });
+
+    let projectedValue;
+    if (slotEndMinutes <= chartNowMinutes) {
+      projectedValue = actualPoints[i - 1] ? actualPoints[i - 1].yValue : 0;
+    } else {
+      projectedValue = actualSoFar + (actualPace * Math.max(0, slotEndHours - elapsedClockHours));
+    }
+
+    projectedPoints.push({
+      xHour: i,
+      yValue: Math.min(capacityCeiling || projectedValue, projectedValue)
+    });
+  }
+
+  const rawMax = Math.max(
+    capacityCeiling,
+    Number(hourlySummary.projectedActualOut || 0),
+    Number(hourlySummary.expectedByNow || 0),
+    actualSoFar,
+    100
+  );
+  const maxY = getNiceChartMax(rawMax * 1.1);
+
+  function x(hour) { return padLeft + ((hour - 1) / Math.max(1, totalPoints - 1)) * plotW; }
+  function y(value) { return padTop + plotH - (Number(value || 0) / maxY) * plotH; }
+  function path(points) {
+    if (!points.length) return '';
+    return points.map(function (p, idx) {
+      return `${idx === 0 ? 'M' : 'L'} ${x(p.xHour).toFixed(1)} ${y(p.yValue).toFixed(1)}`;
+    }).join(' ');
+  }
+  function areaPath(points) {
+    if (!points.length) return '';
+    const baseline = height - padBottom;
+    const line = points.map(function (p, idx) {
+      return `${idx === 0 ? 'M' : 'L'} ${x(p.xHour).toFixed(1)} ${y(p.yValue).toFixed(1)}`;
+    }).join(' ');
+    const lastX = x(points[points.length - 1].xHour).toFixed(1);
+    const firstX = x(points[0].xHour).toFixed(1);
+    return `${line} L ${lastX} ${baseline} L ${firstX} ${baseline} Z`;
+  }
+
+  const actualVisiblePoints = [];
+  slots.forEach(function (slot, index) {
+    if (slot.end <= chartNowMinutes && actualPoints[index]) {
+      actualVisiblePoints.push(actualPoints[index]);
+    }
+  });
+
+  if (selectedDate === todayKey && chartNowMinutes > startMinutes && chartNowMinutes < endMinutes) {
+    const currentXHour = xHourForMinutes(chartNowMinutes);
+    const lastVisible = actualVisiblePoints[actualVisiblePoints.length - 1];
+    if (!lastVisible || Math.abs(lastVisible.xHour - currentXHour) > 0.001) {
+      actualVisiblePoints.push({ xHour: currentXHour, yValue: actualSoFar });
+    } else {
+      lastVisible.yValue = actualSoFar;
+    }
+  } else if (actualVisiblePoints.length && selectedDate <= todayKey) {
+    actualVisiblePoints[actualVisiblePoints.length - 1].yValue = actualSoFar || actualVisiblePoints[actualVisiblePoints.length - 1].yValue;
+  }
+
+  let html = '';
+  html += `<defs><linearGradient id="chartActualGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" class="chart-grad-stop-top"></stop>
+    <stop offset="100%" class="chart-grad-stop-bottom"></stop>
+  </linearGradient></defs>`;
+  for (let i = 0; i <= 4; i += 1) {
+    const gridValue = (maxY / 4) * (4 - i);
+    const yy = padTop + (plotH / 4) * i;
+    html += `<line class="chart-grid" x1="${padLeft}" y1="${yy}" x2="${width - padRight}" y2="${yy}"></line>`;
+    html += `<text class="chart-y-label" x="${padLeft - 8}" y="${yy + 4}" text-anchor="end">${formatCompactNumber(gridValue)}</text>`;
+  }
+
+  for (let i = 1; i <= totalPoints; i += 1) {
+    const xx = x(i);
+    if (i < totalPoints) {
+      html += `<line class="chart-grid" x1="${xx}" y1="${padTop}" x2="${xx}" y2="${height - padBottom}"></line>`;
+    }
+    const label = slots[i - 1] ? formatHourLabel(formatMinutesAsClock(slots[i - 1].end)) : '';
+    const anchor = i === 1 ? 'start' : (i === totalPoints ? 'end' : 'middle');
+    html += `<text class="chart-label" x="${xx}" y="${height - 12}" text-anchor="${anchor}">${label}</text>`;
+  }
+
+  html += `<line class="chart-axis" x1="${padLeft}" y1="${height - padBottom}" x2="${width - padRight}" y2="${height - padBottom}"></line>`;
+  html += `<line class="chart-axis" x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${height - padBottom}"></line>`;
+
+  if (actualVisiblePoints.length > 1) {
+    html += `<path class="chart-area-actual" d="${areaPath(actualVisiblePoints)}"></path>`;
+  }
+  html += `<path class="chart-line-expected" d="${path(expectedPoints)}"></path>`;
+  html += `<path class="chart-line-projected" d="${path(projectedPoints)}"></path>`;
+  html += `<path class="chart-line-actual" d="${path(actualVisiblePoints)}"></path>`;
+
+  const dotPoint = actualVisiblePoints[actualVisiblePoints.length - 1];
+  if (dotPoint) {
+    html += `<circle class="chart-actual-dot" cx="${x(dotPoint.xHour).toFixed(1)}" cy="${y(dotPoint.yValue).toFixed(1)}" r="4"></circle>`;
+  }
+
+  if (selectedDate === todayKey && clockMinutes >= startMinutes && clockMinutes <= endMinutes) {
+    const nowX = x(xHourForMinutes(chartNowMinutes));
+    html += `<line class="chart-now" x1="${nowX}" y1="${padTop}" x2="${nowX}" y2="${height - padBottom}"></line>`;
+    html += `<rect class="chart-now-tag" x="${nowX - 16}" y="4" width="32" height="14" rx="3"></rect>`;
+    html += `<text class="chart-now-label" x="${nowX}" y="14" text-anchor="middle">NOW</text>`;
+  }
+
+  svg.innerHTML = html;
+  animateRenderedHourlyChart(svg);
+}
+
+function animateRenderedHourlyChart(svg) {
+  if (!svg || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  svg.querySelectorAll('.chart-line-actual, .chart-line-expected, .chart-line-projected').forEach(function (path, index) {
+    if (typeof path.getTotalLength !== 'function') return;
+    const length = Math.max(1, path.getTotalLength());
+    path.style.strokeDasharray = path.classList.contains('chart-line-actual')
+      ? String(length)
+      : path.style.strokeDasharray;
+    path.style.strokeDashoffset = String(length);
+    path.classList.add('chart-path-draw');
+    path.style.animationDelay = `${index * 110}ms`;
+  });
+
+  const area = svg.querySelector('.chart-area-actual');
+  if (area) area.classList.add('chart-area-reveal');
+}
+
+function initAnimatedValueObserver() {
+  const selector = [
+    '.forecast-kpi-card strong',
+    '.ar-kpi-card strong',
+    '.finish-kpi-card strong',
+    '.mini-kpi strong',
+    '.focus-item strong',
+    '.action-row strong'
+  ].join(',');
+
+  const observer = new MutationObserver(function (mutations) {
+    mutations.forEach(function (mutation) {
+      const target = mutation.target.nodeType === 3 ? mutation.target.parentElement : mutation.target;
+      const element = target && target.closest ? target.closest(selector) : null;
+      if (!element) return;
+      element.classList.remove('kpi-value-flash');
+      void element.offsetWidth;
+      element.classList.add('kpi-value-flash');
+    });
+  });
+
+  document.querySelectorAll(selector).forEach(function (element) {
+    observer.observe(element, { childList: true, characterData: true, subtree: true });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  window.setTimeout(initAnimatedValueObserver, 500);
+});
+
+function getNiceChartMax(value) {
+  const num = Math.max(100, Number(value || 0));
+  if (num <= 250) return 250;
+  if (num <= 500) return 500;
+  if (num <= 1000) return 1000;
+  if (num <= 1500) return 1500;
+  if (num <= 2000) return 2000;
+  return Math.ceil(num / 500) * 500;
+}
+
+function formatCompactNumber(value) {
+  const num = Number(value || 0);
+  if (num >= 1000) return `${(num / 1000).toFixed(num % 1000 === 0 ? 0 : 1)}k`;
+  return String(Math.round(num));
+}
+
+function formatHourLabel(value) {
+  const text = String(value || '');
+  // Range labels (final partial slot, e.g. "5:00 PM–5:30 PM") — axis space is tight,
+  // so show only the end time, which is what actually matters (when the shift closes).
+  const parts = text.split(/[–-]/);
+  const display = parts.length > 1 ? parts[parts.length - 1].trim() : text.trim();
+
+  const match = display.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return display;
+
+  const hour = match[1];
+  const minute = match[2];
+  const suffix = match[3].toUpperCase() === 'AM' ? 'a' : 'p';
+  return minute === '00' ? `${hour}${suffix}` : `${hour}:${minute}${suffix}`;
+}
+
+
+
+function formatPressureClearText(row) {
+  if (!row) return '0 min';
+
+  const sourceKey = String(row.sourceKey || '');
+  const sourceWip = Number(row.sourceWip || row.currentWip || 0);
+  const pressureJph = Number(row.pressureJph || row.effectiveJph || 0);
+  const pressureArea = row.pressureArea || {};
+  const pressureAreaWip = Number(pressureArea.currentWip || 0);
+  const timeMode = row.timeMode || '';
+
+  if (sourceWip <= 0) return '0 min';
+
+  // SF Unbox scan means jobs are staging/moving into Detaper / Auto Blocker.
+  // Operators understand this better as operational minutes, not 0.3 hr.
+  if (timeMode === 'sf_unbox_stage' || sourceKey === 'unbox') {
+    if (sourceWip <= 150) return '10–20 min';
+    if (sourceWip <= 250) return '20–30 min';
+    return '30+ min';
+  }
+
+  // Auto Blocker scan means jobs are moving into Cooling.
+  // It is usually a short transfer unless Cooling itself is overloaded.
+  if (timeMode === 'cooling_transfer' || sourceKey === 'autoblocker') {
+    const limit = Number(row.bufferSignalLimit || 200);
+    if (pressureAreaWip > limit) return `Cooling over ${formatNumber(limit)} WIP`;
+    return '5–10 min';
+  }
+
+  // Cooling scan means dwell time before ORB / Generator.
+  if (timeMode === 'cooling_dwell' || sourceKey === 'cooling') {
+    return '25–50 min dwell';
+  }
+
+  if (pressureJph <= 0) return 'BLOCKED';
+
+  const mins = Math.max(0, Number(row.pressureHours || row.timeToClear || 0) * 60);
+  return formatMinutesRange(mins);
+}
+
+function formatMinutesRange(minutes) {
+  const mins = Number(minutes || 0);
+  if (mins <= 0) return '0 min';
+  if (mins < 5) return '<5 min';
+  if (mins < 10) return '5–10 min';
+  if (mins < 15) return '10–15 min';
+  if (mins < 20) return '15–20 min';
+  if (mins < 30) return '20–30 min';
+  if (mins < 45) return '30–45 min';
+  if (mins < 60) return '45–60 min';
+
+  const rounded = Math.round(mins / 5) * 5;
+  return `${formatNumber(rounded)} min`;
+}
+
+function renderBottleneckTable(areas) {
+  const body = document.getElementById('bottleneckTable');
+  if (!body) return;
+
+  const pressureRows = buildLiveWipPressureRows(areas || []);
+
+  const rows = pressureRows
+    .slice()
+    .sort(function (a, b) {
+      const flowDiff = getSurfaceFlowOrderIndex(a.sourceKey) - getSurfaceFlowOrderIndex(b.sourceKey);
+      if (flowDiff !== 0) return flowDiff;
+      return getSurfaceFlowOrderIndex(a.pressureAreaKey) - getSurfaceFlowOrderIndex(b.pressureAreaKey);
+    })
+    .map(function (row) {
+      const source = row.sourceArea || {};
+      const capacity = row.capacityArea || row.pressureArea || source || {};
+      const sourceIsBuffer = source.type === 'buffer';
+      const sourceWip = Number(row.sourceWip || 0);
+      const pressureJph = Number(row.pressureJph || 0);
+
+      /*
+        Important:
+        The table row must match the setup card for the area on the left.
+        Example: Detaping / ODT must show Detaping associates and Detaping machines,
+        not Coater associates/machines just because Detaping scan feeds Coater.
+
+        Route pressure is still used for the TIME TO CLEAR and SIGNAL because live WIP
+        means "last scan -> next process pressure". The setup columns stay tied to
+        the row area so the table is not confusing.
+      */
+      const associatesDisplay = round1(source.associatesAssigned || 0);
+      const unitsDisplay = sourceIsBuffer
+        ? `${round1(source.unitsRunning || 0)} tower(s)`
+        : round1(source.unitsRunning || 0);
+      const jphDisplay = sourceIsBuffer
+        ? 'Cooling 25–50 min'
+        : round1(source.effectiveJph || source.totalJph || 0);
+      const capacityDisplay = sourceIsBuffer
+        ? `Buffer ${formatNumber(source.bufferCapacity || 180)} jobs`
+        : formatNumber(source.adjustedCapacity || 0);
+      const downtimeDisplay = formatNumber(source.downtimeLostJobs || 0);
+
+      const clearText = formatPressureClearText(row);
+
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(source.label || '-')}</strong>
+            <div class="muted-cell">→ ${escapeHtml(row.pressureLabel || '-')}</div>
+          </td>
+          <td>${associatesDisplay}</td>
+          <td>${unitsDisplay}</td>
+          <td>${jphDisplay}</td>
+          <td>${capacityDisplay}</td>
+          <td>${downtimeDisplay}</td>
+          <td>${formatNumber(sourceWip)}</td>
+          <td>${clearText}</td>
+          <td><span class="status-pill ${row.signalClass === 'wip-ok' ? 'status-green' : row.signalClass === 'wip-watch' ? 'status-amber' : 'status-red'}">${escapeHtml(row.signal)}</span></td>
+        </tr>
+      `;
+    });
+
+  body.innerHTML = rows.join('') || '<tr><td colspan="9">No live WIP pressure yet.</td></tr>';
+}
+
+async function saveShipGoal() {
+  const goal = Number(getValue('shipGoal', 0)) || 0;
+  const productionDate = getValue('productionDate', getLocalDateInputValue(new Date()));
+
+  if (goal <= 0) {
+    alert('Enter a Ship Goal greater than 0 before saving.');
+    return;
+  }
+
+  const button = document.getElementById('saveGoalBtn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Saving…';
+  }
+
+  try {
+    if (!latestForecastResult) calculateForecast();
+    const payload = collectPayload();
+
+    const response = await fetch(SURFACE_API_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'saveGoal', payload })
+    });
+    const data = await response.json();
+
+    if (!data.ok) throw new Error(data.error || 'Goal save failed.');
+
+    latestForecastResult = { payload, result: data.result || latestForecastResult?.result || null };
+    savePageState();
+    setText('shipGoalSaveMeta', `Goal ${formatNumber(goal)} saved for ${productionDate}.`);
+    alert(`Ship Goal ${formatNumber(goal)} saved for ${productionDate}.`);
+  } catch (err) {
+    setText('shipGoalSaveMeta', 'Goal was not saved. Try again.');
+    alert(`Goal save failed: ${err.message || err}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Save Goal';
+    }
+  }
+}
+
+async function saveForecast() {
+  await postToApi('saveForecast', 'Forecast saved.');
+}
+
+async function saveDowntime() {
+  await postToApi('saveDowntime', 'Downtime saved.');
+}
+
+async function saveHourly() {
+  await postToApi('saveHourly', 'Hourly input saved.');
+}
+
+async function postToApi(action, successMessage) {
+  if (!SURFACE_API_URL) {
+    alert('API URL is missing.');
+    return;
+  }
+
+  if (!latestForecastResult) calculateForecast();
+
+  try {
+    const response = await fetch(SURFACE_API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action,
+        payload: latestForecastResult.payload
+      })
+    });
+
+    const data = await response.json();
+
+    if (!data.ok) {
+      throw new Error(data.error || 'Save failed.');
+    }
+
+    savePageState();
+    alert(successMessage);
+
+  } catch (err) {
+    alert(`Save failed: ${err.message || err}`);
+  }
+}
+
+function buildRecommendation(data) {
+  if (!data.bottleneck) {
+    return 'Enter running associates/machines to calculate the forecast.';
+  }
+
+  let msg =
+    `Forecast range is ${formatNumber(data.projectedOut || data.knownWipForecast)} to ${formatNumber(data.capacityProjectedOut || data.knownWipForecast)}. ` +
+    `Low = current pace projection. High = BOS WIP + average incoming (${formatNumber(data.incomingLow)}-${formatNumber(data.incomingHigh)}) + average remake/breakage (${formatNumber(data.remakeLow)}-${formatNumber(data.remakeHigh)}), capped by bottleneck capacity. ` +
+    `Current bottleneck is ${data.bottleneck.label} at ${round1(data.effectiveBottleneckJph)} effective JPH. ` +
+    `Total associates entered: ${round1(data.totalAssociates)}.`;
+
+  if (data.liveWipBottleneck) {
+    msg += ` Live WIP bottleneck is ${data.liveWipBottleneck.label}: ${formatNumber(data.liveWipBottleneck.currentWip)} WIP and ${round1(data.liveWipBottleneck.timeToClear)} hr to clear.`;
+  }
+
+  if (data.hourlySummary && data.hourlySummary.hoursEntered > 0) {
+    msg += ` Hourly status is ${data.hourlySummary.onTrackStatus}. ` +
+      `AR41 actual so far: ${formatNumber(data.hourlySummary.actualAr41SoFar)}. ` +
+      `Expected by now: ${formatNumber(data.hourlySummary.expectedByNow)}. ` +
+      `Projected actual OUT: ${formatNumber(data.hourlySummary.projectedActualOut)}.`;
+  } else {
+    msg += ' No hourly AR41 output entered yet.';
+  }
+
+  if (data.shipGoal > 0) {
+    if (data.goalRisk === 'RED') msg += ` Ship goal is not realistic. It needs ${round1(data.requiredJph)} JPH.`;
+    else if (data.goalRisk === 'YELLOW') msg += ' Ship goal is tight. Any downtime can break it.';
+    else msg += ' Ship goal is feasible with current capacity.';
+  } else {
+    msg += ' No ship goal entered. Forecast is capacity-based only.';
+  }
+
+  if (data.downtimeLostTotal > 0) {
+    msg += ` Downtime reduces capacity by ${formatNumber(data.downtimeLostTotal)} jobs.`;
+  }
+
+  return msg;
+}
+
+
+
+async function loadCurrentStateFromApi() {
+  if (!SURFACE_API_URL) return false;
+
+  try {
+    const response = await fetch(`${SURFACE_API_URL}?action=getCurrentState&ts=${Date.now()}`);
+    const data = await response.json();
+
+    if (!data || !data.ok || !data.hasState || !data.payload) {
+      return false;
+    }
+
+    isRestoringState = true;
+
+    try {
+      restorePayloadToPage(data.payload);
+      latestForecastResult = {
+        payload: data.payload,
+        result: data.result || null
+      };
+
+      return true;
+    } finally {
+      isRestoringState = false;
+    }
+
+  } catch (err) {
+    console.warn('Could not load current state from API. Local backup will be used.', err);
+    return false;
+  }
+}
+
+async function saveCurrentStateToApi(showAlert) {
+  if (!SURFACE_API_URL) return;
+
+  const payload = collectPayload();
+
+  try {
+    const response = await fetch(SURFACE_API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'saveCurrentState',
+        payload: payload
+      })
+    });
+
+    const data = await response.json();
+
+    if (!data.ok) {
+      throw new Error(data.error || 'Current state save failed.');
+    }
+
+    if (showAlert) {
+      alert('Current page data saved. It can now be opened from another computer.');
+    }
+
+  } catch (err) {
+    console.warn('Cloud autosave failed:', err);
+    if (showAlert) {
+      alert(`Cloud save failed: ${err.message || err}`);
+    }
+  }
+}
+
+function restorePayloadToPage(payload) {
+  if (!payload) return false;
+
+  setValue('productionDate', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('perfDateInput', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('shiftMode', payload.shiftMode || getAutomaticShiftMode(payload.productionDate));
+  setValue('bosWip', payload.bosWip || 0);
+  setValue('shipGoal', payload.shipGoal || 0);
+  if (Number(payload.shipGoal) > 0) {
+    setText('shipGoalSaveMeta', `Saved goal ${formatNumber(payload.shipGoal)} loaded for ${payload.productionDate || 'this date'}.`);
+  }
+  setValue('incomingLow', payload.incomingLow ?? SURFACE_EXTRA_WORK_DEFAULTS.incomingLow);
+  setValue('incomingHigh', payload.incomingHigh ?? SURFACE_EXTRA_WORK_DEFAULTS.incomingHigh);
+  setValue('remakeLow', payload.remakeLow ?? SURFACE_EXTRA_WORK_DEFAULTS.remakeLow);
+  setValue('remakeHigh', payload.remakeHigh ?? SURFACE_EXTRA_WORK_DEFAULTS.remakeHigh);
+  setValue('floaterCount', payload.floaterCount || 0);
+  setValue('floaterAssign', payload.floaterAssign || 'none');
+
+  if (payload.areas) {
+    Object.keys(payload.areas).forEach(function (key) {
+      setValue(`area_${key}`, payload.areas[key]);
+    });
+  }
+
+  if (payload.associates) {
+    Object.keys(payload.associates).forEach(function (key) {
+      setValue(`assoc_${key}`, payload.associates[key]);
+    });
+  }
+
+  if (document.getElementById('inspectionStartupDelay') && payload.inspectionStartupDelay !== undefined) {
+    document.getElementById('inspectionStartupDelay').checked = Boolean(payload.inspectionStartupDelay);
+  }
+
+  if (payload.ratios) {
+    Object.keys(payload.ratios).forEach(function (key) {
+      if (document.getElementById(`ratio_${key}`)) setValue(`ratio_${key}`, payload.ratios[key]);
+    });
+  }
+
+  buildHourlyRows(payload.shiftMode || getAutomaticShiftMode(payload.productionDate), false);
+    restoreHourlyRows(payload.hourly || []);
+  restoreDowntimeRows(payload.downtime || []);
+
+  return true;
+}
+
+
+function autoSavePageState() {
+  if (isRestoringState) return;
+
+  window.clearTimeout(autoSavePageState.timer);
+  autoSavePageState.timer = window.setTimeout(function () {
+    savePageState();
+    saveCurrentStateToApi(false);
+  }, 700);
+}
+
+function savePageState() {
+  try {
+    const payload = collectPayload();
+
+    const state = {
+      savedAt: new Date().toISOString(),
+      payload: payload
+    };
+
+    localStorage.setItem(SURFACE_STORAGE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.warn('Surface Forecast autosave failed:', err);
+  }
+}
+
+function restorePageState() {
+  const raw = localStorage.getItem(SURFACE_STORAGE_KEY);
+  if (!raw) return false;
+
+  let state = null;
+
+  try {
+    state = JSON.parse(raw);
+  } catch (err) {
+    console.warn('Surface Forecast restore failed:', err);
+    return false;
+  }
+
+  if (!state || !state.payload) return false;
+
+  isRestoringState = true;
+
+  try {
+    const payload = state.payload;
+
+    setValue('productionDate', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('perfDateInput', payload.productionDate || getLocalDateInputValue(new Date()));
+    setValue('shiftMode', payload.shiftMode || getAutomaticShiftMode(payload.productionDate));
+    setValue('bosWip', payload.bosWip || 0);
+    setValue('shipGoal', payload.shipGoal || 0);
+  if (Number(payload.shipGoal) > 0) {
+    setText('shipGoalSaveMeta', `Saved goal ${formatNumber(payload.shipGoal)} loaded for ${payload.productionDate || 'this date'}.`);
+  }
+    setValue('floaterCount', payload.floaterCount || 0);
+    setValue('floaterAssign', payload.floaterAssign || 'none');
+
+    if (payload.areas) {
+      Object.keys(payload.areas).forEach(function (key) {
+        setValue(`area_${key}`, payload.areas[key]);
+      });
+    }
+
+    if (payload.associates) {
+      Object.keys(payload.associates).forEach(function (key) {
+        setValue(`assoc_${key}`, payload.associates[key]);
+      });
+    }
+
+    if (document.getElementById('inspectionStartupDelay') && payload.inspectionStartupDelay !== undefined) {
+    document.getElementById('inspectionStartupDelay').checked = Boolean(payload.inspectionStartupDelay);
+  }
+
+  if (payload.ratios) {
+      Object.keys(payload.ratios).forEach(function (key) {
+        if (document.getElementById(`ratio_${key}`)) setValue(`ratio_${key}`, payload.ratios[key]);
+      });
+    }
+
+    buildHourlyRows(payload.shiftMode || getAutomaticShiftMode(payload.productionDate), false);
+    restoreHourlyRows(payload.hourly || []);
+    restoreDowntimeRows(payload.downtime || []);
+
+    return true;
+
+  } finally {
+    isRestoringState = false;
+  }
+}
+
+function restoreHourlyRows(hourlyRows) {
+  const savedByHour = {};
+  (hourlyRows || []).forEach(function (saved) {
+    savedByHour[normalizeHourKey(saved.hour)] = saved;
+  });
+
+  document.querySelectorAll('.hourly-row').forEach(function (row) {
+    const key = row.dataset.apiHour || normalizeHourKey(getRowValue(row, '.hr-hour'));
+    const saved = savedByHour[key];
+    if (!saved) return;
+
+    setRowValue(row, '.hr-unbox', saved.unbox || '');
+    setRowValue(row, '.hr-autoblocker', saved.autoblocker || '');
+    setRowValue(row, '.hr-cooling', saved.cooling || '');
+    setRowValue(row, '.hr-orb', saved.orb || '');
+    setRowValue(row, '.hr-polisher', saved.polisher || '');
+    setRowValue(row, '.hr-engraving', saved.engraving || '');
+    setRowValue(row, '.hr-detaping', saved.detaping || '');
+    setRowValue(row, '.hr-coater', saved.coater || '');
+    setRowValue(row, '.hr-inspection', saved.inspection || '');
+    setRowValue(row, '.hr-notes', saved.notes || '');
+    setRowValue(row, '.hr-active', saved.active || 'Yes');
+  });
+}
+
+function restoreDowntimeRows(downtimeRows) {
+  const holder = document.getElementById('downtimeRows');
+  if (!holder) return;
+
+  holder.innerHTML = '';
+  downtimeCounter = 0;
+
+  if (!downtimeRows.length) {
+    addDowntimeRow();
+    return;
+  }
+
+  downtimeRows.forEach(function (saved) {
+    const row = addDowntimeRow();
+
+    if (!row) return;
+
+    setRowValue(row, '.dt-area', saved.areaKey || 'unbox');
+    setRowValue(row, '.dt-issue', saved.issue || 'Machine Down');
+    setRowValue(row, '.dt-units', saved.unitsDown || 0);
+    setRowValue(row, '.dt-start', saved.startTime || '08:45');
+    setRowValue(row, '.dt-end', saved.endTime || '10:15');
+    setRowValue(row, '.dt-fullday', saved.fullDay || 'No');
+    setRowValue(row, '.dt-notes', saved.notes || '');
+    setRowValue(row, '.dt-active', saved.active || 'No');
+  });
+}
+
+function clearSavedSurfaceForecastState() {
+  localStorage.removeItem(SURFACE_STORAGE_KEY);
+  alert('Saved browser state cleared. Refresh the page to reload default values.');
+}
+
+function setValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+function setRowValue(row, selector, value) {
+  const el = row.querySelector(selector);
+  if (el) el.value = value;
+}
+
+
+
+
+function loadSurfaceBosSnapshots() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SURFACE_BOS_WIP_STORAGE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+function saveSurfaceBosSnapshots(snapshots) {
+  localStorage.setItem(
+    SURFACE_BOS_WIP_STORAGE_KEY,
+    JSON.stringify(snapshots || {})
+  );
+}
+
+function normalizeSurfaceBosMap(source) {
+  const result = {};
+  SURFACE_FLOW_ORDER.forEach(function (key) {
+    result[key] = Math.max(0, Number(source && source[key]) || 0);
+  });
+  return result;
+}
+
+function getSurfaceBosTotal(snapshot) {
+  return SURFACE_FLOW_ORDER.reduce(function (sum, key) {
+    return sum + (Number(snapshot && snapshot[key]) || 0);
+  }, 0);
+}
+
+function getSurfaceBosSnapshot(dateKey, fallbackCurrentWip) {
+  const snapshots = loadSurfaceBosSnapshots();
+  const saved = snapshots[String(dateKey || '')];
+
+  if (saved && typeof saved === 'object') {
+    return normalizeSurfaceBosMap(saved);
+  }
+
+  return normalizeSurfaceBosMap(fallbackCurrentWip || {});
+}
+
+function captureSurfaceBosSnapshotIfMissing(dateKey, currentWip) {
+  const key = String(dateKey || '').trim();
+  if (!key) return normalizeSurfaceBosMap(currentWip || {});
+
+  const snapshots = loadSurfaceBosSnapshots();
+
+  if (!snapshots[key]) {
+    snapshots[key] = normalizeSurfaceBosMap(currentWip || {});
+    saveSurfaceBosSnapshots(snapshots);
+  }
+
+  const snapshot = normalizeSurfaceBosMap(snapshots[key]);
+  setValue('bosWip', Math.round(getSurfaceBosTotal(snapshot)));
+  return snapshot;
+}
+
+
+function readSurfaceBosInputs() {
+  const snapshot = {};
+
+  SURFACE_FLOW_ORDER.forEach(function (key) {
+    const input = document.querySelector(
+      `.surface-bos-value-input[data-surface-bos-key="${key}"]`
+    );
+    snapshot[key] = Math.max(0, Number(input && input.value) || 0);
+  });
+
+  return normalizeSurfaceBosMap(snapshot);
+}
+
+function updateSurfaceBosTotalFromInputs() {
+  const snapshot = readSurfaceBosInputs();
+  const total = getSurfaceBosTotal(snapshot);
+  setValue('bosWip', Math.round(total));
+  setText('surfaceBosStartupMeta', 'Unsaved BOS changes — click Save BOS.');
+  return snapshot;
+}
+
+function saveSurfaceBosSnapshot() {
+  const dateKey = getValue('productionDate', getLocalDateInputValue(new Date()));
+  let snapshot = readSurfaceBosInputs();
+  const enteredTotal = Math.max(0, Number(getValue('bosWip', 0)) || 0);
+  const stationTotal = getSurfaceBosTotal(snapshot);
+
+  // When the user changes only the total BOS field, preserve the station mix
+  // by scaling all station values proportionally. If every station is zero,
+  // place the total in SF Unbox so the forecast does not invent downstream WIP.
+  if (Math.round(enteredTotal) !== Math.round(stationTotal)) {
+    if (stationTotal > 0) {
+      const scale = enteredTotal / stationTotal;
+      let allocated = 0;
+
+      SURFACE_FLOW_ORDER.forEach(function (key, index) {
+        if (index === SURFACE_FLOW_ORDER.length - 1) {
+          snapshot[key] = Math.max(0, Math.round(enteredTotal - allocated));
+        } else {
+          snapshot[key] = Math.max(
+            0,
+            Math.round((Number(snapshot[key]) || 0) * scale)
+          );
+          allocated += snapshot[key];
+        }
+      });
+    } else {
+      snapshot = normalizeSurfaceBosMap({});
+      snapshot.unbox = Math.round(enteredTotal);
+    }
+  }
+
+  const snapshots = loadSurfaceBosSnapshots();
+  snapshots[dateKey] = snapshot;
+  saveSurfaceBosSnapshots(snapshots);
+
+  setValue('bosWip', Math.round(getSurfaceBosTotal(snapshot)));
+  renderSurfaceBosSnapshot();
+  calculateForecast();
+
+  alert(
+    `Surface BOS WIP saved at ${formatNumber(getSurfaceBosTotal(snapshot))} jobs for ${dateKey}.`
+  );
+}
+
+function resetSurfaceBosSnapshot() {
+  const dateKey = getValue('productionDate', getLocalDateInputValue(new Date()));
+  const currentWip = normalizeSurfaceBosMap(window.surfaceDashboardCurrentWip || {});
+  const snapshots = loadSurfaceBosSnapshots();
+
+  snapshots[dateKey] = currentWip;
+  saveSurfaceBosSnapshots(snapshots);
+  setValue('bosWip', Math.round(getSurfaceBosTotal(currentWip)));
+  renderSurfaceBosSnapshot();
+  calculateForecast();
+
+  alert(
+    `Surface BOS WIP reset to ${formatNumber(getSurfaceBosTotal(currentWip))} jobs for ${dateKey}.`
+  );
+}
+
+function getSurfaceClockProgress(shiftMode) {
+  const windowInfo = getShiftWindow(shiftMode || 'Weekday');
+  const start = parseTimeToMinutes(windowInfo.start) || 420;
+  const end = parseTimeToMinutes(windowInfo.end) || 1050;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  return {
+    start,
+    end,
+    totalMinutes: Math.max(1, end - start),
+    elapsedMinutes: Math.max(0, Math.min(end - start, nowMinutes - start)),
+    remainingMinutes: Math.max(0, end - nowMinutes)
+  };
+}
+
+function getSurfaceBosMaturity(snapshot, elapsedMinutes, totalShiftMinutes) {
+  const byNow = {};
+  const byEos = {};
+  let maturedNow = 0;
+  let maturedByEos = 0;
+
+  SURFACE_FLOW_ORDER.forEach(function (key) {
+    const jobs = Math.max(0, Number(snapshot && snapshot[key]) || 0);
+    const travel = Number(SURFACE_MATURITY_MINUTES[key]) || 0;
+
+    byNow[key] = elapsedMinutes >= travel ? jobs : 0;
+    byEos[key] = totalShiftMinutes >= travel ? jobs : 0;
+    maturedNow += byNow[key];
+    maturedByEos += byEos[key];
+  });
+
+  const downstreamBos =
+    (Number(snapshot.polisher) || 0) +
+    (Number(snapshot.engraving) || 0) +
+    (Number(snapshot.detaping) || 0) +
+    (Number(snapshot.coater) || 0) +
+    (Number(snapshot.inspection) || 0);
+
+  return {
+    byNow,
+    byEos,
+    maturedNow,
+    maturedByEos,
+    downstreamBos,
+    startupDelayApplied: downstreamBos <= 0,
+    startupDelayRemaining: downstreamBos <= 0
+      ? Math.max(0, SURFACE_STARTUP_OUTPUT_DELAY_MIN - elapsedMinutes)
+      : 0
+  };
+}
+
+function renderSurfaceBosSnapshot() {
+  const holder = document.getElementById('surfaceBosStationGrid');
+  if (!holder) return;
+
+  const dateKey = getValue('productionDate', getLocalDateInputValue(new Date()));
+  const snapshot = getSurfaceBosSnapshot(
+    dateKey,
+    window.surfaceDashboardCurrentWip || {}
+  );
+  const progress = getSurfaceClockProgress(getValue('shiftMode', 'Weekday'));
+  const maturity = getSurfaceBosMaturity(
+    snapshot,
+    progress.elapsedMinutes,
+    progress.totalMinutes
+  );
+
+  const bosTotalInput = document.getElementById('bosWip');
+  if (!bosTotalInput || document.activeElement !== bosTotalInput) {
+    setValue('bosWip', Math.round(getSurfaceBosTotal(snapshot)));
+  }
+  setText(
+    'surfaceBosStartupMeta',
+    maturity.startupDelayRemaining > 0
+      ? `${Math.round(maturity.startupDelayRemaining)} min until normal first output window`
+      : `BOS saved for ${dateKey}. Edit station values and click Save BOS.`
+  );
+
+  holder.innerHTML = SURFACE_FLOW_ORDER.map(function (key) {
+    const area = SURFACE_AREAS.find(function (row) { return row.key === key; });
+    const label = area ? area.label : key;
+    const jobs = Number(snapshot[key]) || 0;
+    const range = SURFACE_STAGE_TIME_RANGES[key] || {
+      label: '0 min'
+    };
+    const travel = Number(SURFACE_MATURITY_MINUTES[key]) || 0;
+    const ready = progress.elapsedMinutes >= travel;
+
+    return `
+      <label class="surface-bos-station ${ready ? 'ready' : 'waiting'}">
+        <span>${escapeHtml(label)}</span>
+        <input
+          class="surface-bos-value-input"
+          data-surface-bos-key="${escapeHtml(key)}"
+          type="number"
+          min="0"
+          step="1"
+          value="${Math.round(jobs)}">
+        <small>Time to clear: ${escapeHtml(range.label)}</small>
+      </label>
+    `;
+  }).join('');
+
+  holder.querySelectorAll('.surface-bos-value-input').forEach(function (input) {
+    input.addEventListener('input', updateSurfaceBosTotalFromInputs);
+  });
+}
+
+async function syncSurfaceDashboardData(showAlert) {
+  setText('dashboardApiState', 'Syncing...');
+  setText('dashboardSyncStatus', 'Pulling Surface Dashboard API...');
+  setHeroSync('syncing', 'Syncing...', null);
+
+  try {
+    const [flowData, operatorData] = await Promise.all([
+      fetchDashboardProductionFlow(),
+      fetchDashboardOperatorActivity()
+    ]);
+
+    const wipMap = mapDashboardWip(flowData);
+    window.surfaceDashboardCurrentWip = wipMap;
+    captureSurfaceBosSnapshotIfMissing(
+      getValue('productionDate', getLocalDateInputValue(new Date())),
+      wipMap
+    );
+    renderSurfaceBosSnapshot();
+
+    window.surfaceDashboardOperatorRows = Array.isArray(operatorData.rows) ? operatorData.rows : [];
+    const hourlyRows = mapOperatorActivityToHourly(operatorData);
+    applyDashboardHourlyRows(hourlyRows);
+
+    window.surfaceDashboardSync = {
+      updatedAt: new Date().toISOString(),
+      source: 'Surface Dashboard API',
+      flowRows: Array.isArray(flowData.rows) ? flowData.rows.length : 0,
+      operatorRows: Array.isArray(operatorData.rows) ? operatorData.rows.length : 0
+    };
+
+    setText('dashboardApiState', 'Connected');
+    setText('dashboardLastSync', new Date().toLocaleTimeString());
+    setText('dashboardSyncStatus', 'Synced with Surface Dashboard API');
+    setHeroSync('ok', 'Connected', new Date().toLocaleTimeString());
+
+    calculateForecast();
+    savePageState();
+    saveCurrentStateToApi(false);
+
+    if (showAlert) {
+      console.log('Surface Dashboard sync complete.');
+    }
+
+  } catch (err) {
+    console.error('Dashboard sync failed:', err);
+    setText('dashboardApiState', 'Sync failed');
+    setText('dashboardSyncStatus', err.message || 'Surface Dashboard API sync failed.');
+    setHeroSync('error', 'Sync failed', null);
+    if (showAlert) alert(`Dashboard sync failed: ${err.message || err}`);
+  }
+}
+
+function setHeroSync(state, label, time) {
+  const dot = document.getElementById('heroSyncDot');
+  if (dot) {
+    dot.classList.remove('dot-ok', 'dot-syncing', 'dot-error');
+    if (state === 'ok') dot.classList.add('dot-ok');
+    if (state === 'syncing') dot.classList.add('dot-syncing');
+    if (state === 'error') dot.classList.add('dot-error');
+  }
+
+  setText('heroSyncState', label);
+  setText('heroSyncTime', time ? `Synced ${time}` : 'Never synced');
+}
+
+async function fetchDashboardProductionFlow() {
+  const url = `${SURFACE_DASHBOARD_API_URL}?action=productionFlow&area=Surface&t=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Production Flow API HTTP ${res.status}`);
+
+  const json = await res.json();
+  if (!json || json.status !== 'success') throw new Error(json?.message || 'Production Flow API returned error');
+
+  const rows = Array.isArray(json.productionFlow)
+    ? json.productionFlow
+    : Array.isArray(json.surfaceFlow)
+      ? json.surfaceFlow
+      : [];
+
+  return { raw: json, rows };
+}
+
+async function fetchDashboardOperatorActivity() {
+  const url = `${SURFACE_DASHBOARD_API_URL}?action=operatorActivity&area=Surface&t=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Operator Activity API HTTP ${res.status}`);
+
+  const json = await res.json();
+  if (!json || json.status !== 'success') throw new Error(json?.message || 'Operator Activity API returned error');
+
+  const rows = Array.isArray(json.operatorActivity) ? json.operatorActivity : [];
+  return { raw: json, rows };
+}
+
+function mapDashboardWip(flowData) {
+  const rows = Array.isArray(flowData.rows) ? flowData.rows : [];
+
+  const map = {
+    unbox: 0,
+    autoblocker: 0,
+    cooling: 0,
+    orb: 0,
+    polisher: 0,
+    engraving: 0,
+    detaping: 0,
+    coater: 0,
+    inspection: 0
+  };
+
+  rows.forEach(function (row) {
+    const step = String(row.FlowStep || row.DisplayName || row.StationKey || '').trim();
+    const wip = Number(String(row.CurrentWIP ?? row.CurrentJobTotal ?? row.CurrentJobTotal ?? 0).replace(/,/g, '')) || 0;
+    const key = stationToForecastKey(step);
+
+    if (key && map[key] !== undefined) {
+      map[key] += wip;
+    }
+  });
+
+  return map;
+}
+
+function mapOperatorActivityToHourly(operatorData) {
+  const rows = Array.isArray(operatorData.rows) ? operatorData.rows : [];
+  const hourly = {};
+
+  HOURLY_DEFAULTS.forEach(function (hour) {
+    hourly[hour] = {
+      hour,
+      unbox: 0,
+      autoblocker: 0,
+      cooling: 0,
+      orb: 0,
+      polisher: 0,
+      engraving: 0,
+      detaping: 0,
+      coater: 0,
+      inspection: 0,
+      notes: 'Dashboard sync',
+      active: 'Yes'
+    };
+  });
+
+  rows.forEach(function (row) {
+    const stationName = getDashboardStationName(row);
+    const key = stationToForecastKey(stationName);
+
+    // IMPORTANT:
+    // Only use exact machine/station rows.
+    // Do not use parent rows like "Surface", "Zenni Lab", "SF Scan & Verify", or generic scan rows.
+    if (!key) return;
+
+    const hourSource = getDashboardHourSource(row);
+
+    Object.keys(hourSource).forEach(function (label) {
+      const hourKey = dashboardHourLabelToInputHour(label);
+      if (!hourKey || !hourly[hourKey]) return;
+
+      const value = Number(String(hourSource[label]).replace(/,/g, '')) || 0;
+      hourly[hourKey][key] += value;
+    });
+  });
+
+  return Object.values(hourly);
+}
+
+function getDashboardStationName(row) {
+  return String(
+    row.DisplayName ||
+    row.FlowStep ||
+    row.FlowStation ||
+    row.flowStation ||
+    row.StationKey ||
+    row.AccessPoint ||
+    row['Access Point'] ||
+    row.Station ||
+    row.station ||
+    ''
+  ).trim();
+}
+
+function getDashboardHourSource(row) {
+  // The dashboard station cards are built from hourly station totals.
+  // Some payloads store them under Hours; others are flat H07/H08 or numeric 7/8/15 columns.
+  if (row.Hours && typeof row.Hours === 'object') return row.Hours;
+  if (row.hours && typeof row.hours === 'object') return row.hours;
+
+  const out = {};
+
+  Object.keys(row || {}).forEach(function (key) {
+    if (/^H?\d{1,2}$/i.test(String(key))) {
+      out[key] = row[key];
+    }
+  });
+
+  return out;
+}
+
+function applyDashboardHourlyRows(hourlyRows) {
+  const rowByHour = {};
+  hourlyRows.forEach(function (row) {
+    rowByHour[row.hour] = row;
+  });
+
+  document.querySelectorAll('.hourly-row').forEach(function (tr) {
+    const hour = tr.dataset.apiHour || normalizeHourKey(getRowValue(tr, '.hr-hour'));
+    const row = rowByHour[hour];
+
+    if (!row) return;
+
+    setRowValue(tr, '.hr-unbox', row.unbox || '');
+    setRowValue(tr, '.hr-autoblocker', row.autoblocker || '');
+    setRowValue(tr, '.hr-cooling', row.cooling || '');
+    setRowValue(tr, '.hr-orb', row.orb || '');
+    setRowValue(tr, '.hr-polisher', row.polisher || '');
+    setRowValue(tr, '.hr-engraving', row.engraving || '');
+    setRowValue(tr, '.hr-detaping', row.detaping || '');
+    setRowValue(tr, '.hr-coater', row.coater || '');
+    setRowValue(tr, '.hr-inspection', row.inspection || '');
+
+    setRowValue(tr, '.hr-notes', 'Dashboard sync');
+    setRowValue(tr, '.hr-active', 'Yes');
+  });
+}
+
+function stationToForecastKey(station) {
+  const raw = String(station || '').trim();
+  const s = raw.toLowerCase();
+
+  // Ignore parent/group rows. These are totals and will double-count the machine station rows.
+  if (!s || s === 'surface' || s === 'zenni lab' || s === 'finish' || s === 'inventory' || s === 'breakage') return '';
+  if (s.includes('scan & verify') || s === 'sf scan & verify') return '';
+
+  // Exact dashboard station-card mapping.
+  if (s === 'surface unbox' || s === 'sf unbox') return 'unbox';
+
+  if (
+    s === 'blocking line b' ||
+    s === 'auto blockers' ||
+    s === 'auto blocker' ||
+    s.includes('auto blockers + manual blocker')
+  ) return 'autoblocker';
+
+  if (
+    s === 'cooling storage' ||
+    s === 'iq star' ||
+    s === 'iq-star' ||
+    s.includes('cooling storage')
+  ) return 'cooling';
+
+  if (
+    s === 'generating line b' ||
+    s === 'orbit generator' ||
+    s === 'orb generator' ||
+    s === 'orb'
+  ) return 'orb';
+
+  if (
+    s === 'polishing line b' ||
+    s === 'polisher' ||
+    s === 'polisher / flex'
+  ) return 'polisher';
+
+  if (
+    s === 'engraving line b' ||
+    s === 'engraver' ||
+    s === 'engraving / otl'
+  ) return 'engraving';
+
+  if (
+    s === 'detaping line b' ||
+    s === 'detaper' ||
+    s === 'detaping / odt'
+  ) return 'detaping';
+
+  if (
+    s === 'coating line b' ||
+    s === '54r coater' ||
+    s === 'coater' ||
+    s === 'coater / 54r'
+  ) return 'coater';
+
+  if (
+    s === 'surface inspection' ||
+    s === 'surface inspection out' ||
+    s === 'surface inspection / ar41' ||
+    s === 'ar41'
+  ) return 'inspection';
+
+  return '';
+}
+
+function dashboardHourLabelToInputHour(label) {
+  const text = String(label || '').trim();
+  if (!text) return '';
+
+  // Flat report columns: 0, 1, 2, ... 20
+  if (/^\d{1,2}$/.test(text)) {
+    const h = Number(text);
+    if (h >= 0 && h <= 23) return `${String(h).padStart(2, '0')}:00`;
+  }
+
+  // API columns: H06, H07, H15
+  const hMatch = text.match(/^H(\d{1,2})$/i);
+  if (hMatch) {
+    const h = Number(hMatch[1]);
+    if (h >= 0 && h <= 23) return `${String(h).padStart(2, '0')}:00`;
+  }
+
+  // Station detail labels: 7 AM, 10 AM, 2 PM
+  const shortMatch = text.match(/^(\d{1,2})\s*(AM|PM)$/i);
+  if (shortMatch) {
+    let h = Number(shortMatch[1]);
+    const ampm = shortMatch[2].toUpperCase();
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:00`;
+  }
+
+  const direct = {
+    '6:00 AM': '06:00',
+    '7:00 AM': '07:00',
+    '8:00 AM': '08:00',
+    '9:00 AM': '09:00',
+    '10:00 AM': '10:00',
+    '11:00 AM': '11:00',
+    '12:00 PM': '12:00',
+    '1:00 PM': '13:00',
+    '2:00 PM': '14:00',
+    '3:00 PM': '15:00',
+    '4:00 PM': '16:00',
+    '5:00 PM': '17:00',
+    '6:00 PM': '18:00',
+    '7:00 PM': '19:00',
+    '8:00 PM': '20:00'
+  };
+
+  return direct[text] || '';
+}
+
+
+function getLiveWipBottleneck(areas) {
+  const rows = buildLiveWipPressureRows(areas || [])
+    .filter(function (row) {
+      return Number(row.sourceWip || 0) > 0;
+    })
+    .sort(function (a, b) {
+      if (a.signalRank !== b.signalRank) return b.signalRank - a.signalRank;
+      return Number(b.pressureHours || 0) - Number(a.pressureHours || 0);
+    });
+
+  return rows.length ? rows[0] : null;
+}
+
+function buildLiveWipPressureRows(areas) {
+  const areaByKey = {};
+  (areas || []).forEach(function (area) {
+    areaByKey[area.key] = area;
+  });
+
+  return (areas || []).map(function (sourceArea) {
+    const route = SURFACE_PRESSURE_ROUTE[sourceArea.key] || {
+      pressureAreaKey: sourceArea.key,
+      pressureLabel: sourceArea.label,
+      note: 'No pressure route configured'
+    };
+
+    const pressureArea = areaByKey[route.pressureAreaKey] || sourceArea;
+    const capacityArea = areaByKey[route.capacityAreaKey] || pressureArea || sourceArea;
+    const sourceWip = Number(sourceArea.currentWip || 0);
+    const pressureJph = getPressureAreaJph(capacityArea);
+    const isBuffer = capacityArea.type === 'buffer';
+    const pressureHours = !isBuffer && pressureJph > 0 ? sourceWip / pressureJph : 0;
+
+    let signal = 'OK';
+    let signalClass = 'wip-ok';
+    let signalRank = 0;
+
+    if (isBuffer && sourceWip > Number(pressureArea.bufferCapacity || 180)) {
+      signal = 'BUFFER OVER';
+      signalClass = 'wip-hot';
+      signalRank = 3;
+    } else if (!isBuffer && sourceWip > 0 && pressureJph <= 0) {
+      signal = 'BLOCKED';
+      signalClass = 'wip-hot';
+      signalRank = 4;
+    } else if (!isBuffer && pressureHours >= 2) {
+      signal = 'BOTTLENECK';
+      signalClass = 'wip-hot';
+      signalRank = 3;
+    } else if (!isBuffer && pressureHours >= 1) {
+      signal = 'WATCH';
+      signalClass = 'wip-watch';
+      signalRank = 2;
+    }
+
+    return {
+      key: `${sourceArea.key}_to_${pressureArea.key}`,
+      sourceKey: sourceArea.key,
+      pressureAreaKey: pressureArea.key,
+      label: route.pressureLabel || pressureArea.label,
+      sourceLabel: sourceArea.label,
+      pressureLabel: route.pressureLabel || pressureArea.label,
+      note: route.note,
+      sourceArea,
+      pressureArea,
+      capacityArea,
+      capacityAreaKey: capacityArea.key,
+      capacityLabel: route.capacityLabel || capacityArea.label,
+      currentWip: sourceWip,
+      sourceWip,
+      pressureJph,
+      effectiveJph: pressureJph,
+      timeToClear: pressureHours,
+      pressureHours,
+      signal,
+      signalClass,
+      signalRank
+    };
+  });
+}
+
+function getPressureAreaJph(area) {
+  if (!area || area.type === 'buffer') return 0;
+  return Math.max(0, Number(area.effectiveJph || area.totalJph || 0));
+}
+
+
+function normalizeForecastRange(lowValue, highValue) {
+  let low = Math.max(0, Number(lowValue) || 0);
+  let high = Math.max(0, Number(highValue) || 0);
+
+  if (high < low) {
+    const temp = low;
+    low = high;
+    high = temp;
+  }
+
+  return { low, high };
+}
+
+function getAreaCapacityInfo(area, unitsRunning, associatesAssigned, shiftHours) {
+  const mode = area.capacityMode || area.type;
+  const jph = Number(area.jphPerUnit || 0);
+  const machines = Math.max(0, Number(unitsRunning || 0));
+  const associates = Math.max(0, Number(associatesAssigned || 0));
+
+  if (mode === 'buffer') {
+    const bufferCapacity = Number(area.bufferCapacity || 0);
+    return {
+      activeCapacityUnits: machines,
+      capacityBasis: 'buffer',
+      totalJph: 0,
+      normalCapacity: bufferCapacity
+    };
+  }
+
+  if (mode === 'operator') {
+    // Some screens have both "Associates" and "Associate Count" for the same cell.
+    // Use the higher value so the same person is not double-counted.
+    const activeAssociates = Math.max(associates, machines);
+    return {
+      activeCapacityUnits: activeAssociates,
+      capacityBasis: 'associates',
+      totalJph: activeAssociates * jph,
+      normalCapacity: activeAssociates * jph * shiftHours
+    };
+  }
+
+  // Machine output is capped by the installed/running machines.
+  // Associates provide coverage and uptime; extra associates above required coverage
+  // do not create fake machine JPH.
+  if (mode === 'machine') {
+    const machineCeilingJph = machines * jph;
+    const machinesPerAssociate = Math.max(0.25, Number(area.machinesPerAssociate || 1));
+    const requiredAssociates = machines > 0 ? machines / machinesPerAssociate : 0;
+    const coverageFactor = requiredAssociates > 0
+      ? Math.min(1, associates / requiredAssociates)
+      : 0;
+    const effectiveMachineJph = machineCeilingJph * coverageFactor;
+
+    return {
+      activeCapacityUnits: machines,
+      capacityBasis: coverageFactor >= 1
+        ? 'machine ceiling fully covered'
+        : `${round1(coverageFactor * 100)}% labor coverage`,
+      machineCeilingJph,
+      requiredAssociates,
+      coverageFactor,
+      totalJph: effectiveMachineJph,
+      normalCapacity: effectiveMachineJph * shiftHours
+    };
+  }
+
+  return {
+    activeCapacityUnits: 0,
+    capacityBasis: 'unknown',
+    totalJph: 0,
+    normalCapacity: 0
+  };
+}
+
+function getDowntimeLossForArea(area, downtime, shiftHours) {
+  let lost = 0;
+
+  downtime.forEach(function (item) {
+    if (!item || item.active !== 'Yes') return;
+    if (item.areaKey !== area.key) return;
+
+    const unitsDown = Number(item.unitsDown) || 0;
+    const hours = item.fullDay === 'Yes'
+      ? shiftHours
+      : calculateHoursBetween(item.startTime, item.endTime);
+
+    lost += unitsDown * area.jphPerUnit * hours;
+  });
+
+  return lost;
+}
+
+function calculateHoursBetween(startValue, endValue) {
+  const start = parseTimeToMinutes(startValue);
+  const end = parseTimeToMinutes(endValue);
+  if (start === null || end === null) return 0;
+
+  let diff = end - start;
+  if (diff < 0) diff += 24 * 60;
+
+  return diff / 60;
+}
+
+function parseTimeToMinutes(value) {
+  if (value === null || value === undefined || value === '') return null;
+
+  let text = String(value).trim();
+
+  // Accept 13.30 or 12.45 as 13:30 / 12:45
+  text = text.replace('.', ':');
+
+  // Accept 7, 13 as full hour
+  if (/^\d{1,2}$/.test(text)) {
+    const hOnly = Number(text);
+    if (hOnly < 0 || hOnly > 23) return null;
+    return hOnly * 60;
+  }
+
+  const match = text.match(/^(\d{1,2}):(\d{1,2})(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+
+  let h = Number(match[1]);
+  const m = Number(match[2]);
+  const ampm = match[3] ? match[3].toUpperCase() : '';
+
+  if (m < 0 || m > 59) return null;
+
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+
+  if (h < 0 || h > 23) return null;
+
+  return h * 60 + m;
+}
+
+
+
+function initPerformanceControls() {
+  const topDate = document.getElementById('productionDate');
+  const perfDate = document.getElementById('perfDateInput');
+  const perfShift = document.getElementById('perfShiftModeSelect');
+  const mainShift = document.getElementById('shiftMode');
+  const today = getLocalDateInputValue(new Date());
+
+  if (topDate && !topDate.value) topDate.value = today;
+  if (perfDate && !perfDate.value) perfDate.value = topDate ? topDate.value : today;
+
+  function applyDate(dateValue) {
+    const selectedDate = dateValue || today;
+    if (topDate) topDate.value = selectedDate;
+    if (perfDate) perfDate.value = selectedDate;
+    shiftModeManualOverride = false;
+    applyAutomaticShiftForDate(selectedDate, true);
+  }
+
+  if (topDate) topDate.addEventListener('change', function () { applyDate(topDate.value); });
+  if (perfDate) perfDate.addEventListener('change', function () { applyDate(perfDate.value); });
+
+  if (perfShift && mainShift) {
+    perfShift.value = mainShift.value || getAutomaticShiftMode(topDate ? topDate.value : today);
+    perfShift.addEventListener('change', function () {
+      shiftModeManualOverride = true;
+      mainShift.value = perfShift.value;
+      buildHourlyRows(mainShift.value, true);
+      updateShiftControlStatus();
+      calculateForecast();
+    });
+
+    mainShift.addEventListener('change', function () {
+      shiftModeManualOverride = true;
+      perfShift.value = mainShift.value;
+      buildHourlyRows(mainShift.value, true);
+      updateShiftControlStatus();
+      calculateForecast();
+    });
+  }
+
+  applyAutomaticShiftForDate(topDate ? topDate.value : today, false);
+}
+
+function getAutomaticShiftMode(dateValue) {
+  const date = new Date(`${dateValue || getLocalDateInputValue(new Date())}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Weekday';
+  const day = date.getDay();
+  return day >= 1 && day <= 4 ? 'Weekday' : 'Weekend';
+}
+
+function applyAutomaticShiftForDate(dateValue, recalculate) {
+  const shiftMode = getAutomaticShiftMode(dateValue);
+  const mainShift = document.getElementById('shiftMode');
+  const perfShift = document.getElementById('perfShiftModeSelect');
+  if (mainShift) mainShift.value = shiftMode;
+  if (perfShift) perfShift.value = shiftMode;
+  buildHourlyRows(shiftMode, true);
+  updateShiftControlStatus();
+  updatePerformanceShiftChrome(latestForecastResult ? latestForecastResult.result : null);
+  if (recalculate) calculateForecast();
+}
+
+function updateShiftControlStatus() {
+  setText('shiftControlStatus', shiftModeManualOverride ? 'Manual Override' : 'Calendar Controlled');
+}
+
+function updatePerformanceUI(result) {
+  updatePerformanceShiftChrome(result);
+  renderPerformanceHourlyCards(result);
+}
+
+function getShiftWindow(shiftMode) {
+  if (shiftMode === 'Weekday OT 12') {
+    return { start: '07:00', end: '19:00', label: 'Weekday OT', dayBadge: '⚡ Weekday OT' };
+  }
+
+  if (shiftMode === 'Weekend') {
+    return { start: '06:30', end: '18:30', label: 'Weekend', dayBadge: '◐ Weekend' };
+  }
+
+  return { start: '07:00', end: '17:30', label: 'Weekday', dayBadge: '☀ Weekday' };
+}
+
+
+function getHourlyRowOffsetForShift() {
+  return 0;
+}
+
+function updatePerformanceShiftChrome(result) {
+  const mainShift = document.getElementById('shiftMode');
+  const perfShift = document.getElementById('perfShiftModeSelect');
+  const shiftMode = (perfShift && perfShift.value) || (mainShift && mainShift.value) || (result && result.shiftMode) || 'Weekday';
+  const shiftHours = result && result.shiftHours ? result.shiftHours : getShiftHours(shiftMode);
+  const windowInfo = getShiftWindow(shiftMode);
+  const startMinutes = parseTimeToMinutes(windowInfo.start) || 420;
+  const endMinutes = parseTimeToMinutes(windowInfo.end) || 1050;
+  const now = new Date();
+  const selectedDate = getValue('productionDate', getLocalDateInputValue(now));
+  const isToday = selectedDate === getLocalDateInputValue(now);
+  const nowMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : startMinutes;
+  const totalMinutes = Math.max(1, endMinutes - startMinutes);
+  const elapsedMinutes = Math.max(0, Math.min(totalMinutes, nowMinutes - startMinutes));
+  const pct = Math.max(0, Math.min(100, (elapsedMinutes / totalMinutes) * 100));
+
+  if (perfShift && perfShift.value !== shiftMode) perfShift.value = shiftMode;
+
+  setText('perfStartTime', formatMinutesAsClock(startMinutes));
+  setText('perfEndTime', formatMinutesAsClock(endMinutes));
+  setText('perfProductiveHours', `${round1(shiftHours)} hr`);
+  setText('perfShiftDayBadge', windowInfo.dayBadge);
+  setText('perfShiftStartLabel', formatMinutesAsClock(startMinutes));
+  setText('perfShiftEndLabel', formatMinutesAsClock(endMinutes));
+  setText('perfNowTime', formatMinutesAsClock(nowMinutes));
+  setText('perfTimelineMeta', `${formatMinutesAsClock(startMinutes)} → ${formatMinutesAsClock(endMinutes)} · ${round1(shiftHours)} productive hr`);
+
+  const dateInput = document.getElementById('perfDateInput');
+  if (dateInput && !dateInput.value) dateInput.value = getLocalDateInputValue(now);
+  const dateValue = dateInput ? dateInput.value : selectedDate;
+  setText('perfDayLabel', getPerformanceDateLabel(dateValue));
+  setText('productionDateLabel', getFullProductionDateLabel(dateValue));
+  setText('productionDateSetupText', getFullProductionDateLabel(dateValue));
+  setText('shiftModeSetupText', getShiftModeDisplay(shiftMode));
+
+  const progress = document.getElementById('perfShiftProgress');
+  const remain = document.getElementById('perfShiftRemaining');
+  const marker = document.getElementById('perfNowMarker');
+
+  if (progress) progress.style.width = `${pct}%`;
+  if (remain) remain.style.width = `${Math.max(0, 100 - pct)}%`;
+  if (marker) { marker.style.left = `${pct}%`; marker.style.display = isToday ? '' : 'none'; }
+}
+
+function renderPerformanceHourlyCards(result) {
+  const holder = document.getElementById('perfHourlyCards');
+  if (!holder) return;
+
+  const hourly = result && result.hourlySummary ? result.hourlySummary : {};
+  const rows = latestForecastResult && latestForecastResult.payload && Array.isArray(latestForecastResult.payload.hourly)
+    ? latestForecastResult.payload.hourly
+    : [];
+
+  const shiftMode = result && result.shiftMode ? result.shiftMode : getValue('shiftMode', 'Weekday');
+  const windowInfo = getShiftWindow(shiftMode);
+  const startMinutes = parseTimeToMinutes(windowInfo.start) || 420;
+  const endMinutes = parseTimeToMinutes(windowInfo.end) || 1050;
+  const now = new Date();
+  const selectedDate = getValue('productionDate', getLocalDateInputValue(now));
+  const todayValue = getLocalDateInputValue(now);
+  const nowMinutes = selectedDate === todayValue ? now.getHours() * 60 + now.getMinutes() : (selectedDate < todayValue ? endMinutes : startMinutes);
+  const targetPace = Number(hourly.targetPace || 0);
+  const rowOffset = getHourlyRowOffsetForShift(shiftMode);
+
+  const slots = buildPerformanceHourSlots(startMinutes, endMinutes);
+
+  let cumulativeActual = 0;
+  const cards = slots.map(function (slot, index) {
+    const row = rows[rowOffset + index] || null;
+    const actualThisHour = row && row.active !== 'No' ? Number(row.inspection || 0) || 0 : 0;
+    if (actualThisHour > 0) cumulativeActual += actualThisHour;
+
+    const elapsedSlotHours = Math.max(0, (slot.end - startMinutes) / 60);
+    const expectedCum = targetPace > 0 ? targetPace * elapsedSlotHours : 0;
+    const hasActual = actualThisHour > 0 || (row && row.active !== 'No' && row.inspection !== undefined && Number(row.inspection || 0) > 0);
+    const isCurrent = nowMinutes >= slot.start && nowMinutes < slot.end;
+    const started = nowMinutes >= slot.start;
+    const ratio = expectedCum > 0 ? cumulativeActual / expectedCum : 0;
+
+    let statusClass = 'not-started';
+    let statusText = '—';
+
+    if (hasActual || (started && cumulativeActual > 0)) {
+      if (ratio >= 1) {
+        statusClass = 'good';
+        statusText = `${Math.round(ratio * 100)}%`;
+      } else if (ratio >= 0.90) {
+        statusClass = 'risk';
+        statusText = `${Math.round(ratio * 100)}%`;
+      } else {
+        statusClass = 'behind';
+        statusText = `${Math.round(ratio * 100)}%`;
+      }
+    }
+
+    const actualText = hasActual || cumulativeActual > 0 ? formatNumber(cumulativeActual) : '—';
+    const expectedText = expectedCum > 0 ? formatNumber(expectedCum) : '—';
+    const fillPct = expectedCum > 0 ? Math.max(0, Math.min(100, ratio * 100)) : 0;
+
+    return `
+      <div class="sector-row ${statusClass}${isCurrent ? ' current' : ''}">
+        <span class="sector-hour">${escapeHtml(slot.label)}${isCurrent ? '<i class="sector-now-tag">NOW</i>' : ''}</span>
+        <div class="sector-track">
+          <i class="sector-fill-actual" style="width:${fillPct}%"></i>
+        </div>
+        <span class="sector-values"><b>${actualText}</b> / ${expectedText}</span>
+        <span class="sector-pct">${statusText}</span>
+      </div>
+    `;
+  });
+
+  holder.innerHTML = cards.join('');
+}
+
+function buildPerformanceHourSlots(startMinutes, endMinutes) {
+  const slots = [];
+  let start = startMinutes;
+
+  while (start < endMinutes) {
+    // Snap to the next clock-hour mark (7:00, 8:00, 9:00...) rather than just
+    // adding 60 minutes to the previous slot's start. This makes the grid read
+    // in normal clock hours (7:00-8:00, 8:00-9:00...) instead of drifting by
+    // whatever minute the shift happens to start on (6:30-7:30, 7:30-8:30...).
+    // Only the first and last slots end up partial, wherever the shift's
+    // actual start/end don't land on the hour.
+    const nextClockHour = Math.floor(start / 60) * 60 + 60;
+    const nextHour = Math.min(endMinutes, nextClockHour);
+    // Rows are labeled by their START (the "7:00 AM" row = the 7-8am hour) —
+    // that's the existing convention and it's correct for every row except
+    // one: the LAST slot of the shift. When shift length is an exact multiple
+    // of 60 (Weekend 06:30-18:30, Weekday OT 12 07:00-19:00), that last slot
+    // is also a full 60-min block, so start-labeling it silently drops the
+    // true shift-end time from every row/tick. Force the final slot only to
+    // show the full range so the real end time is always visible somewhere.
+    const isFinalSlot = nextHour === endMinutes;
+    const label = (nextHour - start < 60 || isFinalSlot)
+      ? `${formatMinutesAsClock(start)}–${formatMinutesAsClock(nextHour)}`
+      : formatMinutesAsClock(start);
+
+    slots.push({
+      start,
+      end: nextHour,
+      key: minutesToHourKey(start),
+      label
+    });
+
+    start = nextHour;
+  }
+
+  return slots;
+}
+
+function normalizeHourKey(value) {
+  const minutes = parseTimeToMinutes(value);
+  if (minutes === null) return String(value || '');
+  return minutesToHourKey(minutes);
+}
+
+function minutesToHourKey(minutes) {
+  const h = Math.floor(Number(minutes || 0) / 60);
+  return `${String(h).padStart(2, '0')}:00`;
+}
+
+function formatMinutesAsClock(minutes) {
+  let total = Number(minutes || 0);
+  total = ((total % 1440) + 1440) % 1440;
+  let h = Math.floor(total / 60);
+  const m = total % 60;
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+function getLocalDateInputValue(date) {
+  const d = date instanceof Date ? date : new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getFullProductionDateLabel(value) {
+  if (!value) return 'Today';
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Selected day';
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+
+function getPerformanceDateLabel(value) {
+  if (!value) return 'Today';
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Selected day';
+  const today = getLocalDateInputValue(new Date());
+  const label = date.toLocaleDateString(undefined, { weekday: 'long' });
+  return value === today ? `${label} · Today` : label;
+}
+
+function getShiftHours(shiftMode) {
+  if (Object.prototype.hasOwnProperty.call(SHIFT_PRODUCTIVE_HOURS, shiftMode)) {
+    return SHIFT_PRODUCTIVE_HOURS[shiftMode];
+  }
+  return 9.5;
+}
+
+function getValue(id, fallback) {
+  const el = document.getElementById(id);
+  if (!el) return fallback;
+  return el.value;
+}
+
+function getRowValue(row, selector) {
+  const el = row.querySelector(selector);
+  return el ? el.value : '';
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function setRiskClass(el, risk) {
+  if (!el) return;
+  el.classList.remove('risk-green', 'risk-yellow', 'risk-red');
+
+  if (risk === 'GREEN') el.classList.add('risk-green');
+  if (risk === 'YELLOW') el.classList.add('risk-yellow');
+  if (risk === 'RED') el.classList.add('risk-red');
+}
+
+function formatNumber(value) {
+  const n = Number(value) || 0;
+  return Math.round(n).toLocaleString();
+}
+
+function round1(value) {
+  const n = Number(value) || 0;
+  return (Math.round(n * 10) / 10).toLocaleString();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+/* =========================================================
+   AR FORECAST MODULE V2
+   Live Production WIP + RAW_ACTIVITY_CURRENT live staffing + AR Forecast storage.
+========================================================= */
+const AR_FORECAST_API_URL = 'https://script.google.com/macros/s/AKfycbz3ZhvArQTxy4y_LLmEaDXEYxaZsBDSP5JNGr_H8wvFl5qg5Aofe1zf9QQRdBvVUY3Y/exec';
+const AR_FORECAST_STORAGE_KEY = 'productionGoalForecast.ar.v2';
+const AR_STAFFING_CAPACITY_OVERRIDES_KEY = 'productionGoalForecast.ar.staffingCapacityOverrides.v1';
+const AR_BOS_WIP_STORAGE_KEY = 'productionGoalForecast.ar.bosWipByDate.v1';
+const AR_FORECAST_FRONTEND_VERSION = '2026-07-13-ar-bos-stable-v7';
+const AR_DEFAULT_CONFIG = Object.freeze({goal:0,runSize:84,maintenanceDelay:50,arIn:40,basket:60,t40:45,oven:60,sectoring:40,chamber:45,deRing:20,arOut:30});
+const AR_DEFAULT_JPH = Object.freeze({'AR-IN':120,'Basket':64,'Oven':0,'Sectoring':48,'DeRing':120,'AR-OUT':100});
+const AR_DEFAULT_STAFFING_EXCLUSIONS = Object.freeze([
+  'CALEB DAY'
+]);
+const AR_LOCAL_STAFFING_EXCLUSIONS_KEY = 'productionGoalForecast.ar.staffingExclusions.v1';
+const AR_STATION_ORDER=['AR-IN','Basket','Oven','Sectoring','DeRing','AR-OUT'];
+const AR_DEFAULT_MORNING_PLAN=Object.freeze({
+  arIn:1.5,
+  basket:3,
+  sectoring:3,
+  deRing:1,
+  arOut:1.5
+});
+const AR_FORECAST_STATE={
+  department:localStorage.getItem('productionGoalForecast.department')||'Surface',
+  config:{...AR_DEFAULT_CONFIG},
+  flow:null,
+  operatorActivity:null,
+  staffingExclusions:loadARLocalStaffingExclusions(),
+  staffingCapacityOverrides:loadARStaffingCapacityOverrides(),
+  morningPlan:{...AR_DEFAULT_MORNING_PLAN},
+  bosWipByDate:loadARBosWipByDate(),
+  liveStaff:[],
+  hourly:{},
+  manualHourly:{},
+  calculated:null,
+  lastSync:null,
+  syncPromise:null,
+  syncRequestId:0
+};
+window.AR_FORECAST_APP={getDepartment:()=>AR_FORECAST_STATE.department};
+
+document.addEventListener('DOMContentLoaded',function initARForecastModuleV2(){restoreARLocalState();wireARForecastControls();setDepartmentMode(AR_FORECAST_STATE.department,false);buildARHourlyRows();calculateARForecast();});
+
+function wireARForecastControls(){const dep=document.getElementById('departmentMode');if(dep){dep.value=AR_FORECAST_STATE.department;dep.addEventListener('change',()=>setDepartmentMode(dep.value,true));}document.getElementById('arStaffingCards')?.addEventListener('click',handleARStaffingClick);document.getElementById('arStaffingCards')?.addEventListener('change',handleARStaffingCapacityChange);document.getElementById('arExcludedAssociates')?.addEventListener('click',handleARStaffingClick);['arGoal','arRunSize','arMaintenanceDelay','arTimeArIn','arTimeBasket','arTimeT40','arTimeOven','arTimeSectoring','arTimeChamber','arTimeDeRing','arTimeArOut'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.addEventListener('input',()=>{readARConfigFromInputs();saveARLocalState();calculateARForecast();});});document.getElementById('arSaveGoalBtn')?.addEventListener('click',saveARGoal);
+document.getElementById('arGoal')?.addEventListener('input',()=>{
+  setTextSafe('arGoalSaveMeta','Goal changed — click Save Goal.');
+});
+['arPlanArIn','arPlanBasket','arPlanSectoring','arPlanDeRing','arPlanArOut'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.addEventListener('input',()=>{
+    readARMorningPlanInputs();
+    setTextSafe('arMorningPlanStatus','Morning plan changed — click Save Morning Plan.');
+    saveARLocalState();
+    calculateARForecast();
+  });
+});
+document.getElementById('arSaveMorningPlanBtn')?.addEventListener('click',saveARMorningPlan);
+document.getElementById('arSaveBosBtn')?.addEventListener('click',saveARBosWip);document.getElementById('arResetBosBtn')?.addEventListener('click',resetARBosWip);document.getElementById('arBosWip')?.addEventListener('input',()=>{setTextSafe('arBosSetupMeta','Unsaved BOS change — click Save BOS.');});document.getElementById('arSaveSetupBtn')?.addEventListener('click',saveARSetup);document.getElementById('arResetSetupBtn')?.addEventListener('click',resetARSetup);document.getElementById('arSaveHourlyBtn')?.addEventListener('click',saveARHourly);document.getElementById('arClearHourlyBtn')?.addEventListener('click',clearARManualHourly);document.getElementById('arSaveForecastBtn')?.addEventListener('click',saveARForecast);const btn=document.getElementById('calculateBtn');btn?.addEventListener('click',e=>{if(AR_FORECAST_STATE.department==='AR'){e.stopImmediatePropagation();syncARForecastData(true);}},true);document.getElementById('shiftMode')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR'){buildARHourlyRows();calculateARForecast();}});document.getElementById('productionDate')?.addEventListener('change',()=>{if(AR_FORECAST_STATE.department==='AR')syncARForecastData(false);});}
+function setDepartmentMode(mode,shouldSync){
+  const d=['Surface','AR','Finish'].includes(mode)?mode:'Surface';
+  AR_FORECAST_STATE.department=d;
+  localStorage.setItem('productionGoalForecast.department',d);
+  document.body.dataset.department=d;
+
+  const s=document.getElementById('departmentMode');
+  if(s)s.value=d;
+
+  setTextSafe('departmentBrandMark',d==='AR'?'AR':d==='Finish'?'FN':'SF');
+  setTextSafe('departmentBrandName',d==='AR'?'AR':d==='Finish'?'FINISH':'SURFACE');
+  setTextSafe('pageForecastTitle',d==='AR'?'AR Goal Forecast':d==='Finish'?'Finish Goal Forecast':'Surface Goal Forecast');
+  setTextSafe('departmentModeStatus',d==='AR'?'AR WIP + live activity staffing':d==='Finish'?'Finish BOS + planned/live staffing':'Surface engine');
+
+  const tab=document.querySelector('.tab-btn.active')?.dataset.tabTarget||'status';
+  activateTab(tab,Array.from(document.querySelectorAll('.tab-btn')),Array.from(document.querySelectorAll('.tab-panel')));
+
+  if(!shouldSync)return;
+
+  if(d==='AR'){
+    syncARForecastData(true);
+  }else if(d==='Finish'){
+    syncFinishForecastData(true);
+  }else{
+    syncSurfaceDashboardData(true);
+    calculateForecast();
+  }
+}
+
+async function fetchARJson(url){
+  const response=await fetch(url,{
+    method:'GET',
+    cache:'default',
+    credentials:'omit'
+  });
+
+  if(!response.ok)throw new Error(`API ${response.status}`);
+
+  const payload=await response.json();
+
+  if(payload?.status==='error'){
+    throw new Error(payload.message||'Production Flow API error');
+  }
+
+  if(payload?.ok===false){
+    throw new Error(payload.error||payload.message||'API error');
+  }
+
+  return payload;
+}
+
+function getARShiftType(){
+  return getValue('shiftMode','Weekday').includes('Weekend')?'Weekend':'Weekday';
+}
+
+async function syncARForecastData(showStatus){
+  // Do not start another Google Apps Script request while one is already running.
+  if(AR_FORECAST_STATE.syncPromise){
+    if(showStatus)setARSyncState('syncing','AR refresh already running');
+    return AR_FORECAST_STATE.syncPromise;
+  }
+
+  const requestId=++AR_FORECAST_STATE.syncRequestId;
+
+  AR_FORECAST_STATE.syncPromise=(async()=>{
+    if(showStatus)setARSyncState('syncing','Syncing AR WIP + live staffing');
+
+    readARConfigFromInputs();
+
+    try{
+      // These two endpoints are independent, so request them together.
+      // debug=true was intentionally removed so the Apps Script 30-second cache works.
+      const [flowResult,operatorResult]=await Promise.allSettled([
+        fetchARJson(`${SURFACE_DASHBOARD_API_URL}?action=productionFlow&area=AR`),
+        fetchARJson(`${SURFACE_DASHBOARD_API_URL}?action=operatorActivity&area=AR`)
+      ]);
+
+      // Ignore a result only if a newer request somehow superseded this one.
+      if(requestId!==AR_FORECAST_STATE.syncRequestId)return;
+
+      if(flowResult.status==='fulfilled'){
+        AR_FORECAST_STATE.flow=flowResult.value;
+      }else{
+        console.warn('[AR Forecast] Flow request failed:',flowResult.reason);
+      }
+
+      if(operatorResult.status==='fulfilled'){
+        AR_FORECAST_STATE.operatorActivity=operatorResult.value;
+      }else{
+        console.warn('[AR Forecast] Operator request failed:',operatorResult.reason);
+      }
+
+      AR_FORECAST_STATE.staffingExclusions=loadARLocalStaffingExclusions();
+
+      if(!AR_FORECAST_STATE.flow){
+        throw new Error('Live AR WIP unavailable');
+      }
+
+      AR_FORECAST_STATE.liveStaff=buildARLiveStaffing(
+        AR_FORECAST_STATE.operatorActivity
+      ).filter(person=>!isARStaffingExcluded(person.name));
+
+      mergeARHourlyFromLiveSources(
+        AR_FORECAST_STATE.flow,
+        AR_FORECAST_STATE.operatorActivity
+      );
+
+      AR_FORECAST_STATE.lastSync=new Date();
+
+      // Render each expensive section once, after both API responses are resolved.
+      buildARHourlyRows();
+      renderARStaffingCards();
+      renderARExcludedAssociates();
+      calculateARForecast();
+
+      setARSyncState(
+        'ok',
+        AR_FORECAST_STATE.liveStaff.length
+          ? `AR live · ${AR_FORECAST_STATE.liveStaff.length} associates`
+          : 'AR live · waiting for first scans'
+      );
+    }catch(err){
+      console.error('[AR Forecast]',err);
+
+      setARSyncState('error','AR sync failed');
+
+      // Keep and display the last successful data instead of blanking the page.
+      renderARStaffingCards();
+      renderARExcludedAssociates();
+      calculateARForecast();
+    }finally{
+      AR_FORECAST_STATE.syncPromise=null;
+    }
+  })();
+
+  return AR_FORECAST_STATE.syncPromise;
+}
+
+function setARSyncState(state,text){if(AR_FORECAST_STATE.department!=='AR')return;setTextSafe('heroSyncState',text);setTextSafe('heroSyncTime',new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}));setTextSafe('arRosterSyncStatus',text);const dot=document.getElementById('heroSyncDot');if(dot)dot.className=`hero-sync-dot dot-${state}`;}
+
+
+function loadARStaffingCapacityOverrides(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(AR_STAFFING_CAPACITY_OVERRIDES_KEY)||'{}');
+    const out={};
+    AR_STATION_ORDER.forEach(station=>{
+      if(raw[station]===undefined||raw[station]===null||raw[station]==='')return;
+      const value=Number(raw[station]);
+      if(Number.isFinite(value)&&value>=0)out[station]=Math.round(value*2)/2;
+    });
+    return out;
+  }catch{
+    return {};
+  }
+}
+
+function saveARStaffingCapacityOverrides(){
+  localStorage.setItem(
+    AR_STAFFING_CAPACITY_OVERRIDES_KEY,
+    JSON.stringify(AR_FORECAST_STATE.staffingCapacityOverrides||{})
+  );
+}
+
+function getARCapacityAssociateCount(station,detectedCount){
+  const value=AR_FORECAST_STATE.staffingCapacityOverrides?.[station];
+  return Number.isFinite(Number(value))
+    ? Math.max(0,Math.round(Number(value)*2)/2)
+    : detectedCount;
+}
+
+function setARCapacityAssociateOverride(station,value){
+  if(!AR_STATION_ORDER.includes(station)||station==='Oven')return;
+
+  const numeric=Number(value);
+  if(!Number.isFinite(numeric)||numeric<0)return;
+
+  AR_FORECAST_STATE.staffingCapacityOverrides[station]=Math.round(numeric*2)/2;
+  saveARStaffingCapacityOverrides();
+}
+
+function clearARCapacityAssociateOverride(station){
+  if(!AR_FORECAST_STATE.staffingCapacityOverrides)return;
+  delete AR_FORECAST_STATE.staffingCapacityOverrides[station];
+  saveARStaffingCapacityOverrides();
+}
+
+function handleARStaffingCapacityChange(event){
+  const input=event.target.closest('[data-ar-capacity-station]');
+  if(!input)return;
+
+  const station=String(input.dataset.arCapacityStation||'').trim();
+  setARCapacityAssociateOverride(station,input.value);
+  calculateARForecast();
+  renderARStaffingCards();
+  showARMessage(`${station} capacity count set to ${round1(input.value)} associate(s).`);
+}
+
+function normalizeAROperatorKey(name){return String(name||'').trim().replace(/\s+/g,' ').toUpperCase();}
+function loadARLocalStaffingExclusions(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(AR_LOCAL_STAFFING_EXCLUSIONS_KEY)||'[]');
+    return Array.isArray(saved)?saved.map(normalizeAROperatorKey).filter(Boolean):[];
+  }catch{return [];}
+}
+function saveARLocalStaffingExclusions(){
+  const cleaned=Array.from(new Set((AR_FORECAST_STATE.staffingExclusions||[]).map(normalizeAROperatorKey).filter(Boolean)));
+  AR_FORECAST_STATE.staffingExclusions=cleaned;
+  localStorage.setItem(AR_LOCAL_STAFFING_EXCLUSIONS_KEY,JSON.stringify(cleaned));
+}
+function isARDefaultStaffingExclusion(name){
+  const key=normalizeAROperatorKey(name);
+  return AR_DEFAULT_STAFFING_EXCLUSIONS.some(item=>normalizeAROperatorKey(item)===key);
+}
+function isARStaffingExcluded(name){
+  const key=normalizeAROperatorKey(name);
+  return isARDefaultStaffingExclusion(key)||(AR_FORECAST_STATE.staffingExclusions||[]).some(item=>normalizeAROperatorKey(item)===key);
+}
+function refreshARStaffingAfterExclusionChange(){
+  AR_FORECAST_STATE.liveStaff=buildARLiveStaffing(AR_FORECAST_STATE.operatorActivity).filter(person=>!isARStaffingExcluded(person.name));
+  calculateARForecast();
+  renderARStaffingCards();
+  renderARExcludedAssociates();
+  setARSyncState('ok',AR_FORECAST_STATE.liveStaff.length?`AR live · ${AR_FORECAST_STATE.liveStaff.length} associates`:'AR live · waiting for first scans');
+}
+function handleARStaffingClick(event){
+  const button=event.target.closest('[data-ar-staff-action]');
+  if(!button)return;
+  const action=button.dataset.arStaffAction;
+
+  if(action==='reset-capacity'){
+    const station=String(button.dataset.station||'').trim();
+    clearARCapacityAssociateOverride(station);
+    calculateARForecast();
+    renderARStaffingCards();
+    showARMessage(`${station} capacity count returned to automatic live count.`);
+    return;
+  }
+
+  const operator=String(button.dataset.operator||'').trim();
+  if(!operator)return;
+  const key=normalizeAROperatorKey(operator);
+  if(action==='hide'){
+    if(!AR_FORECAST_STATE.staffingExclusions.includes(key))AR_FORECAST_STATE.staffingExclusions.push(key);
+    saveARLocalStaffingExclusions();
+    showARMessage(`${operator} hidden from AR staffing on this browser.`);
+  }else if(action==='restore'){
+    if(isARDefaultStaffingExclusion(key)){
+      showARMessage(`${operator} is a default JS exclusion and cannot be restored from the page.`);
+      return;
+    }
+    AR_FORECAST_STATE.staffingExclusions=(AR_FORECAST_STATE.staffingExclusions||[]).filter(item=>normalizeAROperatorKey(item)!==key);
+    saveARLocalStaffingExclusions();
+    showARMessage(`${operator} restored to AR staffing on this browser.`);
+  }
+  refreshARStaffingAfterExclusionChange();
+}
+function renderARExcludedAssociates(){
+  const box=document.getElementById('arExcludedAssociates');
+  const count=document.getElementById('arExcludedCount');
+  if(!box)return;
+  const defaults=AR_DEFAULT_STAFFING_EXCLUSIONS.map(normalizeAROperatorKey).filter(Boolean);
+  const local=(AR_FORECAST_STATE.staffingExclusions||[]).map(normalizeAROperatorKey).filter(Boolean).filter(name=>!defaults.includes(name));
+  const excluded=[...defaults.map(name=>({name,source:'Default JS exclusion'})),...local.map(name=>({name,source:'Hidden on this browser'}))];
+  if(count)count.textContent=String(excluded.length);
+  box.innerHTML=excluded.length?excluded.map(item=>`<div class="ar-excluded-row"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source)}</small></div>${item.source==='Default JS exclusion'?'<span class="ar-default-exclusion-badge">DEFAULT</span>':`<button type="button" class="ar-restore-btn" data-ar-staff-action="restore" data-operator="${escapeHtml(item.name)}">Restore</button>`}</div>`).join(''):'<div class="ar-excluded-empty">No associates are hidden.</div>';
+}
+function getARRowsFromFlow(){const rows=Array.isArray(AR_FORECAST_STATE.flow?.productionFlow)?AR_FORECAST_STATE.flow.productionFlow:[];return rows.filter(r=>String(r.Area||'').trim().toUpperCase()==='AR');}
+function findARFlowRow(names,bridgeRole){const rows=getARRowsFromFlow();if(bridgeRole){const x=rows.find(r=>String(r.BridgeRole||'').toUpperCase()===bridgeRole);if(x)return x;}const wanted=names.map(n=>n.toUpperCase());return rows.find(r=>wanted.includes(String(r.FlowStep||r.DisplayName||'').trim().toUpperCase()))||{};}
+
+function loadARBosWipByDate(){
+  try{
+    const value=JSON.parse(localStorage.getItem(AR_BOS_WIP_STORAGE_KEY)||'{}');
+    return value&&typeof value==='object'?value:{};
+  }catch{
+    return {};
+  }
+}
+
+function saveARBosWipByDate(){
+  localStorage.setItem(
+    AR_BOS_WIP_STORAGE_KEY,
+    JSON.stringify(AR_FORECAST_STATE.bosWipByDate||{})
+  );
+}
+
+function getARProductionDateKey(){
+  return getValue('productionDate',getLocalDateInputValue(new Date()));
+}
+
+function calculateCurrentARInsideWip(live){
+  return toARNumber(live?.arIn)+
+    toARNumber(live?.basket)+
+    toARNumber(live?.oven)+
+    toARNumber(live?.sectoring)+
+    toARNumber(live?.deRing);
+}
+
+function captureARBosWipIfMissing(live){
+  const dateKey=getARProductionDateKey();
+  if(!dateKey)return 0;
+
+  const saved=AR_FORECAST_STATE.bosWipByDate?.[dateKey];
+  if(Number.isFinite(Number(saved))){
+    return Math.max(0,toARNumber(saved));
+  }
+
+  const captured=calculateCurrentARInsideWip(live);
+  AR_FORECAST_STATE.bosWipByDate[dateKey]=captured;
+  saveARBosWipByDate();
+  return captured;
+}
+
+function getARBosWip(live){
+  return captureARBosWipIfMissing(live);
+}
+
+
+function saveARBosWip(){
+  const dateKey=getARProductionDateKey();
+  const bosInput=document.getElementById('arBosWip');
+  const value=Math.max(0,toARNumber(bosInput?.value));
+
+  AR_FORECAST_STATE.bosWipByDate[dateKey]=value;
+  saveARBosWipByDate();
+  calculateARForecast();
+
+  showARMessage(
+    `BOS AR WIP saved at ${formatARNumber(value)} jobs for ${dateKey}.`
+  );
+
+  setTextSafe(
+    'arBosSetupMeta',
+    `BOS saved for ${dateKey}. Reset Live pulls current AR WIP.`
+  );
+}
+
+function resetARBosWip(){
+  const live=getARLiveValues();
+  const dateKey=getARProductionDateKey();
+  const captured=calculateCurrentARInsideWip(live);
+
+  AR_FORECAST_STATE.bosWipByDate[dateKey]=captured;
+  saveARBosWipByDate();
+  calculateARForecast();
+
+  showARMessage(
+    `BOS AR WIP reset from live WIP to ${formatARNumber(captured)} jobs for ${dateKey}.`
+  );
+}
+
+function renderARBosSetup(live,bosWip){
+  const bosInput=document.getElementById('arBosWip');
+  const feedInput=document.getElementById('arSurfaceFeedLive');
+  const dateKey=getARProductionDateKey();
+
+  if(bosInput&&document.activeElement!==bosInput){
+    bosInput.value=Math.round(bosWip);
+  }
+  if(feedInput)feedInput.value=Math.round(toARNumber(live?.surface));
+
+  if(document.activeElement!==bosInput){
+    setTextSafe(
+      'arBosSetupMeta',
+      `BOS saved for ${dateKey}. Reset Live pulls current AR WIP.`
+    );
+  }
+}
+
+function getARLiveValues(){const row=(n,r)=>findARFlowRow(n,r);return{surface:toARNumber(row(['Surface Inspection','Surface Inspection Input WIP'],'AR_INPUT').CurrentWIP),arIn:toARNumber(row(['AR-IN']).CurrentWIP),basket:toARNumber(row(['Basket']).CurrentWIP),oven:toARNumber(row(['Oven']).CurrentWIP),sectoring:toARNumber(row(['Sectoring']).CurrentWIP),deRing:toARNumber(row(['DeRing']).CurrentWIP),arOut:toARNumber(row(['AR-OUT'],'AR_OUTPUT').ActivityToday)};}
+function toARBool(v){return v===true||String(v).toLowerCase()==='true'||String(v)==='1'||String(v).toLowerCase()==='yes';}
+function normalizeARRole(value){const s=String(value||'').trim().toUpperCase().replace(/_/g,'-');if(s==='AR IN'||s.includes('AR-IN'))return'AR-IN';if(s.includes('BASKET'))return'Basket';if(s.includes('OVEN'))return'Oven';if(s.includes('SECTOR'))return'Sectoring';if(s.includes('DERING')||s.includes('DE-RING'))return'DeRing';if(s==='AR OUT'||s.includes('AR-OUT'))return'AR-OUT';return String(value||'').trim();}
+function getARHourRank(value){const key=normalizeARHourKey(value);const parts=key.split(':').map(Number);return (parts[0]||0)*60+(parts[1]||0);}
+function isValidAROperator(name){const key=String(name||'').trim().toUpperCase();return Boolean(key&&key!=='UNASSIGNED / NO OPERATOR'&&!key.includes('NO OPERATOR')&&!key.includes('UNASSIGNED'));}
+function buildARLiveStaffing(payload){
+  const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
+  const byOperatorStation={};
+
+  rows.forEach(row=>{
+    const name=String(row.Operator??row.operator??'').trim();
+    if(!isValidAROperator(name))return;
+
+    const station=normalizeARRole(
+      row.FlowStation??row.flowStation??row.AccessPoint??row.accessPoint??''
+    );
+    if(!AR_STATION_ORDER.includes(station))return;
+
+    const operatorKey=name.toUpperCase();
+    const recordKey=`${operatorKey}::${station}`;
+    const hours=row.Hours??row.hours??{};
+
+    if(!byOperatorStation[recordKey]){
+      byOperatorStation[recordKey]={
+        name,
+        operatorKey,
+        station,
+        accessPoint:String(row.AccessPoint??row.accessPoint??station),
+        hourlyOutputs:{},
+        totalOutput:0,
+        firstRank:Infinity,
+        firstHour:'',
+        firstHourLabel:'',
+        lastRank:-Infinity,
+        lastHour:'',
+        lastHourLabel:'',
+        lastHourOutput:0
+      };
+    }
+
+    const record=byOperatorStation[recordKey];
+
+    Object.entries(hours).forEach(([hour,value])=>{
+      const output=Math.max(0,toARNumber(value));
+      if(output<=0)return;
+
+      const normalizedHour=normalizeARHourKey(hour);
+      const rank=getARHourRank(hour);
+      if(!Number.isFinite(rank))return;
+
+      record.hourlyOutputs[normalizedHour]=(record.hourlyOutputs[normalizedHour]||0)+output;
+      record.totalOutput+=output;
+
+      if(rank<record.firstRank){
+        record.firstRank=rank;
+        record.firstHour=normalizedHour;
+        record.firstHourLabel=formatARHourLabel(hour);
+      }
+
+      if(rank>record.lastRank){
+        record.lastRank=rank;
+        record.lastHour=normalizedHour;
+        record.lastHourLabel=formatARHourLabel(hour);
+        record.lastHourOutput=output;
+      }else if(rank===record.lastRank){
+        record.lastHourOutput+=output;
+      }
+    });
+  });
+
+  const grouped={};
+
+  Object.values(byOperatorStation)
+    .filter(record=>record.totalOutput>0)
+    .forEach(record=>{
+      const list=grouped[record.operatorKey]||(grouped[record.operatorKey]=[]);
+      list.push(record);
+    });
+
+  return Object.values(grouped)
+    .map(records=>{
+      records.sort((a,b)=>
+        b.lastRank-a.lastRank||
+        AR_STATION_ORDER.indexOf(b.station)-AR_STATION_ORDER.indexOf(a.station)
+      );
+
+      const current=records[0];
+      const otherStations=records.slice(1).map(record=>({
+        station:record.station,
+        output:record.lastHourOutput,
+        totalOutput:record.totalOutput
+      }));
+
+      return{
+        ...current,
+        otherStations,
+        dailyOutput:current.totalOutput,
+        finalJph:current.station==='Oven'?0:(AR_DEFAULT_JPH[current.station]||0),
+        status:otherStations.length?'Moved / Multi-area':'Active'
+      };
+    })
+    .sort((a,b)=>
+      AR_STATION_ORDER.indexOf(a.station)-
+      AR_STATION_ORDER.indexOf(b.station)||
+      a.name.localeCompare(b.name)
+    );
+}
+function getARStationRoster(){const out={};AR_STATION_ORDER.forEach(s=>out[s]=[]);AR_FORECAST_STATE.liveStaff.forEach(person=>{if(out[person.station])out[person.station].push({...person,weight:1,effectiveJph:person.finalJph});});return out;}
+
+function readARMorningPlanInputs(){
+  const map={
+    arIn:'arPlanArIn',
+    basket:'arPlanBasket',
+    sectoring:'arPlanSectoring',
+    deRing:'arPlanDeRing',
+    arOut:'arPlanArOut'
+  };
+
+  Object.entries(map).forEach(([key,id])=>{
+    const el=document.getElementById(id);
+    if(el)AR_FORECAST_STATE.morningPlan[key]=Math.max(0,toARNumber(el.value));
+  });
+}
+
+function writeARMorningPlanInputs(){
+  const map={
+    arIn:'arPlanArIn',
+    basket:'arPlanBasket',
+    sectoring:'arPlanSectoring',
+    deRing:'arPlanDeRing',
+    arOut:'arPlanArOut'
+  };
+
+  Object.entries(map).forEach(([key,id])=>{
+    const el=document.getElementById(id);
+    if(el)el.value=AR_FORECAST_STATE.morningPlan[key];
+  });
+}
+
+function getARPlannedStationCounts(){
+  const p=AR_FORECAST_STATE.morningPlan||AR_DEFAULT_MORNING_PLAN;
+  return{
+    'AR-IN':Math.max(0,toARNumber(p.arIn)),
+    'Basket':Math.max(0,toARNumber(p.basket)),
+    'Oven':0,
+    'Sectoring':Math.max(0,toARNumber(p.sectoring)),
+    'DeRing':Math.max(0,toARNumber(p.deRing)),
+    'AR-OUT':Math.max(0,toARNumber(p.arOut))
+  };
+}
+
+function getARPlannedStationCapacities(remainingHours){
+  const counts=getARPlannedStationCounts();
+
+  return AR_STATION_ORDER.map(station=>{
+    const currentAssociates=counts[station]||0;
+    const stationJph=station==='Oven'?0:(AR_DEFAULT_JPH[station]||0);
+    const usableJph=station==='Oven'?0:currentAssociates*stationJph;
+
+    return{
+      station,
+      associates:[],
+      detectedAssociates:0,
+      currentAssociates,
+      stationJph,
+      usableJph,
+      isManual:true,
+      source:'planned',
+      remainingCapacity:station==='Oven'
+        ? Infinity
+        : Math.max(0,usableJph*remainingHours)
+    };
+  });
+}
+
+function getAREffectiveStationCapacities(remainingHours){
+  const live=getARStationCapacities(remainingHours);
+  const planned=getARPlannedStationCapacities(remainingHours);
+  const plannedMap=Object.fromEntries(planned.map(row=>[row.station,row]));
+
+  return live.map(row=>{
+    if(row.station==='Oven')return{...row,source:'process'};
+
+    // Switch station-by-station. A station keeps its morning plan until
+    // at least one associate has produced a positive live scan there.
+    if(row.detectedAssociates>0){
+      return{...row,source:'live'};
+    }
+
+    return{...plannedMap[row.station],detectedAssociates:0,source:'planned'};
+  });
+}
+
+function getARCellMetrics(){
+  const roster=getARStationRoster();
+  const plan=getARPlannedStationCounts();
+
+  const liveCounts={
+    outside:(roster['AR-IN']||[]).length+(roster['AR-OUT']||[]).length,
+    middle:(roster['Basket']||[]).length,
+    inside:(roster['Oven']||[]).length+(roster['Sectoring']||[]).length+(roster['DeRing']||[]).length
+  };
+
+  const plannedCounts={
+    outside:plan['AR-IN']+plan['AR-OUT'],
+    middle:plan['Basket'],
+    inside:plan['Sectoring']+plan['DeRing']
+  };
+
+  const plannedCapacity={
+    outside:Math.min(
+      plan['AR-IN']*(AR_DEFAULT_JPH['AR-IN']||0),
+      plan['AR-OUT']*(AR_DEFAULT_JPH['AR-OUT']||0)
+    ),
+    middle:plan['Basket']*(AR_DEFAULT_JPH['Basket']||0),
+    inside:Math.min(
+      plan['Sectoring']*(AR_DEFAULT_JPH['Sectoring']||0),
+      plan['DeRing']*(AR_DEFAULT_JPH['DeRing']||0)
+    )
+  };
+
+  return{liveCounts,plannedCounts,plannedCapacity};
+}
+
+function renderARMorningPlan(){
+  const m=getARCellMetrics();
+
+  setTextSafe('arPlanOutsideTotal',round1(m.plannedCounts.outside));
+  setTextSafe('arPlanMiddleTotal',round1(m.plannedCounts.middle));
+  setTextSafe('arPlanInsideTotal',round1(m.plannedCounts.inside));
+
+  setTextSafe('arPlanOutsideCapacity',`${round1(m.plannedCapacity.outside)} JPH`);
+  setTextSafe('arPlanMiddleCapacity',`${round1(m.plannedCapacity.middle)} JPH`);
+  setTextSafe('arPlanInsideCapacity',`${round1(m.plannedCapacity.inside)} JPH`);
+
+  setTextSafe('arLiveOutsideTotal',round1(m.liveCounts.outside));
+  setTextSafe('arLiveMiddleTotal',round1(m.liveCounts.middle));
+  setTextSafe('arLiveInsideTotal',round1(m.liveCounts.inside));
+
+  const variance=(live,planned)=>live-planned;
+  const formatVariance=value=>`${value>0?'+':''}${round1(value)}`;
+
+  setTextSafe('arOutsideVariance',formatVariance(variance(m.liveCounts.outside,m.plannedCounts.outside)));
+  setTextSafe('arMiddleVariance',formatVariance(variance(m.liveCounts.middle,m.plannedCounts.middle)));
+  setTextSafe('arInsideVariance',formatVariance(variance(m.liveCounts.inside,m.plannedCounts.inside)));
+
+  const liveStations=new Set((AR_FORECAST_STATE.liveStaff||[]).map(person=>person.station));
+  const totalLive=AR_FORECAST_STATE.liveStaff.length;
+
+  setTextSafe(
+    'arPlanForecastMode',
+    totalLive
+      ? 'Forecast blending planned and live staffing'
+      : 'Forecast using planned morning staffing'
+  );
+
+  setTextSafe(
+    'arPlanForecastMeta',
+    totalLive
+      ? `${liveStations.size} station(s) are using live staffing. Stations without scans still use the morning plan.`
+      : 'Live scanning has not started. The forecast is using the saved morning plan.'
+  );
+}
+
+async function saveARMorningPlan(){
+  readARMorningPlanInputs();
+  saveARLocalState();
+
+  const payload={
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    config:{...AR_FORECAST_STATE.config},
+    morningPlan:{...AR_FORECAST_STATE.morningPlan}
+  };
+
+  const btn=document.getElementById('arSaveMorningPlanBtn');
+  const originalText=btn?.textContent||'Save Morning Plan';
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Saving...';
+  }
+
+  const response=await postARForecastApi('saveCurrentState',payload);
+
+  if(btn){
+    btn.disabled=false;
+    btn.textContent=originalText;
+  }
+
+  if(!response||!response.ok){
+    const message=response?.error||'Morning staffing plan could not be saved.';
+    setTextSafe('arMorningPlanStatus',message);
+    showARMessage(message);
+    return;
+  }
+
+  setTextSafe(
+    'arMorningPlanStatus',
+    `Morning staffing plan saved for ${payload.date||'current date'}.`
+  );
+  showARMessage('AR morning staffing plan saved.');
+}
+
+function getARStationCapacities(remainingHours){
+  const roster=getARStationRoster();
+
+  return AR_STATION_ORDER.map(station=>{
+    const associates=roster[station]||[];
+    const detectedAssociates=associates.length;
+    const currentAssociates=station==='Oven'
+      ? detectedAssociates
+      : getARCapacityAssociateCount(station,detectedAssociates);
+    const stationJph=station==='Oven'?0:(AR_DEFAULT_JPH[station]||0);
+    const usableJph=station==='Oven'?0:currentAssociates*stationJph;
+
+    return{
+      station,
+      associates,
+      detectedAssociates,
+      currentAssociates,
+      stationJph,
+      usableJph,
+      isManual:
+        station!=='Oven'&&
+        Number.isFinite(Number(AR_FORECAST_STATE.staffingCapacityOverrides?.[station])),
+      remainingCapacity:station==='Oven'
+        ? Infinity
+        : Math.max(0,usableJph*remainingHours)
+    };
+  });
+}
+function mergeARHourlyFromLiveSources(flowPayload,operatorPayload){
+  const flowCombined={};
+  const operatorCombined={};
+
+  const flowRows=Array.isArray(flowPayload?.hourlyActivity)
+    ?flowPayload.hourlyActivity
+    :[];
+
+  flowRows.forEach(row=>{
+    const station=normalizeARRole(
+      row.FlowStep??row.DisplayName??row.FlowStation??row.AccessPoint??''
+    );
+
+    if(station!=='AR-IN'&&station!=='AR-OUT')return;
+
+    Object.entries(row.Hours??row.hours??{}).forEach(([hour,value])=>{
+      const jobs=Math.max(0,toARNumber(value));
+      addARHour(
+        flowCombined,
+        hour,
+        station==='AR-IN'?jobs:0,
+        station==='AR-OUT'?jobs:0
+      );
+    });
+  });
+
+  const operatorRows=Array.isArray(operatorPayload?.operatorActivity)
+    ?operatorPayload.operatorActivity
+    :[];
+
+  operatorRows.forEach(row=>{
+    const station=normalizeARRole(
+      row.FlowStation??row.flowStation??row.AccessPoint??row.accessPoint??''
+    );
+
+    if(station!=='AR-IN'&&station!=='AR-OUT')return;
+
+    Object.entries(row.Hours??row.hours??{}).forEach(([hour,value])=>{
+      const jobs=Math.max(0,toARNumber(value));
+      addARHour(
+        operatorCombined,
+        hour,
+        station==='AR-IN'?jobs:0,
+        station==='AR-OUT'?jobs:0
+      );
+    });
+  });
+
+  const combined={};
+  const allHours=new Set([
+    ...Object.keys(flowCombined),
+    ...Object.keys(operatorCombined)
+  ]);
+
+  allHours.forEach(hour=>{
+    const flow=flowCombined[hour]||{};
+    const operator=operatorCombined[hour]||{};
+
+    // Use the production-flow value only when it contains real output.
+    // Otherwise use operator activity, which drives the live staffing cards.
+    combined[hour]={
+      arIn:toARNumber(flow.arIn)>0
+        ?toARNumber(flow.arIn)
+        :toARNumber(operator.arIn),
+      arOut:toARNumber(flow.arOut)>0
+        ?toARNumber(flow.arOut)
+        :toARNumber(operator.arOut)
+    };
+  });
+
+  AR_FORECAST_STATE.hourly=combined;
+}
+function addARHour(target,key,arin,arout){const h=normalizeARHourKey(key);if(!target[h])target[h]={arIn:0,arOut:0};target[h].arIn+=arin;target[h].arOut+=arout;}
+function buildARHourlyRows(){
+  const body=document.getElementById('arHourlyRows');
+  if(!body)return;
+
+  const w=getShiftWindow(getValue('shiftMode','Weekday'));
+  const start=parseTimeToMinutes(w.start)||420;
+  const end=parseTimeToMinutes(w.end)||1050;
+  const slots=buildPerformanceHourSlots(start,end);
+
+  body.innerHTML='';
+
+  slots.forEach(slot=>{
+    const key=minutesToHourKey(Math.floor(slot.start/60)*60);
+    const api=AR_FORECAST_STATE.hourly[key]||{};
+    const manual=AR_FORECAST_STATE.manualHourly[key]||{};
+
+    // AR-IN and AR-OUT always come from RAW_ACTIVITY_CURRENT.
+    // Old saved manual zeroes are intentionally ignored.
+    const arIn=toARNumber(api.arIn);
+    const arOut=toARNumber(api.arOut);
+
+    const maint=Boolean(manual.maintenance);
+    const delay=maint
+      ? toARNumber(manual.delay||AR_FORECAST_STATE.config.maintenanceDelay)
+      : 0;
+
+    const tr=document.createElement('tr');
+    tr.className='ar-hour-row';
+    tr.dataset.hour=key;
+
+    tr.innerHTML=`
+      <td><input class="ar-hour-label" value="${escapeHtml(slot.label)}" readonly></td>
+      <td>
+        <input class="ar-hour-in ar-hour-auto" type="number" min="0" step="1"
+          value="${arIn||''}" readonly title="Automatic from RAW_ACTIVITY_CURRENT">
+      </td>
+      <td>
+        <input class="ar-hour-out ar-hour-auto" type="number" min="0" step="1"
+          value="${arOut||''}" readonly title="Automatic from RAW_ACTIVITY_CURRENT">
+      </td>
+      <td class="ar-runs-in">${completeARRuns(arIn)}</td>
+      <td class="ar-runs-out">${completeARRuns(arOut)}</td>
+      <td><input class="ar-hour-maint" type="checkbox" ${maint?'checked':''}></td>
+      <td>
+        <input class="ar-delay-input" type="number" min="0" step="5"
+          value="${delay||AR_FORECAST_STATE.config.maintenanceDelay}" ${maint?'':'disabled'}>
+      </td>
+      <td class="ar-projection-cell">--</td>
+      <td><input class="ar-hour-note" type="text" value="${escapeHtml(manual.note||'')}"></td>`;
+
+    body.appendChild(tr);
+
+    tr.querySelector('.ar-hour-maint')?.addEventListener('change',()=>updateARHourlyRow(tr));
+    tr.querySelector('.ar-delay-input')?.addEventListener('input',()=>updateARHourlyRow(tr));
+    tr.querySelector('.ar-hour-note')?.addEventListener('input',()=>updateARHourlyRow(tr));
+
+    updateARHourlyRow(tr,false);
+  });
+}
+
+function updateARHourlyRow(row,save=true){
+  const key=row.dataset.hour;
+  const maintenance=row.querySelector('.ar-hour-maint')?.checked;
+  const delayInput=row.querySelector('.ar-delay-input');
+
+  if(delayInput)delayInput.disabled=!maintenance;
+
+  const api=AR_FORECAST_STATE.hourly[key]||{};
+  const arIn=toARNumber(api.arIn);
+  const arOut=toARNumber(api.arOut);
+
+  const data={
+    maintenance,
+    delay:maintenance
+      ? toARNumber(delayInput?.value||AR_FORECAST_STATE.config.maintenanceDelay)
+      : 0,
+    note:String(row.querySelector('.ar-hour-note')?.value||'')
+  };
+
+  // Save only maintenance, delay, and note.
+  // AR-IN / AR-OUT are always refreshed from the Production Flow API.
+  AR_FORECAST_STATE.manualHourly[key]=data;
+
+  const arInInput=row.querySelector('.ar-hour-in');
+  const arOutInput=row.querySelector('.ar-hour-out');
+
+  if(arInInput)arInInput.value=arIn||'';
+  if(arOutInput)arOutInput.value=arOut||'';
+
+  row.querySelector('.ar-runs-in').textContent=completeARRuns(arIn);
+  row.querySelector('.ar-runs-out').textContent=completeARRuns(arOut);
+  row.querySelector('.ar-projection-cell').textContent=getARProjectedCompletionLabel(
+    key,
+    {arIn,arOut,maintenance,delay:data.delay,note:data.note}
+  );
+
+  if(save){
+    saveARLocalState();
+    calculateARForecast();
+  }
+}
+
+function getARProjectedCompletionLabel(key,data){if(!data.arIn)return'--';const[h,m]=key.split(':').map(Number),d=new Date();d.setHours(h,m||0,0,0);d.setMinutes(d.getMinutes()+getARTotalPipelineMinutes()+toARNumber(data.delay));return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+
+function estimateARMaturedJobs(live,remainingMinutes,totalDelayMinutes){
+  const c=AR_FORECAST_STATE.config;
+  const usableMinutes=Math.max(
+    0,
+    toARNumber(remainingMinutes)-toARNumber(totalDelayMinutes)
+  );
+
+  // RAW WIP represents the last completed scan location.
+  // Count a station's current WIP only when enough shift time remains
+  // for that work to clear every downstream AR process and AR-OUT.
+  const stages=[
+    {
+      jobs:toARNumber(live?.deRing),
+      minutes:c.arOut
+    },
+    {
+      jobs:toARNumber(live?.sectoring),
+      minutes:c.chamber+c.deRing+c.arOut
+    },
+    {
+      jobs:toARNumber(live?.oven),
+      minutes:c.sectoring+c.chamber+c.deRing+c.arOut
+    },
+    {
+      jobs:toARNumber(live?.basket),
+      minutes:c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut
+    },
+    {
+      jobs:toARNumber(live?.arIn),
+      minutes:c.basket+c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut
+    }
+  ];
+
+  return stages.reduce((sum,stage)=>{
+    return sum+(usableMinutes>=stage.minutes?stage.jobs:0);
+  },0);
+}
+
+
+function projectAROutFromHourly(currentOut,hourly,remainingHours){
+  const rows=Array.isArray(hourly)?hourly:[];
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  const completedRows=rows.filter(row=>{
+    const hourMinutes=parseTimeToMinutes(row.hour);
+    return hourMinutes!==null&&hourMinutes<=nowMinutes;
+  });
+
+  const usableRows=completedRows.length?completedRows:rows;
+  const outputs=usableRows.map(row=>toARNumber(row.arOut));
+
+  // Use elapsed scheduled hours, including zero-output hours, so the pace
+  // projection does not become artificially high by ignoring downtime.
+  const elapsedHours=Math.max(0,usableRows.length);
+  const produced=outputs.reduce((sum,value)=>sum+value,0);
+
+  if(elapsedHours<=0||produced<=0){
+    return Math.max(0,toARNumber(currentOut));
+  }
+
+  const averageOutPerHour=produced/elapsedHours;
+  const additionalProjection=Math.max(
+    0,
+    averageOutPerHour*Math.max(0,toARNumber(remainingHours))
+  );
+
+  return Math.max(
+    toARNumber(currentOut),
+    toARNumber(currentOut)+additionalProjection
+  );
+}
+
+
+function getARWipFocus(live){
+  return [
+    ['AR-IN',toARNumber(live?.arIn)],
+    ['Basket / T40',toARNumber(live?.basket)],
+    ['Oven / Cooling',toARNumber(live?.oven)],
+    ['Sector / Chamber',toARNumber(live?.sectoring)],
+    ['DeRing',toARNumber(live?.deRing)]
+  ].sort((a,b)=>b[1]-a[1])[0]||['No WIP',0];
+}
+
+function getARLaborFocus(caps,live){
+  const wipByStation={
+    'AR-IN':toARNumber(live?.arIn),
+    'Basket':toARNumber(live?.basket),
+    'Oven':toARNumber(live?.oven),
+    'Sectoring':toARNumber(live?.sectoring),
+    'DeRing':toARNumber(live?.deRing),
+    'AR-OUT':toARNumber(live?.deRing)
+  };
+
+  const ranked=(Array.isArray(caps)?caps:[])
+    .filter(row=>row.station!=='Oven')
+    .map(row=>{
+      const wip=wipByStation[row.station]||0;
+      const usableJph=toARNumber(row.usableJph);
+
+      return{
+        ...row,
+        wip,
+        clearMin:usableJph>0?(wip/usableJph)*60:Infinity
+      };
+    })
+    .sort((a,b)=>b.clearMin-a.clearMin);
+
+  const focus=ranked[0];
+
+  if(!focus){
+    return{
+      name:'No staffing',
+      reason:'No AR station capacity available'
+    };
+  }
+
+  return{
+    name:focus.station,
+    reason:Number.isFinite(focus.clearMin)
+      ? `${Math.round(focus.clearMin)} min to clear ${formatARNumber(focus.wip)} WIP at ${round1(focus.usableJph)} JPH`
+      : 'No usable JPH assigned'
+  };
+}
+
+function getARExpectedByNow(goal){
+  const numericGoal=toARNumber(goal);
+  if(numericGoal<=0)return 0;
+
+  const shift=getShiftWindow(getValue('shiftMode','Weekday'));
+  const start=parseTimeToMinutes(shift.start)||420;
+  const end=parseTimeToMinutes(shift.end)||1050;
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  const ratio=Math.max(
+    0,
+    Math.min(1,(nowMinutes-start)/Math.max(1,end-start))
+  );
+
+  return numericGoal*ratio;
+}
+
+function calculateARForecast(){
+  readARConfigFromInputs();
+
+  const live=getARLiveValues();
+  const runSize=Math.max(1,AR_FORECAST_STATE.config.runSize);
+  const liveInside=calculateCurrentARInsideWip(live);
+  const bosWip=getARBosWip(live);
+  const surfaceFeed=toARNumber(live.surface);
+  const totalWorkAvailable=Math.max(0,bosWip+surfaceFeed);
+
+  const hourly=collectARHourlyData();
+  const totalDelay=hourly.reduce(
+    (sum,row)=>sum+(row.maintenance?row.delay:0),
+    0
+  );
+
+  const currentOut=Math.max(
+    toARNumber(live.arOut),
+    hourly.reduce((sum,row)=>sum+toARNumber(row.arOut),0)
+  );
+
+  const windowInfo=getShiftWindow(getValue('shiftMode','Weekday'));
+  const now=new Date();
+  const endMinutes=parseTimeToMinutes(windowInfo.end)||1050;
+  const endDate=new Date();
+  endDate.setHours(Math.floor(endMinutes/60),endMinutes%60,0,0);
+
+  const remainingMin=Math.max(0,(endDate-now)/60000);
+  const remainingHours=remainingMin/60;
+
+  const maturedJobs=estimateARMaturedJobs(live,remainingMin,totalDelay);
+  const liveStationCaps=getARStationCapacities(remainingHours);
+  const plannedStationCaps=getARPlannedStationCapacities(remainingHours);
+  const stationCaps=getAREffectiveStationCapacities(remainingHours);
+  const laborCaps=stationCaps
+    .filter(row=>row.station!=='Oven')
+    .map(row=>row.remainingCapacity);
+  const laborCeiling=laborCaps.length?Math.min(...laborCaps):0;
+
+  const remainingAvailableWork=Math.max(
+    0,
+    totalWorkAvailable-currentOut
+  );
+
+  const paceProjection=projectAROutFromHourly(
+    currentOut,
+    hourly,
+    remainingHours
+  );
+
+  const pipelinePotential=Math.max(
+    0,
+    Math.min(
+      remainingAvailableWork,
+      maturedJobs+surfaceFeed
+    )
+  );
+
+  const laborAdditional=laborCeiling>0
+    ? Math.min(pipelinePotential,laborCeiling)
+    : 0;
+
+  const projectedAdditional=Math.max(
+    0,
+    Math.min(
+      remainingAvailableWork,
+      pipelinePotential,
+      laborAdditional||pipelinePotential
+    )
+  );
+
+  const capacityProjection=currentOut+projectedAdditional;
+  const projectedOut=Math.max(
+    currentOut,
+    Math.round(
+      Math.min(
+        totalWorkAvailable,
+        paceProjection>currentOut
+          ? Math.max(capacityProjection,paceProjection)
+          : capacityProjection
+      )
+    )
+  );
+
+  const low=Math.max(
+    currentOut,
+    Math.round(Math.min(projectedOut,paceProjection||projectedOut))
+  );
+  const high=Math.max(
+    projectedOut,
+    Math.round(Math.min(totalWorkAvailable,capacityProjection))
+  );
+
+  const runsCompleted=completeARRuns(currentOut);
+  const runsProjected=completeARRuns(projectedOut);
+  const bosRuns=bosWip/runSize;
+  const feedRuns=surfaceFeed/runSize;
+  const projectedRunsExact=projectedOut/runSize;
+  const projectedEosWip=Math.max(0,totalWorkAvailable-projectedOut);
+
+  const focus=getARLaborFocus(stationCaps,live);
+  const wipFocus=getARWipFocus(live);
+  const goal=AR_FORECAST_STATE.config.goal;
+  const expectedNow=getARExpectedByNow(goal,currentOut);
+  const pacePct=expectedNow>0?currentOut/expectedNow:0;
+
+  AR_FORECAST_STATE.calculated={
+    live,
+    liveInside,
+    bosWip,
+    bosRuns,
+    surfaceFeed,
+    feedRuns,
+    totalWorkAvailable,
+    remainingAvailableWork,
+    projectedEosWip,
+    projectedRunsExact,
+    currentOut,
+    projectedOut,
+    low,
+    high,
+    runsCompleted,
+    runsProjected,
+    totalDelay,
+    focus,
+    wipFocus,
+    remainingMin,
+    remainingHours,
+    stationCaps,
+    liveStationCaps,
+    plannedStationCaps,
+    staffingMode:AR_FORECAST_STATE.liveStaff.length?'blended':'planned',
+    maturedJobs,
+    laborCeiling,
+    availableJobs:totalWorkAvailable,
+    goal,
+    expectedNow
+  };
+
+  renderARBosSetup(live,bosWip);
+  renderARForecastAll(AR_FORECAST_STATE.calculated,hourly,pacePct);
+}
+function renderARForecastAll(r,hourly,pacePct){
+  setTextSafe('arKpiCurrentOut',formatARNumber(r.currentOut));
+  setTextSafe('arKpiProjectedOut',formatARNumber(r.projectedOut));
+
+  const arGoal=Math.max(0,toARNumber(r.goal));
+  const arExpectedNow=Math.max(0,toARNumber(r.expectedNow));
+  const arProjectedGap=arGoal>0?r.projectedOut-arGoal:0;
+  const arPaceGap=r.currentOut-arExpectedNow;
+  const arRemainingHours=Math.max(0,toARNumber(r.remainingHours));
+  const arJobsNeeded=Math.max(0,arGoal-r.currentOut);
+  const arRecoveryJph=arGoal>0&&arRemainingHours>0
+    ? arJobsNeeded/arRemainingHours
+    : 0;
+
+  setTextSafe('arKpiGoal',formatARNumber(arGoal));
+  setTextSafe(
+    'arKpiGoalMeta',
+    arGoal>0
+      ? `${Math.abs(Math.round(arProjectedGap))} jobs ${arProjectedGap>=0?'above':'below'} projected goal`
+      : 'No AR goal entered'
+  );
+
+  setTextSafe('arKpiExpectedNow',formatARNumber(Math.round(arExpectedNow)));
+  setTextSafe(
+    'arKpiPaceMeta',
+    arGoal>0
+      ? `${Math.abs(Math.round(arPaceGap))} jobs ${arPaceGap>=0?'ahead of':'behind'} pace`
+      : 'Enter an AR goal to compare pace'
+  );
+
+  setTextSafe('arKpiRecoveryJph',`${Math.round(arRecoveryJph)} JPH`);
+  setTextSafe(
+    'arKpiRecoveryMeta',
+    arGoal<=0
+      ? 'No AR goal entered'
+      : arProjectedGap>=0
+        ? 'No recovery needed at projected pace'
+        : `${formatARNumber(Math.max(0,arGoal-r.projectedOut))} projected jobs still needed`
+  );
+
+  setTextSafe(
+    'arKpiGoalGap',
+    arGoal>0
+      ? `${arProjectedGap>=0?'+':'-'}${formatARNumber(Math.abs(Math.round(arProjectedGap)))}`
+      : '0'
+  );
+  setTextSafe(
+    'arKpiGoalGapMeta',
+    arGoal>0
+      ? `Projected ${formatARNumber(r.projectedOut)} vs target ${formatARNumber(arGoal)}`
+      : 'Projected vs target'
+  );
+
+  const arGoalCard=document.getElementById('arKpiGoalCard');
+  const arExpectedCard=document.getElementById('arKpiExpectedCard');
+  const arRecoveryCard=document.getElementById('arKpiRecoveryCard');
+  const arGapCard=document.getElementById('arKpiGapCard');
+
+  [arGoalCard,arExpectedCard,arRecoveryCard,arGapCard].forEach(card=>{
+    if(!card)return;
+    card.classList.remove('danger','success','warning');
+  });
+
+  if(arGoal>0){
+    const paceRatio=arExpectedNow>0?r.currentOut/arExpectedNow:0;
+
+    if(arProjectedGap>=0){
+      arGoalCard?.classList.add('success');
+      arGapCard?.classList.add('success');
+      arRecoveryCard?.classList.add('success');
+    }else{
+      arGoalCard?.classList.add('danger');
+      arGapCard?.classList.add('danger');
+      arRecoveryCard?.classList.add('danger');
+    }
+
+    if(paceRatio>=1){
+      arExpectedCard?.classList.add('success');
+    }else if(paceRatio>=0.9){
+      arExpectedCard?.classList.add('warning');
+    }else{
+      arExpectedCard?.classList.add('danger');
+    }
+  }
+  setTextSafe('arKpiRunsCompleted',r.runsCompleted);
+  setTextSafe('arKpiRunsProjected',round1(r.projectedRunsExact));
+  setTextSafe('arKpiWip',formatARNumber(r.bosWip));
+  setTextSafe(
+    'arBosWipMeta',
+    `${round1(r.bosRuns)} BOS runs · ${formatARNumber(r.liveInside)} live AR WIP now`
+  );
+  setTextSafe('arKpiSurfaceFeed',formatARNumber(r.surfaceFeed));
+  setTextSafe('arKpiMaintenance',`${r.totalDelay} min`);
+  setTextSafe(
+    'arMaintenanceMeta',
+    r.totalDelay
+      ? `${hourly.filter(row=>row.maintenance).length} affected hour(s)`
+      : 'No affected hours'
+  );
+  setTextSafe('arKpiFocus',r.focus.name);
+  setTextSafe('arFocusMeta',r.focus.reason);
+
+  setTextSafe('arSummaryRange',`${formatARNumber(r.low)} - ${formatARNumber(r.high)}`);
+  setTextSafe('arSummaryProjected',formatARNumber(r.projectedOut));
+  setTextSafe('arSummaryGoal',round1(r.bosRuns));
+  setTextSafe(
+    'arSummaryBosRunsMeta',
+    `${formatARNumber(r.bosWip)} BOS jobs ÷ ${AR_FORECAST_STATE.config.runSize}`
+  );
+  setTextSafe(
+    'arSummaryCapacity',
+    formatARNumber(
+      Math.min(
+        r.totalWorkAvailable,
+        r.currentOut+Math.max(0,r.laborCeiling)
+      )
+    )
+  );
+
+  setTextSafe(
+    'arSummaryNarrative',
+    `BOS AR WIP is ${formatARNumber(r.bosWip)} jobs (${round1(r.bosRuns)} runs). `+
+    `Surface Inspection currently adds up to ${formatARNumber(r.surfaceFeed)} jobs (${round1(r.feedRuns)} runs) of incoming feed. `+
+    `Projected AR-OUT is ${formatARNumber(r.projectedOut)} with ${formatARNumber(r.projectedEosWip)} jobs projected to remain.`
+  );
+
+  setTextSafe('arStructuralBottleneck',r.focus.name);
+  setTextSafe('arStructuralMeta',r.focus.reason);
+  setTextSafe('arLiveWipFocus',r.wipFocus[0]);
+  setTextSafe('arLiveWipMeta',`${formatARNumber(r.wipFocus[1])} live WIP`);
+
+  const next=getARNextRunCompletion(r.live,r.totalDelay);
+  setTextSafe('arSummaryNextCompletion',next.label);
+  setTextSafe('arSummaryNextCompletionMeta',next.meta);
+
+  const gap=r.goal?r.projectedOut-r.goal:0;
+  setTextSafe(
+    'arSummaryGoalGap',
+    r.goal
+      ? `${Math.abs(gap)} jobs ${gap>=0?'above':'below'}`
+      : `${formatARNumber(r.projectedEosWip)} jobs`
+  );
+  setTextSafe(
+    'arSummaryGoalMeta',
+    r.goal
+      ? `Goal ${formatARNumber(r.goal)}`
+      : 'Projected EOS AR WIP'
+  );
+
+  setTextSafe(
+    'arProjectedOutMeta',
+    `${round1(r.projectedRunsExact)} projected runs · ${Math.round(r.remainingMin)} min remain`
+  );
+  setTextSafe(
+    'arRunsProjectedMeta',
+    `${Math.max(0,round1(r.projectedRunsExact-r.currentOut/AR_FORECAST_STATE.config.runSize))} additional runs`
+  );
+
+  renderARStage('ArIn',r.live.arIn);
+  renderARStage('Basket',r.live.basket);
+  renderARStage('Oven',r.live.oven);
+  renderARStage('Sectoring',r.live.sectoring);
+  renderARStage('DeRing',r.live.deRing);
+  renderARStage('ArOut',r.currentOut);
+
+  highlightARStage(r.focus.name);
+  renderARGoalPlan(r);
+  renderARBottleneckTable(r);
+  renderARRecommendations(r);
+  renderARHourlyCards(hourly,r);
+  renderARPace(r,pacePct);
+  renderARStaffingCards();
+  renderARMorningPlan();
+
+  setTextSafe(
+    'arPipelineStatus',
+    `${getARTotalPipelineMinutes()} min normal flow · ${AR_FORECAST_STATE.config.runSize} jobs = 1 run`
+  );
+
+  if(AR_FORECAST_STATE.department==='AR'){
+    setTextSafe(
+      'lastUpdated',
+      new Date().toLocaleString(
+        'en-US',
+        {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}
+      )
+    );
+  }
+}
+function renderARGoalPlan(r){
+  const body=document.getElementById('arGoalPlanTable');
+  const summary=document.getElementById('arGoalPlanSummary');
+  if(!body||!summary)return;
+
+  const remainingGoal=Math.max(0,r.goal-r.currentOut);
+  const requiredJph=r.remainingHours>0?remainingGoal/r.remainingHours:0;
+
+  const rows=r.stationCaps
+    .filter(x=>x.station!=='Oven')
+    .map(x=>{
+      const defaultJph=AR_DEFAULT_JPH[x.station]||1;
+      const requiredAssociates=requiredJph/defaultJph;
+      const gap=Math.max(0,requiredAssociates-x.currentAssociates);
+      const status=x.usableJph>=requiredJph
+        ? 'ON TRACK'
+        : x.usableJph>=requiredJph*.9
+          ? 'WATCH'
+          : 'NEEDS ATTENTION';
+
+      return{...x,requiredJph,requiredAssociates,gap,status};
+    });
+
+  body.innerHTML=rows.map(x=>`
+    <tr>
+      <td>
+        <strong>${escapeHtml(x.station)}</strong>
+        <small class="ar-capacity-source">${x.source==='live'?'Live staffing':'Morning plan'}</small>
+      </td>
+      <td>${round1(x.requiredJph)}</td>
+      <td>${round1(x.usableJph)}</td>
+      <td>${round1(x.requiredAssociates)}</td>
+      <td>${round1(x.currentAssociates)}</td>
+      <td>${x.gap>0?'+'+round1(x.gap):'—'}</td>
+      <td><span class="status-pill ${x.status==='ON TRACK'?'status-green':x.status==='WATCH'?'status-amber':'status-red'}">${x.status}</span></td>
+    </tr>
+  `).join('');
+
+  const risks=rows.filter(x=>x.status!=='ON TRACK');
+
+  if(r.goal<=0){
+    summary.innerHTML='<p class="muted-cell">Set an AR Goal above 0 to calculate the staffing pace needed.</p>';
+  }else if(risks.length){
+    const sourceText=r.staffingMode==='planned'
+      ? 'The morning staffing plan is currently driving the forecast.'
+      : 'Live staffing is used where associates have started scanning; the morning plan remains active at stations without scans.';
+
+    summary.innerHTML=`<p class="goal-plan-short"><strong>${risks.length}</strong> AR station(s) are below the staffing pace needed for the remaining <strong>${formatARNumber(remainingGoal)}</strong> jobs. ${sourceText}</p>`;
+  }else{
+    summary.innerHTML=`<p class="goal-plan-ok">Current planned/live staffing supports the remaining goal of ${formatARNumber(remainingGoal)} jobs.</p>`;
+  }
+}
+function renderARBottleneckTable(r){const body=document.getElementById('arBottleneckTable');if(!body)return;const liveMap={'AR-IN':r.live.arIn,'Basket':r.live.basket,'Oven':r.live.oven,'Sectoring':r.live.sectoring,'DeRing':r.live.deRing,'AR-OUT':r.live.deRing};body.innerHTML=r.stationCaps.map(x=>{const w=liveMap[x.station]||0,clear=x.station==='Oven'?`${AR_FORECAST_STATE.config.oven} min process`:x.usableJph>0?`${Math.round(w/x.usableJph*60)} min`:'No JPH',signal=x.station==='Oven'?'WATCH':x.usableJph<=0?'AT RISK':w/x.usableJph*60>120?'AT RISK':w/x.usableJph*60>60?'WATCH':'OK';return`<tr><td><strong>${escapeHtml(x.station)}</strong></td><td>${round1(x.currentAssociates)}</td><td>${x.station==='Oven'?'Process':round1(x.usableJph)}</td><td>${x.station==='Oven'?'60 min cycle':formatARNumber(x.remainingCapacity)}</td><td>${formatARNumber(w)}</td><td>${completeARRuns(w)}</td><td>${clear}</td><td><span class="status-pill ${signal==='OK'?'status-green':signal==='WATCH'?'status-amber':'status-red'}">${signal}</span></td></tr>`;}).join('');}
+
+function ensureARLivePerformanceV16Styles(){
+  if(document.getElementById('arLivePerformanceV16Styles'))return;
+
+  const style=document.createElement('style');
+  style.id='arLivePerformanceV16Styles';
+  style.textContent=`
+    #arStaffingCards.ar-staffing-grid{
+      grid-template-columns:repeat(3,minmax(0,1fr))!important;
+      gap:18px!important;
+    }
+    #arStaffingCards .ar-staff-card{
+      min-width:0;
+      min-height:500px;
+      overflow:hidden;
+      border:1px solid rgba(92,132,188,.26);
+      border-radius:18px;
+      background:linear-gradient(145deg,#101928,#08111e);
+    }
+    #arStaffingCards .ar-staff-card-head{
+      padding:16px 16px 12px;
+    }
+    #arStaffingCards .ar-staff-card-head strong{
+      font-size:20px;
+    }
+    #arStaffingCards .ar-staff-card-head span{
+      color:#4de6ff;
+      font-family:'Share Tech Mono',monospace;
+      font-size:13px;
+      font-weight:800;
+    }
+    #arStaffingCards .ar-staff-summary{
+      grid-template-columns:repeat(3,minmax(0,1fr))!important;
+      gap:8px;
+      padding:0 14px 10px;
+    }
+    #arStaffingCards .ar-staff-summary>div{
+      min-width:0;
+      padding:11px 10px;
+      border:1px solid rgba(92,132,188,.18);
+      border-radius:11px;
+      background:rgba(255,255,255,.022);
+    }
+    #arStaffingCards .ar-staff-summary small{
+      display:block;
+      color:#8d9bb0;
+      font-size:11px;
+    }
+    #arStaffingCards .ar-staff-summary b{
+      display:block;
+      margin-top:5px;
+      color:#eef5ff;
+      font-size:17px;
+    }
+    #arStaffingCards .ar-associate-list{
+      max-height:360px;
+      overflow:auto;
+      padding:0 14px 14px;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(0,229,255,.38) rgba(255,255,255,.03);
+    }
+    #arStaffingCards .ar-associate-row{
+      display:grid!important;
+      grid-template-columns:minmax(0,1fr) auto!important;
+      gap:14px!important;
+      align-items:center!important;
+      margin-bottom:8px;
+      padding:12px!important;
+      border:1px solid rgba(92,132,188,.12);
+      border-radius:11px;
+      background:rgba(255,255,255,.025);
+    }
+    #arStaffingCards .ar-associate-row:hover{
+      border-color:rgba(0,229,255,.28);
+      background:rgba(0,229,255,.035);
+    }
+    #arStaffingCards .ar-person-main{
+      min-width:0;
+    }
+    #arStaffingCards .ar-person-main strong{
+      color:#f2f6ff;
+    }
+    #arStaffingCards .ar-person-main small{
+      display:block;
+      margin-top:4px;
+      color:#8e9db2;
+      line-height:1.35;
+    }
+    #arStaffingCards .ar-person-progress{
+      position:relative;
+      height:6px;
+      margin-top:10px;
+      overflow:hidden;
+      border-radius:999px;
+      background:#182437;
+    }
+    #arStaffingCards .ar-person-progress::after{
+      position:absolute;
+      inset:-2px auto -2px 90%;
+      width:1px;
+      background:rgba(255,189,61,.72);
+      content:'';
+    }
+    #arStaffingCards .ar-person-progress i{
+      display:block;
+      height:100%;
+      border-radius:inherit;
+    }
+    #arStaffingCards .ar-person-progress i.green{background:linear-gradient(90deg,#20bb84,#45e6a7)}
+    #arStaffingCards .ar-person-progress i.amber{background:linear-gradient(90deg,#df8d12,#ffbd3d)}
+    #arStaffingCards .ar-person-progress i.red{background:linear-gradient(90deg,#e44455,#ff6675)}
+    #arStaffingCards .ar-person-result{
+      display:grid;
+      justify-items:end;
+      gap:7px;
+      min-width:142px;
+    }
+    #arStaffingCards .ar-person-result em{
+      color:#63f0c2;
+      font-style:normal;
+      font-family:'Share Tech Mono',monospace;
+      font-size:13px;
+      font-weight:800;
+    }
+    #arStaffingCards .ar-person-result .status-pill{
+      min-width:132px;
+    }
+    #tabPanel-ar-performance .ar-dual-summary,
+    #tabPanel-ar-performance .ar-split-charts{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:18px;
+    }
+    #tabPanel-ar-performance .ar-pace-card,
+    #tabPanel-ar-performance .ar-split-chart{
+      min-width:0;
+      padding:20px;
+      border:1px solid rgba(92,132,188,.25);
+      border-radius:18px;
+      background:
+        radial-gradient(circle at 100% 0%,rgba(0,229,255,.05),transparent 40%),
+        linear-gradient(145deg,#111a2a,#091220);
+    }
+    #tabPanel-ar-performance .ar-pace-card.out,
+    #tabPanel-ar-performance .ar-split-chart.out{
+      background:
+        radial-gradient(circle at 100% 0%,rgba(69,230,167,.05),transparent 40%),
+        linear-gradient(145deg,#111a2a,#091220);
+    }
+    #tabPanel-ar-performance .ar-pace-head,
+    #tabPanel-ar-performance .ar-split-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:14px;
+    }
+    #tabPanel-ar-performance .ar-pace-head span,
+    #tabPanel-ar-performance .ar-split-title span{
+      display:block;
+      color:#8e9db3;
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    #tabPanel-ar-performance .ar-pace-head strong,
+    #tabPanel-ar-performance .ar-split-title strong{
+      display:block;
+      margin-top:5px;
+      color:#fff;
+      font-family:'Rajdhani',sans-serif;
+      font-size:25px;
+    }
+    #tabPanel-ar-performance .ar-pace-value{
+      display:flex;
+      align-items:flex-end;
+      gap:14px;
+      margin:20px 0 14px;
+    }
+    #tabPanel-ar-performance .ar-pace-value b{
+      color:#fff;
+      font-family:'Rajdhani',sans-serif;
+      font-size:48px;
+      line-height:.9;
+    }
+    #tabPanel-ar-performance .ar-pace-value small{
+      color:#8e9db3;
+      line-height:1.4;
+    }
+    #tabPanel-ar-performance .ar-mini-track,
+    #tabPanel-ar-performance .ar-hour-track{
+      position:relative;
+      height:8px;
+      overflow:hidden;
+      border-radius:999px;
+      background:#19263a;
+    }
+    #tabPanel-ar-performance .ar-mini-track::after,
+    #tabPanel-ar-performance .ar-hour-track::after{
+      position:absolute;
+      inset:-2px auto -2px 90%;
+      width:1px;
+      background:rgba(255,189,61,.70);
+      content:'';
+    }
+    #tabPanel-ar-performance .ar-mini-track i,
+    #tabPanel-ar-performance .ar-hour-track i{
+      display:block;
+      height:100%;
+      border-radius:inherit;
+      transition:width .65s ease;
+    }
+    #tabPanel-ar-performance i.green{background:linear-gradient(90deg,#20bb84,#45e6a7)}
+    #tabPanel-ar-performance i.amber{background:linear-gradient(90deg,#df8d12,#ffbd3d)}
+    #tabPanel-ar-performance i.red{background:linear-gradient(90deg,#e44455,#ff6675)}
+    #tabPanel-ar-performance .ar-chart-meta{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:8px;
+      margin:14px 0;
+    }
+    #tabPanel-ar-performance .ar-chart-meta div{
+      padding:10px 12px;
+      border:1px solid rgba(92,132,188,.17);
+      border-radius:10px;
+      background:rgba(255,255,255,.02);
+    }
+    #tabPanel-ar-performance .ar-chart-meta span{
+      display:block;
+      color:#8190a6;
+      font-size:10px;
+      text-transform:uppercase;
+    }
+    #tabPanel-ar-performance .ar-chart-meta strong{
+      display:block;
+      margin-top:4px;
+      color:#eaf2ff;
+    }
+    #tabPanel-ar-performance .ar-chart-shell{
+      min-height:290px;
+      padding:10px;
+      border:1px solid rgba(92,132,188,.2);
+      border-radius:15px;
+      background:
+        linear-gradient(rgba(0,229,255,.024) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,229,255,.024) 1px,transparent 1px),
+        #080f1b;
+      background-size:32px 32px;
+      overflow:hidden;
+    }
+    #tabPanel-ar-performance .ar-chart-shell svg{
+      display:block;
+      width:100%;
+      height:270px;
+    }
+    #tabPanel-ar-performance .ar-chart-actual{
+      fill:none;
+      stroke-width:5;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+    #tabPanel-ar-performance .ar-chart-expected{
+      fill:none;
+      stroke-width:3;
+      stroke-dasharray:9 8;
+      stroke-linecap:round;
+      opacity:.75;
+      animation:chartDashFlow 1.5s linear infinite;
+    }
+    #tabPanel-ar-performance .ar-hourly-grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:12px;
+    }
+    #tabPanel-ar-performance .ar-hour-card{
+      min-width:0;
+      padding:14px;
+      border:1px solid rgba(92,132,188,.22);
+      border-radius:13px;
+      background:linear-gradient(145deg,#111a2a,#0a1220);
+    }
+    #tabPanel-ar-performance .ar-hour-card.now{
+      border-color:rgba(0,229,255,.55);
+      box-shadow:0 0 20px rgba(0,229,255,.08);
+    }
+    #tabPanel-ar-performance .ar-hour-head{
+      display:flex;
+      justify-content:space-between;
+      margin-bottom:12px;
+    }
+    #tabPanel-ar-performance .ar-hour-metric{
+      display:grid;
+      grid-template-columns:72px minmax(0,1fr) 105px;
+      gap:9px;
+      align-items:center;
+      margin-top:10px;
+    }
+    #tabPanel-ar-performance .ar-hour-metric label{
+      color:#9aa8bb;
+      font-size:12px;
+    }
+    #tabPanel-ar-performance .ar-hour-value{
+      color:#eaf2ff;
+      font-size:12px;
+      text-align:right;
+    }
+    #tabPanel-ar-performance .ar-hour-value span{
+      display:block;
+      margin-top:2px;
+      font-size:11px;
+      font-weight:900;
+    }
+    #tabPanel-ar-performance .ar-hour-value span.green{color:#45e6a7}
+    #tabPanel-ar-performance .ar-hour-value span.amber{color:#ffbd3d}
+    #tabPanel-ar-performance .ar-hour-value span.red{color:#ff6675}
+    #tabPanel-ar-performance .ar-hour-foot{
+      display:flex;
+      justify-content:flex-end;
+      margin-top:12px;
+    }
+    @media(max-width:1250px){
+      #arStaffingCards.ar-staffing-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+      #tabPanel-ar-performance .ar-hourly-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media(max-width:800px){
+      #arStaffingCards.ar-staffing-grid,
+      #tabPanel-ar-performance .ar-dual-summary,
+      #tabPanel-ar-performance .ar-split-charts,
+      #tabPanel-ar-performance .ar-hourly-grid{grid-template-columns:1fr!important}
+      #arStaffingCards .ar-associate-row{grid-template-columns:1fr!important}
+      #arStaffingCards .ar-person-result{justify-items:start}
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function getARAssociateExpectedHours(person){
+  const slots=getFinishShiftSlots();
+  if(!slots.length)return 0;
+
+  const selectedDate=getValue('productionDate',getLocalDateInputValue(new Date()));
+  const today=getLocalDateInputValue(new Date());
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  let firstIndex=slots.findIndex(slot=>slot.key===person.firstHour);
+  if(firstIndex<0)firstIndex=0;
+
+  const start=slots[firstIndex]?.start??slots[0].start;
+  let end=slots[slots.length-1].end;
+
+  if(selectedDate===today){
+    end=Math.max(start,Math.min(nowMinutes,slots[slots.length-1].end));
+  }else if(selectedDate>today){
+    end=start;
+  }
+
+  return Math.max(0,(end-start)/60);
+}
+
+function getARAssociatePerformance(person){
+  const expectedHours=getARAssociateExpectedHours(person);
+  const expectedJobs=Math.max(0,toARNumber(person.effectiveJph)*expectedHours);
+  const actualJobs=Math.max(0,toARNumber(person.totalOutput??person.dailyOutput));
+  const ratio=expectedJobs>0?actualJobs/expectedJobs:1;
+
+  return{
+    expectedHours,
+    expectedJobs,
+    actualJobs,
+    ratio,
+    percent:Math.round(ratio*100),
+    className:ratio>=1?'green':ratio>=.9?'amber':'red',
+    label:ratio>=1?'ON TRACK':ratio>=.9?'WATCH':'BEHIND'
+  };
+}
+
+function getARPerformanceStatus(actual,expected){
+  const ratio=expected>0?actual/expected:1;
+  return{
+    ratio,
+    percent:Math.round(ratio*100),
+    className:ratio>=1?'green':ratio>=.9?'amber':'red',
+    label:ratio>=1?'ON TRACK':ratio>=.9?'WATCH':'BEHIND'
+  };
+}
+
+function buildARPerformancePath(values,xAt,yAt){
+  let path='';
+  values.forEach((value,index)=>{
+    if(value===null||value===undefined||!Number.isFinite(Number(value)))return;
+    path+=`${path?' L':'M'} ${xAt(index).toFixed(1)} ${yAt(Number(value)).toFixed(1)}`;
+  });
+  return path;
+}
+
+function buildARPerformanceChart(rows,config){
+  const W=760,H=270,left=54,right=18,top=20,bottom=40;
+  const plotW=W-left-right,plotH=H-top-bottom;
+  const actual=rows.map(row=>row[config.actualKey]);
+  const expected=rows.map(row=>row[config.expectedKey]);
+  const maxY=Math.max(100,...actual,...expected);
+  const roundedMax=Math.ceil(maxY/100)*100;
+  const xAt=index=>left+(rows.length<=1?0:index/(rows.length-1)*plotW);
+  const yAt=value=>top+plotH-(Math.max(0,value)/roundedMax)*plotH;
+  const grid=Array.from({length:5},(_,index)=>{
+    const value=roundedMax/4*index;
+    const y=yAt(value);
+    return `<line class="chart-grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line>
+      <text class="chart-y-label" x="${left-8}" y="${y+4}" text-anchor="end">${formatARNumber(value)}</text>`;
+  }).join('');
+  const labels=rows.map((row,index)=>{
+    if(index%2&&index!==rows.length-1)return'';
+    return `<text class="chart-label" x="${xAt(index)}" y="${H-12}" text-anchor="middle">${escapeHtml(formatARHourLabel(row.hour).replace(':00 ',''))}</text>`;
+  }).join('');
+  const currentIndex=Math.max(0,rows.findLastIndex(row=>row.started));
+  const current=rows[currentIndex]||rows[0];
+  const status=getARPerformanceStatus(
+    Number(current?.[config.actualKey])||0,
+    Number(current?.[config.expectedKey])||0
+  );
+
+  return `<article class="ar-split-chart ${config.cardClass||''}">
+    <div class="ar-split-head">
+      <div class="ar-split-title">
+        <span>${escapeHtml(config.kicker)}</span>
+        <strong>${escapeHtml(config.title)}</strong>
+      </div>
+      <span class="status-pill status-${status.className==='green'?'green':status.className==='amber'?'amber':'red'}">${status.percent}% · ${status.label}</span>
+    </div>
+    <div class="ar-chart-meta">
+      <div><span>Actual</span><strong>${formatARNumber(current?.[config.actualKey]||0)}</strong></div>
+      <div><span>Expected</span><strong>${formatARNumber(current?.[config.expectedKey]||0)}</strong></div>
+      <div><span>Variance</span><strong>${formatARNumber((current?.[config.actualKey]||0)-(current?.[config.expectedKey]||0))}</strong></div>
+    </div>
+    <div class="ar-chart-shell">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        ${grid}
+        <line class="chart-axis" x1="${left}" y1="${top}" x2="${left}" y2="${H-bottom}"></line>
+        <line class="chart-axis" x1="${left}" y1="${H-bottom}" x2="${W-right}" y2="${H-bottom}"></line>
+        ${labels}
+        <path class="ar-chart-expected" d="${buildARPerformancePath(expected,xAt,yAt)}" stroke="${config.expectedColor}"></path>
+        <path class="ar-chart-actual" d="${buildARPerformancePath(actual,xAt,yAt)}" stroke="${config.actualColor}" style="filter:drop-shadow(0 0 5px ${config.glow})"></path>
+        <line class="chart-now" x1="${xAt(currentIndex)}" y1="${top}" x2="${xAt(currentIndex)}" y2="${H-bottom}"></line>
+        <circle class="chart-actual-dot" cx="${xAt(currentIndex)}" cy="${yAt(current?.[config.actualKey]||0)}" r="5" fill="${config.actualColor}"></circle>
+      </svg>
+    </div>
+  </article>`;
+}
+
+function renderARStaffingCards(){
+  const box=document.getElementById('arStaffingCards');
+  if(!box)return;
+
+  ensureARLivePerformanceV16Styles();
+  const roster=getARStationRoster();
+
+  box.innerHTML=AR_STATION_ORDER.map(station=>{
+    const people=roster[station]||[];
+    const detectedCount=people.length;
+    const capacityCount=station==='Oven'
+      ? detectedCount
+      : getARCapacityAssociateCount(station,detectedCount);
+    const stationJph=station==='Oven'?0:(AR_DEFAULT_JPH[station]||0);
+    const liveCapacity=station==='Oven'?0:people.reduce((sum,p)=>sum+toARNumber(p.effectiveJph),0);
+    const isManual=
+      station!=='Oven'&&
+      Number.isFinite(Number(AR_FORECAST_STATE.staffingCapacityOverrides?.[station]));
+
+    const rows=people.length
+      ? people.map(person=>{
+          const movement=person.otherStations?.length
+            ? ` · Also ${person.otherStations.map(item=>`${item.station} ${formatARNumber(item.totalOutput||item.output)}`).join(', ')}`
+            : '';
+
+          if(station==='Oven'){
+            return `<div class="ar-associate-row">
+              <div class="ar-person-main">
+                <strong>${escapeHtml(person.name)}</strong>
+                <small>Total ${formatARNumber(person.totalOutput)} jobs · Last ${escapeHtml(person.lastHourLabel||'Live')}: ${formatARNumber(person.lastHourOutput)} · 60 min process${escapeHtml(movement)}</small>
+              </div>
+              <div class="ar-person-result">
+                <em>PROCESS</em>
+                <span class="status-pill status-green">ACTIVE</span>
+              </div>
+            </div>`;
+          }
+
+          const performance=getARAssociatePerformance(person);
+
+          return `<div class="ar-associate-row ${person.otherStations?.length?'floater':''}">
+            <div class="ar-person-main">
+              <strong>${escapeHtml(person.name)}</strong>
+              <small>Total ${formatARNumber(performance.actualJobs)} jobs · Expected ${formatARNumber(performance.expectedJobs)} · Last ${escapeHtml(person.lastHourLabel||'Live')}: ${formatARNumber(person.lastHourOutput)}${escapeHtml(movement)}</small>
+              <div class="ar-person-progress">
+                <i class="${performance.className}" style="width:${Math.min(100,performance.ratio*100)}%"></i>
+              </div>
+            </div>
+            <div class="ar-person-result">
+              <em>${round1(person.effectiveJph)} JPH</em>
+              <span class="status-pill status-${performance.className==='green'?'green':performance.className==='amber'?'amber':'red'}">${performance.percent}% · ${performance.label}</span>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="ar-associate-row">
+          <div class="ar-person-main">
+            <strong>No current ${station==='Oven'?'process activity':'associate'}</strong>
+            <small>No positive hourly activity at this station yet</small>
+          </div>
+          <div class="ar-person-result">
+            <em>${station==='Oven'?'PROCESS':'0 JPH'}</em>
+          </div>
+        </div>`;
+
+    const source=detectedCount>0?'Live / Plan':'Morning Plan';
+
+    return `<article class="ar-staff-card">
+      <div class="ar-staff-card-head">
+        <strong>${escapeHtml(station)}</strong>
+        <span>${station==='Oven'?`${detectedCount} PROCESS LIVE`:`${detectedCount} LIVE`}</span>
+      </div>
+      <div class="ar-staff-summary">
+        <div>
+          <small>${station==='Oven'?'Live Process Operators':'Live Associates'}</small>
+          <b>${detectedCount}</b>
+        </div>
+        <div>
+          <small>${station==='Oven'?'Process Cycle':'Associate JPH'}</small>
+          <b>${station==='Oven'?`${AR_FORECAST_STATE.config.oven} min`:round1(liveCapacity)}</b>
+        </div>
+        <div>
+          <small>Forecast Rule</small>
+          <b>${station==='Oven'?'Process':source}</b>
+        </div>
+      </div>
+      <div class="ar-associate-list">${rows}</div>
+    </article>`;
+  }).join('');
+}
+function renderARRecommendations(r){const box=document.getElementById('arOperationalRecommendations');if(!box)return;const items=[];items.push(`<div class="recommendation-item"><strong>Primary focus: ${escapeHtml(r.focus.name)}</strong><span>${escapeHtml(r.focus.reason)}</span></div>`);if(r.live.surface>r.live.arIn&&r.live.surface>=AR_FORECAST_STATE.config.runSize)items.push(`<div class="recommendation-item"><strong>Protect AR-IN feed</strong><span>${formatARNumber(r.live.surface)} jobs are waiting from Surface while AR-IN has ${formatARNumber(r.live.arIn)} WIP.</span></div>`);if(r.totalDelay)items.push(`<div class="recommendation-item"><strong>Maintenance impact</strong><span>${r.totalDelay} total delay minutes are applied to affected pipeline work.</span></div>`);if(r.goal)items.push(`<div class="recommendation-item"><strong>${r.projectedOut>=r.goal?'Goal currently covered':'Recovery required'}</strong><span>Projected AR-OUT ${formatARNumber(r.projectedOut)} versus goal ${formatARNumber(r.goal)}.</span></div>`);box.innerHTML=items.join('');}
+
+function getARLiveHourlyTotals(){
+  const totals={};
+
+  (AR_FORECAST_STATE.liveStaff||[]).forEach(person=>{
+    const station=normalizeARRole(person.station||'');
+    if(station!=='AR-IN'&&station!=='AR-OUT')return;
+
+    Object.entries(person.hourlyOutputs||{}).forEach(([hour,value])=>{
+      const key=normalizeARHourKey(hour);
+      if(!totals[key])totals[key]={arIn:0,arOut:0};
+      const jobs=Math.max(0,toARNumber(value));
+      if(station==='AR-IN')totals[key].arIn+=jobs;
+      if(station==='AR-OUT')totals[key].arOut+=jobs;
+    });
+  });
+
+  return totals;
+}
+
+function mergeARPerformanceHourlyRows(hourly){
+  const liveTotals=getARLiveHourlyTotals();
+  const provided={};
+
+  (hourly||[]).forEach(row=>{
+    const key=normalizeARHourKey(row.hour);
+    provided[key]={
+      arIn:Math.max(0,toARNumber(row.arIn)),
+      arOut:Math.max(0,toARNumber(row.arOut))
+    };
+  });
+
+  const keys=new Set([...Object.keys(provided),...Object.keys(liveTotals)]);
+  const merged={};
+
+  keys.forEach(key=>{
+    const source=provided[key]||{};
+    const live=liveTotals[key]||{};
+    merged[key]={
+      arIn:toARNumber(live.arIn)>0?toARNumber(live.arIn):toARNumber(source.arIn),
+      arOut:toARNumber(live.arOut)>0?toARNumber(live.arOut):toARNumber(source.arOut)
+    };
+  });
+
+  return merged;
+}
+
+function renderARHourlyCards(hourly,r){
+  const panel=document.getElementById('tabPanel-ar-performance');
+  if(!panel)return;
+
+  ensureARLivePerformanceV16Styles();
+
+  const caps=Object.fromEntries((r.stationCaps||[]).map(row=>[row.station,row]));
+  const liveRoster=getARStationRoster();
+
+  const liveArInJph=(liveRoster['AR-IN']||[])
+    .reduce((sum,person)=>sum+Math.max(0,toARNumber(person.effectiveJph)),0);
+
+  const liveArOutJph=(liveRoster['AR-OUT']||[])
+    .reduce((sum,person)=>sum+Math.max(0,toARNumber(person.effectiveJph)),0);
+
+  // Performance uses associates actually scanning right now.
+  // Forecast capacity remains available as the fallback before live scans begin.
+  const arInJph=liveArInJph>0
+    ?liveArInJph
+    :Math.max(0,toARNumber(caps['AR-IN']?.usableJph));
+
+  const arOutJph=liveArOutJph>0
+    ?liveArOutJph
+    :Math.max(0,toARNumber(caps['AR-OUT']?.usableJph));
+  const slots=getFinishShiftSlots();
+  const selectedDate=getValue('productionDate',getLocalDateInputValue(new Date()));
+  const today=getLocalDateInputValue(new Date());
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+  // Use the same live associate hourly totals that drive the staffing cards.
+  // The hourly table/API remains a fallback only when live staffing has no value.
+  const hourlyMap=mergeARPerformanceHourlyRows(hourly);
+
+  let arInCum=0;
+  let arOutCum=0;
+  let arInExpectedCum=0;
+  let arOutExpectedCum=0;
+
+  const rows=slots.map(slot=>{
+    const source=hourlyMap[normalizeARHourKey(slot.key)]||{};
+    const durationHours=Math.max(0,(slot.end-slot.start)/60);
+    const arInActual=Math.max(0,toARNumber(source.arIn));
+    const arOutActual=Math.max(0,toARNumber(source.arOut));
+    const arInExpected=arInJph*durationHours;
+    const arOutExpected=arOutJph*durationHours;
+    const isPast=selectedDate<today||(selectedDate===today&&nowMinutes>=slot.end);
+    const isNow=selectedDate===today&&nowMinutes>=slot.start&&nowMinutes<slot.end;
+    const started=isPast||isNow||arInActual>0||arOutActual>0;
+
+    arInCum+=arInActual;
+    arOutCum+=arOutActual;
+    arInExpectedCum+=arInExpected;
+    arOutExpectedCum+=arOutExpected;
+
+    return{
+      hour:slot.key,
+      label:slot.label,
+      started,
+      isNow,
+      arInActual,
+      arOutActual,
+      arInExpected,
+      arOutExpected,
+      arInCum,
+      arOutCum,
+      arInExpectedCum,
+      arOutExpectedCum
+    };
+  });
+
+  const liveHourlyTotals=getARLiveHourlyTotals();
+  const liveArInJobs=Object.values(liveHourlyTotals).reduce((sum,row)=>sum+toARNumber(row.arIn),0);
+  const liveArOutJobs=Object.values(liveHourlyTotals).reduce((sum,row)=>sum+toARNumber(row.arOut),0);
+
+  const activeRows=rows.filter(row=>row.started);
+  const current=activeRows[activeRows.length-1]||rows[0]||{
+    arInCum:0,arOutCum:0,arInExpectedCum:0,arOutExpectedCum:0
+  };
+  const inStatus=getARPerformanceStatus(current.arInCum,current.arInExpectedCum);
+  const outStatus=getARPerformanceStatus(current.arOutCum,current.arOutExpectedCum);
+
+  const charts=`
+    <div class="ar-split-charts">
+      ${buildARPerformanceChart(rows,{
+        kicker:'AR-IN',
+        title:'AR-IN pace',
+        actualKey:'arInCum',
+        expectedKey:'arInExpectedCum',
+        actualColor:'#00e5ff',
+        expectedColor:'#7867ff',
+        glow:'rgba(0,229,255,.55)'
+      })}
+      ${buildARPerformanceChart(rows,{
+        kicker:'AR-OUT',
+        title:'AR-OUT pace',
+        actualKey:'arOutCum',
+        expectedKey:'arOutExpectedCum',
+        actualColor:'#45e6a7',
+        expectedColor:'#ffbd3d',
+        glow:'rgba(69,230,167,.55)',
+        cardClass:'out'
+      })}
+    </div>`;
+
+  const cards=rows.map(row=>{
+    const inMetric=getARPerformanceStatus(row.arInActual,row.arInExpected);
+    const outMetric=getARPerformanceStatus(row.arOutActual,row.arOutExpected);
+    const notStarted=!row.started;
+    const overall=Math.min(inMetric.ratio,outMetric.ratio);
+    const cls=overall>=1?'green':overall>=.9?'amber':'red';
+    const label=notStarted?'NOT STARTED':overall>=1?'ON TRACK':overall>=.9?'WATCH':'BEHIND';
+
+    return `<article class="ar-hour-card ${row.isNow?'now':''}">
+      <div class="ar-hour-head">
+        <strong>${escapeHtml(row.label||formatARHourLabel(row.hour))}</strong>
+        ${row.isNow?'<span class="finish-now-badge">NOW</span>':''}
+      </div>
+      <div class="ar-hour-metric">
+        <label>AR-IN</label>
+        <div class="ar-hour-track"><i class="${notStarted?'':inMetric.className}" style="width:${notStarted?0:Math.min(100,inMetric.ratio*100)}%"></i></div>
+        <div class="ar-hour-value">
+          ${notStarted?'—':`${formatARNumber(row.arInActual)} / ${formatARNumber(row.arInExpected)}`}
+          ${notStarted?'':`<span class="${inMetric.className}">${inMetric.percent}%</span>`}
+        </div>
+      </div>
+      <div class="ar-hour-metric">
+        <label>AR-OUT</label>
+        <div class="ar-hour-track"><i class="${notStarted?'':outMetric.className}" style="width:${notStarted?0:Math.min(100,outMetric.ratio*100)}%"></i></div>
+        <div class="ar-hour-value">
+          ${notStarted?'—':`${formatARNumber(row.arOutActual)} / ${formatARNumber(row.arOutExpected)}`}
+          ${notStarted?'':`<span class="${outMetric.className}">${outMetric.percent}%</span>`}
+        </div>
+      </div>
+      <div class="ar-hour-foot">
+        <span class="status-pill ${notStarted?'':`status-${cls==='green'?'green':cls==='amber'?'amber':'red'}`}">${label}</span>
+      </div>
+    </article>`;
+  }).join('');
+
+  panel.innerHTML=`
+    <section class="panel wide performance-hero-panel futuristic-hero scoreboard-frame">
+      <div class="performance-tab-header">
+        <div>
+          <p class="eyebrow">AR live performance</p>
+          <h2>PACE &amp; HOURLY OUTLOOK</h2>
+        </div>
+        <div class="performance-tab-badge"><span class="status-led"></span>AR-IN + AR-OUT</div>
+      </div>
+    </section>
+
+    <section class="ar-dual-summary wide">
+      <article class="ar-pace-card">
+        <div class="ar-pace-head">
+          <div><span>AR-IN pace</span><strong>${round1(arInJph)} assigned JPH</strong></div>
+          <span class="status-pill status-${inStatus.className==='green'?'green':inStatus.className==='amber'?'amber':'red'}">${inStatus.percent}% · ${inStatus.label}</span>
+        </div>
+        <div class="ar-pace-value">
+          <b>${formatARNumber(current.arInCum)}</b>
+          <small>Actual vs ${formatARNumber(current.arInExpectedCum)} expected · Live output ${formatARNumber(liveArInJobs)}</small>
+        </div>
+        <div class="ar-mini-track"><i class="${inStatus.className}" style="width:${Math.min(100,inStatus.ratio*100)}%"></i></div>
+      </article>
+
+      <article class="ar-pace-card out">
+        <div class="ar-pace-head">
+          <div><span>AR-OUT pace</span><strong>${round1(arOutJph)} assigned JPH</strong></div>
+          <span class="status-pill status-${outStatus.className==='green'?'green':outStatus.className==='amber'?'amber':'red'}">${outStatus.percent}% · ${outStatus.label}</span>
+        </div>
+        <div class="ar-pace-value">
+          <b>${formatARNumber(current.arOutCum)}</b>
+          <small>Actual vs ${formatARNumber(current.arOutExpectedCum)} expected · Live output ${formatARNumber(liveArOutJobs)}</small>
+        </div>
+        <div class="ar-mini-track"><i class="${outStatus.className}" style="width:${Math.min(100,outStatus.ratio*100)}%"></i></div>
+      </article>
+    </section>
+
+    <section class="panel wide">
+      <div class="section-title command-title">
+        <h2>AR-IN and AR-OUT Pace</h2>
+        <span>Actual output compared with assigned live/planned JPH</span>
+      </div>
+      ${charts}
+    </section>
+
+    <section class="panel wide">
+      <div class="section-title command-title">
+        <h2>Hourly Pace vs Expected</h2>
+        <span>Red &lt;90% · Amber 90–99.9% · Green 100%+</span>
+      </div>
+      <div class="ar-hourly-grid">${cards}</div>
+    </section>`;
+}
+function renderARPace(r,ratio){const pct=Math.max(0,Math.round(ratio*100)),gap=Math.round(r.currentOut-r.expectedNow);setTextSafe('arPacePercent',`${pct}%`);setTextSafe('arPaceGap',`${gap>=0?'+':''}${formatARNumber(gap)} jobs`);setTextSafe('arPaceStatus',ratio>=1?'ON TRACK':ratio>=.9?'AT RISK':'BEHIND');const actual=document.getElementById('arActualPaceBar'),expected=document.getElementById('arExpectedPaceBar'),gauge=document.getElementById('arPaceGauge');if(actual)actual.style.width=`${Math.min(100,pct)}%`;if(expected)expected.style.width='100%';if(gauge)gauge.style.background=`radial-gradient(circle at center,#06111f 0 58%,transparent 59%),conic-gradient(var(--${ratio>=1?'green':ratio>=.9?'yellow':'red'}) 0 ${Math.min(100,pct)}%,rgba(255,255,255,.12) ${Math.min(100,pct)}% 100%)`;}
+function highlightARStage(name){document.querySelectorAll('.ar-stage').forEach(x=>x.classList.remove('pressure'));const map={'AR-IN':'arin','Basket':'basket','Sectoring':'sectoring','DeRing':'dering','AR-OUT':'arout'};const key=map[name];if(key)document.querySelector(`[data-ar-stage="${key}"]`)?.classList.add('pressure');}
+function getARNextRunCompletion(live,totalDelay){const c=AR_FORECAST_STATE.config,stages=[['DeRing',live.deRing,c.arOut],['Sectoring',live.sectoring,c.deRing+c.arOut],['Oven',live.oven,c.sectoring+c.chamber+c.deRing+c.arOut],['Basket',live.basket,c.oven+c.sectoring+c.chamber+c.deRing+c.arOut],['AR-IN',live.arIn,c.basket+c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut]],hit=stages.find(x=>completeARRuns(x[1])>0);if(!hit)return{label:'--',meta:'No complete run available'};const d=new Date(Date.now()+(hit[2]+totalDelay)*60000);return{label:d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),meta:`From ${hit[0]} · ${hit[2]+totalDelay} min`};}
+function renderARStage(name,value){setTextSafe(`arStage${name}`,formatARNumber(value));setTextSafe(`arStage${name}Runs`,`${completeARRuns(value)} Runs`);}
+function collectARHourlyData(){
+  return Array.from(document.querySelectorAll('.ar-hour-row')).map(row=>({
+    hour:row.dataset.hour,
+    arIn:toARNumber(row.querySelector('.ar-hour-in')?.value),
+    arOut:toARNumber(row.querySelector('.ar-hour-out')?.value),
+    maintenance:Boolean(row.querySelector('.ar-hour-maint')?.checked),
+    delay:toARNumber(row.querySelector('.ar-delay-input')?.value),
+    note:String(row.querySelector('.ar-hour-note')?.value||'')
+  }));
+}
+function readARConfigFromInputs(){const map={goal:'arGoal',runSize:'arRunSize',maintenanceDelay:'arMaintenanceDelay',arIn:'arTimeArIn',basket:'arTimeBasket',t40:'arTimeT40',oven:'arTimeOven',sectoring:'arTimeSectoring',chamber:'arTimeChamber',deRing:'arTimeDeRing',arOut:'arTimeArOut'};Object.entries(map).forEach(([k,id])=>{const el=document.getElementById(id);if(!el)return;AR_FORECAST_STATE.config[k]=toARNumber(el.value);});}
+function writeARConfigInputs(){const map={goal:'arGoal',runSize:'arRunSize',maintenanceDelay:'arMaintenanceDelay',arIn:'arTimeArIn',basket:'arTimeBasket',t40:'arTimeT40',oven:'arTimeOven',sectoring:'arTimeSectoring',chamber:'arTimeChamber',deRing:'arTimeDeRing',arOut:'arTimeArOut'};Object.entries(map).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.value=AR_FORECAST_STATE.config[k];});}
+function getARTotalPipelineMinutes(){const c=AR_FORECAST_STATE.config;return c.arIn+c.basket+c.t40+c.oven+c.sectoring+c.chamber+c.deRing+c.arOut;}
+function completeARRuns(jobs){return Math.floor(toARNumber(jobs)/Math.max(1,AR_FORECAST_STATE.config.runSize));}
+function resetARSetup(){AR_FORECAST_STATE.config={...AR_DEFAULT_CONFIG};writeARConfigInputs();saveARLocalState();calculateARForecast();}
+async function saveARGoal(){
+  readARConfigFromInputs();
+
+  const payload={
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    goal:Math.max(0,toARNumber(AR_FORECAST_STATE.config.goal)),
+    config:{...AR_FORECAST_STATE.config}
+  };
+
+  if(!payload.date){
+    showARMessage('Select a production date before saving the AR goal.');
+    return;
+  }
+
+  const btn=document.getElementById('arSaveGoalBtn');
+  const originalText=btn?.textContent || 'Save Goal';
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Saving...';
+  }
+
+  const response=await postARForecastApi('saveGoal',payload);
+
+  if(btn){
+    btn.disabled=false;
+    btn.textContent=originalText;
+  }
+
+  if(!response || !response.ok){
+    const message=response?.error || 'AR goal could not be saved.';
+    setTextSafe('arGoalSaveMeta',message);
+    showARMessage(message);
+    return;
+  }
+
+  saveARLocalState();
+  setTextSafe(
+    'arGoalSaveMeta',
+    `Goal ${formatARNumber(payload.goal)} saved for ${payload.date}.`
+  );
+  showARMessage(`AR goal saved for ${payload.date}.`);
+}
+
+async function saveARSetup(){readARConfigFromInputs();saveARLocalState();await postARForecastApi('saveConfig',{config:AR_FORECAST_STATE.config});showARMessage('AR setup saved.');}
+async function saveARHourly(){const payload={date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),config:AR_FORECAST_STATE.config,hourly:collectARHourlyData()};saveARLocalState();await postARForecastApi('saveHourly',payload);showARMessage('AR hourly saved.');}
+async function saveARForecast(){if(!AR_FORECAST_STATE.calculated)return;const payload={date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),config:AR_FORECAST_STATE.config,morningPlan:AR_FORECAST_STATE.morningPlan,result:AR_FORECAST_STATE.calculated,liveStaff:AR_FORECAST_STATE.liveStaff};await postARForecastApi('saveForecast',payload);showARMessage('AR forecast saved.');}
+function clearARManualHourly(){AR_FORECAST_STATE.manualHourly={};saveARLocalState();buildARHourlyRows();calculateARForecast();}
+async function postARForecastApi(action,payload){try{const r=await fetch(AR_FORECAST_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload})});return await r.json();}catch(e){console.warn('[AR Forecast API]',e);return{ok:false,error:e.message};}}
+function saveARLocalState(){
+  localStorage.setItem(
+    AR_FORECAST_STORAGE_KEY,
+    JSON.stringify({
+      config:AR_FORECAST_STATE.config,
+      manualHourly:AR_FORECAST_STATE.manualHourly,
+      morningPlan:AR_FORECAST_STATE.morningPlan,
+      staffingCapacityOverrides:AR_FORECAST_STATE.staffingCapacityOverrides
+    })
+  );
+  saveARStaffingCapacityOverrides();
+}
+function restoreARLocalState(){
+  try{
+    const x=JSON.parse(localStorage.getItem(AR_FORECAST_STORAGE_KEY)||'{}');
+    AR_FORECAST_STATE.config={...AR_DEFAULT_CONFIG,...(x.config||{})};
+    AR_FORECAST_STATE.manualHourly=x.manualHourly||{};
+    AR_FORECAST_STATE.morningPlan={
+      ...AR_DEFAULT_MORNING_PLAN,
+      ...(x.morningPlan||{})
+    };
+
+    if(x.staffingCapacityOverrides&&typeof x.staffingCapacityOverrides==='object'){
+      AR_FORECAST_STATE.staffingCapacityOverrides={
+        ...AR_FORECAST_STATE.staffingCapacityOverrides,
+        ...x.staffingCapacityOverrides
+      };
+    }
+  }catch{}
+  writeARConfigInputs();
+  writeARMorningPlanInputs();
+}
+function normalizeARHourKey(key){const s=String(key||'').trim().replace(/^H/i,''),m=s.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);if(!m)return s;let h=Number(m[1]),min=Number(m[2]||0);if(m[3]){const ap=m[3].toUpperCase();if(ap==='PM'&&h<12)h+=12;if(ap==='AM'&&h===12)h=0;}return`${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;}
+function formatARHourLabel(key){const[h,m]=normalizeARHourKey(key).split(':').map(Number),d=new Date();d.setHours(h,m||0,0,0);return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+function toARNumber(v){const n=Number(String(v??'').replace(/,/g,'').trim());return Number.isFinite(n)?n:0;}
+function formatARNumber(v){return Math.round(toARNumber(v)).toLocaleString('en-US');}
+function setTextSafe(id,value){const el=document.getElementById(id);if(el)el.textContent=String(value);}
+function showARMessage(text){if(typeof showToast==='function')showToast(text);else console.log(text);}
+
+
+
+
+function showAppToast(message,type='success',duration=3200){
+  let host=document.getElementById('appToastHost');
+  if(!host){
+    host=document.createElement('div');
+    host.id='appToastHost';
+    host.className='app-toast-host';
+    host.setAttribute('aria-live','polite');
+    document.body.appendChild(host);
+  }
+
+  const toast=document.createElement('div');
+  toast.className=`app-toast app-toast-${type}`;
+  toast.innerHTML=`
+    <span class="app-toast-icon">${type==='success'?'✓':type==='error'?'!':'i'}</span>
+    <div>
+      <strong>${type==='success'?'Saved':type==='error'?'Could not save':'Notice'}</strong>
+      <small>${escapeHtml(String(message||''))}</small>
+    </div>`;
+
+  host.appendChild(toast);
+  requestAnimationFrame(()=>toast.classList.add('show'));
+
+  window.setTimeout(()=>{
+    toast.classList.remove('show');
+    window.setTimeout(()=>toast.remove(),220);
+  },duration);
+}
+
+/* =========================================================
+   FINISH FORECAST MODULE V1
+========================================================= */
+const FINISH_FORECAST_API_URL='https://script.google.com/macros/s/AKfycbxAGP8BMRvicY3UoRJvkwJQIT7KL-d9bEV8EQngtuaxi6wl5gKUhCVYWG3jBtk8nK9vFQ/exec';
+const FINISH_LOCAL_KEY='productionGoalForecast.finish.v1';
+const FINISH_JPH={unbox:150,mei:50,mounting:25,drill:6,final:75};
+const FINISH_STATE={
+  goal:0,finishBosWip:0,arBosWip:0,previousWeekAvgIncoming:0,
+  incomingEntries:{},
+  morningPlan:{finishUnboxPlanned:1,meiMachinesRunning:3,meiPlannedAssociates:1,mountingPlanned:6,finalInspectionPlanned:2},
+  associatesDb:{},liveStaff:[],hourly:{},lastSync:null,calculated:null
+};
+
+document.addEventListener('DOMContentLoaded',function initFinishForecast(){
+  restoreFinishLocal();
+  wireFinishControls();
+  writeFinishInputs();
+  renderFinishIncomingAverage();
+  calculateFinishForecast();
+});
+
+function wireFinishControls(){
+  ['finishGoal','finishBosWip','finishArBosWip','finishPlanUnbox','finishPlanMeiMachines','finishPlanMeiAssociates','finishPlanMounting','finishPlanFinal'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',()=>{
+      readFinishInputs(); saveFinishLocal(); calculateFinishForecast();
+    });
+  });
+  document.querySelectorAll('.finish-incoming-day').forEach(input=>input.addEventListener('input',()=>{
+    FINISH_STATE.incomingEntries[input.dataset.day]=input.value;
+    renderFinishIncomingAverage(); saveFinishLocal(); calculateFinishForecast();
+  }));
+  document.getElementById('finishSaveGoalBtn')?.addEventListener('click',saveFinishGoal);
+  document.getElementById('finishSaveBosBtn')?.addEventListener('click',saveFinishBos);
+  document.getElementById('finishSaveIncomingBtn')?.addEventListener('click',saveFinishIncomingWeek);
+  document.getElementById('finishSaveMorningBtn')?.addEventListener('click',saveFinishMorningPlan);
+  document.getElementById('finishSaveForecastBtn')?.addEventListener('click',saveFinishForecast);
+  document.getElementById('finishAssociateJphList')?.addEventListener('change',handleFinishJphChange);
+}
+
+function readFinishInputs(){
+  FINISH_STATE.goal=toARNumber(getValue('finishGoal',0));
+  FINISH_STATE.finishBosWip=toARNumber(getValue('finishBosWip',0));
+  FINISH_STATE.arBosWip=toARNumber(getValue('finishArBosWip',0));
+  FINISH_STATE.morningPlan={
+    finishUnboxPlanned:toARNumber(getValue('finishPlanUnbox',1)),
+    meiMachinesRunning:toARNumber(getValue('finishPlanMeiMachines',3)),
+    meiPlannedAssociates:toARNumber(getValue('finishPlanMeiAssociates',1)),
+    mountingPlanned:toARNumber(getValue('finishPlanMounting',6)),
+    finalInspectionPlanned:toARNumber(getValue('finishPlanFinal',2))
+  };
+}
+function writeFinishInputs(){
+  const map={finishGoal:FINISH_STATE.goal,finishBosWip:FINISH_STATE.finishBosWip,finishArBosWip:FINISH_STATE.arBosWip,
+    finishPlanUnbox:FINISH_STATE.morningPlan.finishUnboxPlanned,finishPlanMeiMachines:FINISH_STATE.morningPlan.meiMachinesRunning,
+    finishPlanMeiAssociates:FINISH_STATE.morningPlan.meiPlannedAssociates,finishPlanMounting:FINISH_STATE.morningPlan.mountingPlanned,
+    finishPlanFinal:FINISH_STATE.morningPlan.finalInspectionPlanned};
+  Object.entries(map).forEach(([id,v])=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=v;});
+  document.querySelectorAll('.finish-incoming-day').forEach(el=>{if(document.activeElement!==el)el.value=FINISH_STATE.incomingEntries[el.dataset.day]??'';});
+}
+function saveFinishLocal(){localStorage.setItem(FINISH_LOCAL_KEY,JSON.stringify(FINISH_STATE));}
+function restoreFinishLocal(){try{const x=JSON.parse(localStorage.getItem(FINISH_LOCAL_KEY)||'{}');Object.assign(FINISH_STATE,x||{});FINISH_STATE.morningPlan={...FINISH_STATE.morningPlan,...(x.morningPlan||{})};}catch{}}
+
+function getFinishPreviousWeekStart(){
+  const value=getValue('productionDate',getLocalDateInputValue(new Date()));
+  const d=new Date(value+'T12:00:00'); d.setDate(d.getDate()-d.getDay()-7);
+  return getLocalDateInputValue(d);
+}
+function getFinishIncomingValues(){
+  return Object.values(FINISH_STATE.incomingEntries).filter(v=>v!==''&&v!==null&&v!==undefined&&Number.isFinite(Number(v))).map(Number);
+}
+function renderFinishIncomingAverage(){
+  const values=getFinishIncomingValues();
+  const avg=values.length
+    ? values.reduce((a,b)=>a+b,0)/values.length
+    : toARNumber(FINISH_STATE.previousWeekAvgIncoming);
+
+  FINISH_STATE.previousWeekAvgIncoming=avg;
+  setTextSafe('finishIncomingAverage',formatARNumber(avg));
+  setTextSafe(
+    'finishIncomingCount',
+    values.length
+      ? `${values.length} day${values.length===1?'':'s'} entered`
+      : (avg>0?'Saved weekly average':'0 days entered')
+  );
+}
+
+function normalizeFinishStation(value){
+  const s=String(value||'').trim().toUpperCase();
+  if(s.includes('FINISH UNBOX')||s==='UNBOX')return'Finish Unbox';
+  if(s.includes('MEI'))return'MEI';
+  if(s.includes('DRILL'))return'Drill';
+  if(s.includes('MOUNT'))return'Mounting';
+  if(s.includes('FINAL INSPECTION')||s.includes('FINAL'))return'Final Inspection';
+  return'';
+}
+function isFinishMachineAlias(name){
+  const text=String(name||'').trim().toUpperCase();
+
+  // MEI 01 B, MEI 05 C, MEI-02-B, etc. are machine/operator aliases,
+  // not people. MEI capacity comes from the machine-count input.
+  return /^MEI[\s_-]*\d+[\s_-]*[ABC]?$/.test(text);
+}
+
+function buildFinishLiveStaffing(payload){
+  const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
+  const by={};
+
+  rows.forEach(row=>{
+    const name=String(row.Operator??row.operator??'').trim();
+    const machineAlias=isFinishMachineAlias(name);
+    if(!machineAlias&&!isValidAROperator(name))return;
+
+    let station=normalizeFinishStation(row.FlowStation??row.AccessPoint??row.accessPoint??'');
+    if(machineAlias)station='MEI';
+    if(!station)return;
+
+    const key=name.toUpperCase();
+
+    if(!by[key]){
+      by[key]={
+        name,
+        station,
+        rank:-Infinity,
+        firstRank:Infinity,
+        firstHour:'',
+        firstHourLabel:'',
+        lastHour:'',
+        lastHourLabel:'',
+        lastHourOutput:0,
+        totalOutput:0,
+        hourlyOutputs:{},
+        isMachine:machineAlias
+      };
+    }
+
+    const person=by[key];
+
+    Object.entries(row.Hours??row.hours??{}).forEach(([hour,value])=>{
+      const output=toARNumber(value);
+      const normalizedHour=normalizeARHourKey(hour);
+      const rank=getARHourRank(hour);
+
+      if(!Number.isFinite(rank))return;
+
+      person.hourlyOutputs[normalizedHour]=(person.hourlyOutputs[normalizedHour]||0)+Math.max(0,output);
+      person.totalOutput+=Math.max(0,output);
+
+      if(output>0&&rank<person.firstRank){
+        person.firstRank=rank;
+        person.firstHour=normalizedHour;
+        person.firstHourLabel=formatARHourLabel(hour);
+      }
+
+      if(output>0&&(rank>person.rank||(rank===person.rank&&station==='Drill'))){
+        person.rank=rank;
+        person.station=station;
+        person.lastHour=normalizedHour;
+        person.lastHourLabel=formatARHourLabel(hour);
+        person.lastHourOutput=output;
+      }
+    });
+  });
+
+  return Object.values(by)
+    .filter(person=>person.totalOutput>0)
+    .map(person=>{
+      const db=FINISH_STATE.associatesDb[person.name.toUpperCase()]||{};
+      const standard=person.station==='Finish Unbox'
+        ?150
+        :person.station==='MEI'
+          ?50
+          :person.station==='Mounting'
+            ?25
+            :person.station==='Drill'
+              ?6
+              :75;
+
+      const effective=db.trainingStatus
+        ?toARNumber(db.trainingJph)
+        :(db.customJph!==''&&db.customJph!==undefined
+          ?toARNumber(db.customJph)
+          :standard);
+
+      return{
+        ...person,
+        effectiveJph:effective,
+        trainingStatus:person.isMachine?false:Boolean(db.trainingStatus),
+        trainingWeek:person.isMachine?0:(db.trainingWeek||0)
+      };
+    });
+}
+
+function getFinishAssociateExpectedHours(person){
+  const slots=getFinishShiftSlots();
+  if(!slots.length)return 0;
+
+  const selectedDate=getValue('productionDate',getLocalDateInputValue(new Date()));
+  const today=getLocalDateInputValue(new Date());
+  const now=new Date();
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  let firstIndex=slots.findIndex(slot=>slot.key===person.firstHour);
+  let lastIndex=slots.findIndex(slot=>slot.key===person.lastHour);
+
+  if(firstIndex<0)firstIndex=0;
+  if(lastIndex<firstIndex)lastIndex=firstIndex;
+
+  const firstStart=slots[firstIndex]?.start??slots[0].start;
+  let endMinutes=slots[lastIndex]?.end??slots[slots.length-1].end;
+
+  if(selectedDate===today){
+    const currentSlotIndex=slots.findIndex(slot=>nowMinutes>=slot.start&&nowMinutes<slot.end);
+    if(currentSlotIndex>=firstIndex){
+      endMinutes=Math.min(nowMinutes,slots[Math.max(lastIndex,currentSlotIndex)].end);
+    }
+  }
+
+  return Math.max(0,(endMinutes-firstStart)/60);
+}
+
+function getFinishAssociatePerformance(person){
+  const expectedHours=getFinishAssociateExpectedHours(person);
+  const expectedJobs=Math.max(0,toARNumber(person.effectiveJph)*expectedHours);
+  const actualJobs=Math.max(0,toARNumber(person.totalOutput));
+  const ratio=expectedJobs>0?actualJobs/expectedJobs:1;
+  const percent=Math.round(ratio*100);
+
+  return{
+    expectedHours,
+    expectedJobs,
+    actualJobs,
+    ratio,
+    percent,
+    className:ratio>=1?'green':ratio>=.9?'amber':'red',
+    label:ratio>=1?'ON TRACK':ratio>=.9?'WATCH':'BEHIND'
+  };
+}
+function getFinishLiveByArea(){
+  const out={'Finish Unbox':[],'MEI':[],'Mounting':[],'Drill':[],'Final Inspection':[]};
+  FINISH_STATE.liveStaff.forEach(p=>out[p.station]?.push(p)); return out;
+}
+function getFinishAreaCaps(){
+  const live=getFinishLiveByArea(), p=FINISH_STATE.morningPlan;
+  const sum=a=>a.reduce((s,x)=>s+toARNumber(x.effectiveJph),0);
+  const has=k=>live[k].length>0;
+  return[
+    {area:'Finish Unbox',source:has('Finish Unbox')?'Live staffing':'Morning plan',count:has('Finish Unbox')?live['Finish Unbox'].length:p.finishUnboxPlanned,jph:has('Finish Unbox')?sum(live['Finish Unbox']):p.finishUnboxPlanned*150,required:true},
+    {area:'MEI',source:has('MEI')?'Live staffing':'Morning plan',count:has('MEI')?live.MEI.length:p.meiPlannedAssociates,jph:p.meiMachinesRunning*50,required:true,detail:`${p.meiMachinesRunning} machine(s)`},
+    {area:'Mounting',source:has('Mounting')||has('Drill')?'Live staffing':'Morning plan',count:has('Mounting')?live.Mounting.length:p.mountingPlanned,jph:has('Mounting')||has('Drill')?sum(live.Mounting):p.mountingPlanned*25,required:true,detail:has('Drill')?`${live.Drill.length} moved to Drill`:''},
+    {area:'Drill',source:'Live only',count:live.Drill.length,jph:sum(live.Drill),required:false},
+    {area:'Final Inspection',source:has('Final Inspection')?'Live staffing':'Morning plan',count:has('Final Inspection')?live['Final Inspection'].length:p.finalInspectionPlanned,jph:has('Final Inspection')?sum(live['Final Inspection']):p.finalInspectionPlanned*75,required:true}
+  ];
+}
+function getFinishCurrentOut(){
+  return Object.values(FINISH_STATE.hourly).reduce((s,row)=>s+toARNumber(row.finalInspection),0);
+}
+function calculateFinishForecast(){
+  readFinishInputs(); renderFinishIncomingAverage();
+  const hours=getShiftHours(getValue('shiftMode','Weekday'));
+  const currentOut=getFinishCurrentOut();
+  const caps=getFinishAreaCaps();
+  const requiredCaps=caps.filter(x=>x.required&&x.jph>0);
+  const bottleneck=requiredCaps.length?requiredCaps.reduce((a,b)=>a.jph<=b.jph?a:b):null;
+  const capacity=bottleneck?bottleneck.jph*hours:0;
+  const arFeedLow=FINISH_STATE.arBosWip*.55, arFeedHigh=FINISH_STATE.arBosWip*.85;
+  const workLow=FINISH_STATE.finishBosWip+arFeedLow;
+  const workHigh=FINISH_STATE.finishBosWip+arFeedHigh+FINISH_STATE.previousWeekAvgIncoming;
+  const low=Math.min(workLow,capacity), high=Math.min(workHigh,capacity);
+  const projected=currentOut>0?Math.max(currentOut,high):high;
+  const paceNeeded=hours>0?FINISH_STATE.goal/hours:0;
+  const eos=Math.max(0,workHigh-high);
+  FINISH_STATE.calculated={goal:FINISH_STATE.goal,currentFinishOut:currentOut,projectedFinishOutLow:low,projectedFinishOutHigh:high,totalExpectedWork:workHigh,expectedEosWip:eos,bottleneckArea:bottleneck?.area||'',bottleneckJph:bottleneck?.jph||0,plannedStaffingTotal:0,liveStaffingTotal:FINISH_STATE.liveStaff.length,staffingVariance:0,forecastMode:FINISH_STATE.liveStaff.length?'Blended planned/live':'Morning plan',goalStatus:FINISH_STATE.goal&&high>=FINISH_STATE.goal?'ON TRACK':'AT RISK',recommendation:bottleneck?`Protect ${bottleneck.area}; it is the current limiting area at ${round1(bottleneck.jph)} JPH.`:'Enter morning staffing.'};
+  renderFinishForecast(caps,paceNeeded);
+}
+function renderFinishForecast(caps,paceNeeded){
+  const r=FINISH_STATE.calculated||{};
+  setTextSafe('finishCurrentOut',formatARNumber(r.currentFinishOut));
+  setTextSafe('finishProjectedOut',formatARNumber(r.projectedFinishOutHigh));
+  setTextSafe('finishProjectedRange',`${formatARNumber(r.projectedFinishOutLow)} - ${formatARNumber(r.projectedFinishOutHigh)}`);
+  setTextSafe('finishGoalCard',formatARNumber(FINISH_STATE.goal));
+  setTextSafe('finishBosCard',formatARNumber(FINISH_STATE.finishBosWip));
+  setTextSafe('finishArBosCard',formatARNumber(FINISH_STATE.arBosWip));
+  setTextSafe('finishIncomingAvgCard',formatARNumber(FINISH_STATE.previousWeekAvgIncoming));
+  setTextSafe('finishConstraintCard',r.bottleneckArea||'-');
+  setTextSafe('finishConstraintMeta',r.bottleneckArea?`${round1(r.bottleneckJph)} usable JPH`:'Waiting for staffing');
+  setTextSafe('finishGoalGap',FINISH_STATE.goal?`${formatARNumber(Math.max(0,FINISH_STATE.goal-r.projectedFinishOutHigh))} jobs below goal`:'No goal entered');
+  setTextSafe('finishForecastMode',r.forecastMode||'Morning plan');
+  setTextSafe('finishPlanUnboxCapacity',`${round1(FINISH_STATE.morningPlan.finishUnboxPlanned*150)} JPH`);
+  setTextSafe('finishPlanMeiCapacity',`${round1(FINISH_STATE.morningPlan.meiMachinesRunning*50)} JPH`);
+  setTextSafe('finishPlanMountingCapacity',`${round1(FINISH_STATE.morningPlan.mountingPlanned*25)} JPH`);
+  setTextSafe('finishPlanFinalCapacity',`${round1(FINISH_STATE.morningPlan.finalInspectionPlanned*75)} JPH`);
+  const body=document.getElementById('finishReadinessTable');
+  if(body)body.innerHTML=caps.map(x=>{const gap=x.required?Math.max(0,paceNeeded-x.jph):0;const ok=!x.required||x.jph>=paceNeeded;return`<tr><td><strong>${escapeHtml(x.area)}</strong>${x.detail?`<small>${escapeHtml(x.detail)}</small>`:''}</td><td>${x.source}</td><td>${round1(x.count)}</td><td>${round1(x.jph)}</td><td>${x.required?round1(paceNeeded):'Route only'}</td><td>${gap?round1(gap):'—'}</td><td class="${ok?'risk-green':'risk-red'}">${ok?'ON TRACK':'NEEDS ATTENTION'}</td></tr>`;}).join('');
+  setTextSafe('finishSummary',FINISH_STATE.goal?`${r.goalStatus}: projected range ${formatARNumber(r.projectedFinishOutLow)}–${formatARNumber(r.projectedFinishOutHigh)} against a goal of ${formatARNumber(FINISH_STATE.goal)}.`:'Enter a Finish goal to see readiness.');
+  renderFinishLiveStaff();
+  renderFinishHourly();
+}
+function renderFinishLiveStaff(){
+  const box=document.getElementById('finishLiveStaffCards');
+  if(!box)return;
+
+  const areaOrder=['Finish Unbox','MEI','Mounting','Drill','Final Inspection'];
+  const areaMap=getFinishLiveByArea();
+
+  if(!FINISH_STATE.liveStaff.length){
+    box.innerHTML='<div class="recommendation-item"><strong>No live Finish staffing loaded</strong><span>Morning plan remains active until associates begin scanning.</span></div>';
+    renderFinishAssociateJphList();
+    return;
+  }
+
+  box.innerHTML=areaOrder.map(area=>{
+    const associates=areaMap[area]||[];
+    const totalJph=associates.reduce((sum,p)=>sum+toARNumber(p.effectiveJph),0);
+    const isMei=area==='MEI';
+
+    const rows=associates.length
+      ? associates.map(p=>{
+          const performance=getFinishAssociatePerformance(p);
+          return`
+          <div class="ar-associate-row finish-associate-performance-row">
+            <div class="finish-associate-main">
+              <strong>${escapeHtml(p.name)} ${p.isMachine?'<span class="finish-training-badge">M</span>':p.trainingStatus?'<span class="finish-training-badge">T</span>':''}</strong>
+              <small>
+                Total ${formatARNumber(performance.actualJobs)} jobs ·
+                Expected ${formatARNumber(performance.expectedJobs)} ·
+                Last ${escapeHtml(p.lastHourLabel||'Live')}: ${formatARNumber(p.lastHourOutput||0)}
+                ${p.isMachine?' · MEI machine':p.trainingStatus?` · Training Week ${p.trainingWeek}`:''}
+              </small>
+              <div class="finish-associate-progress">
+                <i class="${performance.className}" style="width:${Math.min(100,performance.ratio*100)}%"></i>
+              </div>
+            </div>
+            <div class="finish-associate-result">
+              <em>${round1(p.effectiveJph)} JPH</em>
+              <span class="finish-status-pill ${performance.className}">
+                ${performance.percent}% · ${performance.label}
+              </span>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="finish-empty-area">
+           <strong>No active associate</strong>
+           <small>${isMei?'No MEI machine activity has been recorded yet. Forecast still uses machines running.':'Morning staffing plan remains active for this area.'}</small>
+         </div>`;
+
+    return `
+      <article class="ar-staff-card finish-live-area-card">
+        <div class="ar-staff-card-head">
+          <strong>${escapeHtml(area)}</strong>
+          <span>${isMei?`${associates.length} MACHINE${associates.length===1?'':'S'} LIVE`:`${associates.length} LIVE`}</span>
+        </div>
+
+        <div class="ar-staff-summary">
+          <div><small>${isMei?'Live Machines':'Live Associates'}</small><b>${associates.length}</b></div>
+          <div><small>${isMei?'Machine JPH':'Associate JPH'}</small><b>${round1(totalJph)}</b></div>
+          <div><small>Forecast Rule</small><b>${isMei?'Machines':'Live / Plan'}</b></div>
+        </div>
+
+        <div class="ar-associate-list">${rows}</div>
+      </article>`;
+  }).join('');
+
+  renderFinishAssociateJphList();
+}
+function renderFinishAssociateJphList(){
+  const box=document.getElementById('finishAssociateJphList'); if(!box)return;
+  const names=[...new Set(FINISH_STATE.liveStaff.map(p=>p.name).filter(name=>!isFinishMachineAlias(name)))];
+  box.innerHTML=names.length?names.map(name=>{const p=FINISH_STATE.liveStaff.find(x=>x.name===name),db=FINISH_STATE.associatesDb[name.toUpperCase()]||{};return`<div class="finish-jph-row" data-name="${escapeHtml(name)}"><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(p.station)}</small></div><label>Custom JPH<input data-finish-jph="custom" type="number" min="0" step="1" value="${db.customJph??''}"></label><label>Training <select data-finish-jph="training"><option value="No">No</option><option value="Yes" ${db.trainingStatus?'selected':''}>Yes</option></select></label><label>Week<input data-finish-jph="week" type="number" min="1" step="1" value="${db.trainingWeek||1}"></label><button type="button" class="secondary" data-finish-save-jph>Save</button></div>`;}).join(''):'<div class="recommendation-item"><strong>No Finish associates loaded</strong><span>Sync Finish activity first.</span></div>';
+  box.querySelectorAll('[data-finish-save-jph]').forEach(btn=>btn.addEventListener('click',()=>saveFinishAssociateJph(btn.closest('.finish-jph-row'))));
+}
+function handleFinishJphChange(){}
+async function saveFinishAssociateJph(row){
+  const name=row.dataset.name,p=FINISH_STATE.liveStaff.find(x=>x.name===name); if(!p)return;
+  const custom=row.querySelector('[data-finish-jph="custom"]').value;
+  const training=row.querySelector('[data-finish-jph="training"]').value==='Yes';
+  const week=toARNumber(row.querySelector('[data-finish-jph="week"]').value);
+  let trainingJph=0;
+  if(training&&p.station==='Mounting')trainingJph=[3,6,9,12,15,18,21,25][Math.max(0,Math.min(7,week-1))];
+  if(training&&p.station==='Final Inspection')trainingJph=[15,30,45,60,75][Math.max(0,Math.min(4,week-1))];
+  const payload={associateId:name,associateName:name,baseArea:p.station,defaultJph:p.station==='Mounting'?25:p.station==='Final Inspection'?75:p.station==='Drill'?6:p.station==='Finish Unbox'?150:50,customJph:custom,trainingStatus:training,trainingArea:p.station,trainingWeek:week};
+  const res=await postFinishApi('saveAssociateJph',payload); if(!res?.ok){showARMessage(res?.error||'Could not save Finish JPH.');return;}
+  FINISH_STATE.associatesDb[name.toUpperCase()]={...payload,trainingJph,effectiveJph:res.associate?.effectiveJph};
+  saveFinishLocal();
+  calculateFinishForecast();
+  showAppToast(`${name} JPH saved.`);
+}
+function ensureFinishPerformanceV11Styles(){
+  if(document.getElementById('finishPerformanceV11Styles'))return;
+  const style=document.createElement('style');
+  style.id='finishPerformanceV11Styles';
+  style.textContent=`
+    #tabPanel-finish-performance .finish-dual-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:18px}
+    #tabPanel-finish-performance .finish-pace-card{position:relative;overflow:hidden;padding:22px;border:1px solid rgba(95,135,190,.28);border-radius:18px;background:linear-gradient(145deg,rgba(17,26,43,.98),rgba(8,14,25,.98));box-shadow:0 16px 36px rgba(0,0,0,.28)}
+    #tabPanel-finish-performance .finish-pace-card::before{content:'';position:absolute;inset:0 auto 0 0;width:5px;background:linear-gradient(180deg,#00e5ff,#675cff)}
+    #tabPanel-finish-performance .finish-pace-card.final::before{background:linear-gradient(180deg,#45e6a7,#00c9ff)}
+    #tabPanel-finish-performance .finish-pace-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+    #tabPanel-finish-performance .finish-pace-head span{display:block;color:#8fa0b7;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+    #tabPanel-finish-performance .finish-pace-head strong{display:block;margin-top:5px;color:#fff;font-family:'Rajdhani',sans-serif;font-size:27px}
+    #tabPanel-finish-performance .finish-pace-value{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:22px 0 14px}
+    #tabPanel-finish-performance .finish-pace-value b{color:#fff;font-family:'Rajdhani',sans-serif;font-size:48px;line-height:.9}
+    #tabPanel-finish-performance .finish-pace-value small{color:#8fa0b7;font-size:13px;text-align:right}
+    #tabPanel-finish-performance .finish-mini-track{height:10px;overflow:hidden;border-radius:999px;background:#182437}
+    #tabPanel-finish-performance .finish-mini-track i{display:block;width:0;height:100%;border-radius:inherit;transition:width .8s cubic-bezier(.2,.75,.25,1);background:linear-gradient(90deg,#ff5c6d,#ff8a5b);box-shadow:0 0 14px rgba(255,92,109,.34)}
+    #tabPanel-finish-performance .finish-mini-track i.amber{background:linear-gradient(90deg,#ffad20,#ffd15d);box-shadow:0 0 14px rgba(255,173,32,.34)}
+    #tabPanel-finish-performance .finish-mini-track i.green{background:linear-gradient(90deg,#2ee6a6,#00d7ff);box-shadow:0 0 14px rgba(46,230,166,.34)}
+    #tabPanel-finish-performance .finish-status-pill{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:7px 11px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap}
+    #tabPanel-finish-performance .finish-status-pill::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor}
+    #tabPanel-finish-performance .finish-status-pill.red{color:#ff6675;background:rgba(255,71,87,.1);border:1px solid rgba(255,102,117,.32)}
+    #tabPanel-finish-performance .finish-status-pill.amber{color:#ffbd3d;background:rgba(255,176,32,.1);border:1px solid rgba(255,189,61,.32)}
+    #tabPanel-finish-performance .finish-status-pill.green{color:#45e6a7;background:rgba(46,230,166,.1);border:1px solid rgba(69,230,167,.32)}
+    #tabPanel-finish-performance .finish-chart-shell{position:relative;min-height:420px;padding:18px;border:1px solid rgba(95,135,190,.25);border-radius:18px;background:linear-gradient(rgba(0,229,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.025) 1px,transparent 1px),radial-gradient(circle at 48% 30%,rgba(0,229,255,.045),transparent 48%),#080f1b;background-size:34px 34px,34px 34px,auto,auto;overflow:hidden}
+    #tabPanel-finish-performance .finish-chart-shell::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,229,255,.06),transparent);transform:translateX(-130%);animation:finishChartScan 6s ease-in-out infinite;pointer-events:none}
+    #tabPanel-finish-performance .finish-chart-legend{display:flex;flex-wrap:wrap;gap:18px;margin:0 0 12px;color:#8fa0b7;font-size:12px}
+    #tabPanel-finish-performance .finish-chart-legend span{display:flex;align-items:center;gap:7px}
+    #tabPanel-finish-performance .finish-chart-legend i{width:18px;height:3px;border-radius:3px;background:currentColor}
+    #tabPanel-finish-performance .finish-chart-legend .mount-actual{color:#00e5ff}.finish-chart-legend .mount-expected{color:#7b6cff}.finish-chart-legend .final-actual{color:#45e6a7}.finish-chart-legend .final-expected{color:#ffbd3d}
+    #tabPanel-finish-performance #finishDualChart{display:block;width:100%;height:340px}
+    #tabPanel-finish-performance .finish-grid-line{stroke:rgba(135,165,205,.13);stroke-width:1}.finish-axis-line{stroke:rgba(155,185,225,.3);stroke-width:1.5}.finish-axis-label{fill:#8291a7;font-size:12px}.finish-now-line{stroke:#ffbd3d;stroke-width:2;stroke-dasharray:6 6;animation:finishDash 1.3s linear infinite}.finish-now-label{fill:#ffbd3d;font-size:11px;font-weight:900}
+    #tabPanel-finish-performance .finish-line{fill:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:2200;stroke-dashoffset:2200;animation:finishLineDraw 1.15s ease forwards}.finish-line.expected{stroke-width:3;stroke-dasharray:9 8;stroke-dashoffset:0;animation:finishExpectedMove 1.4s linear infinite}.finish-mount-actual{stroke:#00e5ff;filter:drop-shadow(0 0 5px rgba(0,229,255,.55))}.finish-mount-expected{stroke:#7b6cff}.finish-final-actual{stroke:#45e6a7;filter:drop-shadow(0 0 5px rgba(69,230,167,.52))}.finish-final-expected{stroke:#ffbd3d}.finish-area-fill-mount{fill:url(#finishMountGrad)}.finish-area-fill-final{fill:url(#finishFinalGrad)}
+    #tabPanel-finish-performance .finish-hourly-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    #tabPanel-finish-performance .finish-hour-card{padding:15px;border:1px solid rgba(91,129,182,.25);border-radius:14px;background:linear-gradient(145deg,#111a2a,#0b1321);animation:finishCardIn .45s ease both}
+    #tabPanel-finish-performance .finish-hour-card.now{border-color:rgba(0,229,255,.55);box-shadow:0 0 22px rgba(0,229,255,.08)}
+    #tabPanel-finish-performance .finish-hour-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:13px}.finish-hour-head strong{font-size:15px}.finish-now-badge{padding:4px 7px;border-radius:999px;color:#fff;background:linear-gradient(90deg,#2477ff,#00c9ff);font-size:9px;font-weight:900}
+    #tabPanel-finish-performance .finish-hour-metric{display:grid;grid-template-columns:86px 1fr auto;gap:10px;align-items:center;margin-top:10px}.finish-hour-metric label{color:#9eacc0;font-size:12px}.finish-hour-metric .metric-track{height:8px;border-radius:999px;background:#182437;overflow:hidden}.finish-hour-metric .metric-track i{display:block;height:100%;border-radius:inherit;transition:width .7s ease}.finish-hour-metric b{min-width:74px;color:#dce7f6;font-size:12px;text-align:right}.finish-hour-metric.mount .metric-track i{background:linear-gradient(90deg,#00a9d4,#00e5ff)}.finish-hour-metric.final .metric-track i{background:linear-gradient(90deg,#1dcf92,#45e6a7)}
+    #tabPanel-finish-performance .finish-hour-foot{display:flex;justify-content:flex-end;margin-top:12px}
+    @keyframes finishLineDraw{to{stroke-dashoffset:0}}@keyframes finishExpectedMove{to{stroke-dashoffset:-34}}@keyframes finishChartScan{0%,70%{transform:translateX(-130%)}100%{transform:translateX(130%)}}@keyframes finishCardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}@keyframes finishDash{to{stroke-dashoffset:-24}}
+    @media(max-width:1100px){#tabPanel-finish-performance .finish-hourly-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    #tabPanel-finish-performance .finish-hour-metric .metric-track{position:relative;overflow:visible}
+    #tabPanel-finish-performance .finish-hour-metric .metric-track::after{content:'';position:absolute;top:-3px;bottom:-3px;left:90%;width:1px;background:rgba(255,189,61,.75);box-shadow:0 0 8px rgba(255,189,61,.5)}
+    #tabPanel-finish-performance .finish-hour-metric .metric-track i.red{background:linear-gradient(90deg,#ff5267,#ff7684)!important}
+    #tabPanel-finish-performance .finish-hour-metric .metric-track i.amber{background:linear-gradient(90deg,#ffae24,#ffd15c)!important}
+    #tabPanel-finish-performance .finish-hour-metric .metric-track i.green{background:linear-gradient(90deg,#2ee6a6,#00d7ff)!important}
+    #tabPanel-finish-performance .finish-hour-metric .metric-value{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:125px}
+    #tabPanel-finish-performance .finish-hour-metric .metric-percent{min-width:48px;padding:4px 7px;border:1px solid currentColor;border-radius:999px;font-size:10px;font-weight:900;text-align:center}
+    #tabPanel-finish-performance .finish-hour-metric .metric-percent.red{color:#ff6675;background:rgba(255,71,87,.08)}
+    #tabPanel-finish-performance .finish-hour-metric .metric-percent.amber{color:#ffbd3d;background:rgba(255,176,32,.08)}
+    #tabPanel-finish-performance .finish-hour-metric .metric-percent.green{color:#45e6a7;background:rgba(46,230,166,.08)}
+    #tabPanel-finish-performance .finish-line.expected{opacity:.48;stroke-width:2.5!important}
+    #tabPanel-finish-performance .finish-line.finish-mount-actual,#tabPanel-finish-performance .finish-line.finish-final-actual{stroke-width:5.5!important}
+    #tabPanel-finish-performance .finish-current-label{font-size:11px;font-weight:900;paint-order:stroke;stroke:#08101c;stroke-width:4px}
+    #tabPanel-finish-performance .finish-current-dot{stroke:#08101c;stroke-width:3;animation:finishCurrentPulse 1.5s ease-in-out infinite}
+    @keyframes finishCurrentPulse{0%,100%{r:6;opacity:1}50%{r:9;opacity:.55}}
+    @media(max-width:700px){#tabPanel-finish-performance .finish-dual-summary,#tabPanel-finish-performance .finish-hourly-grid{grid-template-columns:1fr}#tabPanel-finish-performance .finish-hour-metric{grid-template-columns:76px 1fr}.finish-hour-metric .metric-value{grid-column:1/-1;justify-content:space-between}}
+  `;
+  document.head.appendChild(style);
+}
+function getFinishPerformanceCaps(){
+  const caps=getFinishAreaCaps();
+  const mounting=caps.find(x=>x.area==='Mounting')||{count:0,jph:0,source:'Morning plan'};
+  const finalInspection=caps.find(x=>x.area==='Final Inspection')||{count:0,jph:0,source:'Morning plan'};
+  return{mounting,finalInspection};
+}
+function getFinishPerformanceStatus(actual,expected){
+  const ratio=expected>0?actual/expected:1;
+  const percent=Math.round(ratio*100);
+  if(ratio>=1)return{ratio,percent,className:'green',label:'ON TRACK'};
+  if(ratio>=.9)return{ratio,percent,className:'amber',label:'WATCH'};
+  return{ratio,percent,className:'red',label:'BEHIND'};
+}
+function getFinishShiftSlots(){
+  const shift=getShiftWindow(getValue('shiftMode','Weekday'));
+  const start=parseTimeToMinutes(shift.start)??420;
+  const end=parseTimeToMinutes(shift.end)??1050;
+  return buildPerformanceHourSlots(start,end).map(slot=>({...slot,key:minutesToHourKey(Math.floor(slot.start/60)*60)}));
+}
+function buildFinishChartPath(values,xAt,yAt){
+  const points=[];
+  values.forEach((value,index)=>{if(value===null||value===undefined||!Number.isFinite(value))return;points.push(`${points.length?'L':'M'} ${xAt(index).toFixed(1)} ${yAt(value).toFixed(1)}`);});
+  return points.join(' ');
+}
+
+function ensureFinishPerformanceV13Styles(){
+  if(document.getElementById('finishPerformanceV13Styles'))return;
+  const style=document.createElement('style');
+  style.id='finishPerformanceV13Styles';
+  style.textContent=`
+    #tabPanel-finish-performance .finish-split-charts{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:18px;
+    }
+    #tabPanel-finish-performance .finish-split-chart{
+      min-width:0;
+      padding:20px;
+      border:1px solid rgba(95,135,190,.25);
+      border-radius:18px;
+      background:
+        radial-gradient(circle at 100% 0%,rgba(0,229,255,.045),transparent 38%),
+        linear-gradient(145deg,#111a2a,#0a1220);
+      overflow:hidden;
+    }
+    #tabPanel-finish-performance .finish-split-chart.final{
+      background:
+        radial-gradient(circle at 100% 0%,rgba(69,230,167,.045),transparent 38%),
+        linear-gradient(145deg,#111a2a,#0a1220);
+    }
+    #tabPanel-finish-performance .finish-split-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+      margin-bottom:14px;
+    }
+    #tabPanel-finish-performance .finish-split-title span{
+      display:block;
+      color:#8fa0b7;
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    #tabPanel-finish-performance .finish-split-title strong{
+      display:block;
+      margin-top:4px;
+      color:#fff;
+      font-family:'Rajdhani',sans-serif;
+      font-size:26px;
+    }
+    #tabPanel-finish-performance .finish-split-stats{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    #tabPanel-finish-performance .finish-split-percent{
+      font-family:'Rajdhani',sans-serif;
+      font-size:34px;
+      font-weight:800;
+      line-height:1;
+    }
+    #tabPanel-finish-performance .finish-split-percent.green{color:#45e6a7}
+    #tabPanel-finish-performance .finish-split-percent.amber{color:#ffbd3d}
+    #tabPanel-finish-performance .finish-split-percent.red{color:#ff6675}
+    #tabPanel-finish-performance .finish-split-meta{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:8px;
+      margin-bottom:14px;
+    }
+    #tabPanel-finish-performance .finish-split-meta div{
+      padding:10px 12px;
+      border:1px solid rgba(95,135,190,.18);
+      border-radius:11px;
+      background:rgba(255,255,255,.022);
+    }
+    #tabPanel-finish-performance .finish-split-meta span{
+      display:block;
+      color:#7f8da3;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    #tabPanel-finish-performance .finish-split-meta strong{
+      display:block;
+      margin-top:4px;
+      color:#e8f1fd;
+      font-size:15px;
+    }
+    #tabPanel-finish-performance .finish-single-chart-shell{
+      position:relative;
+      min-height:300px;
+      padding:10px;
+      border:1px solid rgba(95,135,190,.20);
+      border-radius:15px;
+      background:
+        linear-gradient(rgba(0,229,255,.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,229,255,.025) 1px,transparent 1px),
+        #080f1b;
+      background-size:32px 32px;
+      overflow:hidden;
+    }
+    #tabPanel-finish-performance .finish-single-chart-shell svg{
+      display:block;
+      width:100%;
+      height:280px;
+    }
+    #tabPanel-finish-performance .finish-single-chart-legend{
+      display:flex;
+      align-items:center;
+      gap:16px;
+      margin:0 0 10px;
+      color:#8fa0b7;
+      font-size:11px;
+    }
+    #tabPanel-finish-performance .finish-single-chart-legend span{
+      display:flex;
+      align-items:center;
+      gap:7px;
+    }
+    #tabPanel-finish-performance .finish-single-chart-legend i{
+      width:18px;
+      height:3px;
+      border-radius:3px;
+      background:currentColor;
+    }
+    #tabPanel-finish-performance .finish-single-chart-legend .expected i{
+      background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 10px);
+    }
+    #tabPanel-finish-performance .finish-chart-line-actual{
+      fill:none;
+      stroke-width:5;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      stroke-dasharray:1800;
+      stroke-dashoffset:1800;
+      animation:finishLineDraw 1.05s ease forwards;
+    }
+    #tabPanel-finish-performance .finish-chart-line-expected{
+      fill:none;
+      stroke-width:3;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+      stroke-dasharray:9 8;
+      animation:finishExpectedMove 1.4s linear infinite;
+      opacity:.75;
+    }
+    #tabPanel-finish-performance .finish-chart-area{
+      opacity:.13;
+    }
+    #tabPanel-finish-performance .finish-chart-dot{
+      animation:finishCurrentPulse 1.4s ease-in-out infinite;
+    }
+    #tabPanel-finish-performance .finish-chart-variance{
+      position:absolute;
+      right:14px;
+      top:12px;
+      padding:6px 9px;
+      border-radius:999px;
+      font-size:10px;
+      font-weight:900;
+      letter-spacing:.04em;
+    }
+    #tabPanel-finish-performance .finish-chart-variance.green{
+      color:#45e6a7;background:rgba(46,230,166,.10);border:1px solid rgba(69,230,167,.28)
+    }
+    #tabPanel-finish-performance .finish-chart-variance.amber{
+      color:#ffbd3d;background:rgba(255,176,32,.10);border:1px solid rgba(255,189,61,.28)
+    }
+    #tabPanel-finish-performance .finish-chart-variance.red{
+      color:#ff6675;background:rgba(255,71,87,.10);border:1px solid rgba(255,102,117,.28)
+    }
+    .finish-associate-performance-row{
+      grid-template-columns:minmax(0,1fr) auto !important;
+      gap:14px !important;
+      align-items:center !important;
+    }
+    .finish-associate-main{
+      min-width:0;
+    }
+    .finish-associate-main small{
+      display:block;
+      margin-top:4px;
+      color:#8d9bb0 !important;
+      line-height:1.35;
+    }
+    .finish-associate-progress{
+      position:relative;
+      height:6px;
+      margin-top:10px;
+      overflow:hidden;
+      border-radius:999px;
+      background:#1a2638;
+    }
+    .finish-associate-progress::after{
+      position:absolute;
+      top:-2px;
+      bottom:-2px;
+      left:90%;
+      width:1px;
+      background:rgba(255,189,61,.72);
+      content:"";
+    }
+    .finish-associate-progress i{
+      display:block;
+      width:0;
+      height:100%;
+      border-radius:inherit;
+      transition:width .7s cubic-bezier(.2,.75,.25,1);
+    }
+    .finish-associate-progress i.green{
+      background:linear-gradient(90deg,#21bc85,#45e6a7);
+      box-shadow:0 0 9px rgba(69,230,167,.45);
+    }
+    .finish-associate-progress i.amber{
+      background:linear-gradient(90deg,#e89612,#ffbd3d);
+      box-shadow:0 0 9px rgba(255,189,61,.42);
+    }
+    .finish-associate-progress i.red{
+      background:linear-gradient(90deg,#e84354,#ff6675);
+      box-shadow:0 0 9px rgba(255,102,117,.42);
+    }
+    .finish-associate-result{
+      display:grid;
+      justify-items:end;
+      gap:7px;
+      min-width:138px;
+    }
+    .finish-associate-result em{
+      color:#63f0c2 !important;
+      font-style:normal;
+      font-size:13px;
+      font-weight:800;
+    }
+    .finish-associate-result .finish-status-pill{
+      min-width:128px;
+      justify-content:center;
+    }
+    @media(max-width:700px){
+      .finish-associate-performance-row{
+        grid-template-columns:1fr !important;
+      }
+      .finish-associate-result{
+        justify-items:start;
+      }
+    }
+    @media(max-width:1100px){
+      #tabPanel-finish-performance .finish-split-charts{grid-template-columns:1fr}
+    }
+    @media(max-width:700px){
+      #tabPanel-finish-performance .finish-split-meta{grid-template-columns:1fr}
+      #tabPanel-finish-performance .finish-split-head{flex-direction:column}
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function buildFinishAreaChart(rows, config){
+  const W=760,H=280,left=54,right=18,top=22,bottom=42;
+  const plotW=W-left-right,plotH=H-top-bottom;
+  const actualValues=rows.map(r=>r.started?r[config.actualKey]:null);
+  const expectedValues=rows.map(r=>r[config.expectedKey]);
+  const maxY=Math.max(100,...actualValues.filter(Number.isFinite),...expectedValues.filter(Number.isFinite));
+  const roundedMax=Math.ceil(maxY/100)*100;
+  const xAt=i=>left+(rows.length<=1?0:(i/(rows.length-1))*plotW);
+  const yAt=v=>top+plotH-(Math.max(0,v)/roundedMax)*plotH;
+  const lastStartedIndex=Math.max(0,rows.findLastIndex(r=>r.started));
+  const currentRow=rows[lastStartedIndex]||rows[0];
+  const currentActual=Number(currentRow?.[config.actualKey])||0;
+  const currentExpected=Number(currentRow?.[config.expectedKey])||0;
+  const status=getFinishPerformanceStatus(currentActual,currentExpected);
+  const variance=currentActual-currentExpected;
+  const yTicks=4;
+  const grid=Array.from({length:yTicks+1},(_,i)=>{
+    const value=(roundedMax/yTicks)*i;
+    const y=yAt(value);
+    return `<line class="finish-grid-line" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line>
+      <text class="finish-axis-label" x="${left-9}" y="${y+4}" text-anchor="end">${formatARNumber(value)}</text>`;
+  }).join('');
+  const xLabels=rows.map((r,i)=>{
+    if(i%2!==0&&i!==rows.length-1)return'';
+    return `<text class="finish-axis-label" x="${xAt(i)}" y="${H-13}" text-anchor="middle">${escapeHtml(formatARHourLabel(r.key).replace(':00 ',''))}</text>`;
+  }).join('');
+  const actualPath=buildFinishChartPath(actualValues,xAt,yAt);
+  const expectedPath=buildFinishChartPath(expectedValues,xAt,yAt);
+  const areaPath=actualPath?`${actualPath} L ${xAt(lastStartedIndex).toFixed(1)} ${(H-bottom).toFixed(1)} L ${xAt(0).toFixed(1)} ${(H-bottom).toFixed(1)} Z`:'';
+  const currentX=xAt(lastStartedIndex);
+  const currentY=yAt(currentActual);
+  const varianceLabel=`${variance>=0?'+':''}${formatARNumber(variance)} jobs`;
+  return `
+    <article class="finish-split-chart ${config.cardClass||''}">
+      <div class="finish-split-head">
+        <div class="finish-split-title">
+          <span>${escapeHtml(config.kicker)}</span>
+          <strong>${escapeHtml(config.title)}</strong>
+        </div>
+        <div class="finish-split-stats">
+          <span class="finish-split-percent ${status.className}">${status.percent}%</span>
+          <span class="finish-status-pill ${status.className}">${status.label}</span>
+        </div>
+      </div>
+      <div class="finish-split-meta">
+        <div><span>Actual</span><strong>${formatARNumber(currentActual)}</strong></div>
+        <div><span>Expected</span><strong>${formatARNumber(currentExpected)}</strong></div>
+        <div><span>Variance</span><strong>${varianceLabel}</strong></div>
+      </div>
+      <div class="finish-single-chart-legend">
+        <span style="color:${config.actualColor}"><i></i>Actual</span>
+        <span class="expected" style="color:${config.expectedColor}"><i></i>Expected</span>
+      </div>
+      <div class="finish-single-chart-shell">
+        <span class="finish-chart-variance ${status.className}">${varianceLabel}</span>
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="${escapeHtml(config.title)} actual versus expected chart">
+          <defs>
+            <linearGradient id="${config.gradientId}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="${config.actualColor}" stop-opacity=".40"></stop>
+              <stop offset="1" stop-color="${config.actualColor}" stop-opacity="0"></stop>
+            </linearGradient>
+          </defs>
+          ${grid}
+          <line class="finish-axis-line" x1="${left}" y1="${top}" x2="${left}" y2="${H-bottom}"></line>
+          <line class="finish-axis-line" x1="${left}" y1="${H-bottom}" x2="${W-right}" y2="${H-bottom}"></line>
+          ${xLabels}
+          ${areaPath?`<path class="finish-chart-area" d="${areaPath}" fill="url(#${config.gradientId})"></path>`:''}
+          <path class="finish-chart-line-expected" d="${expectedPath}" stroke="${config.expectedColor}"></path>
+          <path class="finish-chart-line-actual" d="${actualPath}" stroke="${config.actualColor}" style="filter:drop-shadow(0 0 5px ${config.glowColor})"></path>
+          <line class="finish-now-line" x1="${currentX}" y1="${top}" x2="${currentX}" y2="${H-bottom}"></line>
+          <circle class="finish-chart-dot" cx="${currentX}" cy="${currentY}" r="6" fill="${config.actualColor}"></circle>
+        </svg>
+      </div>
+    </article>`;
+}
+
+function renderFinishHourly(){
+  const panel=document.getElementById('tabPanel-finish-performance');
+  if(!panel)return;
+  ensureFinishPerformanceV11Styles();
+  ensureFinishPerformanceV13Styles();
+
+  const caps=getFinishPerformanceCaps();
+  const slots=getFinishShiftSlots();
+  const now=new Date();
+  const selectedDate=getValue('productionDate','');
+  const today=getLocalDateInputValue(now);
+  const nowMinutes=now.getHours()*60+now.getMinutes();
+
+  let mountingCum=0;
+  let finalCum=0;
+
+  const rows=slots.map((slot,index)=>{
+    const row=FINISH_STATE.hourly[slot.key]||{};
+    const mountActual=Math.max(0,toARNumber(row.mounting));
+    const finalActual=Math.max(0,toARNumber(row.finalInspection));
+    const durationHours=Math.max(0,(slot.end-slot.start)/60);
+    const mountExpected=Math.max(0,toARNumber(caps.mounting.jph)*durationHours);
+    const finalExpected=Math.max(0,toARNumber(caps.finalInspection.jph)*durationHours);
+    const isPast=selectedDate<today||(selectedDate===today&&nowMinutes>=slot.end);
+    const isNow=selectedDate===today&&nowMinutes>=slot.start&&nowMinutes<slot.end;
+    const started=isPast||isNow||mountActual>0||finalActual>0;
+
+    mountingCum+=mountActual;
+    finalCum+=finalActual;
+
+    return{
+      ...slot,
+      index,
+      mountActual,
+      finalActual,
+      mountExpected,
+      finalExpected,
+      mountingCum,
+      finalCum,
+      mountExpectedCum:toARNumber(caps.mounting.jph)*Math.max(0,(slot.end-slots[0].start)/60),
+      finalExpectedCum:toARNumber(caps.finalInspection.jph)*Math.max(0,(slot.end-slots[0].start)/60),
+      isNow,
+      started
+    };
+  });
+
+  const startedRows=rows.filter(r=>r.started);
+  const current=startedRows[startedRows.length-1]||rows[0]||{
+    mountingCum:0,
+    finalCum:0,
+    mountExpectedCum:0,
+    finalExpectedCum:0
+  };
+
+  const mountStatus=getFinishPerformanceStatus(current.mountingCum,current.mountExpectedCum);
+  const finalStatus=getFinishPerformanceStatus(current.finalCum,current.finalExpectedCum);
+
+  const charts=`
+    <div class="finish-split-charts">
+      ${buildFinishAreaChart(rows,{
+        kicker:'Mounting',
+        title:'Mounting pace',
+        actualKey:'mountingCum',
+        expectedKey:'mountExpectedCum',
+        actualColor:'#00e5ff',
+        expectedColor:'#7b6cff',
+        glowColor:'rgba(0,229,255,.58)',
+        gradientId:'finishMountAreaV13',
+        cardClass:'mounting'
+      })}
+      ${buildFinishAreaChart(rows,{
+        kicker:'Final Inspection',
+        title:'Final OUT pace',
+        actualKey:'finalCum',
+        expectedKey:'finalExpectedCum',
+        actualColor:'#45e6a7',
+        expectedColor:'#ffbd3d',
+        glowColor:'rgba(69,230,167,.55)',
+        gradientId:'finishFinalAreaV13',
+        cardClass:'final'
+      })}
+    </div>`;
+
+  const cards=rows.map((r,i)=>{
+    const m=getFinishPerformanceStatus(r.mountActual,r.mountExpected);
+    const f=getFinishPerformanceStatus(r.finalActual,r.finalExpected);
+    const notStarted=!r.started;
+    const overallRatio=Math.min(m.ratio,f.ratio);
+    const overallClass=notStarted?'':overallRatio>=1?'green':overallRatio>=.9?'amber':'red';
+    const overallLabel=notStarted?'NOT STARTED':overallRatio>=1?'ON TRACK':overallRatio>=.9?'WATCH':'BEHIND';
+
+    return`<article class="finish-hour-card ${r.isNow?'now':''}" style="animation-delay:${Math.min(i*.035,.35)}s">
+      <div class="finish-hour-head">
+        <strong>${escapeHtml(r.label||formatARHourLabel(r.key))}</strong>
+        ${r.isNow?'<span class="finish-now-badge">NOW</span>':''}
+      </div>
+      <div class="finish-hour-metric mount">
+        <label>Mounting</label>
+        <div class="metric-track"><i class="${notStarted?'':m.className}" style="width:${notStarted?0:Math.min(100,m.ratio*100)}%"></i></div>
+        <div class="metric-value">
+          <b>${notStarted?'—':`${formatARNumber(r.mountActual)} / ${formatARNumber(r.mountExpected)}`}</b>
+          ${notStarted?'':`<span class="metric-percent ${m.className}">${m.percent}%</span>`}
+        </div>
+      </div>
+      <div class="finish-hour-metric final">
+        <label>Final OUT</label>
+        <div class="metric-track"><i class="${notStarted?'':f.className}" style="width:${notStarted?0:Math.min(100,f.ratio*100)}%"></i></div>
+        <div class="metric-value">
+          <b>${notStarted?'—':`${formatARNumber(r.finalActual)} / ${formatARNumber(r.finalExpected)}`}</b>
+          ${notStarted?'':`<span class="metric-percent ${f.className}">${f.percent}%</span>`}
+        </div>
+      </div>
+      <div class="finish-hour-foot">
+        <span class="finish-status-pill ${overallClass}">${overallLabel}</span>
+      </div>
+    </article>`;
+  }).join('');
+
+  panel.innerHTML=`
+    <section class="panel wide performance-hero-panel futuristic-hero scoreboard-frame">
+      <div class="performance-tab-header">
+        <div>
+          <p class="eyebrow">Finish live performance</p>
+          <h2>PACE &amp; HOURLY OUTLOOK</h2>
+        </div>
+        <div class="performance-tab-badge"><span class="status-led"></span>Mounting + Final Inspection</div>
+      </div>
+    </section>
+
+    <section class="finish-dual-summary wide">
+      <article class="finish-pace-card">
+        <div class="finish-pace-head">
+          <div><span>Mounting pace</span><strong>${round1(caps.mounting.jph)} assigned JPH</strong></div>
+          <span class="finish-status-pill ${mountStatus.className}">${mountStatus.percent}% · ${mountStatus.label}</span>
+        </div>
+        <div class="finish-pace-value">
+          <b>${formatARNumber(current.mountingCum)}</b>
+          <small>Actual vs ${formatARNumber(current.mountExpectedCum)} expected<br>${round1(caps.mounting.count)} associate(s) · ${caps.mounting.source}</small>
+        </div>
+        <div class="finish-mini-track"><i class="${mountStatus.className}" style="width:${Math.min(100,mountStatus.ratio*100)}%"></i></div>
+      </article>
+
+      <article class="finish-pace-card final">
+        <div class="finish-pace-head">
+          <div><span>Final Inspection pace</span><strong>${round1(caps.finalInspection.jph)} assigned JPH</strong></div>
+          <span class="finish-status-pill ${finalStatus.className}">${finalStatus.percent}% · ${finalStatus.label}</span>
+        </div>
+        <div class="finish-pace-value">
+          <b>${formatARNumber(current.finalCum)}</b>
+          <small>Actual vs ${formatARNumber(current.finalExpectedCum)} expected<br>${round1(caps.finalInspection.count)} associate(s) · ${caps.finalInspection.source}</small>
+        </div>
+        <div class="finish-mini-track"><i class="${finalStatus.className}" style="width:${Math.min(100,finalStatus.ratio*100)}%"></i></div>
+      </article>
+    </section>
+
+    <section class="panel wide">
+      <div class="section-title command-title">
+        <h2>Mounting and Final Pace</h2>
+        <span>Separate actual vs expected charts for clearer comparison</span>
+      </div>
+      ${charts}
+    </section>
+
+    <section class="panel wide">
+      <div class="section-title command-title">
+        <h2>Hourly Pace vs Expected</h2>
+        <span>Red &lt;90% · Amber 90–99.9% · Green 100%+</span>
+      </div>
+      <div class="finish-hourly-grid">${cards}</div>
+    </section>`;
+
+  requestAnimationFrame(()=>{
+    panel.querySelectorAll('.finish-mini-track i').forEach(i=>{
+      const width=i.style.width;
+      i.style.width='0';
+      requestAnimationFrame(()=>i.style.width=width);
+    });
+  });
+}
+function mergeFinishHourly(payload){
+  const out={};
+  const rows=Array.isArray(payload?.operatorActivity)?payload.operatorActivity:[];
+  rows.forEach(row=>{
+    const station=normalizeFinishStation(row.FlowStation??row.AccessPoint??row.accessPoint??'');
+    if(station!=='Mounting'&&station!=='Final Inspection')return;
+    Object.entries(row.Hours??row.hours??{}).forEach(([h,v])=>{
+      const k=normalizeARHourKey(h);
+      if(!out[k])out[k]={mounting:0,finalInspection:0};
+      if(station==='Mounting')out[k].mounting+=toARNumber(v);
+      if(station==='Final Inspection')out[k].finalInspection+=toARNumber(v);
+    });
+  });
+  FINISH_STATE.hourly=out;
+}
+async function syncFinishForecastData(showStatus){
+  if(showStatus)setFinishSyncState('syncing','Syncing Finish staffing + output');
+  try{
+    const [activity,db,state,prev]=await Promise.all([
+      fetchARJson(`${SURFACE_DASHBOARD_API_URL}?action=operatorActivity&area=Finish`),
+      fetchARJson(`${FINISH_FORECAST_API_URL}?action=getAssociateJph`),
+      fetchARJson(`${FINISH_FORECAST_API_URL}?action=getCurrentState&date=${encodeURIComponent(getValue('productionDate',''))}`),
+      fetchARJson(`${FINISH_FORECAST_API_URL}?action=getPreviousWeekAverage&date=${encodeURIComponent(getValue('productionDate',''))}`)
+    ]);
+    FINISH_STATE.associatesDb=Object.fromEntries((db.associates||[]).map(x=>[String(x.associateName||x.associateId).toUpperCase(),x]));
+    if(state?.state)Object.assign(FINISH_STATE,state.state);
+    if(prev?.entries){FINISH_STATE.incomingEntries={};prev.entries.forEach(x=>FINISH_STATE.incomingEntries[x.dayName]=x.incomingJobs);FINISH_STATE.previousWeekAvgIncoming=prev.average||0;}
+    FINISH_STATE.liveStaff=buildFinishLiveStaffing(activity); mergeFinishHourly(activity); FINISH_STATE.lastSync=new Date();
+    writeFinishInputs();renderFinishIncomingAverage();calculateFinishForecast();saveFinishLocal();
+    setFinishSyncState('ok',FINISH_STATE.liveStaff.length?`Finish live · ${FINISH_STATE.liveStaff.length} associates`:'Finish live · waiting for first scans');
+  }catch(err){console.error('[Finish Forecast]',err);setFinishSyncState('error','Finish sync failed');calculateFinishForecast();}
+}
+function setFinishSyncState(state,text){
+  if(AR_FORECAST_STATE.department!=='Finish')return;
+  setTextSafe('heroSyncState',text);setTextSafe('heroSyncTime',new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}));setTextSafe('finishRosterStatus',text);
+  const dot=document.getElementById('heroSyncDot');if(dot)dot.className=`hero-sync-dot dot-${state}`;
+}
+async function postFinishApi(action,payload){
+  try{const r=await fetch(FINISH_FORECAST_API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload}),credentials:'omit'});return await r.json();}catch(err){return{ok:false,error:err.message};}
+}
+function finishPayload(){return{date:getValue('productionDate',''),shiftMode:getValue('shiftMode','Weekday'),goal:FINISH_STATE.goal,finishBosWip:FINISH_STATE.finishBosWip,arBosWip:FINISH_STATE.arBosWip,previousWeekAvgIncoming:FINISH_STATE.previousWeekAvgIncoming,morningPlan:FINISH_STATE.morningPlan,result:FINISH_STATE.calculated};}
+async function saveFinishGoal(){
+  readFinishInputs();
+  const r=await postFinishApi('saveGoal',{
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    goal:FINISH_STATE.goal
+  });
+
+  if(r?.ok){
+    setTextSafe('finishGoalMeta',`Goal ${formatARNumber(FINISH_STATE.goal)} saved for ${getValue('productionDate','')}.`);
+    showAppToast(`Finish goal ${formatARNumber(FINISH_STATE.goal)} saved.`);
+  }else{
+    showAppToast(r?.error||'Finish goal was not saved.','error');
+  }
+}
+async function saveFinishBos(){
+  readFinishInputs();
+  const r=await postFinishApi('saveBOS',finishPayload());
+
+  if(r?.ok){
+    setTextSafe('finishSetupStatus',`BOS saved for ${getValue('productionDate','')}.`);
+    showAppToast(`Finish BOS ${formatARNumber(FINISH_STATE.finishBosWip)} and AR BOS ${formatARNumber(FINISH_STATE.arBosWip)} saved.`);
+  }else{
+    showAppToast(r?.error||'Finish BOS was not saved.','error');
+  }
+}
+async function saveFinishMorningPlan(){
+  readFinishInputs();
+  const r=await postFinishApi('saveMorningPlan',{
+    date:getValue('productionDate',''),
+    shiftMode:getValue('shiftMode','Weekday'),
+    plan:FINISH_STATE.morningPlan
+  });
+
+  if(r?.ok){
+    setTextSafe('finishMorningStatus',`Morning plan saved for ${getValue('productionDate','')}.`);
+    showAppToast('Finish morning staffing plan saved.');
+  }else{
+    showAppToast(r?.error||'Morning staffing plan was not saved.','error');
+  }
+}
+async function saveFinishIncomingWeek(){
+  const start=getFinishPreviousWeekStart();
+  const d=new Date(start+'T12:00:00');
+
+  const entries=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day,i)=>{
+    const x=new Date(d);
+    x.setDate(d.getDate()+i);
+    const value=FINISH_STATE.incomingEntries[day];
+    const hasValue=value!==''&&value!==undefined&&value!==null;
+
+    return{
+      productionDate:getLocalDateInputValue(x),
+      dayName:day,
+      incomingJobs:hasValue?toARNumber(value):'',
+      included:hasValue
+    };
+  });
+
+  const r=await postFinishApi('saveIncomingWeek',{weekStart:start,entries});
+
+  if(!r?.ok){
+    showAppToast(r?.error||'Previous-week incoming was not saved.','error');
+    return;
+  }
+
+  const saved=r.incoming||{};
+  FINISH_STATE.previousWeekAvgIncoming=toARNumber(saved.average);
+
+  if(Array.isArray(saved.entries)){
+    FINISH_STATE.incomingEntries={};
+    saved.entries.forEach(entry=>{
+      if(entry?.dayName){
+        FINISH_STATE.incomingEntries[entry.dayName]=entry.incomingJobs;
+      }
+    });
+  }
+
+  writeFinishInputs();
+  renderFinishIncomingAverage();
+  calculateFinishForecast();
+  saveFinishLocal();
+
+  setTextSafe(
+    'finishIncomingStatus',
+    `Saved ${saved.count||0} day(s) · Average ${formatARNumber(saved.average||0)} jobs`
+  );
+
+  showAppToast(
+    `Previous-week incoming saved. Daily average: ${formatARNumber(saved.average||0)} jobs.`
+  );
+}
+async function saveFinishForecast(){
+  const r=await postFinishApi('saveForecast',finishPayload());
+
+  if(r?.ok){
+    showAppToast('Finish forecast snapshot saved.');
+  }else{
+    showAppToast(r?.error||'Finish forecast was not saved.','error');
+  }
+}
+
+
+
+/* LIGHT COMMAND CENTER UI ENHANCEMENTS — 20260719
+   Visual behavior only. Forecast calculations and API logic are untouched. */
+(function initLightCommandCenterUi() {
+  function start() {
+    const rail = document.querySelector('.side-rail');
+    if (!rail || document.querySelector('.mobile-nav-toggle')) return;
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'mobile-nav-toggle';
+    toggle.setAttribute('aria-label', 'Open navigation');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.textContent = '☰';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'mobile-rail-overlay';
+    overlay.setAttribute('aria-hidden', 'true');
+
+    document.body.appendChild(toggle);
+    document.body.appendChild(overlay);
+
+    function setRail(open) {
+      rail.classList.toggle('mobile-open', open);
+      overlay.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.textContent = open ? '×' : '☰';
+    }
+
+    toggle.addEventListener('click', function () {
+      setRail(!rail.classList.contains('mobile-open'));
+    });
+    overlay.addEventListener('click', function () { setRail(false); });
+    rail.querySelectorAll('.tab-btn').forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (window.innerWidth <= 1020) setRail(false);
+      });
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 1020) setRail(false);
+    });
+
+    const valueSelector = [
+      '.forecast-kpi-card strong', '.ar-kpi-card strong', '.finish-kpi-card strong',
+      '.mini-kpi strong', '.focus-item strong', '.action-row strong'
+    ].join(',');
+
+    const observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        const target = mutation.target.nodeType === Node.TEXT_NODE
+          ? mutation.target.parentElement
+          : mutation.target;
+        if (!target || !target.matches || !target.matches(valueSelector)) return;
+        target.classList.remove('value-updated');
+        void target.offsetWidth;
+        target.classList.add('value-updated');
+      });
+    });
+
+    document.querySelectorAll(valueSelector).forEach(function (node) {
+      observer.observe(node, { childList: true, characterData: true, subtree: true });
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+})();

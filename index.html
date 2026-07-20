@@ -15,7 +15,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 <link rel="preconnect" href="https://api.fontshare.com">
 <link href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700,800&f[]=space-grotesk@300,400,500,600,700&display=swap" rel="stylesheet">
 
-<link rel="preload" href="style-index.css" as="style">
+<link rel="preload" href="style-index.css?v=20260720-production-forecast" as="style">
 <link rel="stylesheet" href="style-index.css">
 <style>
   /* ── ORIGINAL TRAINING CARD STYLES (unchanged) ── */
@@ -508,6 +508,40 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
   </div>
 </div>
 
+
+<!-- ── Production Forecast ── -->
+<div id="productionforecast-card" class="card card--featured" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#22d3ee"></canvas>
+  <div class="card-accent card-accent--cyan"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">Production Forecast</h3>
+        <span class="badge badge--lms-live">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        Surface, AR, and Finish goal forecasting with live WIP, staffing, machine capacity, hourly pace, and downtime impact.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">Surface Forecast</span>
+      <span class="tag">AR Forecast</span>
+      <span class="tag">Finish Forecast</span>
+      <span class="tag">Goal Readiness</span>
+    </div>
+
+    <button class="card-btn" onclick="openPage('ProductionForecast.html')">
+      Open Production Forecast
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
 <!-- ── Finish Dashboard ── -->
 <div id="finishdash-card" class="card card--featured" data-gated>
   <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#00d9ff"></canvas>
@@ -815,7 +849,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 <!-- ============================================================
      ORIGINAL SCRIPTS (unchanged)
      ============================================================ -->
-<script defer src="index.js"></script>
+<script defer src="index.js?v=20260720-production-forecast"></script>
 
 <!-- ============================================================
      PAGE BACKGROUND ANIMATION
