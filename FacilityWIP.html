@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Facility WIP Command Center" />
+  <title>Facility WIP Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="./FacilityWIP.css?v=20260721-index-embed" />
+</head>
+
+<body>
+  <script>
+    if (window.self !== window.top || new URLSearchParams(location.search).has("embedded")) {
+      document.documentElement.classList.add("is-embedded");
+    }
+  </script>
+  <div class="scanline" aria-hidden="true"></div>
+
+  <div class="page-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">
+          <span class="brand__ring"></span>
+          <span class="brand__core"></span>
+        </div>
+
+        <div>
+          <p class="eyebrow">Zenni Production Command</p>
+          <h1>Facility WIP</h1>
+        </div>
+      </div>
+
+      <div class="topbar__actions">
+        <a class="main-dashboard-button" href="./index.html">
+          <span aria-hidden="true">←</span>
+          Main Dashboard
+        </a>
+
+        <div
+          id="connectionStatus"
+          class="status-pill status-pill--loading"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="status-pill__dot"></span>
+          <span id="connectionStatusText">Connecting</span>
+        </div>
+
+        <button id="expandAllButton" class="secondary-button" type="button">
+          Expand All
+        </button>
+
+        <button id="refreshButton" class="primary-button" type="button">
+          <span id="refreshIcon" class="primary-button__icon" aria-hidden="true">↻</span>
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section id="alertBanner" class="alert-banner alert-banner--hidden" aria-live="polite">
+        <div class="alert-banner__icon" aria-hidden="true">!</div>
+        <div>
+          <strong id="alertTitle"></strong>
+          <p id="alertMessage"></p>
+        </div>
+      </section>
+
+      <section class="kpi-strip">
+        <div class="kpi kpi--facility" id="kpiFacility">
+          <span class="kpi__icon" aria-hidden="true">◇</span>
+          <div class="kpi__content">
+          <span class="kpi__label">Facility WIP</span>
+          <strong class="kpi__value" id="facilityWip">—</strong>
+          <span class="kpi__meta" id="facilityUpdatedAt">Waiting for live data</span>
+          </div>
+        </div>
+
+        <div class="kpi kpi--incoming">
+          <span class="kpi__icon" aria-hidden="true">⇩</span>
+          <div class="kpi__content">
+          <span class="kpi__label">Incoming (Virtual)</span>
+          <strong class="kpi__value" id="incomingWip">—</strong>
+          <span class="kpi__meta" id="incomingQueueCount">0 queues • not in total</span>
+          </div>
+        </div>
+
+        <div class="kpi kpi--gap">
+          <span class="kpi__icon" aria-hidden="true">⌁</span>
+          <div class="kpi__content">
+          <span class="kpi__label">Sync Gap</span>
+          <strong class="kpi__value" id="gapMinutes">—</strong>
+          <span class="kpi__meta" id="snapshotTimes">—</span>
+          </div>
+        </div>
+
+        <div class="kpi kpi--refresh">
+          <span class="kpi__icon" aria-hidden="true">◷</span>
+          <div class="kpi__content">
+          <span class="kpi__label">Next Refresh</span>
+          <strong class="kpi__value" id="nextRefresh">5:00</strong>
+          <span class="kpi__meta" id="bottleneckNote">No bottleneck detected</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="command-layout">
+        <div class="command-main">
+          <p class="flow-caption">Production flow → left to right</p>
+
+          <section class="lane-grid" id="laneGrid">
+            <div class="empty-state">Waiting for department data.</div>
+          </section>
+
+          <div class="flow-rail" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+            <strong>Production Flow → Left to Right</strong>
+          </div>
+
+          <div class="support-heading">
+            <span class="support-heading__icon" aria-hidden="true">◈</span>
+            <span>Support &amp; Operations</span>
+          </div>
+
+          <section class="support-zone">
+            <div class="facility-map" aria-hidden="true">
+              <div class="facility-map__head">Facility Map</div>
+              <div class="facility-map__grid">
+                <i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+            </div>
+
+            <section class="support-strip" id="supportStrip"></section>
+          </section>
+
+          <footer class="system-footer" aria-label="System status">
+            <span><i></i>Status: Nominal</span>
+            <span><i></i>Systems Online</span>
+            <span><i></i>Data Synced</span>
+            <span><i></i>Secure Link</span>
+          </footer>
+        </div>
+
+        <aside class="bottleneck-panel" aria-labelledby="bottleneckTitle">
+          <div class="bottleneck-panel__head">
+            <span class="bottleneck-panel__reticle" aria-hidden="true"></span>
+            <h2 id="bottleneckTitle">Current Bottlenecks</h2>
+          </div>
+
+          <div id="bottleneckList" class="bottleneck-list">
+            <div class="empty-state">Waiting for station data.</div>
+          </div>
+
+          <div class="sync-monitor">
+            <div>
+              <span class="sync-monitor__label">Sync Monitor</span>
+              <div class="sync-monitor__radar" aria-hidden="true">
+                <i></i>
+              </div>
+            </div>
+            <div class="sync-monitor__states">
+              <span>PHY <b>● Online</b></span>
+              <span>Virtual <b>● Online</b></span>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section
+        class="incoming-panel"
+        id="incomingPanel"
+        hidden
+      >
+        <div class="branch-heading">
+          <span class="branch-heading__line"></span>
+          <h3>Incoming Queues</h3>
+          <span class="branch-heading__line"></span>
+        </div>
+
+        <div id="incomingQueueList" class="queue-grid">
+          <div class="empty-state">Waiting for Incoming queue data.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay" aria-hidden="false">
+    <div class="loader">
+      <div class="loader__orbit loader__orbit--one"></div>
+      <div class="loader__orbit loader__orbit--two"></div>
+      <div class="loader__core"></div>
+      <p>Loading Facility WIP</p>
+    </div>
+  </div>
+
+  <template id="laneTemplate">
+    <article class="lane">
+      <button class="lane__head" type="button" aria-expanded="false">
+        <div class="lane__topline">
+          <span class="lane__name"></span>
+          <strong class="lane__value"></strong>
+        </div>
+
+        <div class="lane__bar">
+          <span class="lane__fill"></span>
+        </div>
+
+        <span class="lane__share"></span>
+      </button>
+
+      <div class="lane__stations"></div>
+
+      <div class="lane__actions">
+        <button class="lane__more" type="button" hidden></button>
+        <a class="lane__dashboard" href="#" hidden>
+          Open Dashboard
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </article>
+  </template>
+
+  <template id="stationRowTemplate">
+    <div class="station-row">
+      <div class="station-row__text">
+        <span class="station-row__name"></span>
+        <span class="station-row__desc"></span>
+      </div>
+      <strong class="station-row__value"></strong>
+    </div>
+  </template>
+
+  <template id="supportCardTemplate">
+    <button class="support-card" type="button">
+      <span class="support-card__name"></span>
+      <strong class="support-card__value"></strong>
+    </button>
+  </template>
+
+  <template id="queueNodeTemplate">
+    <article class="queue-node">
+      <div class="queue-node__connector" aria-hidden="true"></div>
+      <div class="queue-node__content">
+        <span class="queue-node__department"></span>
+        <h4 class="queue-node__name"></h4>
+        <strong class="queue-node__value"></strong>
+      </div>
+    </article>
+  </template>
+
+  <script src="./FacilityWIP.js?v=20260721-index-embed" defer></script>
+</body>
+</html> `

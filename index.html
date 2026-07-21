@@ -16,7 +16,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 <link href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700,800&f[]=space-grotesk@300,400,500,600,700&display=swap" rel="stylesheet">
 
 <link rel="preload" href="style-index.css?v=20260720-production-forecast" as="style">
-<link rel="stylesheet" href="style-index.css">
+<link rel="stylesheet" href="style-index.css?v=20260721-facility-home">
 <style>
   /* ── ORIGINAL TRAINING CARD STYLES (unchanged) ── */
   .card--training { border-color: rgba(245,158,11,0.18); }
@@ -227,7 +227,15 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
      ============================================================ -->
 <div class="section-nav">
 
-  <button class="nav-item nav-item--anim active" data-tab="operations">
+  <button class="nav-item nav-item--facility active" data-tab="facility">
+    <div class="facility-nav-icon" aria-hidden="true">◎</div>
+    <div class="facility-nav-copy">
+      <strong>Facility WIP</strong>
+      <span>Live Command Center</span>
+    </div>
+  </button>
+
+  <button class="nav-item nav-item--anim" data-tab="operations">
     <div class="nav-canvas-wrap">
       <canvas class="nav-canvas" id="nav-canvas-ops" width="160" height="72"></canvas>
       <div class="nav-label-row">
@@ -315,8 +323,33 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
      ============================================================ -->
 <main class="main">
 
+  <!-- FACILITY WIP HOME -->
+  <section id="facility" class="tab-content active facility-home">
+    <div class="facility-home__head">
+      <div>
+        <span>Zenni Production Command</span>
+        <h1>Facility WIP</h1>
+      </div>
+
+      <div class="facility-home__status">
+        <i></i>
+        Live Production View
+      </div>
+    </div>
+
+    <div class="facility-home__frame-shell">
+      <iframe
+        id="facilityWipFrame"
+        class="facility-home__frame"
+        src="./FacilityWIP.html?embedded=1"
+        title="Facility WIP Command Center"
+        loading="eager"
+      ></iframe>
+    </div>
+  </section>
+
   <!-- OPERATIONS TAB -->
-  <section id="operations" class="tab-content active">
+  <section id="operations" class="tab-content">
     <div class="module-head">
       <div class="module-label">LMS Command Center</div>
     </div>
@@ -849,7 +882,7 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
 <!-- ============================================================
      ORIGINAL SCRIPTS (unchanged)
      ============================================================ -->
-<script defer src="index.js?v=20260720-production-forecast"></script>
+<script defer src="index.js?v=20260721-facility-home"></script>
 
 <!-- ============================================================
      PAGE BACKGROUND ANIMATION
