@@ -2036,3 +2036,18 @@ html.is-embedded body {
 html.is-embedded .loading-overlay {
   position: absolute;
 }
+
+
+/* =========================================================
+   LANE FOOTER CLEANUP v20260722
+   Show More / Show Less is now the only lane footer action.
+   ========================================================= */
+
+.lane__more {
+  width: calc(100% - 28px);
+}
+
+.lane__actions,
+.lane__dashboard {
+  display: none !important;
+}

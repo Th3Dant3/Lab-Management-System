@@ -34,13 +34,6 @@
 
   const SUPPORT_ORDER = ["Breakage", "Customer Service", "LMS"];
 
-  const DASHBOARD_LINKS = {
-    Inventory: "./PickWip.html",
-    Surface: "./SurfaceWIP.html",
-    AR: "./ARDash.html",
-    Finish: "./FinishDash.html"
-  };
-
   const DISPLAY_DEPARTMENT_RULES = [
     {
       sourceDepartment: "Inventory",
@@ -767,7 +760,6 @@
       const head = node.querySelector(".lane__head");
       const stationsBox = node.querySelector(".lane__stations");
       const moreButton = node.querySelector(".lane__more");
-      const dashboardButton = node.querySelector(".lane__dashboard");
 
       const isExpanded = state.expandedDepartments.has(
         group.department
@@ -784,17 +776,6 @@
       head.setAttribute("aria-expanded", String(isExpanded));
 
       setText(node.querySelector(".lane__name"), group.department);
-
-      const dashboardUrl = DASHBOARD_LINKS[group.department];
-
-      if (dashboardButton && dashboardUrl) {
-        dashboardButton.hidden = false;
-        dashboardButton.href = dashboardUrl;
-        dashboardButton.setAttribute(
-          "aria-label",
-          `Open ${group.department} dashboard`
-        );
-      }
 
       setText(
         node.querySelector(".lane__value"),
