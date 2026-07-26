@@ -7,7 +7,7 @@
  *   ?action=breakageAssociate
  ************************************************************/
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbySXKQSHTXQVlZNq2vubqp2D3W-_IgtmaiFr_GDxz5X4FO2cqcYeUkAo_A9LajOfj9f/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxsZ7Bb5WYUyJeECfMWFyOJjRxzsHZkvdXW3Cloyq3icXrfEF3tmjAUuUYma42IACg3tw/exec';
 const BREAKAGE_CACHE_PREFIX = 'QUALITY_BREAKAGE_WEEK_CACHE_V6_REASON_OPERATOR_';
 const BREAKAGE_CACHE_TTL_MS = 60 * 60 * 1000;
 
@@ -187,23 +187,37 @@ function updateLoader(percent, message, step) {
 /* LOAD */
 async function loadBoot(force = false) {
   setLoading(true);
-  updateLoader(22, force ? 'Refreshing boot data...' : 'Booting Quality Hub...', 'boot');
+  updateLoader(22, force ? 'Refreshing Breakage Hub...' : 'Booting Quality Hub...', 'boot');
 
   try {
-    const action = force ? 'breakageBoot&force=1' : 'breakageBoot';
-    const data = await fetchApi(action);
-    STATE.boot = data || {};
+    const params = new URLSearchParams({
+      action: 'boot',
+      ts: String(Date.now())
+    });
 
-    // Always default to today's actual current FW, not API's defaultWeek.
-    // The API may have an old WorkDate in SETTINGS (e.g. pointing to FW 23
-    // when today is already FW 24). The client knows what day it is.
+    const data = await fetchApiRaw(params.toString());
+
+    const fiscalWeeks = (Array.isArray(data.fiscalWeeks) ? data.fiscalWeeks : [])
+      .map(normalizeBreakageApiWeek)
+      .filter(Boolean);
+
+    const currentWeek = normalizeBreakageApiWeek(
+      data.currentWeek || fiscalWeeks[0] || null
+    );
+
+    STATE.boot = {
+      ...data,
+      fiscalWeeks,
+      currentWeek,
+      defaultWeek: currentWeek || fiscalWeeks[0] || null
+    };
+
     if (!STATE._userChangedFiscalWeek) {
-      STATE.selectedWeek = getCurrentBreakageFiscalWeek();
+      STATE.selectedWeek = currentWeek || fiscalWeeks[0] || null;
     }
 
-    // If still null (no boot data at all), fall back to API default
     if (!STATE.selectedWeek) {
-      STATE.selectedWeek = data.defaultWeek || (data.fiscalWeeks || [])[0] || null;
+      STATE.selectedWeek = STATE.boot.defaultWeek;
     }
 
     renderWeekDropdowns();
@@ -247,24 +261,86 @@ async function loadWeek(force = false) {
     }
   }
 
-  const params = new URLSearchParams({
-    action: 'breakageWeek',
-    fiscalWeek: STATE.selectedWeek.fiscalWeek || '',
+  const summaryParams = new URLSearchParams({
+    action: 'breakageSummary',
     weekStartDate: STATE.selectedWeek.weekStartDate || '',
     weekEndDate: STATE.selectedWeek.weekEndDate || '',
     ts: String(Date.now())
   });
 
   try {
-    const data = await fetchApiRaw(params.toString());
-    STATE.week = normalizeWeekPayload(data || {});
+    const summaryData = await fetchApiRaw(summaryParams.toString());
+
+    // The new API keeps boot fast. Load granular records only for dates
+    // in the selected week, in parallel, so reasons/access points/operators work.
+    const dateKeys = Array.from(new Set(
+      (summaryData.breakageSummaryRows || summaryData.breakageDailySnapshot || [])
+        .map(row => String(row.WorkDate || row.workDate || '').trim())
+        .filter(Boolean)
+    ));
+
+    const detailPayloads = await Promise.all(
+      dateKeys.map(async workDate => {
+        const params = new URLSearchParams({
+          action: 'breakageDateDetails',
+          workDate,
+          ts: String(Date.now())
+        });
+
+        try {
+          return await fetchApiRaw(params.toString());
+        } catch (err) {
+          console.warn(`[Quality Hub] Details unavailable for ${workDate}:`, err);
+          return { breakageDateDetails: [] };
+        }
+      })
+    );
+
+    const records = detailPayloads.flatMap(payload =>
+      Array.isArray(payload.breakageDateDetails)
+        ? payload.breakageDateDetails
+        : Array.isArray(payload.breakageDailySnapshot)
+          ? payload.breakageDailySnapshot
+          : []
+    );
+
+    const payload = {
+      ...summaryData,
+      summary: summaryData.summaryTotals || summaryData.summary || {},
+      records,
+      breakageMaster: records,
+      breakageDailySnapshot: records,
+      breakageOperatorWeeklySummary:
+        summaryData.breakageOperatorWeeklySummary || []
+    };
+
+    STATE.week = normalizeWeekPayload(payload);
     STATE.allWeeks[key] = STATE.week;
     saveCachedWeek(key, STATE.week);
-    afterWeekLoaded('API');
+    afterWeekLoaded('Breakage API');
   } catch (err) {
     console.error(err);
     showError(`Failed to load selected week. ${err.message || err}`);
   }
+}
+
+function normalizeBreakageApiWeek(week) {
+  if (!week) return null;
+
+  const weekStartDate = String(week.weekStartDate || '').trim();
+  const weekEndDate = String(week.weekEndDate || '').trim();
+  if (!weekStartDate || !weekEndDate) return null;
+
+  return {
+    ...week,
+    key: week.key || `${weekStartDate}|${weekEndDate}`,
+    fiscalWeek: week.fiscalWeek || '',
+    weekStartDate,
+    weekEndDate,
+    workDates: Array.isArray(week.workDates) ? week.workDates : [],
+    rowCount: Number(week.rowCount || week.recordCount || 0),
+    recordCount: Number(week.recordCount || week.rowCount || 0)
+  };
 }
 
 function afterWeekLoaded(source) {
@@ -1383,3 +1459,61 @@ function shortStationLabel(text) {
 function openAssociateModal(operator) {
   return openModal(operator);
 }
+
+/************************************************************
+ * BREAKAGE HUB V1 API MODAL OVERRIDE
+ * Uses selected-week records already loaded from date-detail endpoints.
+ ************************************************************/
+openModal = async function(operator) {
+  if (!operator || !STATE.selectedWeek) return;
+
+  const normalizedOperator = normalizeName(operator);
+  const records = (STATE.week?.records || []).filter(record =>
+    normalizeName(record.operator || record.OperatorName || 'No Operator') === normalizedOperator
+  );
+
+  const lens = records.reduce((sum, row) =>
+    sum + Number(row.lensBroken ?? row.LensBreakageCount ?? 0), 0);
+
+  const frame = records.reduce((sum, row) =>
+    sum + Number(row.frameBroken ?? row.FrameBreakageCount ?? 0), 0);
+
+  const total = records.reduce((sum, row) =>
+    sum + Number(row.totalBreakage ?? row.TotalBreakageCount ?? 0), 0);
+
+  const scansByDate = new Map();
+  records.forEach(row => {
+    const dateKey = String(row.workDate || row.WorkDate || '').trim();
+    const scans = Number(row.totalDailyScan ?? row.OperatorDailyScans ?? 0);
+    if (dateKey && scans > 0 && !scansByDate.has(dateKey)) {
+      scansByDate.set(dateKey, scans);
+    }
+  });
+  const scans = Array.from(scansByDate.values()).reduce((sum, value) => sum + value, 0);
+
+  $('modalAssociateName').textContent = operator;
+  $('modalAssociateSub').textContent =
+    `${STATE.selectedWeek.fiscalWeek || ''} • ${formatPrettyDate(STATE.selectedWeek.weekStartDate)} – ${formatPrettyDate(STATE.selectedWeek.weekEndDate)}`;
+  $('modalLens').textContent = formatNumber(lens);
+  $('modalFrame').textContent = formatNumber(frame);
+  $('modalTotal').textContent = formatNumber(total);
+  $('modalScan').textContent = formatNumber(scans);
+
+  $('modalRecords').innerHTML = records.length ? records.map(rec => `
+    <div class="record-row">
+      <span class="rec-date">${escapeHtml(formatPrettyDate(rec.workDate || rec.WorkDate))}</span>
+      <span class="rec-ap" title="${escapeHtml(rec.accessPoint || rec.AccessPoint || '')}">
+        ${escapeHtml(rec.accessPoint || rec.AccessPoint || 'No Access Point')}
+      </span>
+      <span class="rec-reason" title="${escapeHtml(rec.reason || rec.BreakageReason || '')}">
+        ${escapeHtml(rec.reason || rec.BreakageReason || 'No Reason')}
+      </span>
+      <span class="rec-lens">${formatNumber(rec.lensBroken ?? rec.LensBreakageCount ?? 0)} lens</span>
+      <span class="rec-frame">${formatNumber(rec.frameBroken ?? rec.FrameBreakageCount ?? 0)} frame</span>
+    </div>
+  `).join('') : emptyState('No breakage records found for this operator in the selected week.');
+
+  $('associateModal')?.classList.remove('hidden');
+};
+
+console.info('[Quality Hub] Separate Breakage Hub API enabled.');

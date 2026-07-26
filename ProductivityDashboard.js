@@ -5,6 +5,7 @@
  ************************************************************/
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbySXKQSHTXQVlZNq2vubqp2D3W-_IgtmaiFr_GDxz5X4FO2cqcYeUkAo_A9LajOfj9f/exec';
+const BREAKAGE_API_URL = 'https://script.google.com/macros/s/AKfycbxsZ7Bb5WYUyJeECfMWFyOJjRxzsHZkvdXW3Cloyq3icXrfEF3tmjAUuUYma42IACg3tw/exec';
 const CLIENT_CACHE_KEY = 'PRODUCTIVITY_HUB_SHEET_PAYLOAD_CACHE_V6_SATURDAY_SHIFT_FIX';
 const CLIENT_CACHE_TTL_MS = 15 * 60 * 1000;
 
@@ -471,8 +472,7 @@ function reloadData() {
 }
 
 function warmServerCacheQuietly() {
-  fetch(`${API_URL}?action=warmCache&ts=${Date.now()}`)
-    .catch(() => {});
+  // Disabled: API cache warming is handled server-side, not by the webpage.
 }
 
 function clearClientProductivityCache() {
@@ -603,13 +603,13 @@ function fetchBreakageFallbackForWeek(week, reason = 'fallback') {
   }
 
   const qs = new URLSearchParams({
-    action: 'breakageData',
+    action: 'breakageSummary',
     weekStartDate: week.weekStartDate,
     weekEndDate: week.weekEndDate,
     ts: String(Date.now())
   });
 
-  return fetch(`${API_URL}?${qs.toString()}`)
+  return fetch(`${BREAKAGE_API_URL}?${qs.toString()}`)
     .then(r => r.text())
     .then(text => {
       let data;
@@ -4235,14 +4235,14 @@ function fetchBreakageFallbackForWeek(week, reason = 'summary') {
     ts: String(Date.now())
   });
 
-  return fetch(`${API_URL}?${qs.toString()}`)
+  return fetch(`${BREAKAGE_API_URL}?${qs.toString()}`)
     .then(r => r.text())
     .then(text => {
       let data;
       try {
         data = JSON.parse(text);
       } catch (err) {
-        throw new Error('API did not return JSON. Redeploy Apps Script and test /exec?action=breakageSummary.');
+        throw new Error('API did not return JSON. Redeploy the Breakage Hub Apps Script and test its /exec?action=breakageSummary.');
       }
 
       if (!data || data.ok === false) {
@@ -4303,14 +4303,14 @@ function fetchBreakageDateDetails(dateKey) {
     ts: String(Date.now())
   });
 
-  return fetch(`${API_URL}?${qs.toString()}`)
+  return fetch(`${BREAKAGE_API_URL}?${qs.toString()}`)
     .then(r => r.text())
     .then(text => {
       let data;
       try {
         data = JSON.parse(text);
       } catch (err) {
-        throw new Error('API did not return JSON. Redeploy Apps Script and test /exec?action=breakageDateDetails.');
+        throw new Error('API did not return JSON. Redeploy the Breakage Hub Apps Script and test its /exec?action=breakageDateDetails.');
       }
 
       if (!data || data.ok === false) {
@@ -6016,7 +6016,7 @@ function ensureAssociateBreakageDetailsFast(summary) {
           ts: String(Date.now())
         });
 
-        fetch(`${API_URL}?${qs.toString()}`)
+        fetch(`${BREAKAGE_API_URL}?${qs.toString()}`)
           .then(r => r.text())
           .then(text => {
             let data;
