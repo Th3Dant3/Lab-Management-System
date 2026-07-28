@@ -121,7 +121,7 @@
     </button>
     <button class="tab-btn" onclick="sw('research',this)">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="4"/><path d="M10 10l4 4" stroke-linecap="round"/></svg>
-      <span>Research</span>
+      <span>Analysis</span>
     </button>
     <button class="tab-btn" onclick="sw('alerts',this)">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2L2 14h12L8 2z"/><path d="M8 7v3M8 11.5v.5" stroke-linecap="round"/></svg>
@@ -157,8 +157,20 @@
   <!-- ════ OVERVIEW ════ -->
   <section class="tab active" id="t-overview">
 
+    <div class="ops-hero">
+      <div>
+        <div class="ops-eyebrow">SURFACE BREAKAGE CONTROL</div>
+        <h1 id="opsTitle">Today’s breakage performance</h1>
+        <p id="opsSubtitle">Live detection, processing, source-machine and material concentration.</p>
+      </div>
+      <div class="ops-status-row">
+        <span class="ops-chip live"><span></span> Live operations</span>
+        <span class="ops-chip" id="opsCarryChip">Carryover separated in RX Flow</span>
+      </div>
+    </div>
+
     <!-- Single date filter -->
-    <div class="filter-bar">
+    <div class="filter-bar overview-filter">
       <div class="filter-group">
         <label>Date</label>
         <input type="date" id="dateSingle" onchange="applyDateFilter()"/>
@@ -246,56 +258,43 @@
         <label>AR41</label>
         <select id="filterAR41" onchange="renderFlow()"><option value="">All AR41</option></select>
       </div>
-      <div class="flow-count"><span id="flowCount">--</span> jobs</div>
+      <div class="flow-count"><span id="flowCount">--</span></div>
     </div>
 
-    <!-- Professional Flow Legend -->
     <div class="flow-legend-panel">
       <div class="flow-legend-title">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 8h14M9 4l4 4-4 4" stroke-linecap="round"/></svg>
         RX BREAKAGE JOURNEY — UNDERSTANDING THE FLOW
       </div>
       <div class="flow-legend-body">
-
         <div class="flow-legend-stage">
           <div class="flow-legend-seg seg-1"></div>
           <div class="flow-legend-info">
             <div class="flow-legend-stage-name">① Job in Transit — Source to AR41</div>
-            <div class="flow-legend-stage-desc">The RX job has been scanned out of the ORB or OTB source machine and is now moving through the lab toward the AR41 inspection station. This segment measures total travel and queue time — from the moment the source machine releases the job to the moment the operator picks it up at AR41.</div>
+            <div class="flow-legend-stage-desc">Time from the ORB or OTB source-machine scan until the job arrives at AR41. This source scan decides whether the breakage belongs under Run Today or Run Previous Days.</div>
           </div>
         </div>
-
         <div class="flow-legend-arrow">→</div>
-
         <div class="flow-legend-stage">
           <div class="flow-legend-seg seg-2"></div>
           <div class="flow-legend-info">
             <div class="flow-legend-stage-name">② Breakage Identified — AR41 Scan to Breakage Table</div>
-            <div class="flow-legend-stage-desc">The operator has scanned the job at AR41 and a power or axis defect has been detected. This segment captures how long it took from that initial scan until the breakage was formally recorded at the breakage table — the window in which the failure was confirmed and logged.</div>
+            <div class="flow-legend-stage-desc">Time from the AR41 inspection scan until the breakage is formally recorded at the breakage table.</div>
           </div>
         </div>
-
         <div class="flow-legend-arrow">→</div>
-
         <div class="flow-legend-stage">
           <div class="flow-legend-seg seg-3"></div>
           <div class="flow-legend-info">
             <div class="flow-legend-stage-name">③ Breakage Processing — Table Scan to Reorder</div>
-            <div class="flow-legend-stage-desc">The breakage has been logged and the job is now being analyzed, documented, and closed out. This segment reflects how long it took the lab to complete the full breakage workflow — from table entry through final disposition — so the job can be reprocessed or sent back for reorder.</div>
+            <div class="flow-legend-stage-desc">Time from breakage-table entry through final processing or reorder disposition.</div>
           </div>
         </div>
-
       </div>
-      <div class="flow-legend-footer">
-        Each bar represents one RX job. Width is proportional to time in each phase. Hover any segment for exact timestamps, operator ID, and machine details.
-      </div>
+      <div class="flow-legend-footer">All breakages in the current report remain visible. They are separated only by the date the job ran on the ORB or OTB source machine.</div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <span class="panel-title">RX breakage journey</span>
-        <span class="panel-hint">hover any segment — source machine · AR41 · operator scan · processing</span>
-      </div>
+    <div class="panel flow-journey-panel">
       <div id="flowList"><div class="empty">Loading...</div></div>
     </div>
 

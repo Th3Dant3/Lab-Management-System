@@ -26,8 +26,7 @@ const LOADER_MAP = {
   "CWOOD":         "loader_TEAMLEAD.html",
   "CFORBES":       "loader_TEAMLEAD.html",
   "JADAIR":        "loader_TEAMLEAD.html",
-  "JMOLING":        "loader_TEAMLEAD.html",
-  
+  "JMOLING":        "loader_TEAMLEAD.html",  
 }
 
 document.addEventListener("DOMContentLoaded", () => {

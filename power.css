@@ -1131,3 +1131,121 @@ select:focus { border-color: var(--peach); }
   .kpi-div   { display: none; }
   .al-kpi3   { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   V6 REVAMP — operational hierarchy + isolated RX work dates
+   ============================================================ */
+.ops-hero,
+.flow-day-shell {
+  display:flex; align-items:center; justify-content:space-between; gap:24px;
+  padding:22px 24px;
+  background:linear-gradient(135deg, rgba(210,140,100,.10), rgba(13,16,21,.95) 48%, rgba(130,184,176,.07));
+  border:1px solid var(--border-hi); border-radius:14px;
+  box-shadow:0 18px 50px rgba(0,0,0,.22);
+}
+.ops-eyebrow { color:var(--peach); font:600 10px/1 var(--font-mono); letter-spacing:.14em; margin-bottom:9px; }
+.ops-hero h1,.flow-day-shell h2 { color:var(--white); font-size:24px; line-height:1.15; margin:0 0 7px; }
+.ops-hero p,.flow-day-shell p { color:rgba(255,255,255,.62); margin:0; max-width:700px; }
+.ops-status-row { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.ops-chip { border:1px solid var(--border-hi); background:rgba(255,255,255,.035); color:var(--muted); border-radius:999px; padding:7px 11px; font:500 11px var(--font-mono); }
+.ops-chip.live span { display:inline-block; width:7px; height:7px; border-radius:50%; background:#54d6a1; margin-right:6px; box-shadow:0 0 0 5px rgba(84,214,161,.08); }
+.overview-filter { padding:12px 16px; }
+
+.flow-day-switch { display:flex; align-items:center; gap:6px; padding:5px; background:rgba(0,0,0,.22); border:1px solid var(--border); border-radius:10px; }
+.flow-day-btn { border:0; background:transparent; color:var(--muted); padding:9px 13px; border-radius:7px; font:600 11px var(--font-mono); cursor:pointer; }
+.flow-day-btn:hover { color:var(--white); background:rgba(255,255,255,.05); }
+.flow-day-btn.active { color:#0a0c10; background:var(--peach); box-shadow:0 6px 18px rgba(210,140,100,.18); }
+.flow-custom-date { display:flex; align-items:center; gap:7px; color:var(--muted); font:500 10px var(--font-mono); padding-left:8px; }
+.flow-custom-date input { width:132px; background:var(--bg); border:1px solid var(--border-hi); color:var(--white); border-radius:6px; padding:7px; color-scheme:dark; }
+.flow-kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.flow-kpi { min-height:88px; padding:16px 18px; border:1px solid var(--border); border-radius:10px; background:var(--bg-panel); position:relative; overflow:hidden; }
+.flow-kpi::after { content:""; position:absolute; inset:auto 0 0; height:2px; background:var(--peri); opacity:.65; }
+.flow-kpi.warning::after { background:var(--peach); }
+.flow-kpi span { display:block; color:var(--white); font:700 25px/1 var(--font-mono); margin-bottom:8px; }
+.flow-kpi small { color:var(--muted); font:500 10px var(--font-mono); text-transform:uppercase; letter-spacing:.06em; }
+.flow-filter-bar { padding:12px 16px; }
+.compact-flow-key { padding:14px 16px; }
+.compact-stage-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.compact-stage { display:grid; grid-template-columns:8px 1fr; column-gap:10px; row-gap:3px; align-items:center; border:1px solid var(--border); background:rgba(255,255,255,.02); border-radius:8px; padding:12px; }
+.compact-stage i { grid-row:1/3; width:7px; height:100%; min-height:36px; border-radius:4px; }
+.compact-stage b { color:var(--white); font:600 11px var(--font-mono); }
+.compact-stage span { color:var(--muted); font-size:11px; }
+
+/* Cleaner visual density */
+.panel { box-shadow:0 12px 30px rgba(0,0,0,.10); }
+.gantt-row { grid-template-columns:105px 1fr 84px 94px; padding:11px 8px; }
+.gantt-bar { height:25px; }
+.gantt-row:hover { background:rgba(210,140,100,.035); }
+
+@media (max-width:900px) {
+  .ops-hero,.flow-day-shell { align-items:flex-start; flex-direction:column; }
+  .flow-day-switch { width:100%; flex-wrap:wrap; }
+  .flow-kpi-grid,.compact-stage-grid { grid-template-columns:1fr 1fr; }
+}
+@media (max-width:620px) {
+  .flow-kpi-grid,.compact-stage-grid { grid-template-columns:1fr; }
+}
+
+
+/* RX FLOW — SOURCE DATE VS AR41 DATE */
+.source-day-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+}
+.source-day-label {
+  margin-right: 4px;
+  color: var(--label);
+  font: 600 11px var(--font-mono);
+  letter-spacing: .07em;
+}
+.source-day-btn {
+  border: 1px solid var(--border-hi);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 13px;
+  cursor: pointer;
+  font: 500 11px var(--font-mono);
+  transition: .15s ease;
+}
+.source-day-btn:hover { color: var(--white); background: var(--bg-hover); }
+.source-day-btn.active {
+  color: var(--peach);
+  border-color: rgba(210,140,100,.55);
+  background: rgba(210,140,100,.12);
+}
+
+
+/* ============================================================
+   RX FLOW — RUN TODAY VS PREVIOUS DAYS
+   ============================================================ */
+.flow-journey-panel { padding: 0; overflow: hidden; }
+.flow-run-group { padding: 16px 18px 18px; }
+.flow-run-group + .flow-run-group { border-top: 1px solid var(--border-hi); }
+.flow-run-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 10px; padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.flow-run-title {
+  color: var(--white); font: 700 13px var(--font-mono);
+  letter-spacing: .07em;
+}
+.flow-run-sub { color: var(--muted); font: 11px var(--font-mono); margin-top: 3px; }
+.flow-run-count {
+  color: var(--muted); font: 12px var(--font-mono); white-space: nowrap;
+  border: 1px solid var(--border-hi); border-radius: 20px; padding: 5px 10px;
+}
+.flow-run-count strong { color: var(--white); }
+.flow-run-count span { color: var(--faint); margin: 0 4px; }
+.run-today .flow-run-title { color: var(--peach); }
+.run-previous .flow-run-title { color: var(--peri); }
+@media (max-width: 720px) {
+  .flow-run-head { align-items: flex-start; flex-direction: column; }
+}

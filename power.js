@@ -28,6 +28,9 @@ let _brk=[], _reason=[], _research=[], _anom=[];
 // Full loaded sets (always the complete live server response)
 let _allBrk=[], _allReason=[], _allResearch=[], _allAnom=[];
 
+// RX Flow has its own work-date dataset so changing Flow never changes Overview.
+let _flowBrk=[], _flowResearch=[];
+
 /* ============================================================
    FETCH HELPER
    Passes optional startDate / endDate (YYYY-MM-DD strings) to
@@ -248,13 +251,41 @@ function buildOverview() {
 }
 
 /* ============================================================
+   RX FLOW SOURCE-RUN CLASSIFICATION
+   The live breakage report is kept intact. Rows are separated by
+   the ORB/OTB source-machine scan date: today vs previous days.
+============================================================ */
+function isoLocalDate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function safeIsoDate(raw) {
+  if (!raw) return '';
+  const d = new Date(raw);
+  return isNaN(d) ? String(raw).slice(0, 10) : isoLocalDate(d);
+}
+
+function getSourceScanTime(r, res) {
+  const src = (r.BrkSourceMachine || res?.BrkSourceMachine || res?.ORBMachine || '').toUpperCase();
+  if (src.includes('OTB')) return res?.OTBScanTime || r.OTBScanTime || null;
+  return res?.ORBScanTime || r.ORBScanTime || res?.OTBScanTime || r.OTBScanTime || null;
+}
+
+function sourceRunDate(r, res) {
+  return safeIsoDate(getSourceScanTime(r, res));
+}
+
+/* ============================================================
    FLOW FILTERS
 ============================================================ */
 function populateFlowFilters() {
   [
-    ['filterReason', _brk.map(r => r.BrkReason)],
-    ['filterSource', _brk.map(r => r.BrkSourceMachine)],
-    ['filterAR41',   _brk.map(r => r.AR41Machine)],
+    ['filterReason', _flowBrk.map(r => r.BrkReason)],
+    ['filterSource', _flowBrk.map(r => r.BrkSourceMachine)],
+    ['filterAR41',   _flowBrk.map(r => r.AR41Machine)],
   ].forEach(([id, vals]) => {
     const el = document.getElementById(id);
     while (el.options.length > 1) el.remove(1);
@@ -283,49 +314,54 @@ document.addEventListener('mousemove', e => { if (tip && tip.style.display === '
    RENDER FLOW
 ============================================================ */
 function renderFlow() {
-  const fR   = document.getElementById('filterReason').value;
-  const fS   = document.getElementById('filterSource').value;
-  const fA   = document.getElementById('filterAR41').value;
+  const fR = document.getElementById('filterReason').value;
+  const fS = document.getElementById('filterSource').value;
+  const fA = document.getElementById('filterAR41').value;
 
-  let data = [..._brk];
+  let data = [..._flowBrk];
   if (fR) data = data.filter(r => r.BrkReason === fR);
   if (fS) data = data.filter(r => r.BrkSourceMachine === fS);
   if (fA) data = data.filter(r => r.AR41Machine === fA);
 
-  document.getElementById('flowCount').textContent = data.length;
+  const filteredLenses = data.reduce((sum, r) => sum + (parseInt(r.LensesBroken, 10) || 0), 0);
+  document.getElementById('flowCount').textContent = `${data.length} jobs · ${filteredLenses} lenses`;
+
   if (!data.length) {
     document.getElementById('flowList').innerHTML = '<div class="empty">No jobs match filters</div>';
     return;
   }
 
   const resMap = {};
-  _research.forEach(r => { resMap[String(r.RxNumber)] = r; });
+  _flowResearch.forEach(r => { resMap[String(r.RxNumber)] = r; });
+  const today = isoLocalDate();
 
-  const rows = data.map(r => {
-    const res   = resMap[String(r.RxNumber)];
-    const src   = (r.BrkSourceMachine || '').toUpperCase();
-    let srcTime = null;
-    if (res) srcTime = src.includes('ORB') ? res.ORBScanTime : res.OTBScanTime;
-    const d1    = srcTime ? diffMin(srcTime, r.AR41ScanTime) : 0;
-    const d2    = parseFloat(r.AR41_to_Breakage_Min) || 0;
-    const d3    = parseFloat(r.Breakage_to_Processed_Min) || 0;
+  const runToday = [];
+  const runPrevious = [];
+
+  data.forEach(r => {
+    const res = resMap[String(r.RxNumber)];
+    const runDate = sourceRunDate(r, res);
+    if (runDate === today) runToday.push(r);
+    else runPrevious.push(r);
+  });
+
+  function makeJourneyRow(r) {
+    const res = resMap[String(r.RxNumber)];
+    const src = (r.BrkSourceMachine || '').toUpperCase();
+    const srcTime = getSourceScanTime(r, res);
+    const d1 = srcTime ? diffMin(srcTime, r.AR41ScanTime) : 0;
+    const d2 = parseFloat(r.AR41_to_Breakage_Min) || 0;
+    const d3 = parseFloat(r.Breakage_to_Processed_Min) || 0;
     const total = d1 + d2 + d3 || 1;
-    const p1    = Math.max(d1 > 0 ? 1 : 0, Math.round(d1 / total * 100));
-    const p2    = Math.max(1, Math.round(d2 / total * 100));
-    const p3    = Math.max(1, 100 - p1 - p2);
+    const p1 = Math.max(d1 > 0 ? 1 : 0, Math.round(d1 / total * 100));
+    const p2 = Math.max(1, Math.round(d2 / total * 100));
+    const p3 = Math.max(1, 100 - p1 - p2);
 
-    // Source machine name
-    const srcMachine  = r.BrkSourceMachine || res?.ORBMachine || '?';
+    const srcMachine = r.BrkSourceMachine || res?.ORBMachine || '?';
     const ar41Machine = r.AR41Machine || '?';
-    const srcLabel    = src.includes('ORB') ? `ORB — ${srcMachine}` : (src.includes('OTB') ? `OTB — ${srcMachine}` : srcMachine);
-
-    // Operator Scan:
-    // • Historical mode: lives on the _brk row (BREAKAGE_HISTORY col "Operator Scan")
-    // • Live mode S-Power/S-Axis: lives on the PowerResearch row (res.OperatorScan)
-    // • Live mode other reasons: not available in BreakageSummary — would need sheet change
+    const srcLabel = src.includes('ORB') ? `ORB — ${srcMachine}` : (src.includes('OTB') ? `OTB — ${srcMachine}` : srcMachine);
     const operatorScan = r.OperatorScan || res?.OperatorScan || '—';
 
-    // Build rich tooltip HTML per segment
     function makeTip(segClass, headerLabel, rows, durationLabel, durationVal, durClass) {
       const rowsHtml = rows.map(([lbl, val]) =>
         `<div class="tip-row"><div class="tip-row-label">${lbl}</div><div class="tip-row-val">${val}</div></div>`
@@ -341,6 +377,7 @@ function renderFlow() {
     const t1 = d1 > 0 ? makeTip('seg-peach', '① JOB IN TRANSIT — SOURCE TO AR41', [
       ['Source Machine', srcLabel],
       ['Departed Source', fmtDate(srcTime)],
+      ['Source Run Day', safeIsoDate(srcTime) || 'Unavailable'],
       ['Arrived AR41', fmtDate(r.AR41ScanTime)],
       ['AR41 Machine', ar41Machine],
     ], 'Transit Time', fmtMin(d1), 'seg-peach') : null;
@@ -370,8 +407,36 @@ function renderFlow() {
         <span class="reason-pill ${reasonPillClass(r.BrkReason)}">${r.BrkReason || '--'}</span>
         <div class="gantt-total">${fmtMin(total)}</div>
       </div>`;
-  }).join('');
-  document.getElementById('flowList').innerHTML = rows;
+  }
+
+  function journeyTotalMinutes(r) {
+    const res = resMap[String(r.RxNumber)];
+    const srcTime = getSourceScanTime(r, res);
+    const d1 = srcTime ? diffMin(srcTime, r.AR41ScanTime) : 0;
+    const d2 = parseFloat(r.AR41_to_Breakage_Min) || 0;
+    const d3 = parseFloat(r.Breakage_to_Processed_Min) || 0;
+    return d1 + d2 + d3;
+  }
+
+  function makeGroup(title, subtitle, rows, groupClass) {
+    const sortedRows = [...rows].sort((a, b) => journeyTotalMinutes(b) - journeyTotalMinutes(a));
+    const lenses = sortedRows.reduce((sum, r) => sum + (parseInt(r.LensesBroken, 10) || 0), 0);
+    return `
+      <section class="flow-run-group ${groupClass}">
+        <div class="flow-run-head">
+          <div>
+            <div class="flow-run-title">${title}</div>
+            <div class="flow-run-sub">${subtitle}</div>
+          </div>
+          <div class="flow-run-count"><strong>${sortedRows.length}</strong> jobs <span>·</span> <strong>${lenses}</strong> lenses</div>
+        </div>
+        <div class="flow-run-rows">${sortedRows.length ? sortedRows.map(makeJourneyRow).join('') : '<div class="empty">No breakages in this group</div>'}</div>
+      </section>`;
+  }
+
+  document.getElementById('flowList').innerHTML =
+    makeGroup('RUN TODAY', 'Source-machine scan date is today', runToday, 'run-today') +
+    makeGroup('RUN PREVIOUS DAYS', 'Source-machine scan date is before today', runPrevious, 'run-previous');
 }
 
 /* ============================================================
@@ -854,7 +919,6 @@ async function applyDateFilter() {
 
     document.getElementById('dateFilterCount').textContent = _brk.length;
     buildOverview();
-    populateFlowFilters();     renderFlow();
     populateResearchFilters(); renderResearch();
     buildAlerts();
     buildWeekOptions();
@@ -1016,7 +1080,9 @@ async function loadAll() {
 
       document.getElementById('dateFilterCount').textContent = _brk.length;
       buildOverview();
-      populateFlowFilters();    renderFlow();
+      _flowBrk = [..._allBrk];
+      _flowResearch = [..._allResearch];
+      populateFlowFilters(); renderFlow();
       populateResearchFilters(); renderResearch();
       buildAlerts();
       buildWeekOptions();
