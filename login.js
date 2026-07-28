@@ -9,6 +9,7 @@ const LOADER_MAP = {
   "MLITTLE":       "loader_MLITTLE.html",
   "JBOOMERSHINE":  "loader_JBOOMERSHINE.html",
   "BKARR":         "loader_BKARR.html",
+  "KMANACK":       "loader_KMANACK.html",
   "RTATE":         "loader_RTATE.html",
   "AIVANOVSKI":    "loader_AIVANOVSKI.html",
   "SANDERSON":     "loader_SANDERSON.html",
@@ -26,7 +27,7 @@ const LOADER_MAP = {
   "CFORBES":       "loader_TEAMLEAD.html",
   "JADAIR":        "loader_TEAMLEAD.html",
   "JMOLING":        "loader_TEAMLEAD.html",
-  "KSMITH":        "loader_TEAMLEAD.html"
+  
 }
 
 document.addEventListener("DOMContentLoaded", () => {
