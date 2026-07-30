@@ -100,6 +100,9 @@
   };
 
   const STATION_DISPLAY_NAMES = {
+    Inventory: {
+      "Unclassified Inventory WIP": "Inventory Queue WIP"
+    },
     Surface: {
       "SF Scan & Verify": "Scan & Verify (In Totes)",
       "Surface Unbox": "SF Unbox",
@@ -124,6 +127,10 @@
   };
 
   const STATION_FLOW_DESCRIPTIONS = {
+    Inventory: {
+      "Unclassified Inventory WIP":
+        "Physical WIP not classified in the API detail"
+    },
     Surface: {
       "SF Scan & Verify": "In totes • waiting to be unboxed",
       "Surface Unbox": "Moving to taping and Auto Blocker",
@@ -260,6 +267,61 @@
       .trim()
       .replace(/\s+/g, " ")
       .toUpperCase();
+  }
+
+  /*
+   * Canonical department names.
+   * The Hub may receive labels such as "Inventory Department",
+   * "Customer Service Department", or abbreviated variations.
+   * Normalize them before grouping so valid WIP is never stranded
+   * under an unexpected key.
+   */
+  function canonicalDepartmentName(value) {
+    const key = normalizeKey(value)
+      .replace(/\s+DEPARTMENT$/, "")
+      .replace(/\s+DEPT\.?$/, "");
+
+    const aliases = {
+      "INVENTORY": "Inventory",
+      "PICKING": "Inventory",
+      "SURFACE": "Surface",
+      "AR": "AR",
+      "ANTI REFLECTIVE": "AR",
+      "ANTI-REFLECTIVE": "AR",
+      "FINISH": "Finish",
+      "FINISHING": "Finish",
+      "BREAKAGE": "Breakage",
+      "CUSTOMER SERVICE": "Customer Service",
+      "CS": "Customer Service",
+      "LMS": "LMS"
+    };
+
+    return aliases[key] || String(value || "Unassigned").trim();
+  }
+
+  /*
+   * The Sync Gap KPI must compare the two timestamps currently
+   * displayed on the page. The backend synchronization gap can
+   * represent a matched historical snapshot and therefore should
+   * not be used as the live source-to-source gap.
+   */
+  function calculateDisplayedGapMinutes(data) {
+    const incoming = parseDate(data && data.incomingSnapshot);
+    const physical = parseDate(
+      data &&
+      (
+        data.currentPhysicalSnapshot ||
+        data.physicalSnapshot
+      )
+    );
+
+    if (!incoming || !physical) {
+      return null;
+    }
+
+    return Math.round(
+      Math.abs(physical.getTime() - incoming.getTime()) / 60000
+    );
   }
 
   function setText(element, value) {
@@ -481,15 +543,17 @@
 
   function applyDisplayOwnershipRules(rows) {
     return rows.map((row) => {
-      const sourceDepartment = String(
+      const sourceDepartment = canonicalDepartmentName(
         row.department || "Unassigned"
-      ).trim();
+      );
 
       const subDepartment = String(row.subDepartment || "").trim();
 
-      const displayDepartment = getDisplayDepartment(
-        sourceDepartment,
-        subDepartment
+      const displayDepartment = canonicalDepartmentName(
+        getDisplayDepartment(
+          sourceDepartment,
+          subDepartment
+        )
       );
 
       return {
@@ -588,9 +652,9 @@
     const groups = {};
 
     rows.forEach((row) => {
-      const department = String(
+      const department = canonicalDepartmentName(
         row.department || "Unassigned"
-      ).trim();
+      );
 
       if (!groups[department]) {
         groups[department] = {
@@ -611,6 +675,69 @@
     Object.values(groups).forEach((group) => {
       sortDepartmentStations(group.department, group.stations);
     });
+
+    return groups;
+  }
+
+  /*
+   * Reconcile the detail rows to the API's Physical WIP total.
+   *
+   * If a valid Physical total is larger than every grouped detail
+   * row combined, the difference is unclassified source WIP. The
+   * current Facility WIP structure owns that residual in Inventory.
+   * This prevents Inventory from displaying zero while the facility
+   * total clearly contains Inventory jobs.
+   *
+   * No subtraction is performed when detail exceeds the declared
+   * total; that condition remains visible for troubleshooting.
+   */
+  function reconcilePhysicalGroups(groups, physicalTotal) {
+    const declaredTotal = Number(physicalTotal) || 0;
+
+    if (declaredTotal <= 0) {
+      return groups;
+    }
+
+    const groupedTotal = Object.values(groups).reduce(
+      (sum, group) => sum + (Number(group.currentWip) || 0),
+      0
+    );
+
+    const residual = Math.round(declaredTotal - groupedTotal);
+
+    if (residual <= 0) {
+      return groups;
+    }
+
+    if (!groups.Inventory) {
+      groups.Inventory = {
+        department: "Inventory",
+        currentWip: 0,
+        stations: []
+      };
+    }
+
+    groups.Inventory.currentWip += residual;
+    groups.Inventory.stations.push({
+      department: "Inventory",
+      displayDepartment: "Inventory",
+      sourceDepartment: "Inventory",
+      subDepartment: "Unclassified Inventory WIP",
+      currentWip: residual,
+      ownershipAdjusted: false,
+      reconciledResidual: true
+    });
+
+    sortDepartmentStations(
+      "Inventory",
+      groups.Inventory.stations
+    );
+
+    console.warn(
+      "Facility WIP detail was short by",
+      residual,
+      "jobs. Residual assigned to Inventory for display reconciliation."
+    );
 
     return groups;
   }
@@ -698,9 +825,7 @@
       `${Number(data.incomingRowCount) || 0} queues • not in total`
     );
 
-    const gapMinutes = safeNumber(
-      data.synchronizationGapMinutes ?? data.gapMinutes
-    );
+    const gapMinutes = calculateDisplayedGapMinutes(data);
 
     setText(
       elements.gapMinutes,
@@ -714,7 +839,10 @@
       )}`
     );
 
-    const groups = buildDepartmentGroups(state.stationRows);
+    const groups = reconcilePhysicalGroups(
+      buildDepartmentGroups(state.stationRows),
+      physicalWip || 0
+    );
 
     updateAlerts(groups, physicalWip || 0);
 
