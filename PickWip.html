@@ -242,7 +242,7 @@
     <article class="ov-wip-card alert-card br-card">
       <div class="ov-wip-zone-badge br">BR</div>
       <div>
-        <span>Breakage Today</span>
+        <span>Breakage Picked Today</span>
         <strong id="kpiBreakageCount">0</strong>
       </div>
     </article>
@@ -259,7 +259,7 @@
 </section>
 
 
-<section class="scan-breakdown-panel" aria-label="Picking daily breakdown">
+<section class="scan-breakdown-panel daily-breakdown-v4" aria-label="Picking daily breakdown">
   <div class="scan-breakdown-head">
     <div>
       <span class="command-eyebrow">Picking Daily Detail</span>
@@ -268,145 +268,320 @@
     <small>SF / FSV detail + Frame Only + Recovery</small>
   </div>
 
-  <div class="scan-breakdown-grid">
-    <article class="scan-detail-card sf">
-      <span>SF Regular</span>
-      <strong id="detailSfRegular">0</strong>
-      <small>SF Scan &amp; Verify</small>
+  <div class="daily-breakdown-groups">
+
+    <article class="daily-breakdown-group daily-sf-group">
+      <header class="daily-group-head">
+        <div class="daily-group-badge">SF</div>
+        <div>
+          <strong>SF Productive</strong>
+          <small>Surface Scan &amp; Verify</small>
+        </div>
+      </header>
+
+      <div class="daily-group-metrics daily-group-metrics-three">
+        <article class="scan-detail-card sf">
+          <span>SF Regular</span>
+          <strong id="detailSfRegular">0</strong>
+          <small>SF Scan &amp; Verify</small>
+        </article>
+
+        <article class="scan-detail-card sf">
+          <span>SF Lenses</span>
+          <strong id="detailSfLens">0</strong>
+          <small>SF Scan &amp; Verify Lenses</small>
+        </article>
+
+        <article class="scan-detail-card sf miss">
+          <span>SF Miss S&amp;V</span>
+          <strong id="detailSfMiss">0</strong>
+          <small>SF Miss S&amp;V</small>
+        </article>
+      </div>
+
+      <div class="daily-group-art" aria-hidden="true"></div>
     </article>
 
-    <article class="scan-detail-card sf">
-      <span>SF Lenses</span>
-      <strong id="detailSfLens">0</strong>
-      <small>SF Scan &amp; Verify Lenses</small>
+    <article class="daily-breakdown-group daily-fsv-group">
+      <header class="daily-group-head">
+        <div class="daily-group-badge">FSV</div>
+        <div>
+          <strong>FSV Productive</strong>
+          <small>Finish Scan &amp; Verify</small>
+        </div>
+      </header>
+
+      <div class="daily-group-metrics daily-group-metrics-three">
+        <article class="scan-detail-card fsv">
+          <span>FSV Regular</span>
+          <strong id="detailFsvRegular">0</strong>
+          <small>FSV Scan &amp; Verify</small>
+        </article>
+
+        <article class="scan-detail-card fsv">
+          <span>FSV Lenses</span>
+          <strong id="detailFsvLens">0</strong>
+          <small>FSV Scan &amp; Verify Lenses</small>
+        </article>
+
+        <article class="scan-detail-card fsv miss">
+          <span>FSV Miss S&amp;V</span>
+          <strong id="detailFsvMiss">0</strong>
+          <small>FSV Miss S&amp;V</small>
+        </article>
+      </div>
+
+      <div class="daily-group-art" aria-hidden="true"></div>
     </article>
 
-    <article class="scan-detail-card sf miss">
-      <span>SF Miss S&amp;V</span>
-      <strong id="detailSfMiss">0</strong>
-      <small>SF Miss S&amp;V</small>
-    </article>
+    <article class="daily-breakdown-group daily-frame-group">
+      <header class="daily-group-head">
+        <div class="daily-group-badge">FO</div>
+        <div>
+          <strong>Frame Only Flow</strong>
+          <small>Frame Only S&amp;V</small>
+        </div>
+      </header>
 
-    <article class="scan-detail-card fsv">
-      <span>FSV Regular</span>
-      <strong id="detailFsvRegular">0</strong>
-      <small>FSV Scan &amp; Verify</small>
-    </article>
-
-    <article class="scan-detail-card fsv">
-      <span>FSV Lenses</span>
-      <strong id="detailFsvLens">0</strong>
-      <small>FSV Scan &amp; Verify Lenses</small>
-    </article>
-
-    <article class="scan-detail-card fsv miss">
-      <span>FSV Miss S&amp;V</span>
-      <strong id="detailFsvMiss">0</strong>
-      <small>FSV Miss S&amp;V</small>
-    </article>
-  </div>
-
-  <div class="scan-breakdown-subgrid">
-    <article class="exception-card frame-only breakdown-exception">
-      <div class="exception-icon">FO</div>
-      <div>
+      <div class="daily-single-metric">
         <span>Frame Only Flow</span>
         <strong id="flowFrameOnlyWip">0</strong>
         <small>Frame Only Scan &amp; Verify WIP</small>
       </div>
-      <div class="exception-path">Frame-only route</div>
+
+      <div class="daily-group-art" aria-hidden="true"></div>
+      <div class="daily-group-footer">Frame-only route</div>
     </article>
 
-    <article class="exception-card breakage-card breakdown-exception">
-      <div class="exception-icon">BR</div>
-      <div>
+    <article class="daily-breakdown-group daily-recovery-group">
+      <header class="daily-group-head">
+        <div class="daily-group-badge">BR</div>
+        <div>
+          <strong>Recovery Queue</strong>
+          <small>Breakage to Picking</small>
+        </div>
+      </header>
+
+      <div class="daily-single-metric">
         <span>Recovery Queue</span>
         <strong id="flowBreakage">0</strong>
         <small>Breakage to Picking</small>
       </div>
-      <div class="exception-path">Picking recovery</div>
+
+      <div class="daily-group-art" aria-hidden="true"></div>
+      <div class="daily-group-footer">Picking recovery</div>
     </article>
 
-    <article class="exception-card replenish-card breakdown-exception">
-      <div class="exception-icon">RP</div>
-      <div>
+    <article class="daily-breakdown-group daily-supply-group">
+      <header class="daily-group-head">
+        <div class="daily-group-badge">RP</div>
+        <div>
+          <strong>Supply Recovery</strong>
+          <small>Replenishment</small>
+        </div>
+      </header>
+
+      <div class="daily-single-metric">
         <span>Supply Recovery</span>
         <strong id="flowReplenishment">0</strong>
         <small>Replenishment</small>
       </div>
-      <div class="exception-path">Supply recovery</div>
+
+      <div class="daily-group-art" aria-hidden="true"></div>
+      <div class="daily-group-footer">Supply recovery</div>
     </article>
+
   </div>
 </section>
-<section class="pick-flow-command">
-<div class="pick-flow-head">
-<div>
-<span class="command-eyebrow">Operational Flow</span>
-<h2>Picking Process Flow</h2>
-</div>
-<div class="flow-health-pill">
-<span></span>
-              Live station map
+<section class="pick-flow-command process-flow-v6">
+  <div class="pick-flow-head">
+    <div>
+      <span class="command-eyebrow">Operational Flow</span>
+      <h2>Picking Process Flow</h2>
+    </div>
+    <div class="flow-health-pill">
+      <span></span>
+      Live station map
+    </div>
+  </div>
+
+  <div class="pick-flow-grid">
+
+    <article class="flow-control-card sf-control process-pipeline-card">
+      <div class="process-route-bg" aria-hidden="true"></div>
+
+      <div class="flow-card-top">
+        <div class="process-route-title">
+          <b class="route-badge sf">SF</b>
+          <div>
+            <small>Lens Picking</small>
+            <h3>Surface Scan Route</h3>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-chain process-pipeline">
+
+        <div class="route-node input process-stage">
+          <div class="process-stage-label">
+            <b>1</b>
+            <span>Queue Source</span>
+          </div>
+          <div class="process-module">
+            <div class="process-module-icon process-queue-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
             </div>
-</div>
-<div class="pick-flow-grid">
-<article class="flow-control-card sf-control">
-<div class="flow-card-top">
-<div>
-<small>Lens Picking</small>
-<h3>Surface Scan Route</h3>
-</div>
-<b class="route-badge sf">SF</b>
-</div>
-<div class="route-chain">
-<div class="route-node input">
-<span>Queue Source</span>
-<strong id="flowOutSurface">0</strong>
-<em>Out of Surface Queue</em>
-</div>
-<div class="route-link"><i></i></div>
-<div class="route-node scan active">
-<span>In Totes</span>
-<strong id="flowSfWip">0</strong>
-<em>SF Scan &amp; Verify</em>
-</div>
-<div class="route-link"><i></i></div>
-<div class="route-node output">
-<span>Destination</span>
-<strong>Surface</strong>
-<em>Sent to Surface Unbox</em>
-</div>
-</div>
-</article>
-<article class="flow-control-card fsv-control">
-<div class="flow-card-top">
-<div>
-<small>Lens Picking</small>
-<h3>Finish Scan Route</h3>
-</div>
-<b class="route-badge fsv">FSV</b>
-</div>
-<div class="route-chain">
-<div class="route-node input">
-<span>Queue Source</span>
-<strong id="flowOutFinish">0</strong>
-<em>Out of Finish Queue</em>
-</div>
-<div class="route-link"><i></i></div>
-<div class="route-node scan active amber">
-<span>In Totes</span>
-<strong id="flowFsvWip">0</strong>
-<em>FSV Scan &amp; Verify</em>
-</div>
-<div class="route-link"><i></i></div>
-<div class="route-node output">
-<span>Destination</span>
-<strong>Finish</strong>
-<em>Sent to Finish Unbox</em>
-</div>
-</div>
-</article>
-</div>
+            <div class="process-module-data">
+              <strong id="flowOutSurface">0</strong>
+              <em>Out of Surface Queue</em>
+            </div>
+          </div>
+        </div>
+
+        <div class="route-link process-pipe-link" aria-hidden="true"><i></i></div>
+
+        <div class="route-node scan active process-stage">
+          <div class="process-stage-label">
+            <b>2</b>
+            <span>In Totes</span>
+          </div>
+          <div class="process-module">
+            <div class="process-module-icon process-tote-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 7h16l-1.4 12H5.4L4 7Z"/>
+                <path d="M8 7V4h8v3"/>
+                <path d="M8 11h8"/>
+              </svg>
+            </div>
+            <div class="process-module-data">
+              <strong id="flowSfWip">0</strong>
+              <em>SF Scan &amp; Verify</em>
+            </div>
+          </div>
+        </div>
+
+        <div class="route-link process-pipe-link" aria-hidden="true"><i></i></div>
+
+        <div class="route-node output process-stage">
+          <div class="process-stage-label">
+            <b>3</b>
+            <span>Destination</span>
+          </div>
+          <div class="process-module">
+            <div class="process-module-icon process-box-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                <path d="M3.3 7 12 12l8.7-5"/>
+                <path d="M12 22V12"/>
+              </svg>
+            </div>
+            <div class="process-module-data process-destination-data">
+              <strong>Surface</strong>
+              <em>Sent to Surface Unbox</em>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="process-return-line" aria-hidden="true">
+        <i></i><i></i><i></i>
+      </div>
+    </article>
+
+    <article class="flow-control-card fsv-control process-pipeline-card">
+      <div class="process-route-bg" aria-hidden="true"></div>
+
+      <div class="flow-card-top">
+        <div class="process-route-title">
+          <b class="route-badge fsv">FSV</b>
+          <div>
+            <small>Lens Picking</small>
+            <h3>Finish Scan Route</h3>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-chain process-pipeline">
+
+        <div class="route-node input process-stage">
+          <div class="process-stage-label">
+            <b>1</b>
+            <span>Queue Source</span>
+          </div>
+          <div class="process-module">
+            <div class="process-module-icon process-queue-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+            <div class="process-module-data">
+              <strong id="flowOutFinish">0</strong>
+              <em>Out of Finish Queue</em>
+            </div>
+          </div>
+        </div>
+
+        <div class="route-link process-pipe-link" aria-hidden="true"><i></i></div>
+
+        <div class="route-node scan active amber process-stage">
+          <div class="process-stage-label">
+            <b>2</b>
+            <span>In Totes</span>
+          </div>
+          <div class="process-module">
+            <div class="process-module-icon process-tote-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 7h16l-1.4 12H5.4L4 7Z"/>
+                <path d="M8 7V4h8v3"/>
+                <path d="M8 11h8"/>
+              </svg>
+            </div>
+            <div class="process-module-data">
+              <strong id="flowFsvWip">0</strong>
+              <em>FSV Scan &amp; Verify</em>
+            </div>
+          </div>
+        </div>
+
+        <div class="route-link process-pipe-link" aria-hidden="true"><i></i></div>
+
+        <div class="route-node output process-stage">
+          <div class="process-stage-label">
+            <b>3</b>
+            <span>Destination</span>
+          </div>
+          <div class="process-module">
+            <div class="process-module-icon process-box-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                <path d="M3.3 7 12 12l8.7-5"/>
+                <path d="M12 22V12"/>
+              </svg>
+            </div>
+            <div class="process-module-data process-destination-data">
+              <strong>Finish</strong>
+              <em>Sent to Finish Unbox</em>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="process-return-line" aria-hidden="true">
+        <i></i><i></i><i></i>
+      </div>
+    </article>
+
+  </div>
 </section>
 <!-- MOVEMENT CHECK PANEL -->
 
