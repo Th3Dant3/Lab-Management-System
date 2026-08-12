@@ -7232,3 +7232,958 @@ console.info('[Productivity Hub] Associate temp name + archive control loaded.')
 })();
 
 console.info('[Productivity Hub] Final temp archive profile-button override loaded.');
+
+
+/************************************************************
+ * PRODUCTIVITY DASHBOARD — SIGNATURE CONNECTION PATCH
+ * Paste at the VERY BOTTOM of ProductivityDashboard.js.
+ * Replace SIGNATURE_API_URL after deploying the new web app.
+ ************************************************************/
+
+const SIGNATURE_API_URL = 'https://script.google.com/macros/s/AKfycbyvy3I90O_AYuKNtsLm_AQ5xZYx-PE9UTWU-y7_Tq4JvAIe1AxtJ3Hlx6PR_nTDd_A/exec';
+
+STATE.signatureRecords = STATE.signatureRecords || [];
+STATE.associateSigningMode = STATE.associateSigningMode || null;
+
+function signatureJsonpRequest(params, timeoutMs = 30000) {
+  if (!SIGNATURE_API_URL || SIGNATURE_API_URL.includes('PASTE_NEW_')) {
+    return Promise.reject(new Error('Set SIGNATURE_API_URL first.'));
+  }
+
+  return new Promise((resolve, reject) => {
+    const callbackName = '__prodSign_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+    const qs = new URLSearchParams(params || {});
+    qs.set('callback', callbackName);
+    qs.set('ts', String(Date.now()));
+
+    const script = document.createElement('script');
+    const cleanup = () => {
+      try { delete window[callbackName]; } catch (err) { window[callbackName] = undefined; }
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('Signature API request timed out.'));
+    }, timeoutMs);
+
+    window[callbackName] = data => {
+      clearTimeout(timer);
+      cleanup();
+      if (!data || data.ok === false) {
+        reject(new Error(data && data.message ? data.message : 'Invalid Signature API response.'));
+        return;
+      }
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(new Error('Could not reach the Signature API.'));
+    };
+
+    script.src = `${SIGNATURE_API_URL}?${qs.toString()}`;
+    document.head.appendChild(script);
+  });
+}
+
+function encodeSignaturePayload(payload) {
+  const json = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+async function uploadSignaturePayload(payload) {
+  return signatureJsonpRequest(
+    {
+      action: 'createRecord',
+      payload: encodeSignaturePayload(payload)
+    },
+    60000
+  );
+}
+
+function getSelectedAssociateSignatureSummary() {
+  const summaries = typeof buildAssociateSummaries === 'function' ? buildAssociateSummaries() : [];
+  return summaries.find(s => String(s.associate) === String(STATE.selectedAssociate)) || null;
+}
+
+function buildFrozenSignaturePayload(summary, form) {
+  const breakageRows = typeof getAssociateBreakageRows === 'function'
+    ? getAssociateBreakageRows(summary)
+    : [];
+  const quality = typeof buildAssociateBreakageSummary === 'function'
+    ? buildAssociateBreakageSummary(summary, breakageRows)
+    : { lens: 0, frame: 0 };
+  const daily = typeof aggregateAssociateByDay === 'function'
+    ? aggregateAssociateByDay(summary.rows)
+    : [];
+
+  return {
+    associateName: summary.associate,
+    department: summary.departments || STATE.activeDept,
+    scheduleType: summary.scheduleType || STATE.activeShift,
+    fiscalWeek: STATE.selectedFiscalWeek || STATE.meta.fiscalWeek || '',
+    weekStartDate: STATE.selectedWeekStartDate || STATE.meta.weekStartDate || '',
+    weekEndDate: STATE.selectedWeekEndDate || STATE.meta.weekEndDate || '',
+    weeklyProductivity: Number(summary.productivityPercent || 0),
+    totalJobs: Number(summary.totalJobs || 0),
+    lensBreakage: Number(quality.lens || 0),
+    frameBreakage: Number(quality.frame || 0),
+    areas: (summary.areas || []).map(area => ({
+      stationGroup: area.stationGroup,
+      department: area.department,
+      accessPoint: area.accessPoint,
+      totalJobs: Number(area.totalJobs || 0),
+      productivityPercent: Number(area.productivityPercent || 0),
+      status: area.status || ''
+    })),
+    dailyScorecards: daily.map(day => ({
+      workDate: day.workDate,
+      hours: Number(day.totalHours || day.hours || 0),
+      jobs: Number(day.totalJobs || day.jobs || 0),
+      produced: Number(day.workProduced || day.produced || 0),
+      productivityPercent: Number(day.productivityPercent || 0),
+      status: day.status || ''
+    })),
+    supervisorUsername: form.username,
+    supervisorName: form.name,
+    supervisorRole: form.role,
+    supervisorSignature: form.signature,
+    supervisorComment: form.comment
+  };
+}
+
+function openSupervisorSignatureModal() {
+  const summary = getSelectedAssociateSignatureSummary();
+  const user = typeof getCurrentProductivityUser === 'function' ? getCurrentProductivityUser() : null;
+  if (!summary) return alert('Open an associate scorecard first.');
+  if (!user) return alert('Your LMS session is missing. Log in again.');
+
+  closeProductivitySignatureModal();
+  const modal = document.createElement('div');
+  modal.id = 'productivitySignatureModal';
+  modal.className = 'signature-modal-backdrop';
+  modal.innerHTML = `
+    <div class="signature-modal-card">
+      <div class="signature-modal-head">
+        <div>
+          <span>Supervisor Review</span>
+          <h3>${escapeHtml(summary.associate)}</h3>
+          <p>${escapeHtml(STATE.selectedFiscalWeek || STATE.meta.fiscalWeek || '')}</p>
+        </div>
+        <button type="button" class="modal-x" onclick="closeProductivitySignatureModal()">✕</button>
+      </div>
+      <div class="signature-modal-grid">
+        <label><span>Supervisor</span><input value="${escapeHtml(user.fullName || user.username || '')}" readonly></label>
+        <label><span>Role</span><input value="${escapeHtml(user.role || '')}" readonly></label>
+      </div>
+      <label class="signature-field"><span>Electronic Signature</span><input id="psSupervisorSignature" placeholder="Type your full name"></label>
+      <label class="signature-field"><span>Optional Comment</span><textarea id="psSupervisorComment" rows="3"></textarea></label>
+      <div class="signature-warning">This freezes the displayed weekly scorecard and opens Associate Signing Mode.</div>
+      <div class="signature-modal-actions">
+        <button type="button" class="ghost-action" onclick="closeProductivitySignatureModal()">Cancel</button>
+        <button id="psSupervisorSubmit" type="button" class="primary-action" onclick="submitSupervisorSignature()">Sign & Open Associate Mode</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function closeProductivitySignatureModal() {
+  const modal = document.getElementById('productivitySignatureModal');
+  if (modal) modal.remove();
+}
+
+async function submitSupervisorSignature() {
+  const summary = getSelectedAssociateSignatureSummary();
+  const user = getCurrentProductivityUser();
+  const signature = String(document.getElementById('psSupervisorSignature')?.value || '').trim();
+  const comment = String(document.getElementById('psSupervisorComment')?.value || '').trim();
+  if (!signature) return alert('Type the supervisor electronic signature.');
+
+  const button = document.getElementById('psSupervisorSubmit');
+  if (button) { button.disabled = true; button.textContent = 'Saving...'; }
+
+  try {
+    const payload = buildFrozenSignaturePayload(summary, {
+      username: user.username || '', name: user.fullName || user.username || '',
+      role: user.role || '', signature, comment
+    });
+    const response = await uploadSignaturePayload(payload);
+    closeProductivitySignatureModal();
+    STATE.associateSigningMode = response.record;
+    renderAssociateSigningMode();
+  } catch (err) {
+    alert('Could not create signing record: ' + (err.message || err));
+    if (button) { button.disabled = false; button.textContent = 'Sign & Open Associate Mode'; }
+  }
+}
+
+function safeSignatureJson(text, fallback) {
+  try { return JSON.parse(String(text || '')); } catch (err) { return fallback; }
+}
+
+function renderAssociateSigningMode() {
+  const record = STATE.associateSigningMode;
+  const page = document.getElementById('pageContent');
+  if (!record || !page) return;
+
+  const areas = safeSignatureJson(record.AreasWorkedJSON, []);
+  const days = safeSignatureJson(record.DailyScorecardsJSON, []);
+  document.body.classList.add('associate-signing-active');
+
+  page.innerHTML = `
+    <section class="associate-signing-shell">
+      <header class="associate-signing-header">
+        <div><span>Associate Signing Mode</span><h2>${escapeHtml(record.AssociateName)}</h2>
+        <p>${escapeHtml(record.FiscalWeek)} • ${formatDatePretty(record.WeekStartDate)} to ${formatDatePretty(record.WeekEndDate)}</p></div>
+        <div class="signing-lock-badge">Locked Review</div>
+      </header>
+
+      <div class="associate-limited-kpis">
+        <article><span>Weekly Productivity</span><strong>${formatPercent(Number(record.WeeklyProductivity || 0))}</strong></article>
+        <article><span>Total Jobs</span><strong>${formatNumber(record.TotalJobs || 0)}</strong></article>
+        <article><span>Lens Breakage</span><strong>${formatNumber(record.LensBreakage || 0)}</strong></article>
+        <article><span>Frame Breakage</span><strong>${formatNumber(record.FrameBreakage || 0)}</strong></article>
+      </div>
+
+      <section class="associate-signing-section">
+        <h3>Areas Worked This Week</h3>
+        <div class="associate-area-grid">
+          ${areas.map(a => `<article><h4>${escapeHtml(a.stationGroup || '')}</h4>
+            <div><span>Jobs</span><strong>${formatNumber(a.totalJobs || 0)}</strong></div>
+            <div><span>Area %</span><strong>${formatPercent(Number(a.productivityPercent || 0))}</strong></div></article>`).join('')}
+        </div>
+      </section>
+
+      <section class="associate-signing-section">
+        <h3>Productivity Scorecards</h3>
+        <div class="associate-day-grid">
+          ${days.map(d => `<article class="associate-day-card ${escapeHtml(d.status || '')}">
+            <h4>${escapeHtml(typeof getDayName === 'function' ? getDayName(d.workDate) : d.workDate)}</h4><p>${formatDatePretty(d.workDate)}</p>
+            <div class="associate-day-stats">
+              <div><span>Hours</span><strong>${formatDecimal(d.hours || 0)}</strong></div>
+              <div><span>Jobs</span><strong>${formatNumber(d.jobs || 0)}</strong></div>
+              <div><span>Produced</span><strong>${formatDecimal(d.produced || 0)}</strong></div>
+              <div><span>Daily %</span><strong>${formatPercent(Number(d.productivityPercent || 0))}</strong></div>
+              <div><span>Status</span><strong>${escapeHtml(d.status || '')}</strong></div>
+            </div></article>`).join('')}
+        </div>
+      </section>
+
+      <section class="associate-signature-panel">
+        <h3>Associate Acknowledgment</h3>
+        <p>I acknowledge that I reviewed this productivity scorecard. My signature confirms receipt and review and does not necessarily mean agreement with every value.</p>
+        <label class="signature-check"><input id="associateAckCheck" type="checkbox"><span>I reviewed the information above.</span></label>
+        <label class="signature-field"><span>Electronic Signature</span><input id="associateSignatureText" placeholder="Type your full name"></label>
+        <label class="signature-field"><span>Optional Comment</span><textarea id="associateSignatureComment" rows="3"></textarea></label>
+        <button id="associateSignSubmit" type="button" class="primary-action" onclick="submitAssociateSignature()">Sign and Submit</button>
+      </section>
+    </section>`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function submitAssociateSignature() {
+  const record = STATE.associateSigningMode;
+  const accepted = !!document.getElementById('associateAckCheck')?.checked;
+  const signature = String(document.getElementById('associateSignatureText')?.value || '').trim();
+  const comment = String(document.getElementById('associateSignatureComment')?.value || '').trim();
+  if (!accepted) return alert('The associate must check the acknowledgment box.');
+  if (!signature) return alert('Type the associate electronic signature.');
+
+  const btn = document.getElementById('associateSignSubmit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Signing...'; }
+
+  try {
+    const response = await signatureJsonpRequest({
+      action: 'associateSign', recordId: record.RecordID,
+      associateSignature: signature, associateComment: comment,
+      acknowledgmentAccepted: 'TRUE'
+    }, 60000);
+    alert('Scorecard signed successfully. Record ID: ' + response.record.RecordID);
+    STATE.associateSigningMode = null;
+    document.body.classList.remove('associate-signing-active');
+    STATE.activePage = 'scorecards';
+    renderEverything();
+    loadSignatureStatusesQuietly();
+  } catch (err) {
+    alert('Could not save associate signature: ' + (err.message || err));
+    if (btn) { btn.disabled = false; btn.textContent = 'Sign and Submit'; }
+  }
+}
+
+function loadSignatureStatusesQuietly() {
+  if (!SIGNATURE_API_URL || SIGNATURE_API_URL.includes('PASTE_NEW_')) return Promise.resolve();
+  return signatureJsonpRequest({
+    action: 'getWeekStatuses',
+    weekStartDate: STATE.selectedWeekStartDate || STATE.meta.weekStartDate || '',
+    weekEndDate: STATE.selectedWeekEndDate || STATE.meta.weekEndDate || ''
+  }).then(data => {
+    STATE.signatureRecords = data.records || [];
+    renderEverything();
+    return data;
+  }).catch(err => console.warn('[Productivity Hub] Signature status load skipped:', err));
+}
+
+function getSignatureRecordForAssociate(name) {
+  const key = String(name || '').trim().toUpperCase();
+  return (STATE.signatureRecords || []).find(r => String(r.AssociateName || '').trim().toUpperCase() === key) || null;
+}
+
+async function openExistingAssociateSigningRecord(recordId) {
+  try {
+    const response = await signatureJsonpRequest({ action: 'getRecord', recordId });
+    STATE.associateSigningMode = response.record;
+    renderAssociateSigningMode();
+  } catch (err) { alert(err.message || err); }
+}
+
+(function installSignatureHeroButton() {
+  if (typeof renderHero !== 'function') return;
+  const base = renderHero;
+  renderHero = function(summary) {
+    let html = base(summary);
+    if (!summary || html.includes('profile-signature-button')) return html;
+    const record = getSignatureRecordForAssociate(summary.associate);
+    const complete = record && ['COMPLETED','EMAILED'].includes(record.Status);
+    const label = complete ? 'Signed' : (record ? 'Resume Signing' : 'Start Review & Sign');
+    const action = record && !complete
+      ? `openExistingAssociateSigningRecord('${escapeHtml(record.RecordID)}')`
+      : (complete ? '' : 'openSupervisorSignatureModal()');
+    const disabled = complete ? 'disabled' : '';
+    const button = `<button class="profile-signature-button" type="button" ${disabled} onclick="${action}">${label}</button>`;
+    return html.replace(/(<section[^>]*class="[^"]*profile-hero[^"]*"[^>]*>)/i, `$1${button}`);
+  };
+})();
+
+
+
+document.addEventListener('DOMContentLoaded', () => setTimeout(loadSignatureStatusesQuietly, 2200));
+console.info('[Productivity Hub] Signature Mode connection loaded.');
+
+function formatAssociateBreakageRate(count, totalJobs) {
+  const breaks = Number(count || 0);
+  const jobs = Number(totalJobs || 0);
+
+  if (jobs <= 0) return '0.00%';
+
+  return ((breaks / jobs) * 100).toFixed(2) + '%';
+}
+
+
+function getAssociateDailyStatus(productivity, suppliedStatus) {
+  const existing = String(suppliedStatus || '').trim();
+
+  if (existing) {
+    const normalized = existing.toUpperCase().replace(/_/g, ' ');
+
+    if (normalized === 'GREEN') return 'On Target';
+    if (normalized === 'AMBER') return 'Watch';
+    if (normalized === 'RED') return 'Warning';
+    if (normalized === 'NO TARGET') return 'No Target';
+
+    return existing;
+  }
+
+  const value = Number(productivity || 0);
+
+  if (value >= 1) return 'On Target';
+  if (value >= 0.9) return 'Watch';
+  if (value > 0) return 'Warning';
+
+  return 'No Target';
+}
+
+
+function getAssociateDailyStatusClass(productivity, suppliedStatus) {
+  const status = getAssociateDailyStatus(
+    productivity,
+    suppliedStatus
+  ).toUpperCase();
+
+  if (status.includes('ON TARGET')) return 'GREEN';
+  if (status.includes('WATCH')) return 'AMBER';
+  if (status.includes('WARNING')) return 'RED';
+
+  return 'NO-TARGET';
+}
+
+
+function getAssociateQualityStatus(ratePercent) {
+  const rate = Number(ratePercent || 0);
+
+  if (rate === 0) {
+    return {
+      label: 'No Breakage',
+      css: 'quality-clear'
+    };
+  }
+
+  if (rate <= 0.25) {
+    return {
+      label: 'Low Rate',
+      css: 'quality-low'
+    };
+  }
+
+  return {
+    label: 'Review',
+    css: 'quality-review'
+  };
+}
+
+
+function renderAssociateSigningMode() {
+  const record = STATE.associateSigningMode;
+  const page = document.getElementById('pageContent');
+
+  if (!record || !page) return;
+
+  const areas = safeSignatureJson(
+    record.AreasWorkedJSON,
+    []
+  );
+
+  const days = safeSignatureJson(
+    record.DailyScorecardsJSON,
+    []
+  );
+
+  const totalJobs = Number(
+    record.TotalJobs || 0
+  );
+
+  const lensCount = Number(
+    record.LensBreakage || 0
+  );
+
+  const frameCount = Number(
+    record.FrameBreakage || 0
+  );
+
+  const lensRateNumber =
+    totalJobs > 0
+      ? (lensCount / totalJobs) * 100
+      : 0;
+
+  const frameRateNumber =
+    totalJobs > 0
+      ? (frameCount / totalJobs) * 100
+      : 0;
+
+  const lensQuality =
+    getAssociateQualityStatus(
+      lensRateNumber
+    );
+
+  const frameQuality =
+    getAssociateQualityStatus(
+      frameRateNumber
+    );
+
+  document.body.classList.add(
+    'associate-signing-active'
+  );
+
+  page.innerHTML = `
+    <section class="associate-signing-shell associate-scorecard-v3">
+
+      <header class="associate-signing-header associate-scorecard-header">
+        <div class="associate-scorecard-identity">
+          <span class="associate-scorecard-eyebrow">
+            Associate Productivity Review
+          </span>
+
+          <h2>${escapeHtml(
+            record.AssociateName
+          )}</h2>
+
+          <div class="associate-scorecard-meta">
+            <span>${escapeHtml(
+              record.Department || ''
+            )}</span>
+
+            <i></i>
+
+            <span>${escapeHtml(
+              record.ScheduleType || ''
+            )}</span>
+
+            <i></i>
+
+            <span>${escapeHtml(
+              record.FiscalWeek || ''
+            )}</span>
+
+            <i></i>
+
+            <span>
+              ${formatDatePretty(
+                record.WeekStartDate
+              )}
+              to
+              ${formatDatePretty(
+                record.WeekEndDate
+              )}
+            </span>
+          </div>
+        </div>
+
+        <div class="signing-lock-badge">
+          Locked Review
+        </div>
+      </header>
+
+      <section class="associate-scorecard-overview">
+
+        <article class="associate-primary-score">
+          <div
+            class="associate-productivity-ring"
+            style="--associate-pct:${Math.min(
+              100,
+              Math.round(
+                Number(
+                  record.WeeklyProductivity ||
+                  0
+                ) * 100
+              )
+            )}">
+            <div>
+              <strong>${formatPercent(
+                Number(
+                  record.WeeklyProductivity ||
+                  0
+                )
+              )}</strong>
+              <span>Weekly Productivity</span>
+            </div>
+          </div>
+
+          <div class="associate-primary-copy">
+            <span>Weekly Performance</span>
+            <h3>${getAssociateDailyStatus(
+              Number(
+                record.WeeklyProductivity ||
+                0
+              ),
+              ''
+            )}</h3>
+            <p>
+              Productivity is based on work produced
+              compared with recorded hours.
+            </p>
+          </div>
+        </article>
+
+        <article class="associate-summary-card">
+          <div class="associate-summary-icon">▣</div>
+          <div>
+            <span>Total Jobs</span>
+            <strong>${formatNumber(
+              totalJobs
+            )}</strong>
+            <small>Completed during the selected week</small>
+          </div>
+        </article>
+
+        <article class="associate-summary-card associate-quality-card ${lensQuality.css}">
+          <div class="associate-summary-icon">◇</div>
+
+          <div class="associate-quality-copy">
+            <span>Lens Breakage</span>
+
+            <div class="associate-quality-value">
+              <strong>${formatNumber(
+                lensCount
+              )}</strong>
+
+              <b>${formatAssociateBreakageRate(
+                lensCount,
+                totalJobs
+              )}</b>
+            </div>
+
+            <small>
+              ${formatNumber(lensCount)}
+              of
+              ${formatNumber(totalJobs)}
+              jobs
+            </small>
+          </div>
+
+          <em>${lensQuality.label}</em>
+        </article>
+
+        <article class="associate-summary-card associate-quality-card ${frameQuality.css}">
+          <div class="associate-summary-icon">◇</div>
+
+          <div class="associate-quality-copy">
+            <span>Frame Breakage</span>
+
+            <div class="associate-quality-value">
+              <strong>${formatNumber(
+                frameCount
+              )}</strong>
+
+              <b>${formatAssociateBreakageRate(
+                frameCount,
+                totalJobs
+              )}</b>
+            </div>
+
+            <small>
+              ${formatNumber(frameCount)}
+              of
+              ${formatNumber(totalJobs)}
+              jobs
+            </small>
+          </div>
+
+          <em>${frameQuality.label}</em>
+        </article>
+
+      </section>
+
+      <section class="associate-signing-section associate-section-card">
+        <div class="associate-section-heading">
+          <div>
+            <span>Work Distribution</span>
+            <h3>Areas Worked This Week</h3>
+          </div>
+
+          <b>
+            ${areas.length}
+            area${areas.length === 1 ? '' : 's'}
+          </b>
+        </div>
+
+        <div class="associate-area-grid associate-area-grid-v3">
+          ${areas.length
+            ? areas.map(function(area) {
+                const productivity = Number(
+                  area.productivityPercent || 0
+                );
+
+                const status =
+                  getAssociateDailyStatus(
+                    productivity,
+                    area.status
+                  );
+
+                const statusClass =
+                  getAssociateDailyStatusClass(
+                    productivity,
+                    area.status
+                  );
+
+                return `
+                  <article class="associate-area-card-v3 ${statusClass}">
+                    <div class="associate-area-title">
+                      <div>
+                        <span>Area</span>
+                        <h4>${escapeHtml(
+                          area.stationGroup || ''
+                        )}</h4>
+                      </div>
+
+                      <em>${escapeHtml(
+                        status
+                      )}</em>
+                    </div>
+
+                    <div class="associate-area-metrics-v3">
+                      <div>
+                        <span>Jobs</span>
+                        <strong>${formatNumber(
+                          area.totalJobs || 0
+                        )}</strong>
+                      </div>
+
+                      <div>
+                        <span>Area Productivity</span>
+                        <strong>${formatPercent(
+                          productivity
+                        )}</strong>
+                      </div>
+                    </div>
+                  </article>
+                `;
+              }).join('')
+            : `
+              <div class="associate-empty-state">
+                No area records were captured for this week.
+              </div>
+            `
+          }
+        </div>
+      </section>
+
+      <section class="associate-signing-section associate-section-card">
+        <div class="associate-section-heading">
+          <div>
+            <span>Daily Review</span>
+            <h3>Productivity Scorecards</h3>
+          </div>
+
+          <b>
+            ${days.length}
+            day${days.length === 1 ? '' : 's'}
+          </b>
+        </div>
+
+        <div class="associate-day-grid associate-day-grid-v3">
+          ${days.length
+            ? days.map(function(day) {
+                const productivity = Number(
+                  day.productivityPercent || 0
+                );
+
+                const status =
+                  getAssociateDailyStatus(
+                    productivity,
+                    day.status
+                  );
+
+                const statusClass =
+                  getAssociateDailyStatusClass(
+                    productivity,
+                    day.status
+                  );
+
+                return `
+                  <article class="associate-day-card associate-day-card-v3 ${statusClass}">
+                    <div class="associate-day-head-v3">
+                      <div>
+                        <span>${escapeHtml(
+                          formatDatePretty(
+                            day.workDate
+                          )
+                        )}</span>
+
+                        <h4>${escapeHtml(
+                          typeof getDayName === 'function'
+                            ? getDayName(
+                                day.workDate
+                              )
+                            : day.workDate
+                        )}</h4>
+                      </div>
+
+                      <em>${escapeHtml(
+                        status
+                      )}</em>
+                    </div>
+
+                    <div class="associate-day-stats associate-day-stats-v3">
+                      <div>
+                        <span>Hours</span>
+                        <strong>${formatDecimal(
+                          day.hours || 0
+                        )}</strong>
+                      </div>
+
+                      <div>
+                        <span>Jobs</span>
+                        <strong>${formatNumber(
+                          day.jobs || 0
+                        )}</strong>
+                      </div>
+
+                      <div>
+                        <span>Produced</span>
+                        <strong>${formatDecimal(
+                          day.produced || 0
+                        )}</strong>
+                      </div>
+
+                      <div>
+                        <span>Daily Productivity</span>
+                        <strong>${formatPercent(
+                          productivity
+                        )}</strong>
+                      </div>
+                    </div>
+                  </article>
+                `;
+              }).join('')
+            : `
+              <div class="associate-empty-state">
+                No daily scorecards were captured for this week.
+              </div>
+            `
+          }
+        </div>
+      </section>
+
+      <section class="associate-signature-panel associate-acknowledgment-v3">
+        <div class="associate-section-heading">
+          <div>
+            <span>Electronic Acknowledgment</span>
+            <h3>Review and Sign</h3>
+          </div>
+
+          <b>Required</b>
+        </div>
+
+        <div class="associate-acknowledgment-copy">
+          <div class="associate-acknowledgment-icon">✓</div>
+
+          <p>
+            I acknowledge that I reviewed this productivity
+            scorecard. My signature confirms receipt and review
+            and does not necessarily mean agreement with every
+            value.
+          </p>
+        </div>
+
+        <label class="signature-check signature-check-v3">
+          <input
+            id="associateAckCheck"
+            type="checkbox">
+
+          <span>
+            I reviewed the information above.
+          </span>
+        </label>
+
+        <div class="associate-signature-fields-v3">
+          <label class="signature-field">
+            <span>Electronic Signature</span>
+
+            <input
+              id="associateSignatureText"
+              placeholder="Type your full name"
+              autocomplete="off">
+          </label>
+
+          <label class="signature-field">
+            <span>Optional Comment</span>
+
+            <textarea
+              id="associateSignatureComment"
+              rows="3"
+              placeholder="Add a comment if needed"></textarea>
+          </label>
+        </div>
+
+        <div class="associate-signature-actions-v3">
+          <small>
+            The record is dated automatically when submitted.
+          </small>
+
+          <button
+            id="associateSignSubmit"
+            type="button"
+            class="primary-action"
+            onclick="submitAssociateSignature()">
+            Sign and Submit
+          </button>
+        </div>
+      </section>
+
+    </section>
+  `;
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+}
+
+
+console.info(
+  '[Productivity Hub] Professional Associate Scorecard V3 loaded.'
+);
+
+function printAssociateSigningScorecard() {
+  const scorecard = document.querySelector('.associate-signing-shell');
+
+  if (!scorecard) {
+    alert('Open Associate Signing Mode before printing.');
+    return;
+  }
+
+  const oldTitle = document.title;
+  const record = STATE.associateSigningMode || {};
+  const associateName = String(record.AssociateName || 'Associate').trim();
+
+  document.body.classList.add('associate-scorecard-printing');
+  document.title =
+    associateName + ' - ' +
+    String(record.FiscalWeek || '') +
+    ' Productivity Scorecard';
+
+  let restored = false;
+
+  function restorePrintView() {
+    if (restored) return;
+    restored = true;
+    document.body.classList.remove('associate-scorecard-printing');
+    document.title = oldTitle;
+    window.removeEventListener('afterprint', restorePrintView);
+  }
+
+  window.addEventListener('afterprint', restorePrintView);
+  window.print();
+  window.setTimeout(restorePrintView, 2000);
+}
+
+(function installAssociateScorecardPrintButton() {
+  if (typeof renderAssociateSigningMode !== 'function') {
+    console.warn('[Productivity Hub] Print button skipped: renderAssociateSigningMode was not found.');
+    return;
+  }
+
+  const originalRenderAssociateSigningMode = renderAssociateSigningMode;
+
+  renderAssociateSigningMode = function renderAssociateSigningModeWithPrint() {
+    const result = originalRenderAssociateSigningMode.apply(this, arguments);
+
+    window.requestAnimationFrame(function() {
+      const header = document.querySelector('.associate-signing-header');
+
+      if (!header || header.querySelector('.associate-scorecard-print-button')) {
+        return;
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'associate-scorecard-header-actions';
+
+      const lockBadge = header.querySelector('.signing-lock-badge');
+      if (lockBadge) actions.appendChild(lockBadge);
+
+      const printButton = document.createElement('button');
+      printButton.type = 'button';
+      printButton.className = 'associate-scorecard-print-button no-print';
+      printButton.title = 'Print scorecard in color';
+      printButton.setAttribute('aria-label', 'Print associate scorecard');
+      printButton.innerHTML = `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 8V3h10v5"></path>
+          <path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+          <path d="M7 14h10v7H7z"></path>
+          <circle cx="18" cy="12" r="1"></circle>
+        </svg>
+        <span>Print</span>
+      `;
+
+      printButton.addEventListener('click', printAssociateSigningScorecard);
+      actions.appendChild(printButton);
+      header.appendChild(actions);
+    });
+
+    return result;
+  };
+
+  console.info('[Productivity Hub] Associate color print button loaded.');
+})();
