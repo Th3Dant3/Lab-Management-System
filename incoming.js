@@ -448,6 +448,101 @@ function showErrorBanner(msg) {
   b._t = setTimeout(() => { b.style.opacity = "0"; }, 5000);
 }
 
+
+
+/* ============================================================
+   V4 COMMAND CENTER — QUEUE PRESSURE + FLOW INTELLIGENCE
+   ============================================================ */
+function _incomingQueueFlat(data) {
+  const rows = [];
+  Object.keys(data || {}).forEach(dept => {
+    if (dept === '_total') return;
+    const deptData = data[dept] || {};
+    Object.keys(deptData).forEach(queue => {
+      if (queue === '_total') return;
+      rows.push({ dept, queue, value: Number(deptData[queue]?.total || 0) });
+    });
+  });
+  return rows;
+}
+
+function _incomingQueueSum(rows, test) {
+  return rows.reduce((sum, r) => sum + (test(r.queue.toLowerCase(), r) ? r.value : 0), 0);
+}
+
+function buildQueuePressure(data, grandTotal) {
+  const host = document.getElementById('pressureMetrics');
+  const health = document.getElementById('pressureHealth');
+  if (!host) return;
+
+  const rows = _incomingQueueFlat(data);
+  const icons = {
+    overnight: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.7 3.3A8 8 0 1 0 20.7 15 7 7 0 0 1 15.7 3.3Z"/><path d="M16 6h4M18 4v4"/></svg>`,
+    rush: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h10v8H3z"/><path d="M13 11h4l3 3v2h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/><path d="M5 5h8"/></svg>`,
+    error: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 21 20H3L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg>`,
+    hold: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 8v8M15 8v8"/></svg>`,
+    standard: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5 10c2-2 4-2 6 0s4 2 8 0M5 14c2-2 4-2 6 0s4 2 8 0"/></svg>`
+  };
+
+  const metrics = [
+    { label:'In Overnight Queue', icon:icons.overnight, color:'#22d3ee', value:_incomingQueueSum(rows,q=>q.includes('overnight')) },
+    { label:'In Rush Delivery Queue', icon:icons.rush, color:'#38bdf8', value:_incomingQueueSum(rows,q=>q.includes('rush') && !q.includes('china')) },
+    { label:'Error Job / Waiting', icon:icons.error, color:'#fb923c', value:_incomingQueueSum(rows,q=>q.includes('error') || q.includes('waiting')) },
+    { label:'In Held / From Hold', icon:icons.hold, color:'#c084fc', value:_incomingQueueSum(rows,q=>q.includes('hold')) },
+    { label:'In Standard Queue', icon:icons.standard, color:'#22d3ee', value:_incomingQueueSum(rows,q=>q.includes('standard')) }
+  ];
+
+  host.innerHTML = metrics.map(m => {
+    const pct = grandTotal > 0 ? (m.value / grandTotal * 100) : 0;
+    return `<div class="pressure-item" style="--pc:${m.color}">
+      <span class="pressure-item__icon-shell">${m.icon}</span>
+      <span class="pressure-item__label">${m.label}</span>
+      <div class="pressure-item__row">
+        <strong class="pressure-item__value">${m.value.toLocaleString()}</strong>
+        <span class="pressure-item__pct">${pct.toFixed(1)}%</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (health) {
+    const risk = metrics[2].value + metrics[3].value;
+    const riskPct = grandTotal > 0 ? risk / grandTotal * 100 : 0;
+    const level = riskPct < 3 ? 'good' : riskPct < 7 ? 'watch' : 'critical';
+    const label = level === 'good' ? 'GOOD' : level === 'watch' ? 'WATCH' : 'HIGH';
+    const sub = level === 'good' ? 'Normal Flow' : level === 'watch' ? 'Monitor Queues' : 'Action Needed';
+    health.className = 'pressure-health ' + level;
+    health.innerHTML = `<span>Queue Health</span><strong>${label}</strong><small>${sub}</small>`;
+  }
+}
+
+function buildFlowIntelligence(data) {
+  const rows = _incomingQueueFlat(data);
+  const hourly = {};
+  HOUR_ORDER.forEach(h => hourly[h] = 0);
+  Object.keys(data || {}).forEach(dept => {
+    if (dept === '_total') return;
+    Object.keys(data[dept] || {}).forEach(q => {
+      if (q === '_total') return;
+      Object.keys(data[dept][q]?.hours || {}).forEach(h => {
+        (data[dept][q].hours[h] || []).forEach(e => hourly[h] = (hourly[h] || 0) + Number(e.value || 0));
+      });
+    });
+  });
+  let peakHour = '--', peakVolume = 0;
+  HOUR_ORDER.forEach(h => { if ((hourly[h] || 0) > peakVolume) { peakVolume = hourly[h] || 0; peakHour = h; } });
+  const busiest = rows.reduce((best,r) => r.value > (best?.value || -1) ? r : best, null);
+  const errorHold = _incomingQueueSum(rows,q=>q.includes('error')||q.includes('waiting')||q.includes('hold'));
+  const total = rows.reduce((s,r)=>s+r.value,0);
+  const riskPct = total > 0 ? errorHold/total*100 : 0;
+  const status = riskPct < 3 ? ['Normal','good'] : riskPct < 7 ? ['Watch','watch'] : ['High Pressure','critical'];
+  const set=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
+  set('flowPeakHour',peakHour);
+  set('flowPeakVolume',peakVolume.toLocaleString()+' jobs');
+  set('flowBusiestQueue',busiest?.queue || '--');
+  const st=document.getElementById('flowStatus');
+  if(st){st.textContent=status[0];st.className=status[1];}
+}
+
 /* ===== FETCH ===== */
 async function apiFetch(url) {
   const res = await fetch(url);
@@ -554,6 +649,8 @@ function renderAll(data, total, yesterdayData) {
   const el = document.getElementById("totalJobs");
   if (el) el.textContent = total.toLocaleString();
   renderKPI(data, total, yesterdayData);
+  buildQueuePressure(data, total);
+  buildFlowIntelligence(data);
   _updateTopbarDepts(data, yesterdayData);
   currentHour ? showHourBreakdown(currentHour, data) : renderQueueBars(data, total);
   buildHourlyChart(data);
@@ -674,6 +771,9 @@ function renderKPI(data, grandTotal, yesterdayData) {
 
     const geoType  = KPI_GEO_TYPES[dept] || 'squares';
     const geoHtml  = makeKpiGeo(deptColor, geoType);
+    const deptQueueRows = Object.keys(data[dept]).filter(q => q !== '_total').map(q => ({ queue:q, value:Number(data[dept][q]?.total || 0) }));
+    const topQueue = deptQueueRows.reduce((best,r) => r.value > (best?.value || -1) ? r : best, null);
+    const sharePct = grandTotal > 0 ? Math.round(todayVal / grandTotal * 100) : 0;
 
     const card = document.createElement("div");
     card.className = "kpi-card" + (isAlert ? " alert" : "");
@@ -695,6 +795,14 @@ function renderKPI(data, grandTotal, yesterdayData) {
           stroke-dasharray="${arcLen} ${arcGap}" stroke-linecap="round"
           style="transform-origin:50% 50%;transform:rotate(-90deg)"/>
       </svg>
+      <div class="kpi-share-wrap">
+        <div class="kpi-share-ring">
+          <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="4"/><circle cx="22" cy="22" r="18" fill="none" stroke="${deptColor}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(sharePct*1.13).toFixed(1)} 113"/></svg>
+          <strong>${sharePct}%</strong>
+        </div>
+        <span class="kpi-share-label">of total jobs</span>
+      </div>
+      <div class="kpi-top-queue">Top Queue: <b>${topQueue?.queue || 'No active queue'}</b></div>
     `;
     grid.appendChild(card);
 
@@ -1080,125 +1188,173 @@ function buildHourlyChart(data) {
   const canvas = document.getElementById("hourlyChart");
   if (!canvas) return;
 
-  /* ---- MODE A: all queues combined, bar chart ---- */
+  /* ---- MODE A: all queues combined, stacked by department ---- */
   if (selectedQueues.length === 0) {
+    if (chart) { chart.destroy(); chart = null; }
 
-    // If chart was previously a line chart, destroy it
-    if (chart && chart.config.type === 'line') { chart.destroy(); chart = null; }
+    const deptOrder = ["Finish", "Speciality", "Specialty", "Surface", "Frame Only"];
+    const deptKeys = Object.keys(data)
+      .filter(dept => dept !== "_total")
+      .sort((a, b) => {
+        const ai = deptOrder.indexOf(a);
+        const bi = deptOrder.indexOf(b);
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+      });
 
-    const hourMap = {};
-    HOUR_ORDER.forEach(h => { hourMap[h] = 0; });
-    Object.keys(data).forEach(dept => {
-      if (dept === "_total") return;
-      Object.keys(data[dept]).forEach(q => {
+    const deptHourMaps = {};
+    const grandHourMap = {};
+    HOUR_ORDER.forEach(h => { grandHourMap[h] = 0; });
+
+    deptKeys.forEach(dept => {
+      const hourMap = {};
+      HOUR_ORDER.forEach(h => { hourMap[h] = 0; });
+
+      Object.keys(data[dept] || {}).forEach(q => {
         if (q === "_total") return;
         Object.keys(data[dept][q].hours || {}).forEach(h => {
-          data[dept][q].hours[h].forEach(e => { hourMap[h] = (hourMap[h]||0) + e.value; });
+          (data[dept][q].hours[h] || []).forEach(e => {
+            const value = Number(e.value) || 0;
+            hourMap[h] = (hourMap[h] || 0) + value;
+            grandHourMap[h] = (grandHourMap[h] || 0) + value;
+          });
         });
       });
+
+      deptHourMaps[dept] = hourMap;
     });
 
-    const labels = HOUR_ORDER.filter(h => hourMap[h] > 0);
-    const values = labels.map(h => hourMap[h]);
-    const maxVal = Math.max(...values, 1);
-    const avg    = values.reduce((a,b)=>a+b,0) / (values.length||1);
+    const labels = HOUR_ORDER.filter(h => grandHourMap[h] > 0);
+    const totals = labels.map(h => grandHourMap[h]);
+    const avg = totals.length ? totals.reduce((a,b)=>a+b,0) / totals.length : 0;
 
-    const colors = values.map(v => {
-      const r = v / maxVal;
-      if (r >= 1) return "rgba(120,255,190,.92)";
-      if (r < .2) return "rgba(90,150,255,.28)";
-      return "rgba(56,189,248,.72)";
+    const barDatasets = deptKeys.map(dept => {
+      const color = getDeptColor(dept);
+      return {
+        type: "bar",
+        label: dept === "Specialty" ? "Speciality" : dept,
+        data: labels.map(h => deptHourMaps[dept]?.[h] || 0),
+        backgroundColor: color + "CC",
+        borderColor: color,
+        borderWidth: 1,
+        borderRadius: 4,
+        borderSkipped: false,
+        stack: "incoming",
+        order: 2
+      };
     });
-
-    if (chart) {
-      chart.data.labels = labels;
-      chart.data.datasets[0].data = values;
-      chart.data.datasets[0].backgroundColor = colors;
-      chart.data.datasets[1].data = values.map(()=>Math.round(avg));
-      chart.update("none");
-      return;
-    }
 
     const ctx = canvas.getContext("2d");
     chart = new Chart(ctx, {
-      type:"bar",
-      data:{
+      type: "bar",
+      data: {
         labels,
-        datasets:[
-          { type:"bar", data:values, backgroundColor:colors, borderRadius:4, borderSkipped:false, order:2 },
-          { type:"line", label:"Avg", data:values.map(()=>Math.round(avg)),
-            borderColor:"rgba(250,204,21,.55)", borderWidth:1.5, borderDash:[6,4],
-            pointRadius:0, fill:false, tension:0, order:1 }
+        datasets: [
+          ...barDatasets,
+          {
+            type: "line",
+            label: "Avg",
+            data: labels.map(() => Math.round(avg)),
+            borderColor: "rgba(250,204,21,.62)",
+            borderWidth: 1.5,
+            borderDash: [6,4],
+            pointRadius: 0,
+            fill: false,
+            tension: 0,
+            order: 1
+          }
         ]
       },
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        animation:{ duration:600, easing:"easeOutQuart" },
-        onClick:(evt,els,ci)=>{
-          const pts=ci.getElementsAtEventForMode(evt,"index",{intersect:false},true);
-          if(!pts.length) return;
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 650, easing: "easeOutQuart" },
+        interaction: { mode: "index", intersect: false },
+        onClick: (evt, els, ci) => {
+          const pts = ci.getElementsAtEventForMode(evt, "index", { intersect:false }, true);
+          if (!pts.length) return;
           showHourBreakdown(ci.data.labels[pts[0].index]);
         },
-        plugins:{
-          legend:{ display:false },
-          tooltip:{
-            backgroundColor:"rgba(6,13,26,.95)", borderColor:"rgba(56,189,248,.25)", borderWidth:1,
-            titleColor:"#9ed8ff", bodyColor:"#e8f2ff",
-            titleFont:{family:"'Space Mono',monospace",size:11},
-            bodyFont:{family:"'DM Sans',sans-serif",size:12}, padding:10,
-            filter:item=>item.datasetIndex===0,
-            callbacks:{ title:i=>i[0].label, label:i=>` ${i.raw.toLocaleString()} jobs` }
+        plugins: {
+          legend: {
+            display: true,
+            position: "bottom",
+            labels: {
+              color: "#9ab3cb",
+              font: { family:"'DM Sans',sans-serif", size:11 },
+              boxWidth: 10,
+              boxHeight: 10,
+              padding: 18,
+              usePointStyle: true,
+              pointStyle: "circle",
+              filter: item => item.text !== "Avg"
+            }
+          },
+          tooltip: {
+            backgroundColor: "rgba(6,13,26,.96)",
+            borderColor: "rgba(56,189,248,.25)",
+            borderWidth: 1,
+            titleColor: "#9ed8ff",
+            bodyColor: "#e8f2ff",
+            titleFont: { family:"'Space Mono',monospace", size:11 },
+            bodyFont: { family:"'DM Sans',sans-serif", size:12 },
+            padding: 10,
+            callbacks: {
+              title: items => items[0]?.label || "",
+              label: item => item.dataset.label === "Avg"
+                ? ` Average: ${Number(item.raw || 0).toLocaleString()} jobs`
+                : ` ${item.dataset.label}: ${Number(item.raw || 0).toLocaleString()} jobs`,
+              footer: items => {
+                const total = items
+                  .filter(i => i.dataset.label !== "Avg")
+                  .reduce((sum, i) => sum + (Number(i.raw) || 0), 0);
+                return `Total: ${total.toLocaleString()} jobs`;
+              }
+            }
           }
         },
-        scales:{
-          x:{ grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},maxRotation:45} },
-          y:{ grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},callback:v=>v.toLocaleString()} }
+        scales: {
+          x: {
+            stacked: true,
+            grid: { color:"rgba(90,160,255,.05)" },
+            ticks: { color:"#c0d0e0", font:{ family:"'DM Sans',sans-serif", size:12 }, maxRotation:45 }
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            grid: { color:"rgba(90,160,255,.07)" },
+            ticks: { color:"#c0d0e0", font:{ family:"'DM Sans',sans-serif", size:12 }, callback:v=>v.toLocaleString() }
+          }
         }
       }
     });
 
   /* ---- MODE B: multi-queue comparison, line chart ---- */
   } else {
+    if (chart) { chart.destroy(); chart = null; }
 
-    // Destroy bar chart if switching from Mode A
-    if (chart && chart.config.type === 'bar') { chart.destroy(); chart = null; }
-
-    // Union of all hours that have any data across selected queues
     const allHourMap = {};
     HOUR_ORDER.forEach(h => { allHourMap[h] = 0; });
     selectedQueues.forEach(sel => {
       if (!data[sel.dept]?.[sel.queue]) return;
       Object.keys(data[sel.dept][sel.queue].hours || {}).forEach(h => {
-        data[sel.dept][sel.queue].hours[h].forEach(e => { allHourMap[h] = (allHourMap[h]||0) + e.value; });
+        data[sel.dept][sel.queue].hours[h].forEach(e => {
+          allHourMap[h] = (allHourMap[h] || 0) + (Number(e.value) || 0);
+        });
       });
     });
-    const labels = HOUR_ORDER.filter(h => allHourMap[h] > 0);
 
-    // Helper: get per-hour values for one (dept, queue) selection
+    const labels = HOUR_ORDER.filter(h => allHourMap[h] > 0);
     const getVals = sel => labels.map(h => {
       if (!data[sel.dept]?.[sel.queue]) return 0;
-      return (data[sel.dept][sel.queue].hours?.[h] || []).reduce((s, e) => s + e.value, 0);
+      return (data[sel.dept][sel.queue].hours?.[h] || [])
+        .reduce((s, e) => s + (Number(e.value) || 0), 0);
     });
-
-    // Update existing line chart in-place if dataset count matches (smooth refresh)
-    if (chart && chart.config.type === 'line' && chart.data.datasets.length === selectedQueues.length) {
-      chart.data.labels = labels;
-      selectedQueues.forEach((sel, i) => {
-        chart.data.datasets[i].data = getVals(sel);
-        chart.data.datasets[i].borderColor = sel.lineColor;
-        chart.data.datasets[i].backgroundColor = sel.lineColor + '18';
-      });
-      chart.update("none");
-      return;
-    }
-
-    if (chart) { chart.destroy(); chart = null; }
 
     const datasets = selectedQueues.map(sel => ({
       label: `${sel.queue} · ${deptAbbr(sel.dept)}`,
       data: getVals(sel),
       borderColor: sel.lineColor,
-      backgroundColor: sel.lineColor + '18',
+      backgroundColor: sel.lineColor + "18",
       borderWidth: 2,
       tension: 0.4,
       pointRadius: 3,
@@ -1208,33 +1364,47 @@ function buildHourlyChart(data) {
 
     const ctx = canvas.getContext("2d");
     chart = new Chart(ctx, {
-      type: 'line',
+      type: "line",
       data: { labels, datasets },
       options: {
-        responsive: true, maintainAspectRatio: false,
+        responsive: true,
+        maintainAspectRatio: false,
         animation: { duration: 400, easing: "easeOutQuart" },
+        interaction: { mode:"index", intersect:false },
         onClick: (evt, els, ci) => {
-          const pts = ci.getElementsAtEventForMode(evt, "index", {intersect:false}, true);
+          const pts = ci.getElementsAtEventForMode(evt, "index", { intersect:false }, true);
           if (!pts.length) return;
           showHourBreakdown(ci.data.labels[pts[0].index]);
         },
         plugins: {
           legend: {
             display: true,
-            labels: { color:"#6a8ab0", font:{family:"'DM Sans',sans-serif",size:11}, boxWidth:12, padding:12, usePointStyle:true }
+            position: "bottom",
+            labels: {
+              color:"#6a8ab0",
+              font:{ family:"'DM Sans',sans-serif", size:11 },
+              boxWidth:12,
+              padding:12,
+              usePointStyle:true
+            }
           },
           tooltip: {
-            mode: 'index', intersect: false,
-            backgroundColor:"rgba(6,13,26,.95)", borderColor:"rgba(56,189,248,.25)", borderWidth:1,
-            titleColor:"#9ed8ff", bodyColor:"#e8f2ff",
-            titleFont:{family:"'Space Mono',monospace",size:11},
-            bodyFont:{family:"'DM Sans',sans-serif",size:12}, padding:10,
-            callbacks: { label: item => ` ${item.dataset.label}: ${item.raw.toLocaleString()}` }
+            mode: "index",
+            intersect: false,
+            backgroundColor:"rgba(6,13,26,.95)",
+            borderColor:"rgba(56,189,248,.25)",
+            borderWidth:1,
+            titleColor:"#9ed8ff",
+            bodyColor:"#e8f2ff",
+            titleFont:{ family:"'Space Mono',monospace", size:11 },
+            bodyFont:{ family:"'DM Sans',sans-serif", size:12 },
+            padding:10,
+            callbacks: { label: item => ` ${item.dataset.label}: ${Number(item.raw || 0).toLocaleString()}` }
           }
         },
         scales: {
-          x: { grid:{color:"rgba(90,160,255,.05)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},maxRotation:45} },
-          y: { grid:{color:"rgba(90,160,255,.07)"}, ticks:{color:"#c0d0e0",font:{family:"'DM Sans',sans-serif",size:12},callback:v=>v.toLocaleString()} }
+          x: { grid:{ color:"rgba(90,160,255,.05)" }, ticks:{ color:"#c0d0e0", font:{ family:"'DM Sans',sans-serif", size:12 }, maxRotation:45 } },
+          y: { grid:{ color:"rgba(90,160,255,.07)" }, ticks:{ color:"#c0d0e0", font:{ family:"'DM Sans',sans-serif", size:12 }, callback:v=>v.toLocaleString() } }
         }
       }
     });
@@ -1280,10 +1450,10 @@ let trendDays = 14;
 let trendData = null;     // cached last API response
 
 const TREND_DEPT_CFG = [
-  { key:"Finish",     label:"Finish",   color:"#818cf8", alpha:"rgba(129,140,248,.75)" },
-  { key:"Surface",    label:"Surface",  color:"#22d3ee", alpha:"rgba(34,211,238,.75)"  },
-  { key:"Specialty",  label:"Specialty",color:"#f472b6", alpha:"rgba(244,114,182,.75)" },
-  { key:"Frame Only", label:"Frame",    color:"#fb923c", alpha:"rgba(251,146,60,.75)"  },
+  { key:"Finish",     label:"Finish",     color:"#22d3ee", alpha:"rgba(34,211,238,.92)"  },
+  { key:"Specialty",  label:"Speciality", color:"#a855f7", alpha:"rgba(168,85,247,.94)"  },
+  { key:"Surface",    label:"Surface",    color:"#3b82f6", alpha:"rgba(59,130,246,.94)"  },
+  { key:"Frame Only", label:"Frame Only", color:"#fb923c", alpha:"rgba(251,146,60,.96)"  },
 ];
 
 // ── view switch ──────────────────────────────────
@@ -1307,20 +1477,100 @@ function setTrendView(view) {
 }
 
 // ── fetch ─────────────────────────────────────────
+function _trendDateRange(endDate, days) {
+  const [y,m,d] = String(endDate || getLocalDate()).split("-").map(Number);
+  const end = new Date(y, m - 1, d);
+  const dates = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const dt = new Date(end);
+    dt.setDate(end.getDate() - i);
+    dates.push(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`);
+  }
+  return dates;
+}
+
+function _trendRowFromDaily(date, json) {
+  const data = json?.data || {};
+  const departments = {};
+  const queues = {};
+
+  Object.keys(data).forEach(dept => {
+    if (dept === "_total") return;
+    const normalizedDept = dept === "Speciality" ? "Specialty" : dept;
+    const deptData = data[dept] || {};
+    departments[normalizedDept] = Number(deptData._total || 0);
+    queues[normalizedDept] = {};
+
+    Object.keys(deptData).forEach(queueName => {
+      if (queueName === "_total") return;
+      queues[normalizedDept][queueName] = Number(deptData[queueName]?.total || 0);
+    });
+  });
+
+  const total = Number(json?.total || Object.values(departments).reduce((s,v) => s + Number(v || 0), 0));
+  return { date, total, departments, queues };
+}
+
+async function _buildTrendFromDailyRange(endDate, days) {
+  const dates = _trendDateRange(endDate, days);
+  const rows = await Promise.all(dates.map(async date => {
+    try {
+      const cached = getCached(date);
+      if (cached) return _trendRowFromDaily(date, { success:true, data:cached.data, total:cached.total });
+      const json = await apiFetch(`${API_URL}?date=${encodeURIComponent(date)}`);
+      if (!json?.success) return { date, total:0, departments:{}, queues:{} };
+      setCache(date, json.data, json.total);
+      return _trendRowFromDaily(date, json);
+    } catch (err) {
+      console.warn(`Trend daily fallback failed for ${date}:`, err);
+      return { date, total:0, departments:{}, queues:{} };
+    }
+  }));
+  return rows;
+}
+
 async function loadTrend(days=14) {
   trendDays = days;
   document.querySelectorAll(".trend-btn").forEach(b => {
     b.classList.toggle("active", b.textContent.trim()===`${days}D`);
   });
+
+  const endDate = currentDate || document.getElementById("dateFilter")?.value || getLocalDate();
+  const expectedDates = _trendDateRange(endDate, days);
+  const expectedLast = expectedDates[expectedDates.length - 1];
+
   try {
-    const json = await apiFetch(`${API_URL}?mode=trend&days=${days}&queues=1`);
-    if (!json.success) return;
-    trendData = json.trend;
-    if (trendView==="dept") buildTrendDeptChart(json.trend);
-    else                    buildTrendHeatmap(json.trend);
-    setTrendInsight(json.trend);
-    _updateTrendInsightBar(json.trend);
-  } catch(err) { console.error("Trend error:", err); }
+    // Ask the trend endpoint for the selected date window first. Older API deployments
+    // may ignore date/endDate, so the response is validated before it is used.
+    const url = `${API_URL}?mode=trend&days=${days}&queues=1&date=${encodeURIComponent(endDate)}&endDate=${encodeURIComponent(endDate)}`;
+    const json = await apiFetch(url);
+
+    let rows = Array.isArray(json?.trend) ? json.trend : [];
+    const returnedLast = rows.length ? String(rows[rows.length - 1]?.date || "") : "";
+    const completeWindow = rows.length === days && returnedLast === expectedLast;
+
+    if (!json?.success || !completeWindow) {
+      rows = await _buildTrendFromDailyRange(endDate, days);
+    }
+
+    trendData = rows;
+    if (trendView === "dept") buildTrendDeptChart(rows);
+    else                      buildTrendHeatmap(rows);
+    setTrendInsight(rows);
+    _updateTrendInsightBar(rows);
+  } catch(err) {
+    console.error("Trend error:", err);
+    try {
+      const rows = await _buildTrendFromDailyRange(endDate, days);
+      trendData = rows;
+      if (trendView === "dept") buildTrendDeptChart(rows);
+      else                      buildTrendHeatmap(rows);
+      setTrendInsight(rows);
+      _updateTrendInsightBar(rows);
+    } catch (fallbackErr) {
+      console.error("Trend fallback error:", fallbackErr);
+    }
+  }
 }
 
 // ── All Dept: grouped bar + total line + avg ──────

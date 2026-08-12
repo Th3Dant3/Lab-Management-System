@@ -685,3 +685,1351 @@ body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:no
   30%  { box-shadow: 0 0 0 8px rgba(74,222,128,.3); transform: scale(1.06); }
   100% { box-shadow: 0 0 0 0 rgba(74,222,128,.0); transform: scale(1); }
 }
+
+/* ======================================================================
+   INCOMING JOBS V4 — FLOW INTELLIGENCE COMMAND CENTER
+   Visual redesign based on approved mockup. Decorative PNGs contain no data.
+   ====================================================================== */
+body {
+  background:
+    linear-gradient(rgba(1,4,13,.92), rgba(1,4,13,.96)),
+    url("./assets/incoming-command-bg.png") center top / cover fixed no-repeat,
+    var(--bg);
+}
+body::before { opacity:.24; animation-duration:140s; }
+.bg-orb { opacity:.45; filter:blur(170px); }
+.bg-grid { opacity:.38; }
+#app { max-width:1760px; padding:0 20px 52px; }
+
+/* Header: one command bar, no duplicated department totals */
+.topbar { min-height:78px; padding:0 18px; background:rgba(1,5,14,.92); border:1px solid rgba(34,211,238,.18); border-top:0; border-radius:0 0 16px 16px; }
+.topbar-scanner { opacity:.35; }
+.back-btn { margin:0 16px 0 0; min-height:42px; }
+.brand { border-left:0; padding:0 20px 0 8px; }
+.brand-name { font-size:16px; }
+.brand-sub { color:#22d3ee; font-size:8px; }
+.ticker-wrap { display:none !important; }
+.topbar-stats { margin-left:auto; border-left:1px solid rgba(56,189,248,.1); }
+.tb-total { min-width:128px; align-items:flex-start; padding:0 20px; }
+.topbar-sparkline { display:none; }
+.tb-total-val { font-size:25px; }
+.topbar-right { min-height:52px; gap:22px; padding-right:8px; }
+.status-pill.live { font-size:11px; padding:8px 16px; }
+
+/* Queue pressure */
+.queue-pressure {
+  position:relative; z-index:3; max-width:1720px; margin:10px auto 0; padding:12px 16px;
+  display:grid; grid-template-columns:190px minmax(0,1fr) 120px; align-items:stretch; gap:12px;
+  border:1px solid rgba(34,211,238,.24); border-radius:16px; overflow:hidden;
+  background:linear-gradient(180deg,rgba(4,18,31,.95),rgba(2,11,21,.95));
+  box-shadow:inset 0 0 0 1px rgba(56,189,248,.03),0 12px 35px rgba(0,0,0,.22);
+}
+.queue-pressure::before { content:''; position:absolute; inset:0; pointer-events:none; opacity:.18; background:url("./assets/incoming-command-bg.png") 72% 48% / cover no-repeat; mix-blend-mode:screen; }
+.pressure-title,.pressure-metrics,.pressure-health { position:relative; z-index:1; }
+.pressure-title { display:flex; align-items:center; gap:11px; padding-right:14px; border-right:1px solid rgba(56,189,248,.1); }
+.pressure-title__icon { display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(34,211,238,.38);border-radius:10px;color:var(--cyan);box-shadow:inset 0 0 14px rgba(34,211,238,.08); }
+.pressure-title strong { display:block;font-size:13px;text-transform:uppercase;letter-spacing:.05em; }
+.pressure-title small { display:block;margin-top:3px;color:var(--t3);font-size:10px; }
+.pressure-metrics { display:grid; grid-template-columns:repeat(5,minmax(130px,1fr)); gap:8px; }
+.pressure-item { --pc:var(--blue); position:relative; padding:8px 10px 8px 42px; min-height:58px; border-left:1px solid color-mix(in srgb,var(--pc) 35%,transparent); background:linear-gradient(90deg,color-mix(in srgb,var(--pc) 7%,transparent),transparent 70%); clip-path:polygon(12px 0,100% 0,100% 100%,12px 100%,0 50%); }
+.pressure-item__icon { position:absolute;left:11px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:25px;height:25px;border:1px solid color-mix(in srgb,var(--pc) 55%,transparent);border-radius:50%;color:var(--pc);font-size:11px; }
+.pressure-item__label { display:block;color:var(--t2);font-size:9px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.pressure-item__row { display:flex;align-items:baseline;gap:8px;margin-top:2px; }
+.pressure-item__value { font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--t1); }
+.pressure-item__pct { font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--pc); }
+.pressure-health { display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:1px solid rgba(74,222,128,.16);border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.10),transparent 68%); }
+.pressure-health span { font-family:var(--font-mono);font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3); }
+.pressure-health strong { margin-top:2px;font-family:var(--font-mono);font-size:17px;color:var(--green); }
+.pressure-health small { font-size:8px;color:#86efac; }
+.pressure-health.watch strong { color:var(--yellow); } .pressure-health.critical strong { color:var(--red); }
+.pressure-skeleton { grid-column:1/-1;align-self:center;color:var(--t3);font-family:var(--font-mono);font-size:9px; }
+
+/* Velocity becomes a slim secondary live strip */
+.velocity-strip { max-width:1720px; margin:8px auto 0; border:1px solid rgba(56,189,248,.08); border-radius:10px; padding:7px 18px; background:rgba(3,11,22,.82); }
+.controls-row { padding-top:14px; margin-bottom:16px; }
+
+/* KPI cards */
+.kpi-strip { grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:16px; }
+.kpi-card { min-height:220px; padding:20px 20px 60px; border-radius:14px; background-color:#06101d; background-repeat:no-repeat; background-position:center; background-size:cover; isolation:isolate; }
+.kpi-card::before { height:100%; z-index:0; box-shadow:none !important; background:linear-gradient(90deg,rgba(2,10,19,.88) 0%,rgba(2,10,19,.66) 44%,rgba(2,10,19,.16) 100%) !important; }
+.kpi-card::after { z-index:1; opacity:.8; }
+.kpi-card[data-dept="Finish"] { background-image:url("./assets/incoming-finish-bg.png"); border-color:rgba(34,211,238,.42); }
+.kpi-card[data-dept="Speciality"],.kpi-card[data-dept="Specialty"] { background-image:url("./assets/incoming-speciality-bg.png"); border-color:rgba(167,139,250,.42); }
+.kpi-card[data-dept="Surface"] { background-image:url("./assets/incoming-surface-bg.png"); border-color:rgba(56,189,248,.42); }
+.kpi-card[data-dept="Frame Only"] { background-image:url("./assets/incoming-frame-bg.png"); border-color:rgba(251,146,60,.42); }
+.kpi-lbl { font-size:11px;color:var(--kc);letter-spacing:.06em; }
+.kpi-num { font-size:42px; }
+.kpi-num-wrap { height:50px; }
+.kpi-sparkline { height:50px!important;opacity:.8;z-index:3; }
+.kpi-geo-shape { display:none!important; }
+.kpi-ring { display:none; }
+.kpi-share-wrap { position:absolute;left:18px;bottom:18px;z-index:5;display:flex;align-items:center;gap:8px; }
+.kpi-share-ring { position:relative;width:46px;height:46px;display:grid;place-items:center; }
+.kpi-share-ring svg { position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg); }
+.kpi-share-ring strong { font-family:var(--font-mono);font-size:10px;color:var(--t1); }
+.kpi-share-label { color:var(--t2);font-size:10px; }
+.kpi-top-queue { position:absolute;left:18px;right:18px;bottom:4px;z-index:5;padding-top:5px;border-top:1px solid rgba(255,255,255,.05);font-size:9px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.kpi-top-queue b { color:var(--kc);font-weight:600; }
+.kpi-hour-smart,.kpi-hour-badge { max-width:75%; }
+
+/* Main analysis region */
+.main-body { grid-template-columns:320px minmax(0,1fr) 300px; gap:14px; }
+.panel { background:linear-gradient(180deg,rgba(4,15,28,.94),rgba(3,11,22,.96)); border-color:rgba(56,189,248,.16); border-radius:14px; }
+.queue-panel { min-height:350px; }
+.hourly-panel { min-height:350px; background-image:linear-gradient(rgba(4,15,28,.90),rgba(3,11,22,.94)),url("./assets/incoming-command-bg.png");background-size:cover;background-position:center; }
+.hourly-chart-wrap { height:260px; }
+.right-panel { min-height:350px; background:radial-gradient(circle at 50% 38%,rgba(56,189,248,.06),transparent 52%),linear-gradient(180deg,rgba(4,15,28,.96),rgba(3,11,22,.98)); }
+.donut-wrap { width:190px;height:190px; }
+
+/* Bottom intelligence row */
+.insight-row { display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,.9fr);gap:14px;margin-top:14px; }
+.insight-row .compare-panel { min-height:245px; }
+.insight-row .compare-chart-wrap { height:195px; }
+.flow-intelligence { position:relative;min-height:245px;overflow:hidden;padding-bottom:18px;background:radial-gradient(circle at 78% 58%,rgba(56,189,248,.10),transparent 34%),linear-gradient(180deg,rgba(4,15,28,.96),rgba(3,11,22,.98)); }
+.flow-intelligence__body { position:relative;z-index:2;width:64%;padding:4px 18px;display:flex;flex-direction:column;gap:0; }
+.flow-stat { display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid rgba(56,189,248,.08); }
+.flow-stat span { color:var(--t3);font-size:10px; }
+.flow-stat strong { max-width:150px;text-align:right;color:var(--t1);font-family:var(--font-mono);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+#flowStatus.good { color:var(--green); } #flowStatus.watch { color:var(--yellow); } #flowStatus.critical { color:var(--red); }
+.flow-radar { position:absolute;right:18px;bottom:24px;width:150px;height:150px;border-radius:50%;border:1px solid rgba(56,189,248,.20);background:repeating-radial-gradient(circle,transparent 0 18px,rgba(56,189,248,.16) 19px 20px,transparent 21px 36px); }
+.flow-radar::before,.flow-radar::after { content:'';position:absolute;background:rgba(56,189,248,.18); }
+.flow-radar::before { left:50%;top:0;bottom:0;width:1px; } .flow-radar::after { top:50%;left:0;right:0;height:1px; }
+.flow-radar i { position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;background:var(--blue);box-shadow:0 0 12px var(--blue); }
+.flow-radar i:nth-child(1){transform:translate(28px,-34px)} .flow-radar i:nth-child(2){transform:translate(-42px,17px)} .flow-radar i:nth-child(3){transform:translate(40px,40px)}
+.flow-radar b { position:absolute;left:50%;top:50%;width:48%;height:1px;transform-origin:left center;background:linear-gradient(90deg,var(--blue),transparent);animation:incomingRadarSweep 6s linear infinite; }
+@keyframes incomingRadarSweep { to { transform:rotate(360deg); } }
+
+@media(max-width:1350px){ .pressure-metrics{grid-template-columns:repeat(3,1fr)} .queue-pressure{grid-template-columns:160px 1fr 100px}.main-body{grid-template-columns:280px 1fr 250px}.kpi-num{font-size:36px} }
+@media(max-width:1050px){ .queue-pressure{grid-template-columns:1fr}.pressure-title,.pressure-health{border:0}.pressure-metrics{grid-template-columns:repeat(2,1fr)}.kpi-strip{grid-template-columns:repeat(2,1fr)}.main-body{grid-template-columns:1fr}.insight-row{grid-template-columns:1fr}.right-panel{display:block}.flow-intelligence__body{width:70%} }
+@media(max-width:640px){ .pressure-metrics{grid-template-columns:1fr}.kpi-strip{grid-template-columns:1fr}.topbar{padding:0 10px}.topbar-right{gap:8px}.tb-total{min-width:auto;padding:0 10px}.flow-intelligence__body{width:100%;padding-right:110px}.flow-radar{width:95px;height:95px;opacity:.6}.kpi-card{min-height:205px} }
+
+/* ========================================================================
+   INCOMING DASHBOARD V4.1 — KPI ARTWORK SCALE + HOURLY FLOW POLISH
+   ======================================================================== */
+
+/* The approved artwork should read as an accent, not fill the entire card. */
+.kpi-card[data-dept="Finish"],
+.kpi-card[data-dept="Speciality"],
+.kpi-card[data-dept="Specialty"],
+.kpi-card[data-dept="Surface"],
+.kpi-card[data-dept="Frame Only"] {
+  background-repeat: no-repeat !important;
+  background-position: right 52% !important;
+  background-size: 72% auto !important;
+}
+
+/* Give the live values a stronger text-safe zone while allowing the artwork
+   to remain clearly visible on the right side of every KPI card. */
+.kpi-card::before {
+  background:
+    linear-gradient(90deg,
+      rgba(2,10,19,.96) 0%,
+      rgba(2,10,19,.91) 28%,
+      rgba(2,10,19,.72) 48%,
+      rgba(2,10,19,.26) 72%,
+      rgba(2,10,19,.08) 100%) !important;
+}
+
+.kpi-card[data-dept="Finish"] {
+  background-size: 70% auto !important;
+  background-position: 106% 54% !important;
+}
+
+.kpi-card[data-dept="Speciality"],
+.kpi-card[data-dept="Specialty"] {
+  background-size: 68% auto !important;
+  background-position: 108% 54% !important;
+}
+
+.kpi-card[data-dept="Surface"] {
+  background-size: 70% auto !important;
+  background-position: 108% 52% !important;
+}
+
+.kpi-card[data-dept="Frame Only"] {
+  background-size: 66% auto !important;
+  background-position: 107% 54% !important;
+}
+
+/* Keep the sparkline visible without letting it compete with the image. */
+.kpi-sparkline {
+  opacity: .48 !important;
+  z-index: 2 !important;
+}
+
+/* Hourly Flow now uses stacked department-color bars. */
+.hourly-panel .panel-head {
+  position: relative;
+  z-index: 2;
+}
+
+.hourly-chart-wrap {
+  height: 265px !important;
+}
+
+.hourly-panel canvas {
+  position: relative;
+  z-index: 2;
+}
+
+/* Slightly reduce the panel background artwork so the colored bars own the view. */
+.hourly-panel {
+  background-size: 86% auto !important;
+  background-position: 88% 48% !important;
+  background-repeat: no-repeat !important;
+}
+
+@media (max-width: 1100px) {
+  .kpi-card[data-dept="Finish"],
+  .kpi-card[data-dept="Speciality"],
+  .kpi-card[data-dept="Specialty"],
+  .kpi-card[data-dept="Surface"],
+  .kpi-card[data-dept="Frame Only"] {
+    background-size: 62% auto !important;
+    background-position: 112% 56% !important;
+  }
+}
+
+
+
+/* ========================================================================
+   INCOMING DASHBOARD V4.2 — KPI READABILITY / APPROVED MOCKUP TUNING
+   Visual-only. Live values, charts, API and refresh logic remain unchanged.
+   ======================================================================== */
+
+/* Keep KPI art as a right-side accent with a large clean data-safe zone. */
+.kpi-card {
+  min-height: 214px !important;
+  padding: 20px 20px 54px !important;
+  overflow: hidden !important;
+  isolation: isolate !important;
+  background-color: #06101d !important;
+}
+
+.kpi-card[data-dept="Finish"],
+.kpi-card[data-dept="Speciality"],
+.kpi-card[data-dept="Specialty"],
+.kpi-card[data-dept="Surface"],
+.kpi-card[data-dept="Frame Only"] {
+  background-repeat: no-repeat !important;
+  background-size: auto 82% !important;
+  background-position: 104% 48% !important;
+}
+
+/* Department-specific placement to match the approved composition. */
+.kpi-card[data-dept="Finish"] {
+  background-size: auto 80% !important;
+  background-position: 104% 50% !important;
+}
+
+.kpi-card[data-dept="Speciality"],
+.kpi-card[data-dept="Specialty"] {
+  background-size: auto 84% !important;
+  background-position: 106% 49% !important;
+}
+
+.kpi-card[data-dept="Surface"] {
+  background-size: auto 82% !important;
+  background-position: 105% 49% !important;
+}
+
+.kpi-card[data-dept="Frame Only"] {
+  background-size: auto 78% !important;
+  background-position: 106% 50% !important;
+}
+
+/* Text-safe mask: strong only behind live data, transparent over the artwork. */
+.kpi-card::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  height: auto !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  box-shadow: none !important;
+  background:
+    linear-gradient(90deg,
+      rgba(3,11,21,.99) 0%,
+      rgba(3,11,21,.97) 30%,
+      rgba(3,11,21,.88) 43%,
+      rgba(3,11,21,.55) 54%,
+      rgba(3,11,21,.18) 68%,
+      rgba(3,11,21,.03) 100%),
+    linear-gradient(180deg,
+      rgba(3,11,21,.18) 0%,
+      transparent 28%,
+      transparent 68%,
+      rgba(3,11,21,.54) 100%) !important;
+}
+
+/* Keep all live KPI content above the image and readability mask. */
+.kpi-card .kpi-lbl,
+.kpi-card .kpi-num,
+.kpi-card .kpi-num-wrap,
+.kpi-card .kpi-hour-badge,
+.kpi-card .kpi-hour-smart,
+.kpi-card .kpi-chg,
+.kpi-card .kpi-alert-badge,
+.kpi-card .kpi-ring,
+.kpi-card .kpi-delta-badge {
+  position: relative !important;
+  z-index: 5 !important;
+}
+
+.kpi-lbl {
+  margin-bottom: 9px !important;
+  text-shadow: 0 2px 8px rgba(0,0,0,.58) !important;
+}
+
+.kpi-num {
+  font-size: 36px !important;
+  line-height: 1 !important;
+  text-shadow:
+    0 2px 4px rgba(0,0,0,.72),
+    0 0 18px rgba(0,0,0,.28) !important;
+}
+
+.kpi-hour-smart,
+.kpi-hour-badge {
+  width: fit-content !important;
+  max-width: 58% !important;
+}
+
+.kpi-chg {
+  max-width: 56% !important;
+}
+
+/* Share ring is intentionally separated from the background illustration. */
+.kpi-ring {
+  left: 0 !important;
+  right: auto !important;
+  bottom: 17px !important;
+  width: 38px !important;
+  height: 38px !important;
+  opacity: .95 !important;
+}
+
+.kpi-card .kpi-ring + * {
+  position: relative;
+}
+
+/* Make the sparkline a thin lower data layer instead of covering artwork/text. */
+.kpi-sparkline {
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  height: 35px !important;
+  opacity: .34 !important;
+  z-index: 3 !important;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 100%);
+}
+
+/* Top Queue is created dynamically; reserve a clean lower band for it. */
+.kpi-card .kpi-top-queue,
+.kpi-card [class*="top-queue"],
+.kpi-card [class*="topQueue"] {
+  position: absolute !important;
+  left: 20px !important;
+  right: 14px !important;
+  bottom: 7px !important;
+  z-index: 6 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  text-shadow: 0 2px 8px rgba(0,0,0,.9) !important;
+}
+
+/* Existing bottom text that is not in a dedicated class still gains a dark floor. */
+.kpi-card::after {
+  z-index: 2 !important;
+}
+
+/* On hover, reveal a little more art without sacrificing readability. */
+.kpi-card:hover {
+  background-position-x: 101% !important;
+}
+
+/* Responsive: art becomes smaller before the text area gets cramped. */
+@media (max-width: 1350px) {
+  .kpi-card[data-dept="Finish"],
+  .kpi-card[data-dept="Speciality"],
+  .kpi-card[data-dept="Specialty"],
+  .kpi-card[data-dept="Surface"],
+  .kpi-card[data-dept="Frame Only"] {
+    background-size: auto 72% !important;
+    background-position: 110% 52% !important;
+  }
+
+  .kpi-hour-smart,
+  .kpi-hour-badge,
+  .kpi-chg {
+    max-width: 62% !important;
+  }
+}
+
+@media (max-width: 1050px) {
+  .kpi-card[data-dept="Finish"],
+  .kpi-card[data-dept="Speciality"],
+  .kpi-card[data-dept="Specialty"],
+  .kpi-card[data-dept="Surface"],
+  .kpi-card[data-dept="Frame Only"] {
+    background-size: auto 76% !important;
+    background-position: 106% 50% !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-card {
+    min-height: 205px !important;
+  }
+
+  .kpi-card[data-dept="Finish"],
+  .kpi-card[data-dept="Speciality"],
+  .kpi-card[data-dept="Specialty"],
+  .kpi-card[data-dept="Surface"],
+  .kpi-card[data-dept="Frame Only"] {
+    background-size: auto 68% !important;
+    background-position: 116% 55% !important;
+  }
+
+  .kpi-card::before {
+    background: linear-gradient(90deg,
+      rgba(3,11,21,.99) 0%,
+      rgba(3,11,21,.96) 48%,
+      rgba(3,11,21,.58) 68%,
+      rgba(3,11,21,.12) 100%) !important;
+  }
+}
+
+
+/* ========================================================================
+   INCOMING DASHBOARD V4.3 — KPI SHARE RING ALIGNMENT + READABILITY
+   ======================================================================== */
+
+/* Give the lower KPI zone more breathing room so the share ring,
+   label, sparkline, and top-queue line stop fighting each other. */
+.kpi-card {
+  padding-bottom: 88px;
+}
+
+/* Keep the sparkline as a subtle footer accent instead of competing
+   with the lower info cluster. */
+.kpi-sparkline {
+  height: 42px !important;
+  opacity: .52;
+  bottom: 0;
+}
+
+/* Larger, cleaner percentage ring block */
+.kpi-share-wrap {
+  left: 18px;
+  bottom: 32px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding-right: 12px;
+}
+
+.kpi-share-ring {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, rgba(6, 18, 32, .94), rgba(3, 10, 20, .98));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 0 0 1px rgba(56,189,248,.08);
+}
+
+.kpi-share-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.kpi-share-ring strong {
+  position: relative;
+  z-index: 2;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t1);
+  line-height: 1;
+}
+
+.kpi-share-label {
+  display: flex;
+  align-items: center;
+  min-height: 58px;
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.kpi-share-label b,
+.kpi-share-label strong {
+  color: var(--t1);
+}
+
+/* Top queue line sits below the percentage block with clear separation */
+.kpi-top-queue {
+  left: 18px;
+  right: 18px;
+  bottom: 8px;
+  z-index: 6;
+  padding-top: 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+/* Small screens: keep the ring readable without eating the card */
+@media (max-width: 640px) {
+  .kpi-card {
+    padding-bottom: 82px;
+  }
+
+  .kpi-share-wrap {
+    bottom: 30px;
+    gap: 10px;
+    min-height: 50px;
+  }
+
+  .kpi-share-ring {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+  }
+
+  .kpi-share-ring strong {
+    font-size: 11px;
+  }
+
+  .kpi-share-label {
+    min-height: 50px;
+    font-size: 11px;
+  }
+
+  .kpi-top-queue {
+    font-size: 9px;
+  }
+}
+
+
+/* ========================================================================
+   INCOMING DASHBOARD V4.4 — SHARE RING POSITION FIX
+   Move the % ring into the lower-left info zone, directly above Top Queue.
+   ======================================================================== */
+
+.kpi-card {
+  min-height: 232px;
+  padding-bottom: 80px;
+}
+
+.kpi-share-wrap {
+  left: 18px !important;
+  bottom: 24px !important;
+  min-height: 54px !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+.kpi-share-ring {
+  width: 54px !important;
+  height: 54px !important;
+  flex: 0 0 54px !important;
+}
+
+.kpi-share-ring strong {
+  font-size: 12px !important;
+}
+
+.kpi-share-label {
+  min-height: 54px !important;
+  font-size: 11px !important;
+  align-items: center !important;
+}
+
+.kpi-top-queue {
+  left: 18px !important;
+  right: 18px !important;
+  bottom: 2px !important;
+  padding-top: 4px !important;
+  font-size: 9px !important;
+  line-height: 1.1 !important;
+}
+
+/* Keep the sparkline behind the footer info, not through it. */
+.kpi-sparkline {
+  bottom: 0 !important;
+  height: 34px !important;
+  opacity: .34 !important;
+}
+
+@media (max-width: 640px) {
+  .kpi-share-wrap {
+    bottom: 22px !important;
+  }
+
+  .kpi-share-ring {
+    width: 48px !important;
+    height: 48px !important;
+    flex-basis: 48px !important;
+  }
+
+  .kpi-share-label {
+    min-height: 48px !important;
+    font-size: 10px !important;
+  }
+}
+
+
+/* ========================================================================
+   INCOMING DASHBOARD V4.5 — KPI FOOTER SHARE LAYOUT
+   Real reposition: ring anchored in bottom-left footer, label + top queue
+   aligned as one compact information cluster to its right.
+   ======================================================================== */
+
+.kpi-card {
+  min-height: 236px !important;
+  padding-bottom: 84px !important;
+}
+
+/* Anchor the share meter to the true bottom-left footer zone. */
+.kpi-share-wrap {
+  position: absolute !important;
+  left: 18px !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: 10px !important;
+  width: auto !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  z-index: 8 !important;
+  transform: none !important;
+}
+
+.kpi-share-ring {
+  width: 62px !important;
+  height: 62px !important;
+  min-width: 62px !important;
+  flex: 0 0 62px !important;
+  margin: 0 !important;
+  transform: none !important;
+  background: radial-gradient(circle at 50% 45%, rgba(5,17,30,.98), rgba(2,8,16,.99)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.05),
+    0 0 0 1px color-mix(in srgb,var(--kc,var(--blue)) 22%,transparent),
+    0 0 16px color-mix(in srgb,var(--kc,var(--blue)) 10%,transparent) !important;
+}
+
+.kpi-share-ring strong {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+/* First line to the right of the meter. */
+.kpi-share-label {
+  min-height: 0 !important;
+  height: auto !important;
+  align-self: flex-start !important;
+  margin-top: 14px !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+/* Second line in the same footer cluster. */
+.kpi-top-queue {
+  position: absolute !important;
+  left: 92px !important;
+  right: 16px !important;
+  top: auto !important;
+  bottom: 12px !important;
+  z-index: 9 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-top: 0 !important;
+  font-size: 9px !important;
+  line-height: 1.15 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.kpi-top-queue::before {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -7px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,.09), transparent 90%);
+}
+
+/* Keep artwork/sparkline behind the footer information. */
+.kpi-sparkline {
+  bottom: 0 !important;
+  height: 30px !important;
+  opacity: .24 !important;
+  z-index: 2 !important;
+}
+
+@media (max-width: 640px) {
+  .kpi-share-wrap {
+    left: 14px !important;
+    bottom: 9px !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    gap: 10px !important;
+  }
+
+  .kpi-share-ring {
+    width: 54px !important;
+    height: 54px !important;
+    min-width: 54px !important;
+    flex-basis: 54px !important;
+  }
+
+  .kpi-share-label {
+    margin-top: 11px !important;
+    font-size: 10px !important;
+  }
+
+  .kpi-top-queue {
+    left: 78px !important;
+    bottom: 11px !important;
+    font-size: 8.5px !important;
+  }
+}
+/* ========================================================================
+   INCOMING DASHBOARD V4.6 — KPI SHARE BLOCK SIZE + ALIGNMENT FIX
+   Purpose:
+   - make the % circle bigger
+   - move the whole share block into a cleaner lower-left footer zone
+   - align ring + label on the same row
+   - keep Top Queue clearly separated underneath
+   ======================================================================== */
+
+/* Give the KPI footer more room */
+.kpi-card {
+  padding-bottom: 102px !important;
+}
+
+/* Keep the sparkline as a low background accent only */
+.kpi-sparkline {
+  height: 34px !important;
+  bottom: 0 !important;
+  opacity: .34 !important;
+  z-index: 2 !important;
+}
+
+/* Share block container */
+.kpi-card .kpi-share-wrap {
+  position: absolute !important;
+  left: 18px !important;
+  bottom: 36px !important;
+  z-index: 8 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 14px !important;
+  width: auto !important;
+  max-width: calc(100% - 36px) !important;
+  min-height: 64px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Bigger percentage ring */
+.kpi-card .kpi-share-ring {
+  position: relative !important;
+  width: 64px !important;
+  height: 64px !important;
+  flex: 0 0 64px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 50% !important;
+  background: radial-gradient(circle at 50% 45%, rgba(7,18,33,.96), rgba(2,8,18,.98)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.05),
+    0 0 0 1px rgba(56,189,248,.12),
+    0 0 18px rgba(56,189,248,.10) !important;
+}
+
+.kpi-card .kpi-share-ring svg {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: rotate(-90deg) !important;
+}
+
+.kpi-card .kpi-share-ring strong {
+  position: relative !important;
+  z-index: 2 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  color: var(--t1) !important;
+}
+
+/* Label beside the ring */
+.kpi-card .kpi-share-label {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 64px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.1 !important;
+  color: rgba(233, 242, 255, .90) !important;
+  white-space: nowrap !important;
+}
+
+.kpi-card .kpi-share-label b,
+.kpi-card .kpi-share-label strong {
+  color: var(--t1) !important;
+}
+
+/* Top queue line clearly under the share block */
+.kpi-card .kpi-top-queue,
+.kpi-card [class*="top-queue"],
+.kpi-card [class*="topQueue"] {
+  position: absolute !important;
+  left: 18px !important;
+  right: 18px !important;
+  bottom: 10px !important;
+  z-index: 8 !important;
+  margin: 0 !important;
+  padding-top: 8px !important;
+  border-top: 1px solid rgba(255,255,255,.07) !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  color: var(--t3) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.kpi-card .kpi-top-queue b,
+.kpi-card [class*="top-queue"] b,
+.kpi-card [class*="topQueue"] b {
+  color: var(--kc) !important;
+  font-weight: 700 !important;
+}
+
+/* Tablet / tighter widths */
+@media (max-width: 1200px) {
+  .kpi-card {
+    padding-bottom: 96px !important;
+  }
+
+  .kpi-card .kpi-share-wrap {
+    bottom: 34px !important;
+    gap: 12px !important;
+  }
+
+  .kpi-card .kpi-share-ring {
+    width: 58px !important;
+    height: 58px !important;
+    flex-basis: 58px !important;
+  }
+
+  .kpi-card .kpi-share-ring strong {
+    font-size: 14px !important;
+  }
+
+  .kpi-card .kpi-share-label {
+    min-height: 58px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .kpi-card {
+    padding-bottom: 90px !important;
+  }
+
+  .kpi-card .kpi-share-wrap {
+    left: 16px !important;
+    right: 16px !important;
+    bottom: 32px !important;
+    gap: 10px !important;
+    min-height: 54px !important;
+    max-width: calc(100% - 32px) !important;
+  }
+
+  .kpi-card .kpi-share-ring {
+    width: 54px !important;
+    height: 54px !important;
+    flex-basis: 54px !important;
+  }
+
+  .kpi-card .kpi-share-ring strong {
+    font-size: 13px !important;
+  }
+
+  .kpi-card .kpi-share-label {
+    min-height: 54px !important;
+    font-size: 11px !important;
+  }
+
+  .kpi-card .kpi-top-queue,
+  .kpi-card [class*="top-queue"],
+  .kpi-card [class*="topQueue"] {
+    left: 16px !important;
+    right: 16px !important;
+    bottom: 8px !important;
+  }
+}
+
+
+/* ======================================================================
+   V4.8 — APPROVED QUEUE PRESSURE COMPONENT
+   Real layout rebuild to match approved mockup geometry.
+   ====================================================================== */
+.queue-pressure {
+  position:relative !important;
+  z-index:3 !important;
+  max-width:1720px !important;
+  min-height:86px !important;
+  margin:10px auto 0 !important;
+  padding:10px 14px !important;
+  display:grid !important;
+  grid-template-columns:190px minmax(0,1fr) 126px !important;
+  align-items:center !important;
+  gap:12px !important;
+  overflow:hidden !important;
+  border:1px solid rgba(34,211,238,.38) !important;
+  border-radius:15px !important;
+  background:linear-gradient(180deg,rgba(2,12,26,.97),rgba(1,8,18,.98)) !important;
+  box-shadow:inset 0 0 0 1px rgba(56,189,248,.035),0 10px 32px rgba(0,0,0,.28) !important;
+}
+.queue-pressure::before {
+  content:'' !important;
+  position:absolute !important;
+  inset:0 !important;
+  pointer-events:none !important;
+  background:
+    linear-gradient(90deg,rgba(1,8,18,.94) 0 13%,transparent 28%),
+    url("./assets/incoming-command-bg.png") 73% 52% / cover no-repeat !important;
+  opacity:.24 !important;
+  mix-blend-mode:screen !important;
+}
+.queue-pressure::after {
+  content:'' !important;
+  position:absolute !important;
+  left:14px !important;right:14px !important;top:0 !important;height:1px !important;
+  background:linear-gradient(90deg,transparent,rgba(34,211,238,.7) 18%,rgba(56,189,248,.25) 70%,transparent) !important;
+  pointer-events:none !important;
+}
+.pressure-title,.pressure-metrics,.pressure-health{position:relative!important;z-index:2!important}
+.pressure-title{
+  min-width:0 !important;
+  height:64px !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:11px !important;
+  padding:0 14px 0 2px !important;
+  border-right:1px solid rgba(56,189,248,.12) !important;
+}
+.pressure-title__icon{
+  width:40px !important;height:40px !important;flex:0 0 40px !important;
+  display:grid !important;place-items:center !important;
+  border-radius:10px !important;
+  border:1px solid rgba(34,211,238,.48) !important;
+  color:#67e8f9 !important;
+  background:linear-gradient(145deg,rgba(34,211,238,.13),rgba(2,12,25,.82)) !important;
+  box-shadow:inset 0 0 15px rgba(34,211,238,.08),0 0 14px rgba(34,211,238,.05) !important;
+  font-size:16px !important;
+}
+.pressure-title strong{font-size:13px!important;letter-spacing:.035em!important;white-space:nowrap!important;color:#f2f7ff!important}
+.pressure-title small{margin-top:4px!important;font-size:10px!important;color:#91aac6!important;white-space:nowrap!important}
+.pressure-metrics{
+  display:grid !important;
+  grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+  gap:10px !important;
+  align-items:center !important;
+  min-width:0 !important;
+}
+.pressure-item{
+  --pc:var(--blue);
+  position:relative !important;
+  min-width:0 !important;
+  height:64px !important;
+  padding:8px 12px 8px 56px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  clip-path:polygon(16px 0,100% 0,calc(100% - 12px) 100%,0 100%,0 50%) !important;
+  border:0 !important;
+  background:
+    linear-gradient(90deg,color-mix(in srgb,var(--pc) 11%,rgba(2,10,23,.96)),rgba(2,10,23,.77) 52%,rgba(2,10,23,.24) 100%) !important;
+  box-shadow:inset 0 1px color-mix(in srgb,var(--pc) 36%,transparent),inset 0 -1px color-mix(in srgb,var(--pc) 15%,transparent) !important;
+}
+.pressure-item::before{
+  content:'' !important;
+  position:absolute !important;
+  left:0 !important;top:0 !important;bottom:0 !important;width:2px !important;
+  background:var(--pc) !important;
+  opacity:.82 !important;
+}
+.pressure-item::after{
+  content:'' !important;
+  position:absolute !important;
+  left:16px !important;right:12px !important;top:0 !important;height:1px !important;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--pc) 55%,transparent),transparent) !important;
+  opacity:.8 !important;
+}
+.pressure-item__icon-shell{
+  position:absolute !important;
+  left:13px !important;top:50% !important;transform:translateY(-50%) !important;
+  width:36px !important;height:36px !important;
+  display:grid !important;place-items:center !important;
+  border-radius:50% !important;
+  border:1px solid color-mix(in srgb,var(--pc) 72%,transparent) !important;
+  color:var(--pc) !important;
+  background:radial-gradient(circle, color-mix(in srgb,var(--pc) 10%,rgba(2,10,22,.95)),rgba(2,10,22,.95) 68%) !important;
+  box-shadow:inset 0 0 12px color-mix(in srgb,var(--pc) 10%,transparent),0 0 10px color-mix(in srgb,var(--pc) 8%,transparent) !important;
+}
+.pressure-item__icon-shell svg{width:21px!important;height:21px!important;stroke:currentColor!important;fill:none!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important}
+.pressure-item__label{
+  display:block !important;
+  max-width:100% !important;
+  overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important;
+  color:#c9d8ea !important;
+  font-size:8.5px !important;font-weight:600 !important;letter-spacing:.035em !important;text-transform:uppercase !important;
+  line-height:1.1 !important;
+}
+.pressure-item__row{display:flex!important;align-items:baseline!important;gap:8px!important;margin-top:5px!important;min-width:0!important}
+.pressure-item__value{font-family:var(--font-mono)!important;font-size:20px!important;font-weight:700!important;line-height:1!important;color:#f4f8ff!important;white-space:nowrap!important}
+.pressure-item__pct{font-family:var(--font-mono)!important;font-size:9px!important;font-weight:700!important;color:var(--pc)!important;white-space:nowrap!important}
+.pressure-health{
+  --hc:#4ade80;
+  position:relative !important;
+  width:98px !important;height:98px !important;
+  margin-left:auto !important;
+  display:grid !important;place-items:center !important;
+  align-content:center !important;
+  border-radius:50% !important;
+  border:0 !important;
+  background:
+    radial-gradient(circle at center,rgba(3,16,19,.98) 0 56%,transparent 57%),
+    conic-gradient(var(--hc) 0 78%,rgba(74,222,128,.10) 78% 100%) !important;
+  box-shadow:0 0 18px color-mix(in srgb,var(--hc) 10%,transparent),inset 0 0 20px rgba(0,0,0,.38) !important;
+}
+.pressure-health::before{
+  content:'' !important;position:absolute !important;inset:7px !important;border-radius:50% !important;
+  border:1px solid color-mix(in srgb,var(--hc) 28%,transparent) !important;
+  box-shadow:inset 0 0 16px color-mix(in srgb,var(--hc) 8%,transparent) !important;
+}
+.pressure-health span,.pressure-health strong,.pressure-health small{position:relative!important;z-index:2!important}
+.pressure-health span{font-family:var(--font-mono)!important;font-size:6.5px!important;letter-spacing:.11em!important;text-transform:uppercase!important;color:#8ca9a2!important}
+.pressure-health strong{margin-top:2px!important;font-family:var(--font-mono)!important;font-size:16px!important;line-height:1!important;color:var(--hc)!important;text-shadow:0 0 12px color-mix(in srgb,var(--hc) 24%,transparent)!important}
+.pressure-health small{margin-top:3px!important;font-size:7.5px!important;color:#98e9b6!important}
+.pressure-health.watch{--hc:#facc15}.pressure-health.critical{--hc:#f87171}
+.pressure-health.watch small{color:#fde68a!important}.pressure-health.critical small{color:#fecaca!important}
+
+/* Job velocity secondary strip — compact like approved mockup */
+.velocity-strip{
+  max-width:1720px !important;
+  min-height:38px !important;
+  margin:8px auto 0 !important;
+  padding:7px 16px !important;
+  border:1px solid rgba(56,189,248,.08) !important;
+  border-radius:10px !important;
+  background:linear-gradient(180deg,rgba(3,11,24,.84),rgba(2,8,18,.9)) !important;
+}
+.vel-label{font-size:7.5px!important;letter-spacing:.16em!important;margin-right:15px!important}
+.vel-depts{gap:12px!important}.vel-dept-name{font-size:9px!important}.vel-dept-val{font-size:10px!important}
+.vel-total{padding-left:16px!important}.vel-total #velTotalNum{font-size:17px!important}.vel-unit{font-size:9px!important}
+
+@media(max-width:1450px){
+  .queue-pressure{grid-template-columns:175px minmax(0,1fr) 108px!important}
+  .pressure-metrics{gap:7px!important}
+  .pressure-item{padding-left:49px!important}
+  .pressure-item__icon-shell{left:11px!important;width:32px!important;height:32px!important}
+  .pressure-item__icon-shell svg{width:18px!important;height:18px!important}
+  .pressure-item__value{font-size:18px!important}
+  .pressure-health{width:88px!important;height:88px!important}
+}
+@media(max-width:1180px){
+  .queue-pressure{grid-template-columns:1fr!important}
+  .pressure-title{height:auto!important;min-height:52px!important;border-right:0!important;border-bottom:1px solid rgba(56,189,248,.1)!important;padding-bottom:10px!important}
+  .pressure-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .pressure-health{margin:2px auto!important}
+}
+@media(max-width:760px){.pressure-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:520px){.pressure-metrics{grid-template-columns:1fr!important}}
+
+
+/* ======================================================================
+   V4.9 — QUEUE PRESSURE BACKGROUND VISIBILITY FIX
+   Direct image background, no low-opacity pseudo-image.
+   ====================================================================== */
+.queue-pressure {
+  background-image:
+    linear-gradient(90deg,
+      rgba(1,8,18,.94) 0%,
+      rgba(1,8,18,.82) 14%,
+      rgba(1,8,18,.60) 34%,
+      rgba(1,8,18,.34) 62%,
+      rgba(1,8,18,.24) 100%),
+    url("./assets/incoming-command-bg.png") !important;
+  background-size: cover, cover !important;
+  background-position: center, 62% 52% !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-color: #020a16 !important;
+}
+
+/* The image is now on the panel itself. Keep this layer only as a
+   light HUD/readability veil so it cannot hide the artwork again. */
+.queue-pressure::before {
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,.018) 0%,
+      transparent 30%,
+      rgba(0,0,0,.08) 100%),
+    radial-gradient(circle at 88% 50%, rgba(34,211,238,.08), transparent 30%) !important;
+  opacity: 1 !important;
+  mix-blend-mode: normal !important;
+}
+
+/* Let the approved command background show through each metric cell. */
+.pressure-item {
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--pc) 10%, rgba(2,10,24,.40)),
+      rgba(2,10,24,.34) 44%,
+      rgba(2,10,24,.18) 100%) !important;
+  backdrop-filter: blur(1px) !important;
+  -webkit-backdrop-filter: blur(1px) !important;
+}
+
+.pressure-title {
+  background: linear-gradient(90deg, rgba(2,10,24,.48), rgba(2,10,24,.16)) !important;
+}
+
+.pressure-health {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(74,222,128,.17), rgba(2,10,24,.34) 58%, rgba(2,10,24,.10) 72%, transparent 74%) !important;
+  backdrop-filter: blur(1px) !important;
+  -webkit-backdrop-filter: blur(1px) !important;
+}
+
+/* ======================================================================
+   SECTION FIX — Queue Breakdown / Hourly Flow / Distribution
+   Tightens alignment, removes awkward chart strip look,
+   and makes the three panels read as one clean row.
+   ====================================================================== */
+.main-body {
+  grid-template-columns: 305px minmax(0, 1fr) 295px !important;
+  gap: 16px !important;
+  align-items: stretch !important;
+}
+
+.main-body > .panel,
+.main-body > .center-col > .panel {
+  box-sizing: border-box !important;
+}
+
+.queue-panel,
+.hourly-panel,
+.right-panel {
+  min-height: 372px !important;
+  height: 372px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.queue-panel .panel-head,
+.hourly-panel .panel-head,
+.right-panel .panel-head {
+  padding: 16px 18px 0 !important;
+  margin-bottom: 10px !important;
+}
+
+/* Queue Breakdown */
+.queue-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 0 14px 14px !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56,189,248,.28) transparent;
+}
+.queue-list::-webkit-scrollbar {
+  width: 8px;
+}
+.queue-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.queue-list::-webkit-scrollbar-thumb {
+  background: rgba(56,189,248,.22);
+  border-radius: 999px;
+}
+.queue-search-wrap {
+  min-height: 32px !important;
+}
+.dept-header {
+  margin-bottom: 3px !important;
+}
+.queue-row {
+  padding: 7px 8px !important;
+  gap: 8px !important;
+}
+.q-label {
+  width: 48% !important;
+}
+.q-val {
+  min-width: 34px !important;
+}
+.q-pct {
+  min-width: 28px !important;
+}
+
+/* Hourly Flow */
+.center-col {
+  min-width: 0 !important;
+}
+.hourly-panel {
+  position: relative !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(56,189,248,.12), transparent 26%),
+    linear-gradient(180deg, rgba(4,15,28,.96), rgba(3,11,22,.98)),
+    url("./assets/incoming-command-bg.png") center center / cover no-repeat !important;
+}
+.hourly-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    linear-gradient(90deg, rgba(2,9,18,.78) 0%, rgba(2,9,18,.42) 28%, rgba(2,9,18,.18) 62%, rgba(2,9,18,.10) 100%),
+    radial-gradient(circle at 84% 20%, rgba(56,189,248,.10), transparent 22%);
+}
+.hourly-panel > * {
+  position: relative;
+  z-index: 1;
+}
+.chart-type-bar {
+  justify-content: flex-end !important;
+  padding: 0 18px 8px !important;
+  margin-top: 0 !important;
+}
+.hourly-chart-wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 0 14px 2px !important;
+}
+.chart-click-hint {
+  margin-top: auto !important;
+  padding: 8px 18px 14px !important;
+}
+
+/* Distribution */
+.right-panel {
+  justify-content: flex-start !important;
+  background:
+    radial-gradient(circle at 50% 24%, rgba(56,189,248,.09), transparent 32%),
+    linear-gradient(180deg, rgba(4,15,28,.96), rgba(3,11,22,.99)) !important;
+}
+.donut-wrap {
+  flex: 0 0 auto !important;
+  width: 186px !important;
+  height: 186px !important;
+  margin: 2px auto 14px !important;
+}
+.donut-total {
+  font-size: 22px !important;
+}
+.donut-lbl {
+  margin-top: 3px !important;
+}
+.dept-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  padding: 0 18px !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+}
+.dept-row-name {
+  font-size: 12px !important;
+}
+.dept-row-val {
+  font-size: 13px !important;
+}
+.dept-row-pct {
+  font-size: 10px !important;
+  min-width: 30px !important;
+}
+.pct-stack {
+  flex: 0 0 auto !important;
+  height: 8px !important;
+  margin: 2px 18px 0 !important;
+  border-radius: 999px !important;
+}
+
+/* Lower insight row to keep visual balance */
+.insight-row {
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, .8fr) !important;
+  gap: 16px !important;
+}
+.insight-row .compare-panel,
+.flow-intelligence {
+  min-height: 252px !important;
+}
+.insight-row .compare-chart-wrap {
+  height: 188px !important;
+}
+
+@media (max-width: 1450px) {
+  .main-body {
+    grid-template-columns: 280px minmax(0, 1fr) 260px !important;
+  }
+  .queue-panel,
+  .hourly-panel,
+  .right-panel {
+    min-height: 360px !important;
+    height: 360px !important;
+  }
+  .donut-wrap {
+    width: 174px !important;
+    height: 174px !important;
+  }
+}
+
+@media (max-width: 1120px) {
+  .main-body {
+    grid-template-columns: 1fr !important;
+  }
+  .queue-panel,
+  .hourly-panel,
+  .right-panel {
+    height: auto !important;
+    min-height: unset !important;
+  }
+  .hourly-chart-wrap {
+    height: 260px !important;
+  }
+  .right-panel {
+    display: block !important;
+  }
+}

@@ -33,7 +33,7 @@
     <div class="brand-pulse"></div>
     <div class="brand-text">
       <span class="brand-name">JOBS MONITOR</span>
-      <span class="brand-sub">INCOMING JOBS DASHBOARD</span>
+      <span class="brand-sub">INCOMING JOBS COMMAND CENTER</span>
     </div>
   </div>
 
@@ -46,33 +46,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Topbar dept stats -->
+  <!-- Command summary -->
   <div class="topbar-stats" id="topbarStats">
-    <div class="tb-stat" id="tbDeptFinish" style="display:none">
-      <span class="tb-stat-lbl">Finish</span>
-      <span class="tb-stat-val" id="tbvFinish" style="color:#22d3ee">—</span>
-      <span class="tb-stat-badge" id="tbhFinish"></span>
-    </div>
-    <div class="tb-sep" id="tbsep1" style="display:none"></div>
-    <div class="tb-stat" id="tbDeptSpeciality" style="display:none">
-      <span class="tb-stat-lbl">Speciality</span>
-      <span class="tb-stat-val" id="tbvSpeciality" style="color:#a78bfa">—</span>
-      <span class="tb-stat-badge" id="tbhSpeciality"></span>
-    </div>
-    <div class="tb-sep" id="tbsep2" style="display:none"></div>
-    <div class="tb-stat" id="tbDeptSurface" style="display:none">
-      <span class="tb-stat-lbl">Surface</span>
-      <span class="tb-stat-val" id="tbvSurface" style="color:#38bdf8">—</span>
-      <span class="tb-stat-badge" id="tbhSurface"></span>
-    </div>
-    <div class="tb-sep" id="tbsep3" style="display:none"></div>
-    <div class="tb-stat" id="tbDeptFrameOnly" style="display:none">
-      <span class="tb-stat-lbl">Frame Only</span>
-      <span class="tb-stat-val" id="tbvFrameOnly" style="color:#fb923c">—</span>
-      <span class="tb-stat-badge" id="tbhFrameOnly"></span>
-    </div>
-    <div class="tb-sep"></div>
     <div class="tb-stat tb-total">
       <span class="tb-stat-lbl">Total Jobs</span>
       <div class="topbar-sparkline" id="topbarSparkline"></div>
@@ -91,6 +66,25 @@
 
   <div class="topbar-sweep" id="topbarSweep"></div>
 </header>
+
+<!-- QUEUE PRESSURE COMMAND STRIP -->
+<section class="queue-pressure" id="queuePressure" aria-label="Queue pressure overview">
+  <div class="pressure-title">
+    <span class="pressure-title__icon">◎</span>
+    <div>
+      <strong>QUEUE OVERVIEW</strong>
+      <small>Real-time Overview</small>
+    </div>
+  </div>
+  <div class="pressure-metrics" id="pressureMetrics">
+    <div class="pressure-skeleton">Loading queue pressure…</div>
+  </div>
+  <div class="pressure-health" id="pressureHealth">
+    <span>Queue Health</span>
+    <strong>--</strong>
+    <small>Evaluating</small>
+  </div>
+</section>
 
 <!-- ═══════════════════════════════════════════
      VELOCITY STRIP — jobs/hr rate bar
@@ -192,20 +186,6 @@
           <div class="chart-click-hint" id="chartHint">↑ Click any bar to drill into that hour's breakdown</div>
         </div>
 
-        <!-- Today vs Yesterday comparison -->
-        <div class="panel compare-panel">
-          <div class="panel-head">
-            <div class="panel-title-wrap">
-              <span class="panel-title" id="compareTitle">Today vs Yesterday</span>
-            </div>
-            <div class="compare-legend">
-              <span class="leg-item"><span class="leg-swatch today-swatch"></span><span id="legToday">Today</span></span>
-              <span class="leg-item"><span class="leg-swatch yest-swatch"></span><span id="legYest">Yesterday</span></span>
-            </div>
-          </div>
-          <div class="compare-chart-wrap"><canvas id="comparisonChart"></canvas></div>
-        </div>
-
       </div>
 
       <!-- RIGHT: Donut + stats -->
@@ -227,6 +207,34 @@
         <div class="pct-stack" id="pctStack"></div>
       </aside>
 
+    </div>
+
+    <div class="insight-row">
+      <div class="panel compare-panel">
+          <div class="panel-head">
+            <div class="panel-title-wrap">
+              <span class="panel-title" id="compareTitle">Today vs Yesterday</span>
+            </div>
+            <div class="compare-legend">
+              <span class="leg-item"><span class="leg-swatch today-swatch"></span><span id="legToday">Today</span></span>
+              <span class="leg-item"><span class="leg-swatch yest-swatch"></span><span id="legYest">Yesterday</span></span>
+            </div>
+          </div>
+          <div class="compare-chart-wrap"><canvas id="comparisonChart"></canvas></div>
+        </div>
+
+      <aside class="panel flow-intelligence" id="flowIntelligence">
+        <div class="panel-head">
+          <span class="panel-title">Flow Intelligence</span>
+        </div>
+        <div class="flow-intelligence__body">
+          <div class="flow-stat"><span>Peak Hour</span><strong id="flowPeakHour">--</strong></div>
+          <div class="flow-stat"><span>Peak Volume</span><strong id="flowPeakVolume">--</strong></div>
+          <div class="flow-stat"><span>Busiest Queue</span><strong id="flowBusiestQueue">--</strong></div>
+          <div class="flow-stat"><span>Flow Status</span><strong id="flowStatus">--</strong></div>
+        </div>
+        <div class="flow-radar" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+      </aside>
     </div>
   </div>
 
@@ -922,7 +930,7 @@ function _rebuildTrendChart(trend) {
     const g = ctx.createLinearGradient(0, 0, 0, 320);
     const base = d.alpha.replace(/[\d.]+\)$/, '');
     g.addColorStop(0, d.alpha);
-    g.addColorStop(1, d.color + '08');
+    g.addColorStop(1, d.color + '70');
     return g;
   });
 
@@ -939,9 +947,10 @@ function _rebuildTrendChart(trend) {
       data: trend.map(r => r.departments?.[d.key] || 0),
       backgroundColor: deptGrads[i],
       borderColor: d.color,
-      borderWidth: 1,
-      borderRadius: { topLeft: 4, topRight: 4 },
+      borderWidth: 1.5,
+      borderRadius: { topLeft: 3, topRight: 3 },
       borderSkipped: false,
+      stack: 'departments',
       order: 3,
     })),
     /* Total line — only if overlay enabled */
@@ -960,6 +969,7 @@ function _rebuildTrendChart(trend) {
       pointBorderWidth: 2,
       pointHoverRadius: 7,
       pointHoverBackgroundColor: '#fff',
+      stack: 'total-overlay',
       order: 1,
     }] : [],
     /* Avg dashed line — only if overlay enabled */
@@ -973,6 +983,7 @@ function _rebuildTrendChart(trend) {
       borderDash: [6, 5],
       pointRadius: 0,
       tension: 0,
+      stack: 'avg-overlay',
       order: 2,
     }] : [],
   ];
@@ -1011,7 +1022,10 @@ function _rebuildTrendChart(trend) {
             title: items => items[0].label,
             label: item => {
               if (['Total','Avg'].includes(item.dataset.label)) return null;
-              return `  ${item.dataset.label}: ${item.raw.toLocaleString()}`;
+              const dayTotal = Number(totals[item.dataIndex] || 0);
+              const raw = Number(item.raw || 0);
+              const pct = dayTotal > 0 ? (raw / dayTotal * 100).toFixed(1) : '0.0';
+              return `  ${item.dataset.label}: ${raw.toLocaleString()}  (${pct}%)`;
             },
             footer: items => {
               const tot = items
@@ -1024,7 +1038,7 @@ function _rebuildTrendChart(trend) {
       },
       scales: {
         x: {
-          stacked: false,
+          stacked: true,
           grid: { color: 'rgba(56,120,255,.04)', drawTicks: false },
           border: { color: 'rgba(56,120,255,.08)' },
           ticks: {
@@ -1035,6 +1049,7 @@ function _rebuildTrendChart(trend) {
           },
         },
         y: {
+          stacked: true,
           grid: { color: 'rgba(56,120,255,.06)', drawTicks: false },
           border: { color: 'transparent' },
           ticks: {
@@ -1057,7 +1072,9 @@ function _rebuildTrendChart(trend) {
     /* Position it after chart renders */
     setTimeout(() => {
       try {
-        const meta = trendChart.getDatasetMeta(0);
+        const totalDatasetIndex = trendChart.data.datasets.findIndex(ds => ds.label === 'Total');
+        const peakDatasetIndex = totalDatasetIndex >= 0 ? totalDatasetIndex : Math.max(0, TREND_DEPT_CFG.length - 1);
+        const meta = trendChart.getDatasetMeta(peakDatasetIndex);
         const bar  = meta.data[peakIdx];
         if (bar) {
           const rect = canvas.getBoundingClientRect();
@@ -1228,7 +1245,10 @@ loadTrend = async function(days) {
   _showTrendLoading(true);
 
   /* Dim stat cards while loading — do NOT touch the chart panel */
-  gsap.to('.trend-kpi-card', { opacity: 0.3, y: -4, stagger: 0.04, duration: .2, ease: 'power2.in' });
+  const trendCardsForLoad = document.querySelectorAll('.trend-kpi-card');
+  if (trendCardsForLoad.length) {
+    gsap.to(trendCardsForLoad, { opacity: 0.3, y: -4, stagger: 0.04, duration: .2, ease: 'power2.in' });
+  }
 
   try {
     await _origLoadTrendV2(days);
