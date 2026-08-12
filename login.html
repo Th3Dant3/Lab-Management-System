@@ -8,6 +8,13 @@
 </head>
 <body>
 
+  <div class="ambient-bg" aria-hidden="true">
+    <div class="ambient-grid"></div>
+    <div class="ambient-glow ambient-glow-cyan"></div>
+    <div class="ambient-glow ambient-glow-purple"></div>
+    <div class="ambient-particles"></div>
+  </div>
+
   <div class="frame"></div>
 
   <main class="page">
@@ -44,7 +51,7 @@
             <strong>Production Monitoring</strong>
             <p>Track production in real time with end-to-end visibility.</p>
           </div>
-          <div class="arr">›</div>
+          <div class="arr" aria-hidden="true">•</div>
         </div>
 
         <div class="module">
@@ -58,7 +65,7 @@
             <strong>Quality Control</strong>
             <p>Ensure precision and compliance at every step.</p>
           </div>
-          <div class="arr">›</div>
+          <div class="arr" aria-hidden="true">•</div>
         </div>
 
         <div class="module">
@@ -71,7 +78,7 @@
             <strong>Productivity Hub</strong>
             <p>Scorecards, quality, confirmations and productivity control.</p>
           </div>
-          <div class="arr">›</div>
+          <div class="arr" aria-hidden="true">•</div>
         </div>
 
         <div class="module">
@@ -88,19 +95,84 @@
             <strong>System Intelligence</strong>
             <p>Optimize performance and decisions.</p>
           </div>
-          <div class="arr">›</div>
+          <div class="arr" aria-hidden="true">•</div>
         </div>
       </div>
     </section>
 
-    <!-- ── CENTER: orbital sphere ── -->
-    <section class="center">
-      <div class="orb">
-        <div class="orbit-wrap ow1"><div class="circle c1"></div></div>
-        <div class="orbit-wrap ow2"><div class="circle c2"></div></div>
-        <div class="orbit-wrap ow3"><div class="circle c3"></div></div>
-        <div class="core"><span class="core-z">Z</span></div>
-        <div class="base"></div>
+    <!-- ── CENTER: ZENNI HORIZON / OPTICAL COMMAND CORE ── -->
+    <section class="center" aria-hidden="true">
+      <div class="horizon-scene">
+        <div class="scene-aura"></div>
+        <div class="scene-stars"></div>
+        <div class="scene-scan"></div>
+
+        <div class="command-core">
+          <div class="core-orbit orbit-1"></div>
+          <div class="core-orbit orbit-2"></div>
+          <div class="core-orbit orbit-3"></div>
+          <div class="core-orbit orbit-4"></div>
+          <div class="core-shell">
+            <div class="core-glass"></div>
+            <span class="core-z">Z</span>
+          </div>
+        </div>
+
+        <div class="digital-world">
+          <div class="world-rim"></div>
+          <div class="world-rim world-rim-2"></div>
+          <div class="world-grid"></div>
+          <div class="world-glow"></div>
+          <div class="world-sweep"></div>
+        </div>
+
+        <div class="core-beam"></div>
+
+        <div class="department-node node-inventory">
+          <span class="node-label">Inventory</span>
+          <span class="node-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z"/><path d="M4 7.5V17l8 4 8-4V7.5"/><path d="M12 12v9"/>
+            </svg>
+          </span>
+          <span class="node-stem"></span>
+          <span class="node-foot"></span>
+        </div>
+
+        <div class="department-node node-surface">
+          <span class="node-label">Surface</span>
+          <span class="node-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+              <path d="M3 8c2.1-2.4 4.2-2.4 6.3 0 2.1 2.4 4.2 2.4 6.3 0 2.1-2.4 4.2-2.4 5.4-.8"/><path d="M3 13c2.1-2.4 4.2-2.4 6.3 0 2.1 2.4 4.2 2.4 6.3 0 2.1-2.4 4.2-2.4 5.4-.8"/><path d="M3 18c2.1-2.4 4.2-2.4 6.3 0 2.1 2.4 4.2 2.4 6.3 0 2.1-2.4 4.2-2.4 5.4-.8"/>
+            </svg>
+          </span>
+          <span class="node-stem"></span>
+          <span class="node-foot"></span>
+        </div>
+
+        <div class="department-node node-ar">
+          <span class="node-label">AR</span>
+          <span class="node-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="5" width="14" height="14" rx="1.8" transform="rotate(45 12 12)"/><path d="m9 13 6-6"/><path d="m11 17 6-6"/>
+            </svg>
+          </span>
+          <span class="node-stem"></span>
+          <span class="node-foot"></span>
+        </div>
+
+        <div class="department-node node-finish">
+          <span class="node-label">Finish</span>
+          <span class="node-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8"/><path d="m8.7 12.2 2.2 2.2 4.7-5"/>
+            </svg>
+          </span>
+          <span class="node-stem"></span>
+          <span class="node-foot"></span>
+        </div>
+
+        <div class="scene-caption"><span></span>REAL-TIME MANUFACTURING INTELLIGENCE<span></span></div>
       </div>
     </section>
 

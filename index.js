@@ -5,8 +5,22 @@
 const API_URL =
   "https://script.google.com/a/macros/zennioptical.com/s/AKfycbzbQBjzoEEBpvukFkR-XMw8kG_gzCIuxZrTLodZZ_EnwqYAujOBqSzYslx-x9XTw7_UUA/exec";
 
-const PRODUCTION_FLOW_API =
-  "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec";
+/*
+  Production Flow is intentionally not fetched directly from this browser page.
+
+  Reason:
+  The Production Flow deployment works from Apps Script server-to-server calls,
+  but the browser receives HTTP 404 because that deployment is not publicly
+  callable from the GitHub-hosted dashboard.
+
+  Facility WIP remains available inside FacilityWIP.html. The top KPI uses:
+  1) facilityWip returned by the main dashboard API, when available;
+  2) the last known good browser value;
+  3) an em dash when neither exists.
+
+  This prevents a broken optional API from delaying the entire dashboard.
+*/
+const FACILITY_WIP_STORAGE_KEY = "lms_last_good_facility_wip";
 
 const AUTH_API =
   "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
@@ -14,35 +28,7 @@ const AUTH_API =
 
 const SCANNER_STORAGE_KEY = "lms_scanner_attention";
 
-/* =====================================================
-   CUSTOM CURSOR (tracks mouse during loading)
-===================================================== */
-(function initCursor() {
-  const cursor = document.getElementById("lms-cursor");
-  if (!cursor) return;
-
-  let mx = window.innerWidth / 2;
-  let my = window.innerHeight / 2;
-  let cx = mx, cy = my;
-  let rafId;
-
-  document.addEventListener("mousemove", e => {
-    mx = e.clientX;
-    my = e.clientY;
-  });
-
-  function animateCursor() {
-    cx += (mx - cx) * 0.18;
-    cy += (my - cy) * 0.18;
-    cursor.style.transform = `translate(${Math.round(cx)}px, ${Math.round(cy)}px) translate(-50%, -50%)`;
-    rafId = requestAnimationFrame(animateCursor);
-  }
-  animateCursor();
-
-  window._stopCursorAnim = () => {
-    cancelAnimationFrame(rafId);
-  };
-})();
+/* Custom cursor animation removed in Command Center V2 for lower idle CPU usage. */
 
 /* =====================================================
    LOADING SCREEN
@@ -748,7 +734,11 @@ function countUp(id, target, duration, suffix) {
     const p = Math.min((now - start) / duration, 1);
     const val = Math.round(easeOut(p) * target);
     el.textContent = val.toLocaleString() + (suffix || "");
-    if (p < 1) requestAnimationFrame(tick);
+    if (p < 1) {
+      requestAnimationFrame(tick);
+    } else if (id === "totalIncoming" || id === "scannerHealth") {
+      pulseTopKpi_(id);
+    }
   }
   requestAnimationFrame(tick);
 }
@@ -772,13 +762,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Apply access rules from sessionStorage immediately.
   applyVisibilityRules();
 
-  // Start visual effects after the browser paints the page shell.
+  // Command Center V5: restore only the lightweight motion layers.
   requestAnimationFrame(() => {
     initNavAnimations();
-    initBrandCanvas();
     initSparklines();
     initCardCanvases();
     animateScannerHealth("Online", "cb-m-val--green");
+    initCommandCenterBackgroundModes();
   });
 
   // Remove loader fast. KPI numbers can load in the background.
@@ -800,6 +790,74 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
 });
+
+
+/* =====================================================
+   COMMAND CENTER V5 — ALTERNATING BACKGROUND MODES
+   Network → HUD → Ambient. Decorative only; no API impact.
+===================================================== */
+function initCommandCenterBackgroundModes() {
+  const body = document.body;
+  if (!body || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  const MODES = ["cc-bg-network", "cc-bg-hud", "cc-bg-ambient"];
+  let modeIndex = 0;
+  let timer = null;
+
+  function applyMode(index) {
+    body.classList.remove(...MODES);
+    body.classList.add(MODES[index]);
+  }
+
+  function activeTabId() {
+    return document.querySelector(".tab-content.active")?.id || "";
+  }
+
+  function rotateMode() {
+    // Facility WIP owns its visual environment inside the iframe.
+    if (activeTabId() === "facility") {
+      applyMode(0);
+      return;
+    }
+
+    modeIndex = (modeIndex + 1) % MODES.length;
+    applyMode(modeIndex);
+  }
+
+  applyMode(0);
+
+  timer = setInterval(rotateMode, 18000);
+
+  document.querySelectorAll(".nav-item[data-tab]").forEach(tab => {
+    tab.addEventListener("click", () => {
+      setTimeout(() => {
+        if (tab.dataset.tab === "facility") {
+          modeIndex = 0;
+          applyMode(0);
+        }
+      }, 0);
+    });
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (timer) clearInterval(timer);
+  }, { once: true });
+}
+
+/* Briefly pulse top KPI cards when their displayed value changes. */
+function pulseTopKpi_(elementId) {
+  const valueEl = document.getElementById(elementId);
+  const card = valueEl?.closest(".cb-metric");
+  if (!card) return;
+
+  card.classList.remove("kpi-refresh");
+  void card.offsetWidth;
+  card.classList.add("kpi-refresh");
+
+  setTimeout(() => card.classList.remove("kpi-refresh"), 1300);
+}
 
 /* =====================================================
    LIVE CLOCK + DATE
@@ -956,21 +1014,49 @@ function animateScannerHealth(text, colorClass) {
    USER DISPLAY
 ===================================================== */
 function initUserDisplay() {
-  const username  = sessionStorage.getItem("lms_user") || "";
-  const avatarEl  = document.getElementById("userAvatar");
-  const nameEl    = document.getElementById("userName");
+  const username = (sessionStorage.getItem("lms_user") || "").trim();
+  const fullName = (sessionStorage.getItem("lms_fullname") || "").trim();
+  const role     = (sessionStorage.getItem("lms_role") || "").trim();
+  const subRole  = (sessionStorage.getItem("lms_subrole") || "").trim();
 
-  if (!username) return;
+  const avatarEl = document.getElementById("userAvatar");
+  const nameEl   = document.getElementById("userName");
+  const roleEl   = document.querySelector(".user-role");
 
-  const initials = username
-    .split(/[\s._-]+/)
-    .slice(0, 2)
-    .map(w => w[0])
-    .join("")
-    .toUpperCase();
+  if (!username && !fullName) return;
 
-  if (avatarEl) avatarEl.textContent = initials || username[0]?.toUpperCase() || "U";
-  if (nameEl)   nameEl.textContent   = username;
+  // Prefer the employee's full name returned by login.
+  // Username remains the safe fallback for older sessions.
+  const displayName = fullName || username || "User";
+
+  // Subrole is more specific. Fall back to role, then preserve the
+  // existing Operator label if older sessions do not contain either.
+  const displayRole = subRole || role || "Operator";
+
+  // Professional authenticated badge: use first initial from full name,
+  // otherwise the first character of the username.
+  const avatarInitial =
+    displayName.charAt(0).toUpperCase() ||
+    username.charAt(0).toUpperCase() ||
+    "U";
+
+  if (avatarEl) {
+    avatarEl.textContent = avatarInitial;
+    avatarEl.setAttribute("aria-label", `${displayName} authenticated user`);
+    avatarEl.title = `${displayName} • ${displayRole}`;
+  }
+
+  if (nameEl) {
+    nameEl.textContent = displayName.toUpperCase();
+    nameEl.title = username && displayName !== username
+      ? `${displayName} (${username})`
+      : displayName;
+  }
+
+  if (roleEl) {
+    roleEl.textContent = displayRole.toUpperCase();
+    roleEl.title = displayRole;
+  }
 }
 
 /* =====================================================
@@ -1050,70 +1136,172 @@ function initTabs() {
 }
 
 /* =====================================================
-   FETCH DASHBOARD — FASTER PARALLEL VERSION
-   Main dashboard API and Production Flow API run at the same time.
+   FETCH DASHBOARD — FAIL-SAFE MAIN API VERSION
+   -----------------------------------------------------
+   The homepage must never wait on the Production Flow deployment.
+
+   The Production Flow endpoint is currently callable by Apps Script
+   server-to-server, but browser requests from GitHub receive HTTP 404.
+   Therefore this page loads only the main dashboard API.
+
+   Facility WIP behavior:
+   - Uses facilityWip from the main API when present.
+   - Saves the last valid value in localStorage.
+   - Uses the saved value if the main API does not include Facility WIP.
+   - Never replaces a good value with zero because an optional API failed.
 ===================================================== */
 async function fetchDashboard() {
   console.time("DASHBOARD_API_TOTAL");
 
   const cacheBust = Date.now();
-  const mainUrl = API_URL + "?t=" + cacheBust;
-  const flowUrl = PRODUCTION_FLOW_API + "?action=productionFlow&area=All&t=" + cacheBust;
+  const mainUrl =
+    API_URL +
+    (API_URL.includes("?") ? "&" : "?") +
+    "t=" +
+    cacheBust;
 
   try {
-    const [mainResult, flowResult] = await Promise.allSettled([
-      timedFetchJson(mainUrl, "MAIN_DASHBOARD_API"),
-      timedFetchJson(flowUrl, "PRODUCTION_FLOW_API")
-    ]);
+    const data = await timedFetchJson(
+      mainUrl,
+      "MAIN_DASHBOARD_API",
+      15000
+    );
 
-    const data =
-      mainResult.status === "fulfilled" && mainResult.value
-        ? mainResult.value
-        : {};
-
-    if (mainResult.status === "rejected") {
-      console.error("Main Dashboard API failed", mainResult.reason);
-    }
-
-    if (flowResult.status === "fulfilled" && flowResult.value) {
-      data.facilityWip = Number(flowResult.value.facilityWip || 0);
-    } else {
-      console.error("Production Flow API failed", flowResult.reason);
-      data.facilityWip = 0;
-    }
+    applyFacilityWipFallback_(data);
 
     console.timeEnd("DASHBOARD_API_TOTAL");
     return data || {};
 
   } catch (err) {
-    console.error("Dashboard API failed", err);
+    console.error("Main Dashboard API failed", err);
+
+    const fallback = {};
+    applyFacilityWipFallback_(fallback);
+
     console.timeEnd("DASHBOARD_API_TOTAL");
-    return {};
+    return fallback;
   }
 }
 
-async function timedFetchJson(url, label) {
+
+function applyFacilityWipFallback_(data) {
+  const liveValue = Number(data && data.facilityWip);
+
+  if (Number.isFinite(liveValue) && liveValue > 0) {
+    try {
+      localStorage.setItem(
+        FACILITY_WIP_STORAGE_KEY,
+        String(Math.round(liveValue))
+      );
+    } catch (storageError) {
+      console.warn(
+        "Unable to cache Facility WIP.",
+        storageError
+      );
+    }
+
+    data.facilityWip = Math.round(liveValue);
+    data.facilityWipSource = "MAIN_API";
+    return;
+  }
+
+  let cachedValue = 0;
+
+  try {
+    cachedValue = Number(
+      localStorage.getItem(
+        FACILITY_WIP_STORAGE_KEY
+      )
+    ) || 0;
+  } catch (storageError) {
+    console.warn(
+      "Unable to read cached Facility WIP.",
+      storageError
+    );
+  }
+
+  if (cachedValue > 0) {
+    data.facilityWip = Math.round(cachedValue);
+    data.facilityWipSource = "LAST_KNOWN_GOOD";
+  }
+}
+
+
+async function timedFetchJson(
+  url,
+  label,
+  timeoutMs = 15000
+) {
   console.time(label);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    timeoutMs
+  );
 
   try {
     const res = await fetch(url, {
       method: "GET",
-      cache: "no-store"
+      cache: "no-store",
+      signal: controller.signal,
+      redirect: "follow"
     });
 
+    const contentType = String(
+      res.headers.get("content-type") || ""
+    ).toLowerCase();
+
     if (!res.ok) {
-      throw new Error(label + " failed with HTTP " + res.status);
+      const bodyPreview = await res
+        .text()
+        .catch(() => "");
+
+      throw new Error(
+        label +
+        " failed with HTTP " +
+        res.status +
+        (bodyPreview
+          ? " | " +
+            bodyPreview
+              .replace(/\s+/g, " ")
+              .slice(0, 180)
+          : "")
+      );
     }
 
-    const json = await res.json();
-    console.timeEnd(label);
-    return json;
+    if (!contentType.includes("application/json")) {
+      const bodyPreview = await res.text();
+
+      throw new Error(
+        label +
+        " returned non-JSON content: " +
+        bodyPreview
+          .replace(/\s+/g, " ")
+          .slice(0, 180)
+      );
+    }
+
+    return await res.json();
 
   } catch (err) {
-    console.timeEnd(label);
+    if (err && err.name === "AbortError") {
+      throw new Error(
+        label +
+        " timed out after " +
+        timeoutMs +
+        " ms"
+      );
+    }
+
     throw err;
+
+  } finally {
+    clearTimeout(timeoutId);
+    console.timeEnd(label);
   }
 }
+
 
 /* =====================================================
    THRESHOLD COLOR HELPERS

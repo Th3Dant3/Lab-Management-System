@@ -2051,3 +2051,3186 @@ html.is-embedded .loading-overlay {
 .lane__dashboard {
   display: none !important;
 }
+
+
+/* ========================================================================
+   FACILITY WIP COMMAND CENTER V2 — 2026-08-10
+   Visual modernization only.
+   Existing HTML structure, API, refresh, ownership, cache and bottleneck
+   business logic remain unchanged.
+   ======================================================================== */
+
+:root {
+  --fw-bg-0: #040a13;
+  --fw-bg-1: #071321;
+  --fw-panel: rgba(8, 22, 38, .90);
+  --fw-panel-strong: rgba(9, 27, 46, .96);
+  --fw-border: rgba(84, 163, 204, .18);
+  --fw-border-hot: rgba(78, 226, 241, .34);
+  --fw-cyan: #4ee2f1;
+  --fw-blue: #56a9ff;
+  --fw-teal: #45dfb9;
+  --fw-purple: #9c7cff;
+  --fw-amber: #ffb84d;
+  --fw-red: #ff6677;
+}
+
+/* ---------- PAGE ATMOSPHERE ---------- */
+
+body {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(55, 167, 215, .08), transparent 28%),
+    radial-gradient(circle at 70% 12%, rgba(53, 221, 196, .055), transparent 26%),
+    radial-gradient(circle at 92% 18%, rgba(146, 104, 255, .065), transparent 28%),
+    linear-gradient(145deg, var(--fw-bg-0), var(--fw-bg-1) 52%, #050c17);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  opacity: .32;
+  background:
+    linear-gradient(rgba(73, 170, 216, .028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(73, 170, 216, .028) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.18) 88%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), rgba(0,0,0,.18) 88%, transparent);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .42;
+  background:
+    radial-gradient(circle at 22% 54%, rgba(78,226,241,.055) 0 2px, transparent 3px),
+    radial-gradient(circle at 54% 48%, rgba(69,223,185,.045) 0 2px, transparent 3px),
+    radial-gradient(circle at 79% 63%, rgba(156,124,255,.055) 0 2px, transparent 3px);
+  background-size: 180px 180px, 240px 240px, 210px 210px;
+  animation: fwAmbientField 22s linear infinite;
+}
+
+/* ---------- SHELL ---------- */
+
+.page-shell {
+  padding: 8px;
+}
+
+.dashboard {
+  width: min(1760px, calc(100% - 12px));
+  padding: 12px 0 46px;
+}
+
+.topbar {
+  border: 1px solid rgba(68, 155, 198, .20);
+  border-radius: 16px;
+  clip-path: none;
+  background:
+    linear-gradient(135deg, rgba(7, 20, 36, .95), rgba(7, 17, 31, .88));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    0 16px 42px rgba(0,0,0,.18);
+}
+
+.brand__mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border-color: rgba(78,226,241,.38);
+}
+
+.status-pill,
+.primary-button,
+.secondary-button,
+.main-dashboard-button {
+  border-radius: 10px;
+  clip-path: none;
+}
+
+/* ========================================================================
+   LIVE KPI STRIP
+   ======================================================================== */
+
+.kpi-strip {
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.kpi {
+  --kpi-color: var(--fw-cyan);
+  position: relative;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  min-height: 112px;
+  padding: 15px 18px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--kpi-color) 28%, transparent);
+  border-radius: 15px;
+  clip-path: none;
+  background:
+    linear-gradient(145deg, rgba(11,31,51,.92), rgba(6,18,33,.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    0 14px 34px rgba(0,0,0,.15);
+  animation: fwKpiBreath 6.8s ease-in-out infinite;
+}
+
+.kpi--facility { --kpi-color: var(--fw-cyan); }
+.kpi--incoming { --kpi-color: var(--fw-teal); }
+.kpi--gap      { --kpi-color: var(--fw-amber); }
+.kpi--refresh  { --kpi-color: var(--fw-blue); }
+
+.kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .24;
+  background:
+    linear-gradient(rgba(78,226,241,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(78,226,241,.035) 1px, transparent 1px),
+    radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--kpi-color) 12%, transparent), transparent 30%);
+  background-size: 24px 24px, 24px 24px, auto;
+  animation: fwKpiGrid 15s linear infinite;
+}
+
+.kpi::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: -20%;
+  bottom: -20%;
+  left: -26%;
+  width: 22%;
+  pointer-events: none;
+  opacity: 0;
+  transform: skewX(-12deg);
+  background:
+    linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--kpi-color) 8%, transparent),
+      color-mix(in srgb, var(--kpi-color) 20%, transparent),
+      transparent);
+  animation: fwKpiSweep 7s ease-in-out infinite;
+}
+
+.kpi:nth-child(2)::after { animation-delay: -1.5s; }
+.kpi:nth-child(3)::after { animation-delay: -3s; }
+.kpi:nth-child(4)::after { animation-delay: -4.5s; }
+
+.kpi > * {
+  position: relative;
+  z-index: 2;
+}
+
+.kpi__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  color: var(--kpi-color) !important;
+  border: 1px solid color-mix(in srgb, var(--kpi-color) 50%, transparent);
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--kpi-color) 12%, transparent), transparent 68%);
+  box-shadow:
+    inset 0 0 18px color-mix(in srgb, var(--kpi-color) 9%, transparent),
+    0 0 16px color-mix(in srgb, var(--kpi-color) 9%, transparent);
+  font-size: 1.55rem;
+  animation: fwIconPulse 4.8s ease-in-out infinite;
+}
+
+.kpi__label {
+  margin-bottom: 5px;
+  color: #94a9bf;
+  font-size: .69rem;
+  letter-spacing: .18em;
+}
+
+.kpi__value {
+  color: #eafcff;
+  font-size: clamp(2rem, 2.6vw, 2.65rem);
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--kpi-color) 12%, transparent);
+}
+
+.kpi--incoming .kpi__value,
+.kpi--gap .kpi__value {
+  color: #eef9ff;
+}
+
+.kpi__meta {
+  margin-top: 6px;
+  color: #7e94aa;
+  font-size: .71rem;
+}
+
+.kpi:hover {
+  border-color: color-mix(in srgb, var(--kpi-color) 48%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.035),
+    0 16px 40px rgba(0,0,0,.18),
+    0 0 24px color-mix(in srgb, var(--kpi-color) 5%, transparent);
+}
+
+/* ========================================================================
+   COMMAND LAYOUT
+   ======================================================================== */
+
+.command-layout {
+  grid-template-columns: minmax(0, 1fr) 318px;
+  gap: 16px;
+}
+
+.flow-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 28px;
+  margin: 0 0 9px;
+  padding: 0 10px;
+  color: #82dfe9;
+  font-size: .66rem;
+  letter-spacing: .17em;
+}
+
+.flow-caption::before {
+  content: "";
+  width: 22px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--fw-cyan), var(--fw-purple));
+  box-shadow: 0 0 8px rgba(78,226,241,.18);
+}
+
+/* ========================================================================
+   DEPARTMENT LANES
+   ======================================================================== */
+
+.lane-grid {
+  grid-template-columns:
+    minmax(0, .98fr) 28px
+    minmax(0, 1.12fr) 28px
+    minmax(0, .98fr) 28px
+    minmax(0, .98fr);
+}
+
+.lane {
+  --lane-color: var(--fw-cyan);
+  min-height: 505px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--lane-color) 34%, transparent);
+  border-radius: 15px;
+  clip-path: none;
+  background:
+    linear-gradient(155deg, rgba(8,30,49,.94), rgba(5,17,31,.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.02),
+    0 16px 36px rgba(0,0,0,.14);
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
+
+.lane:nth-of-type(1) { --lane-color: var(--fw-blue); }
+.lane:nth-of-type(3) { --lane-color: var(--fw-teal); }
+.lane:nth-of-type(5) { --lane-color: var(--fw-cyan); }
+.lane:nth-of-type(7) { --lane-color: var(--fw-purple); }
+
+.lane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 0;
+  border: 0;
+  border-radius: inherit;
+  opacity: .18;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(79,171,213,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,171,213,.04) 1px, transparent 1px),
+    radial-gradient(circle at 84% 14%, color-mix(in srgb, var(--lane-color) 9%, transparent), transparent 28%);
+  background-size: 26px 26px, 26px 26px, auto;
+  animation: fwLaneGrid 18s linear infinite;
+}
+
+.lane::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: -24%;
+  width: 18%;
+  height: auto;
+  border: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: skewX(-10deg);
+  background:
+    linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--lane-color) 8%, transparent),
+      color-mix(in srgb, var(--lane-color) 15%, transparent),
+      transparent);
+  animation: fwLaneSweep 8.8s ease-in-out infinite;
+}
+
+.lane:nth-of-type(3)::after { animation-delay: -2s; }
+.lane:nth-of-type(5)::after { animation-delay: -4s; }
+.lane:nth-of-type(7)::after { animation-delay: -6s; }
+
+.lane > * {
+  position: relative;
+  z-index: 2;
+}
+
+.lane:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--lane-color) 54%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    0 20px 46px rgba(0,0,0,.18),
+    0 0 26px color-mix(in srgb, var(--lane-color) 4%, transparent);
+}
+
+.lane--alert {
+  --lane-color: var(--fw-red);
+  border-color: rgba(255,102,119,.48);
+  animation: fwLaneAlert 2.5s ease-in-out infinite;
+}
+
+.lane__head {
+  padding: 17px 18px 13px;
+}
+
+.lane__topline {
+  align-items: center;
+}
+
+.lane__name {
+  color: var(--lane-color);
+  font-size: .78rem;
+  letter-spacing: .15em;
+}
+
+.lane__value {
+  color: #effcff;
+  font-size: 2.35rem;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--lane-color) 10%, transparent);
+}
+
+.lane__bar {
+  height: 7px;
+  margin: 12px 0 7px;
+  background: rgba(255,255,255,.065);
+}
+
+.lane__fill {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--lane-color) 78%, white 8%),
+      var(--lane-color));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--lane-color) 16%, transparent);
+}
+
+.lane__fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(255,255,255,.50), transparent);
+  transform: translateX(-120%);
+  animation: fwProgressShine 4.5s ease-in-out infinite;
+}
+
+.lane__share {
+  color: #8598ad;
+  font-size: .68rem;
+}
+
+.lane__stations {
+  padding: 6px 18px 12px;
+}
+
+.station-row {
+  min-height: 52px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(114,158,194,.095);
+  transition:
+    padding-left .18s ease,
+    background .18s ease;
+}
+
+.station-row:hover {
+  padding-left: 5px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--lane-color) 5%, transparent), transparent 62%);
+}
+
+.station-row__name {
+  color: #bdcada;
+  font-size: .83rem;
+}
+
+.station-row__desc {
+  margin-top: 2px;
+  color: #71879d;
+  font-size: .64rem;
+}
+
+.station-row__value {
+  color: #eafcff;
+  font-size: .94rem;
+}
+
+.lane__more {
+  width: calc(100% - 28px);
+  min-height: 37px;
+  margin: 0 14px 13px;
+  border: 1px solid color-mix(in srgb, var(--lane-color) 30%, transparent);
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--lane-color) 88%, white 6%);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lane-color) 5%, transparent),
+      rgba(3,15,27,.18));
+  letter-spacing: .07em;
+}
+
+.lane__more:hover {
+  border-color: color-mix(in srgb, var(--lane-color) 54%, transparent);
+  background: color-mix(in srgb, var(--lane-color) 7%, transparent);
+}
+
+/* ---------- Flow connectors: quieter but clearer ---------- */
+
+.lane-arrow {
+  position: relative;
+  z-index: 3;
+  align-self: center;
+  width: 28px;
+  height: 48px;
+  filter: none;
+}
+
+.lane-arrow::before {
+  content: "›";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(78,226,241,.86);
+  font-family: var(--font-display);
+  font-size: 2.3rem;
+  text-shadow: 0 0 12px rgba(78,226,241,.22);
+  animation: fwArrowMove 1.8s ease-in-out infinite;
+}
+
+.lane-arrow::after {
+  display: none;
+}
+
+/* ========================================================================
+   FLOW RAIL
+   ======================================================================== */
+
+.flow-rail {
+  height: 40px;
+  margin: 3px 24px 4px;
+}
+
+.flow-rail::before {
+  top: 13px;
+  height: 2px;
+  background:
+    linear-gradient(90deg,
+      var(--fw-blue),
+      var(--fw-teal),
+      var(--fw-cyan),
+      var(--fw-purple));
+  box-shadow: 0 0 9px rgba(78,226,241,.22);
+}
+
+.flow-rail span {
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 10px currentColor;
+  animation: fwRailNode 3.6s ease-in-out infinite;
+}
+
+.flow-rail span:nth-child(2) { animation-delay: -.9s; }
+.flow-rail span:nth-child(3) { animation-delay: -1.8s; }
+.flow-rail span:nth-child(4) { animation-delay: -2.7s; }
+
+.flow-rail strong {
+  color: #4e8299;
+  font-size: .48rem;
+  letter-spacing: .18em;
+}
+
+/* ========================================================================
+   BOTTLENECK INTELLIGENCE RAIL
+   ======================================================================== */
+
+.bottleneck-panel {
+  min-height: 100%;
+  padding: 11px;
+  overflow: hidden;
+  border: 1px solid rgba(80,166,207,.22);
+  border-radius: 15px;
+  clip-path: none;
+  background:
+    linear-gradient(180deg, rgba(8,24,41,.94), rgba(4,15,27,.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.02),
+    0 16px 38px rgba(0,0,0,.14);
+}
+
+.bottleneck-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .16;
+  background:
+    linear-gradient(rgba(70,164,209,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(70,164,209,.04) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.bottleneck-panel__head {
+  min-height: 56px;
+  padding: 0 11px;
+  border-bottom: 1px solid rgba(78,226,241,.14);
+}
+
+.bottleneck-panel__head::after {
+  opacity: .45;
+}
+
+.bottleneck-panel__head h2 {
+  color: #d7f5fb;
+  font-size: .78rem;
+  letter-spacing: .12em;
+}
+
+.bottleneck-panel__reticle {
+  border-color: rgba(78,226,241,.55);
+  box-shadow: 0 0 12px rgba(78,226,241,.10);
+  animation: fwReticle 5s linear infinite;
+}
+
+.bottleneck-list {
+  gap: 9px;
+  padding: 10px 0;
+}
+
+.bottleneck-card {
+  --severity: var(--fw-amber);
+  position: relative;
+  grid-template-columns: 36px minmax(0, 1fr) 66px;
+  min-height: 118px;
+  padding: 12px 9px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--severity) 34%, transparent);
+  border-radius: 11px;
+  background:
+    linear-gradient(145deg,
+      color-mix(in srgb, var(--severity) 5%, transparent),
+      rgba(6,19,32,.91));
+  box-shadow: none;
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    background .18s ease;
+}
+
+.bottleneck-card--critical { --severity: var(--fw-red); }
+.bottleneck-card--high     { --severity: var(--fw-amber); }
+.bottleneck-card--medium   { --severity: #dcca37; }
+
+.bottleneck-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--severity) 10%, transparent),
+      transparent);
+  transform: translateX(-100%);
+  animation: fwBottleneckSweep 6s ease-in-out infinite;
+}
+
+.bottleneck-card:nth-child(2)::after { animation-delay: -1s; }
+.bottleneck-card:nth-child(3)::after { animation-delay: -2s; }
+.bottleneck-card:nth-child(4)::after { animation-delay: -3s; }
+.bottleneck-card:nth-child(5)::after { animation-delay: -4s; }
+
+.bottleneck-card:hover {
+  transform: translateX(-2px);
+  border-color: color-mix(in srgb, var(--severity) 55%, transparent);
+  background:
+    linear-gradient(145deg,
+      color-mix(in srgb, var(--severity) 8%, transparent),
+      rgba(6,19,32,.95));
+}
+
+.bottleneck-card__rank {
+  width: 31px;
+  height: 31px;
+  border-radius: 7px;
+}
+
+.bottleneck-card__name {
+  color: #edf7fb;
+  font-size: .91rem;
+}
+
+.bottleneck-card__department,
+.bottleneck-card__share {
+  color: #788da3;
+}
+
+.bottleneck-card__severity {
+  margin-top: 8px;
+  border-radius: 5px;
+}
+
+.bottleneck-card__share {
+  margin-top: 7px;
+}
+
+.bottleneck-card__gauge {
+  width: 62px;
+  height: 62px;
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--severity) 13%, transparent);
+  animation: fwGaugeBreath 3.8s ease-in-out infinite;
+}
+
+.sync-monitor {
+  min-height: 116px;
+  margin-top: 10px;
+  border-top: 1px solid rgba(78,226,241,.10);
+}
+
+.sync-monitor__radar {
+  opacity: .74;
+}
+
+/* ========================================================================
+   SUPPORT + OPERATIONS
+   ======================================================================== */
+
+.support-heading {
+  margin-top: 5px;
+  color: #79dce7;
+  font-size: .62rem;
+  letter-spacing: .16em;
+}
+
+.support-zone {
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 12px;
+  padding: 11px;
+  border: 1px solid rgba(78,226,241,.15);
+  border-radius: 13px;
+  background:
+    linear-gradient(145deg, rgba(6,22,37,.88), rgba(4,15,27,.92));
+}
+
+.facility-map {
+  min-height: 126px;
+  border: 1px solid rgba(76,169,216,.17);
+  border-radius: 10px;
+  overflow: hidden;
+  opacity: .76;
+}
+
+.support-strip {
+  gap: 10px;
+}
+
+.support-card {
+  min-height: 126px;
+  overflow: hidden;
+  border-radius: 10px;
+  clip-path: none;
+  background:
+    linear-gradient(150deg, rgba(10,29,46,.88), rgba(5,17,29,.92));
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.support-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(110deg, transparent, rgba(78,226,241,.07), transparent);
+  transform: translateX(-100%);
+  animation: fwSupportSweep 8s ease-in-out infinite;
+}
+
+.support-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0,0,0,.16);
+}
+
+.support-card__name {
+  color: #8ba0b4;
+}
+
+.support-card__value {
+  color: #edfaff;
+}
+
+.system-footer span {
+  border-color: rgba(70,137,174,.12);
+  border-radius: 6px;
+  background: rgba(5,17,29,.64);
+}
+
+/* ========================================================================
+   INCOMING QUEUES
+   ======================================================================== */
+
+.incoming-panel {
+  margin-top: 20px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(78,226,241,.10);
+}
+
+.queue-grid {
+  gap: 10px;
+}
+
+.queue-node {
+  padding-left: 14px;
+}
+
+.queue-node__connector {
+  left: 4px;
+  width: 1px;
+  background:
+    linear-gradient(to bottom,
+      transparent,
+      rgba(78,226,241,.42),
+      transparent);
+}
+
+.queue-node__content {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(78,226,241,.13);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(9,31,42,.88), rgba(6,20,32,.94));
+}
+
+.queue-node__content::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(78,226,241,.065), transparent);
+  transform: translateX(-100%);
+  animation: fwQueueSweep 8.5s ease-in-out infinite;
+}
+
+.queue-node__department {
+  color: #63dcd7;
+}
+
+.queue-node__value {
+  color: #eafcff;
+}
+
+/* ========================================================================
+   EMBEDDED HOMEPAGE MODE
+   ======================================================================== */
+
+html.is-embedded .dashboard {
+  width: min(1760px, calc(100% - 16px));
+  padding: 12px 0 30px;
+}
+
+html.is-embedded body {
+  background:
+    radial-gradient(circle at 16% 8%, rgba(55,167,215,.065), transparent 26%),
+    radial-gradient(circle at 77% 10%, rgba(144,99,246,.045), transparent 30%),
+    linear-gradient(145deg, #040b14, #071421 56%, #050c17);
+}
+
+html.is-embedded .kpi {
+  min-height: 106px;
+}
+
+html.is-embedded .lane {
+  min-height: 492px;
+}
+
+/* ========================================================================
+   RESPONSIVE
+   ======================================================================== */
+
+@media (max-width: 1480px) {
+  .command-layout {
+    grid-template-columns: minmax(0, 1fr) 292px;
+  }
+
+  .lane-grid {
+    grid-template-columns:
+      minmax(0, .96fr) 24px
+      minmax(0, 1.08fr) 24px
+      minmax(0, .96fr) 24px
+      minmax(0, .96fr);
+  }
+
+  .bottleneck-card {
+    grid-template-columns: 34px minmax(0, 1fr) 58px;
+  }
+
+  .bottleneck-card__gauge {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+@media (max-width: 1320px) {
+  .command-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .bottleneck-panel {
+    min-height: auto;
+  }
+
+  .bottleneck-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .bottleneck-card {
+    grid-template-columns: 31px minmax(0, 1fr);
+    min-height: 118px;
+  }
+
+  .bottleneck-card__gauge {
+    display: none;
+  }
+
+  .sync-monitor {
+    display: none;
+  }
+}
+
+@media (max-width: 1080px) {
+  .kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lane-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .lane {
+    min-height: auto;
+  }
+
+  .lane-arrow {
+    width: 100%;
+    height: 22px;
+  }
+
+  .lane-arrow::before {
+    content: "↓";
+    font-size: 1.45rem;
+  }
+
+  .flow-rail,
+  .facility-map {
+    display: none;
+  }
+
+  .support-zone {
+    grid-template-columns: 1fr;
+  }
+
+  .bottleneck-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard {
+    width: calc(100% - 8px);
+  }
+
+  .kpi-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi {
+    min-height: 98px;
+  }
+
+  .bottleneck-list {
+    grid-template-columns: 1fr;
+  }
+
+  .support-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================================================
+   MOTION
+   ======================================================================== */
+
+@keyframes fwAmbientField {
+  from { background-position: 0 0, 0 0, 0 0; }
+  to   { background-position: 180px 180px, -240px 240px, 210px -210px; }
+}
+
+@keyframes fwKpiBreath {
+  0%,100% {
+    border-color: color-mix(in srgb, var(--kpi-color) 24%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02), 0 14px 34px rgba(0,0,0,.14);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--kpi-color) 34%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.026),
+      0 16px 38px rgba(0,0,0,.16),
+      0 0 20px color-mix(in srgb, var(--kpi-color) 3%, transparent);
+  }
+}
+
+@keyframes fwKpiGrid {
+  to { background-position: 24px 24px, 24px 24px, 0 0; }
+}
+
+@keyframes fwKpiSweep {
+  0%, 58% { left: -26%; opacity: 0; }
+  66% { opacity: .68; }
+  86% { left: 106%; opacity: .14; }
+  100% { left: 106%; opacity: 0; }
+}
+
+@keyframes fwIconPulse {
+  0%,100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.035); filter: brightness(1.12); }
+}
+
+@keyframes fwLaneGrid {
+  to { background-position: 26px 26px, 26px 26px, 0 0; }
+}
+
+@keyframes fwLaneSweep {
+  0%, 64% { left: -24%; opacity: 0; }
+  71% { opacity: .55; }
+  88% { left: 108%; opacity: .12; }
+  100% { left: 108%; opacity: 0; }
+}
+
+@keyframes fwLaneAlert {
+  0%,100% { box-shadow: 0 16px 36px rgba(0,0,0,.14); }
+  50% { box-shadow: 0 16px 36px rgba(0,0,0,.14), 0 0 20px rgba(255,102,119,.065); }
+}
+
+@keyframes fwProgressShine {
+  0%,65% { transform: translateX(-120%); opacity: 0; }
+  72% { opacity: .7; }
+  90%,100% { transform: translateX(120%); opacity: 0; }
+}
+
+@keyframes fwArrowMove {
+  0%,100% { transform: translate(-58%, -50%); opacity: .45; }
+  50% { transform: translate(-40%, -50%); opacity: 1; }
+}
+
+@keyframes fwRailNode {
+  0%,100% { opacity: .45; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes fwReticle {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fwBottleneckSweep {
+  0%,68% { transform: translateX(-100%); opacity: 0; }
+  76% { opacity: .55; }
+  92%,100% { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes fwGaugeBreath {
+  0%,100% { filter: brightness(.96); }
+  50% { filter: brightness(1.12); }
+}
+
+@keyframes fwSupportSweep {
+  0%,70% { transform: translateX(-100%); opacity: 0; }
+  78% { opacity: .50; }
+  92%,100% { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes fwQueueSweep {
+  0%,72% { transform: translateX(-100%); opacity: 0; }
+  80% { opacity: .48; }
+  94%,100% { transform: translateX(100%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after,
+  .kpi,
+  .kpi::before,
+  .kpi::after,
+  .kpi__icon,
+  .lane::before,
+  .lane::after,
+  .lane__fill::after,
+  .lane-arrow::before,
+  .flow-rail span,
+  .bottleneck-panel__reticle,
+  .bottleneck-card::after,
+  .bottleneck-card__gauge,
+  .support-card::after,
+  .queue-node__content::after {
+    animation: none !important;
+  }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V2.1 — LANE HEADER + VERTICAL DENSITY REFINEMENT
+   Applies only to the new V2 command-center design.
+   - separates department label/icon from large WIP value
+   - improves header hierarchy
+   - reduces unused lane height
+   - pulls Show + More upward
+   ======================================================================== */
+
+/* ---------- Lane header hierarchy ---------- */
+
+.lane__head {
+  padding: 16px 16px 11px !important;
+}
+
+.lane__topline {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  grid-template-rows: auto auto !important;
+  align-items: start !important;
+  gap: 4px 10px !important;
+  min-height: 76px;
+}
+
+.lane__name {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  padding-top: 1px;
+  font-size: .76rem !important;
+  line-height: 1.1;
+  letter-spacing: .15em;
+  white-space: nowrap;
+}
+
+.lane__value {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  align-self: end;
+  margin-top: 2px;
+  font-size: clamp(2.05rem, 2.35vw, 2.55rem) !important;
+  line-height: .96 !important;
+  letter-spacing: -.025em;
+}
+
+/* Keep any decorative/icon treatment away from the value area. */
+.lane__head::after {
+  top: 11px !important;
+  right: 14px !important;
+  transform: none !important;
+  opacity: .82;
+}
+
+/* Progress bar and share move closer to the main WIP number. */
+.lane__bar {
+  margin: 9px 0 6px !important;
+}
+
+.lane__share {
+  margin-top: 0 !important;
+  line-height: 1.25;
+}
+
+/* ---------- Station block density ---------- */
+
+.lane {
+  min-height: 455px !important;
+}
+
+html.is-embedded .lane {
+  min-height: 445px !important;
+}
+
+.lane__stations {
+  flex: 0 1 auto !important;
+  padding: 4px 16px 8px !important;
+}
+
+.station-row {
+  min-height: 47px !important;
+  padding: 7px 0 !important;
+}
+
+.station-row__name {
+  line-height: 1.18;
+}
+
+.station-row__desc {
+  line-height: 1.18;
+}
+
+/* ---------- Show + More placement ---------- */
+
+.lane__more {
+  margin-top: auto !important;
+  margin-bottom: 11px !important;
+  min-height: 36px !important;
+}
+
+/* When only a few visible stations exist, do not create a huge empty gap. */
+.lane:has(.station-row:nth-child(1):nth-last-child(1)) .lane__more,
+.lane:has(.station-row:nth-child(1):nth-last-child(2)) .lane__more,
+.lane:has(.station-row:nth-child(1):nth-last-child(3)) .lane__more {
+  margin-top: 18px !important;
+}
+
+/* Embedded homepage should remain compact. */
+html.is-embedded .lane__topline {
+  min-height: 70px;
+}
+
+html.is-embedded .lane__value {
+  font-size: clamp(2rem, 2.2vw, 2.4rem) !important;
+}
+
+/* ---------- Responsive tuning ---------- */
+
+@media (max-width: 1480px) {
+  .lane {
+    min-height: 435px !important;
+  }
+
+  html.is-embedded .lane {
+    min-height: 425px !important;
+  }
+
+  .lane__topline {
+    min-height: 70px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .lane,
+  html.is-embedded .lane {
+    min-height: auto !important;
+  }
+
+  .lane__more {
+    margin-top: 12px !important;
+  }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V2.4 — VISIBLE LIVE INTERIOR GRAPHICS
+   Corrected implementation:
+   - Department lanes target actual data-department values from JS.
+   - KPI graphics use .kpi__content pseudo-elements, avoiding conflicts
+     with existing card pseudo-elements.
+   - No static numbers/images. All data remains live.
+   ======================================================================== */
+
+/* ------------------------------------------------------------------------
+   SHARED CARD SAFETY
+   ------------------------------------------------------------------------ */
+
+.kpi,
+.lane {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.kpi__content {
+  position: relative;
+  z-index: 3;
+  min-width: 0;
+}
+
+.kpi__content > * {
+  position: relative;
+  z-index: 3;
+}
+
+.lane > * {
+  position: relative;
+  z-index: 3;
+}
+
+/* ------------------------------------------------------------------------
+   TOP KPI — LARGE, VISIBLE INTERIOR GRAPHICS
+   ------------------------------------------------------------------------ */
+
+/* Facility WIP — network cube / connected production nodes */
+.kpi--facility .kpi__content::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -8px;
+  top: 50%;
+  width: 152px;
+  height: 96px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: .62;
+  background:
+    radial-gradient(circle at 15% 68%, rgba(78,226,241,.95) 0 2px, transparent 3px),
+    radial-gradient(circle at 33% 32%, rgba(78,226,241,.80) 0 2px, transparent 3px),
+    radial-gradient(circle at 51% 58%, rgba(78,226,241,.90) 0 2px, transparent 3px),
+    radial-gradient(circle at 70% 24%, rgba(86,169,255,.80) 0 2px, transparent 3px),
+    radial-gradient(circle at 84% 66%, rgba(78,226,241,.85) 0 2px, transparent 3px),
+    linear-gradient(28deg, transparent 0 28%, rgba(78,226,241,.24) 28.5% 29.2%, transparent 29.7% 100%),
+    linear-gradient(145deg, transparent 0 38%, rgba(86,169,255,.20) 38.5% 39.2%, transparent 39.7% 100%),
+    linear-gradient(84deg, transparent 0 52%, rgba(78,226,241,.18) 52.5% 53.2%, transparent 53.7% 100%);
+  filter: drop-shadow(0 0 7px rgba(78,226,241,.16));
+  animation: fwV24NetworkDrift 7.5s ease-in-out infinite alternate;
+}
+
+.kpi--facility .kpi__content::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: 10px;
+  top: 16%;
+  width: 105px;
+  height: 70px;
+  pointer-events: none;
+  opacity: .22;
+  border: 1px solid rgba(78,226,241,.26);
+  transform: skewY(-10deg) rotate(-5deg);
+  box-shadow:
+    inset 20px 0 0 rgba(78,226,241,.014),
+    inset -20px 0 0 rgba(86,169,255,.012);
+  animation: fwV24CubePulse 5s ease-in-out infinite;
+}
+
+/* Incoming — vertical data rain / incoming streams */
+.kpi--incoming .kpi__content::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -3px;
+  top: -20px;
+  width: 150px;
+  height: 130px;
+  pointer-events: none;
+  opacity: .62;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 10px,
+      rgba(69,223,185,.22) 10px 11px,
+      transparent 11px 23px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 8px,
+      rgba(69,223,185,.14) 8px 11px,
+      transparent 11px 22px
+    );
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 84%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 18%, #000 84%, transparent 100%);
+  animation: fwV24DataRain 3.6s linear infinite;
+}
+
+.kpi--incoming .kpi__content::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: 4px;
+  bottom: -22px;
+  width: 160px;
+  height: 76px;
+  pointer-events: none;
+  opacity: .50;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      ellipse at center,
+      transparent 0 9px,
+      rgba(69,223,185,.17) 10px 11px,
+      transparent 12px 19px
+    );
+  transform: rotate(-8deg) scaleY(.45);
+  animation: fwV24IncomingWave 5s ease-in-out infinite alternate;
+}
+
+/* Sync Gap — large amber waveform */
+.kpi--gap .kpi__content::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -10px;
+  top: 24px;
+  width: 172px;
+  height: 60px;
+  pointer-events: none;
+  opacity: .72;
+  background:
+    linear-gradient(160deg, transparent 0 10%, rgba(255,184,77,.42) 10.5% 12%, transparent 12.5% 22%,
+      rgba(255,184,77,.28) 22.5% 24%, transparent 24.5% 35%,
+      rgba(255,184,77,.52) 35.5% 37%, transparent 37.5% 49%,
+      rgba(255,184,77,.26) 49.5% 51%, transparent 51.5% 61%,
+      rgba(255,184,77,.44) 61.5% 63%, transparent 63.5% 76%,
+      rgba(255,184,77,.24) 76.5% 78%, transparent 78.5%);
+  filter: drop-shadow(0 0 6px rgba(255,184,77,.18));
+  animation: fwV24WaveFloat 4.2s ease-in-out infinite;
+}
+
+.kpi--gap .kpi__content::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: 0;
+  top: 50%;
+  width: 170px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,184,77,.24), transparent);
+  box-shadow:
+    0 -15px 0 rgba(255,184,77,.025),
+    0 15px 0 rgba(255,184,77,.025);
+  pointer-events: none;
+}
+
+/* Next Refresh — large radar target */
+.kpi--refresh .kpi__content::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: -5px;
+  top: 50%;
+  width: 112px;
+  height: 112px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  border-radius: 50%;
+  opacity: .60;
+  background:
+    radial-gradient(circle,
+      rgba(86,169,255,.14) 0 3px,
+      transparent 4px 19px,
+      rgba(86,169,255,.25) 20px 21px,
+      transparent 22px 34px,
+      rgba(86,169,255,.19) 35px 36px,
+      transparent 37px 49px,
+      rgba(86,169,255,.13) 50px 51px,
+      transparent 52px);
+  box-shadow: 0 0 20px rgba(86,169,255,.08);
+  animation: fwV24RadarPulse 4.8s ease-in-out infinite;
+}
+
+.kpi--refresh .kpi__content::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: 51px;
+  top: 50%;
+  width: 55px;
+  height: 1px;
+  transform-origin: right center;
+  pointer-events: none;
+  opacity: .72;
+  background: linear-gradient(90deg, transparent, rgba(86,169,255,.75));
+  box-shadow: 0 0 7px rgba(86,169,255,.30);
+  animation: fwV24RadarRotate 5.5s linear infinite;
+}
+
+/* Fade graphics away from the live values on smaller KPI widths. */
+@media (max-width: 1280px) {
+  .kpi__content::before,
+  .kpi__content::after {
+    opacity: .30 !important;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   DEPARTMENT LANES — USE REAL DATA-DEPARTMENT ATTRIBUTES
+   ------------------------------------------------------------------------ */
+
+.lane[data-department="INVENTORY"] {
+  --lane-color: var(--fw-blue);
+  background:
+    linear-gradient(155deg, rgba(8,30,49,.91), rgba(5,17,31,.96)),
+    repeating-linear-gradient(90deg, rgba(86,169,255,.07) 0 1px, transparent 1px 30px) !important;
+}
+
+.lane[data-department="SURFACE"] {
+  --lane-color: var(--fw-teal);
+}
+
+.lane[data-department="AR"] {
+  --lane-color: var(--fw-cyan);
+}
+
+.lane[data-department="FINISH"] {
+  --lane-color: var(--fw-purple);
+}
+
+/* Inventory — warehouse blueprint geometry in lower half */
+.lane[data-department="INVENTORY"]::before {
+  background:
+    linear-gradient(rgba(86,169,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(86,169,255,.035) 1px, transparent 1px),
+    linear-gradient(24deg, transparent 0 65%, rgba(86,169,255,.095) 65.2% 65.7%, transparent 66%),
+    linear-gradient(156deg, transparent 0 72%, rgba(86,169,255,.075) 72.2% 72.7%, transparent 73%),
+    radial-gradient(circle at 72% 82%, rgba(86,169,255,.09), transparent 25%) !important;
+  background-size: 24px 24px, 24px 24px, 100% 100%, 100% 100%, 100% 100% !important;
+  opacity: .56 !important;
+}
+
+/* Surface — visible flowing green process bands */
+.lane[data-department="SURFACE"]::before {
+  background:
+    radial-gradient(ellipse at 42% 26%, transparent 0 42%, rgba(69,223,185,.10) 43% 44%, transparent 45% 49%, rgba(69,223,185,.065) 50% 51%, transparent 52%),
+    radial-gradient(ellipse at 74% 78%, transparent 0 42%, rgba(69,223,185,.09) 43% 44%, transparent 45% 51%, rgba(69,223,185,.055) 52% 53%, transparent 54%),
+    linear-gradient(rgba(69,223,185,.020) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(69,223,185,.020) 1px, transparent 1px) !important;
+  background-size: 155% 75%, 165% 70%, 26px 26px, 26px 26px !important;
+  background-position: -45px -50px, -80px 270px, 0 0, 0 0 !important;
+  opacity: .62 !important;
+  animation: fwV24SurfaceFlow 11s ease-in-out infinite alternate !important;
+}
+
+/* AR — large technical concentric scanner rings */
+.lane[data-department="AR"]::before {
+  background:
+    radial-gradient(circle at 72% 20%,
+      transparent 0 28px,
+      rgba(78,226,241,.14) 29px 30px,
+      transparent 31px 48px,
+      rgba(78,226,241,.09) 49px 50px,
+      transparent 51px 70px,
+      rgba(78,226,241,.055) 71px 72px,
+      transparent 73px),
+    radial-gradient(circle at 46% 78%,
+      transparent 0 32px,
+      rgba(78,226,241,.09) 33px 34px,
+      transparent 35px 55px,
+      rgba(78,226,241,.05) 56px 57px,
+      transparent 58px),
+    linear-gradient(rgba(78,226,241,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(78,226,241,.018) 1px, transparent 1px) !important;
+  background-size: auto, auto, 26px 26px, 26px 26px !important;
+  opacity: .68 !important;
+  animation: fwV24ArScan 9s ease-in-out infinite alternate !important;
+}
+
+/* Finish — visible purple precision laser geometry */
+.lane[data-department="FINISH"]::before {
+  background:
+    repeating-linear-gradient(
+      150deg,
+      transparent 0 24px,
+      rgba(156,124,255,.075) 24px 25px,
+      transparent 25px 48px
+    ),
+    linear-gradient(28deg, transparent 0 70%, rgba(156,124,255,.14) 70.2% 70.7%, transparent 71%),
+    linear-gradient(152deg, transparent 0 78%, rgba(156,124,255,.09) 78.2% 78.7%, transparent 79%),
+    radial-gradient(circle at 80% 78%, rgba(156,124,255,.11), transparent 28%) !important;
+  background-size: auto, 100% 100%, 100% 100%, 100% 100% !important;
+  opacity: .62 !important;
+  animation: fwV24FinishShift 12s linear infinite !important;
+}
+
+/* Strong but restrained scan pass inside each lane. */
+.lane[data-department]::after {
+  z-index: 1 !important;
+  width: 24% !important;
+  background:
+    linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--lane-color) 10%, transparent),
+      color-mix(in srgb, var(--lane-color) 22%, transparent),
+      transparent) !important;
+  animation: fwV24LaneScan 7.8s ease-in-out infinite !important;
+}
+
+.lane[data-department="SURFACE"]::after { animation-delay: -1.6s !important; }
+.lane[data-department="AR"]::after      { animation-delay: -3.2s !important; }
+.lane[data-department="FINISH"]::after  { animation-delay: -4.8s !important; }
+
+/* Department name gets a visible status dot */
+.lane[data-department] .lane__name::after {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  animation: fwV24DotPulse 2.5s ease-in-out infinite;
+}
+
+/* Values remain dominant over graphics */
+.lane[data-department] .lane__value {
+  text-shadow:
+    0 0 13px color-mix(in srgb, var(--lane-color) 12%, transparent);
+}
+
+/* Station rows receive a subtle passing telemetry strip */
+.lane[data-department] .station-row {
+  position: relative;
+  overflow: hidden;
+}
+
+.lane[data-department] .station-row::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: -45%;
+  top: 0;
+  bottom: 0;
+  width: 28%;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--lane-color) 8%, transparent),
+      transparent);
+  animation: fwV24StationPass 10s ease-in-out infinite;
+}
+
+.lane[data-department] .station-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------------------
+   SUPPORT AREA — MORE VISUAL DEPTH
+   ------------------------------------------------------------------------ */
+
+.support-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.support-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .35;
+  background:
+    linear-gradient(rgba(78,226,241,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(78,226,241,.025) 1px, transparent 1px),
+    radial-gradient(circle at 82% 24%, rgba(78,226,241,.07), transparent 28%);
+  background-size: 18px 18px, 18px 18px, auto;
+}
+
+.support-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ------------------------------------------------------------------------
+   V2.4 MOTION
+   ------------------------------------------------------------------------ */
+
+@keyframes fwV24NetworkDrift {
+  from { transform: translateY(-50%) translateX(-4px) scale(.97); opacity: .48; }
+  to   { transform: translateY(-50%) translateX(4px) scale(1.03); opacity: .72; }
+}
+
+@keyframes fwV24CubePulse {
+  0%,100% { opacity: .14; filter: brightness(.9); }
+  50% { opacity: .34; filter: brightness(1.2); }
+}
+
+@keyframes fwV24DataRain {
+  from { background-position: 0 0, 0 -44px; }
+  to   { background-position: 0 0, 0 44px; }
+}
+
+@keyframes fwV24IncomingWave {
+  from { transform: rotate(-8deg) scaleY(.42) translateX(-5px); opacity: .35; }
+  to   { transform: rotate(-8deg) scaleY(.50) translateX(5px); opacity: .62; }
+}
+
+@keyframes fwV24WaveFloat {
+  0%,100% { transform: translateY(0) scaleY(.92); opacity: .48; }
+  50% { transform: translateY(-3px) scaleY(1.08); opacity: .78; }
+}
+
+@keyframes fwV24RadarPulse {
+  0%,100% { opacity: .40; transform: translateY(-50%) scale(.94); }
+  50% { opacity: .68; transform: translateY(-50%) scale(1.04); }
+}
+
+@keyframes fwV24RadarRotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fwV24SurfaceFlow {
+  from { background-position: -65px -55px, -100px 285px, 0 0, 0 0; }
+  to   { background-position: -15px -42px, -40px 250px, 26px 26px, 26px 26px; }
+}
+
+@keyframes fwV24ArScan {
+  from { background-position: 0 0, 0 0, 0 0, 0 0; filter: brightness(.94); }
+  to   { background-position: 10px 5px, -8px -4px, 26px 26px, 26px 26px; filter: brightness(1.10); }
+}
+
+@keyframes fwV24FinishShift {
+  from { background-position: 0 0, 0 0, 0 0, 0 0; }
+  to   { background-position: 48px 0, 0 0, 0 0, 0 0; }
+}
+
+@keyframes fwV24LaneScan {
+  0%, 61% { left: -28%; opacity: 0; }
+  69% { opacity: .68; }
+  88% { left: 106%; opacity: .15; }
+  100% { left: 106%; opacity: 0; }
+}
+
+@keyframes fwV24DotPulse {
+  0%,100% { opacity: .38; transform: scale(.72); }
+  50% { opacity: 1; transform: scale(1.28); }
+}
+
+@keyframes fwV24StationPass {
+  0%, 80% { left: -45%; opacity: 0; }
+  86% { opacity: .55; }
+  97%,100% { left: 110%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi__content::before,
+  .kpi__content::after,
+  .lane[data-department]::before,
+  .lane[data-department]::after,
+  .lane[data-department] .lane__name::after,
+  .lane[data-department] .station-row::after {
+    animation: none !important;
+  }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V2.5 — REAL IMAGE BACKGROUNDS FOR KPI + DEPARTMENT CARDS
+   Place the 8 PNG files inside ./assets/ next to this CSS file.
+   ======================================================================== */
+
+.kpi,
+.lane {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.kpi > *,
+.lane > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------- KPI image layers ---------- */
+.kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .28;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  mix-blend-mode: screen;
+  filter: saturate(1.05) brightness(.95);
+}
+
+.kpi::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(3,10,20,.84), rgba(3,10,20,.48) 48%, rgba(3,10,20,.76)),
+    linear-gradient(180deg, rgba(255,255,255,.02), transparent 55%);
+}
+
+.kpi--facility::before {
+  background-image: url("assets/kpi-facility-bg.png");
+  background-position: right center;
+  opacity: .30;
+}
+
+.kpi--incoming::before {
+  background-image: url("assets/kpi-incoming-bg.png");
+  background-position: right center;
+  opacity: .30;
+}
+
+.kpi--gap::before {
+  background-image: url("assets/kpi-sync-gap-bg.png");
+  background-position: right center;
+  opacity: .28;
+}
+
+.kpi--refresh::before {
+  background-image: url("assets/kpi-next-refresh-bg.png");
+  background-position: right center;
+  opacity: .28;
+}
+
+/* ---------- Department lane image layers ---------- */
+.lane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: .22;
+  mix-blend-mode: screen;
+}
+
+.lane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(4,12,24,.18), rgba(4,12,24,.58) 75%, rgba(4,12,24,.70)),
+    linear-gradient(90deg, rgba(5,14,28,.32), transparent 26%, transparent 74%, rgba(5,14,28,.38));
+}
+
+.lane[data-department="INVENTORY"]::before {
+  background-image: url("assets/lane-inventory-bg.png");
+  background-position: center bottom;
+  opacity: .24;
+}
+
+.lane[data-department="SURFACE"]::before {
+  background-image: url("assets/lane-surface-bg.png");
+  background-position: center center;
+  opacity: .24;
+}
+
+.lane[data-department="AR"]::before {
+  background-image: url("assets/lane-ar-bg.png");
+  background-position: center center;
+  opacity: .22;
+}
+
+.lane[data-department="FINISH"]::before {
+  background-image: url("assets/lane-finish-bg.png");
+  background-position: center center;
+  opacity: .24;
+}
+
+/* Keep department accents strong above the image background */
+.lane[data-department="INVENTORY"] { box-shadow: inset 0 0 0 1px rgba(65,181,255,.20), 0 0 0 1px rgba(65,181,255,.10); }
+.lane[data-department="SURFACE"] { box-shadow: inset 0 0 0 1px rgba(69,223,185,.24), 0 0 0 1px rgba(69,223,185,.10); }
+.lane[data-department="AR"] { box-shadow: inset 0 0 0 1px rgba(78,226,241,.22), 0 0 0 1px rgba(78,226,241,.10); }
+.lane[data-department="FINISH"] { box-shadow: inset 0 0 0 1px rgba(156,124,255,.22), 0 0 0 1px rgba(156,124,255,.10); }
+
+/* Values / rows stay readable */
+.kpi__value,
+.lane__value,
+.station-row__value,
+.station-row__name,
+.station-row__meta,
+.kpi__meta,
+.lane__share,
+.kpi__label,
+.lane__name {
+  position: relative;
+  z-index: 3;
+}
+
+.lane__stations,
+.lane__head,
+.lane__more {
+  position: relative;
+  z-index: 3;
+}
+
+/* Optional hover breathing so the image doesn't feel static */
+.kpi:hover::before,
+.lane:hover::before {
+  transform: scale(1.02);
+  transition: transform .45s ease, opacity .45s ease;
+}
+
+.kpi::before,
+.lane::before {
+  transition: transform .45s ease, opacity .45s ease;
+}
+
+@media (max-width: 1200px) {
+  .kpi::before,
+  .lane::before {
+    opacity: .18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi::before,
+  .lane::before {
+    transition: none;
+  }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V2.6 — STRONGER IMAGE VISIBILITY
+   Goal: the background images must be clearly visible inside the KPI and
+   department cards while keeping the live numbers readable.
+   This block intentionally overrides V2.5.
+   ======================================================================== */
+
+/* ---------------- KPI CARDS ---------------- */
+.kpi::before {
+  opacity: .50 !important;
+  mix-blend-mode: screen !important;
+  background-size: cover !important;
+  filter: saturate(1.18) brightness(1.08) contrast(1.06) !important;
+}
+
+.kpi::after {
+  background:
+    linear-gradient(90deg,
+      rgba(3,10,20,.74) 0%,
+      rgba(3,10,20,.58) 26%,
+      rgba(3,10,20,.34) 52%,
+      rgba(3,10,20,.28) 74%,
+      rgba(3,10,20,.46) 100%),
+    linear-gradient(180deg, rgba(255,255,255,.018), transparent 58%) !important;
+}
+
+.kpi--facility::before {
+  opacity: .56 !important;
+  background-position: 78% center !important;
+}
+
+.kpi--incoming::before {
+  opacity: .58 !important;
+  background-position: 84% center !important;
+}
+
+.kpi--gap::before {
+  opacity: .60 !important;
+  background-position: 82% center !important;
+}
+
+.kpi--refresh::before {
+  opacity: .60 !important;
+  background-position: 88% center !important;
+}
+
+.kpi__label,
+.kpi__value,
+.kpi__meta,
+.kpi__sub {
+  text-shadow:
+    0 1px 0 rgba(0,0,0,.34),
+    0 0 12px rgba(2,8,16,.28) !important;
+}
+
+/* ---------------- DEPARTMENT LANES ---------------- */
+.lane::before {
+  opacity: .40 !important;
+  mix-blend-mode: screen !important;
+  background-size: cover !important;
+  filter: saturate(1.16) brightness(1.04) contrast(1.06) !important;
+}
+
+.lane::after {
+  background:
+    linear-gradient(180deg,
+      rgba(4,12,24,.10) 0%,
+      rgba(4,12,24,.18) 34%,
+      rgba(4,12,24,.24) 68%,
+      rgba(4,12,24,.34) 100%),
+    linear-gradient(90deg,
+      rgba(5,14,28,.22) 0%,
+      rgba(5,14,28,.10) 18%,
+      transparent 35%,
+      transparent 68%,
+      rgba(5,14,28,.14) 84%,
+      rgba(5,14,28,.24) 100%) !important;
+}
+
+.lane[data-department="INVENTORY"]::before {
+  opacity: .42 !important;
+  background-size: cover !important;
+  background-position: 58% bottom !important;
+}
+
+.lane[data-department="SURFACE"]::before {
+  opacity: .50 !important;
+  background-size: cover !important;
+  background-position: center center !important;
+}
+
+.lane[data-department="AR"]::before {
+  opacity: .50 !important;
+  background-size: cover !important;
+  background-position: center center !important;
+}
+
+.lane[data-department="FINISH"]::before {
+  opacity: .58 !important;
+  background-size: cover !important;
+  background-position: center center !important;
+}
+
+.lane[data-department="FINISH"]::after {
+  background:
+    linear-gradient(180deg,
+      rgba(8,8,18,.08) 0%,
+      rgba(8,8,18,.16) 38%,
+      rgba(8,8,18,.24) 72%,
+      rgba(8,8,18,.30) 100%),
+    linear-gradient(90deg,
+      rgba(8,8,18,.18) 0%,
+      rgba(8,8,18,.08) 18%,
+      transparent 34%,
+      transparent 72%,
+      rgba(8,8,18,.10) 86%,
+      rgba(8,8,18,.18) 100%) !important;
+}
+
+.lane__name,
+.lane__value,
+.lane__share,
+.station-row__name,
+.station-row__value,
+.station-row__meta,
+.lane__more {
+  text-shadow:
+    0 1px 0 rgba(0,0,0,.34),
+    0 0 12px rgba(2,8,16,.30) !important;
+}
+
+/* Buttons and row containers remain readable over the stronger artwork */
+.lane__more,
+.station-row {
+  backdrop-filter: blur(.6px);
+  -webkit-backdrop-filter: blur(.6px);
+}
+
+/* Slight extra visual pop on hover without changing layout */
+.kpi:hover::before,
+.lane:hover::before {
+  opacity: min(1, calc(var(--hover-op, 1) * 1)) !important;
+  transform: scale(1.025) !important;
+}
+
+.kpi--facility { --hover-op: .60; }
+.kpi--incoming { --hover-op: .62; }
+.kpi--gap      { --hover-op: .64; }
+.kpi--refresh  { --hover-op: .64; }
+
+/* Small screens: back off just a bit so text stays easy to read */
+@media (max-width: 1200px) {
+  .kpi::before { opacity: .42 !important; }
+  .lane::before { opacity: .32 !important; }
+  .lane[data-department="SURFACE"]::before,
+  .lane[data-department="AR"]::before,
+  .lane[data-department="FINISH"]::before { opacity: .38 !important; }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V2.7 — CENTER VISIBILITY FIX
+   Fix: middle department cards (especially SURFACE and AR) need the
+   background artwork to be clearly visible through the center area.
+   ======================================================================== */
+
+/* Global lane artwork gets a little more room to breathe */
+.lane::before {
+  opacity: .46 !important;
+  filter: saturate(1.2) brightness(1.08) contrast(1.08) !important;
+}
+
+.lane::after {
+  background:
+    linear-gradient(180deg,
+      rgba(4,12,24,.06) 0%,
+      rgba(4,12,24,.12) 28%,
+      rgba(4,12,24,.18) 58%,
+      rgba(4,12,24,.26) 100%),
+    linear-gradient(90deg,
+      rgba(5,14,28,.14) 0%,
+      rgba(5,14,28,.06) 14%,
+      transparent 28%,
+      transparent 72%,
+      rgba(5,14,28,.08) 86%,
+      rgba(5,14,28,.14) 100%) !important;
+}
+
+/* Inventory can stay restrained */
+.lane[data-department="INVENTORY"]::before {
+  opacity: .44 !important;
+  background-size: 118% auto !important;
+  background-position: 48% 62% !important;
+}
+
+/* Surface — show the green rings much more clearly in the middle */
+.lane[data-department="SURFACE"]::before {
+  opacity: .68 !important;
+  background-size: 132% auto !important;
+  background-position: 52% 50% !important;
+  filter: saturate(1.28) brightness(1.12) contrast(1.1) !important;
+}
+
+.lane[data-department="SURFACE"]::after {
+  background:
+    linear-gradient(180deg,
+      rgba(3,12,18,.04) 0%,
+      rgba(3,12,18,.08) 28%,
+      rgba(3,12,18,.14) 62%,
+      rgba(3,12,18,.20) 100%),
+    linear-gradient(90deg,
+      rgba(3,12,18,.10) 0%,
+      rgba(3,12,18,.03) 12%,
+      transparent 24%,
+      transparent 76%,
+      rgba(3,12,18,.04) 88%,
+      rgba(3,12,18,.10) 100%) !important;
+}
+
+/* AR — center the radar graphic so it actually reads */
+.lane[data-department="AR"]::before {
+  opacity: .66 !important;
+  background-size: 118% auto !important;
+  background-position: 52% 50% !important;
+  filter: saturate(1.22) brightness(1.1) contrast(1.08) !important;
+}
+
+.lane[data-department="AR"]::after {
+  background:
+    linear-gradient(180deg,
+      rgba(4,12,24,.04) 0%,
+      rgba(4,12,24,.08) 30%,
+      rgba(4,12,24,.14) 64%,
+      rgba(4,12,24,.20) 100%),
+    linear-gradient(90deg,
+      rgba(4,12,24,.10) 0%,
+      rgba(4,12,24,.03) 12%,
+      transparent 24%,
+      transparent 76%,
+      rgba(4,12,24,.04) 88%,
+      rgba(4,12,24,.10) 100%) !important;
+}
+
+/* Finish already reads well, but keep it balanced */
+.lane[data-department="FINISH"]::before {
+  opacity: .60 !important;
+  background-size: 112% auto !important;
+  background-position: 58% 56% !important;
+}
+
+/* Make the center of the cards less muddy while preserving text legibility */
+.lane__stations,
+.lane__head,
+.lane__more {
+  position: relative;
+  z-index: 3;
+}
+
+.station-row {
+  background: linear-gradient(90deg, rgba(2,8,16,.05), rgba(2,8,16,0), rgba(2,8,16,.04));
+}
+
+/* Smaller screens: still visible but avoid overpowering the text */
+@media (max-width: 1200px) {
+  .lane[data-department="SURFACE"]::before { opacity: .56 !important; }
+  .lane[data-department="AR"]::before { opacity: .54 !important; }
+  .lane[data-department="FINISH"]::before { opacity: .52 !important; }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V2.8 — DEPARTMENT CARD REFINEMENT ONLY
+   Top KPI area stays as-is. This pass only retunes the 4 department lanes.
+   Goal: make the lane backgrounds feel intentional, balanced, and visible
+   without overpowering the live numbers.
+   ======================================================================== */
+
+/* Keep the lane artwork visible, but make the overlays cleaner */
+.lane::before {
+  opacity: .44 !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  filter: saturate(1.18) brightness(1.08) contrast(1.08) !important;
+}
+
+.lane::after {
+  background:
+    linear-gradient(180deg,
+      rgba(4,12,24,.06) 0%,
+      rgba(4,12,24,.10) 22%,
+      rgba(4,12,24,.16) 56%,
+      rgba(4,12,24,.28) 100%),
+    linear-gradient(90deg,
+      rgba(4,12,24,.16) 0%,
+      rgba(4,12,24,.08) 16%,
+      transparent 34%,
+      transparent 72%,
+      rgba(4,12,24,.08) 86%,
+      rgba(4,12,24,.16) 100%) !important;
+}
+
+/* Shared lane depth so the lower half does not feel dead */
+.lane[data-department] {
+  background:
+    linear-gradient(180deg, rgba(10,22,38,.94), rgba(7,17,30,.90)),
+    radial-gradient(circle at 50% 82%, rgba(58,180,255,.10), transparent 42%) !important;
+}
+
+.lane[data-department] .lane__stations {
+  position: relative;
+  z-index: 3;
+  background:
+    linear-gradient(180deg, rgba(5,12,22,.08), rgba(5,12,22,.02) 24%, rgba(5,12,22,.10) 100%);
+  border-radius: 16px;
+}
+
+.lane[data-department] .station-row {
+  background: linear-gradient(90deg, rgba(255,255,255,.015), rgba(255,255,255,0), rgba(255,255,255,.012));
+}
+
+/* INVENTORY — stronger blueprint, spread wider across the card */
+.lane[data-department="INVENTORY"]::before {
+  opacity: .50 !important;
+  background-size: 145% auto !important;
+  background-position: 58% 52% !important;
+  filter: saturate(1.14) brightness(1.08) contrast(1.05) !important;
+}
+
+.lane[data-department="INVENTORY"]::after {
+  background:
+    linear-gradient(180deg,
+      rgba(4,12,24,.08) 0%,
+      rgba(4,12,24,.12) 22%,
+      rgba(4,12,24,.18) 58%,
+      rgba(4,12,24,.28) 100%),
+    linear-gradient(90deg,
+      rgba(4,12,24,.18) 0%,
+      rgba(4,12,24,.08) 18%,
+      transparent 34%,
+      transparent 74%,
+      rgba(4,12,24,.08) 88%,
+      rgba(4,12,24,.16) 100%) !important;
+}
+
+/* SURFACE — center the teal flow but keep it out of the values */
+.lane[data-department="SURFACE"]::before {
+  opacity: .64 !important;
+  background-size: 138% auto !important;
+  background-position: 54% 52% !important;
+  filter: saturate(1.22) brightness(1.10) contrast(1.10) !important;
+}
+
+.lane[data-department="SURFACE"]::after {
+  background:
+    linear-gradient(180deg,
+      rgba(3,12,18,.05) 0%,
+      rgba(3,12,18,.08) 24%,
+      rgba(3,12,18,.13) 56%,
+      rgba(3,12,18,.22) 100%),
+    linear-gradient(90deg,
+      rgba(3,12,18,.14) 0%,
+      rgba(3,12,18,.05) 14%,
+      transparent 28%,
+      transparent 76%,
+      rgba(3,12,18,.05) 88%,
+      rgba(3,12,18,.12) 100%) !important;
+}
+
+/* AR — make the radar feel deliberate on the right-center */
+.lane[data-department="AR"]::before {
+  opacity: .62 !important;
+  background-size: 126% auto !important;
+  background-position: 72% 48% !important;
+  filter: saturate(1.16) brightness(1.10) contrast(1.08) !important;
+}
+
+.lane[data-department="AR"]::after {
+  background:
+    linear-gradient(180deg,
+      rgba(4,12,24,.05) 0%,
+      rgba(4,12,24,.08) 26%,
+      rgba(4,12,24,.14) 60%,
+      rgba(4,12,24,.22) 100%),
+    linear-gradient(90deg,
+      rgba(4,12,24,.16) 0%,
+      rgba(4,12,24,.06) 18%,
+      transparent 34%,
+      transparent 74%,
+      rgba(4,12,24,.04) 88%,
+      rgba(4,12,24,.10) 100%) !important;
+}
+
+/* FINISH — stronger purple streaks across the lower-right */
+.lane[data-department="FINISH"]::before {
+  opacity: .68 !important;
+  background-size: 132% auto !important;
+  background-position: 62% 58% !important;
+  filter: saturate(1.24) brightness(1.10) contrast(1.12) !important;
+}
+
+.lane[data-department="FINISH"]::after {
+  background:
+    linear-gradient(180deg,
+      rgba(12,10,22,.05) 0%,
+      rgba(12,10,22,.08) 24%,
+      rgba(12,10,22,.14) 56%,
+      rgba(12,10,22,.22) 100%),
+    linear-gradient(90deg,
+      rgba(12,10,22,.12) 0%,
+      rgba(12,10,22,.05) 16%,
+      transparent 32%,
+      transparent 74%,
+      rgba(12,10,22,.05) 88%,
+      rgba(12,10,22,.12) 100%) !important;
+}
+
+/* Cleaner row readability over the artwork */
+.lane__name,
+.lane__value,
+.lane__share,
+.station-row__name,
+.station-row__value,
+.station-row__meta,
+.lane__more {
+  text-shadow:
+    0 1px 0 rgba(0,0,0,.34),
+    0 0 10px rgba(2,8,16,.24) !important;
+}
+
+/* Slight edge glow so each department reads as a polished module */
+.lane[data-department="INVENTORY"] {
+  box-shadow: inset 0 0 0 1px rgba(65,181,255,.24), 0 0 22px rgba(65,181,255,.06) !important;
+}
+
+.lane[data-department="SURFACE"] {
+  box-shadow: inset 0 0 0 1px rgba(69,223,185,.26), 0 0 24px rgba(69,223,185,.07) !important;
+}
+
+.lane[data-department="AR"] {
+  box-shadow: inset 0 0 0 1px rgba(78,226,241,.24), 0 0 24px rgba(78,226,241,.07) !important;
+}
+
+.lane[data-department="FINISH"] {
+  box-shadow: inset 0 0 0 1px rgba(156,124,255,.26), 0 0 24px rgba(156,124,255,.08) !important;
+}
+
+/* Keep responsive behavior under control */
+@media (max-width: 1200px) {
+  .lane[data-department="INVENTORY"]::before { opacity: .42 !important; }
+  .lane[data-department="SURFACE"]::before   { opacity: .54 !important; }
+  .lane[data-department="AR"]::before        { opacity: .52 !important; }
+  .lane[data-department="FINISH"]::before    { opacity: .56 !important; }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V2.9 — FINAL DEPARTMENT IMAGE FIX
+   Department PNGs are now applied DIRECTLY to .lane backgrounds.
+   This bypasses older ::before / ::after conflicts entirely.
+   Top KPI cards are intentionally untouched.
+   ======================================================================== */
+
+/* Disable all decorative pseudo-image layers on the four live departments. */
+.lane[data-department="INVENTORY"]::before,
+.lane[data-department="SURFACE"]::before,
+.lane[data-department="AR"]::before,
+.lane[data-department="FINISH"]::before,
+.lane[data-department="INVENTORY"]::after,
+.lane[data-department="SURFACE"]::after,
+.lane[data-department="AR"]::after,
+.lane[data-department="FINISH"]::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+  background: none !important;
+}
+
+/* Base department card behavior. */
+.lane[data-department] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-blend-mode: normal !important;
+}
+
+/* INVENTORY — blueprint facility/logistics map. */
+.lane[data-department="INVENTORY"] {
+  background-image:
+    linear-gradient(180deg,
+      rgba(3,11,22,.06) 0%,
+      rgba(3,11,22,.10) 38%,
+      rgba(3,11,22,.18) 72%,
+      rgba(3,11,22,.24) 100%),
+    url("assets/lane-inventory-bg.png") !important;
+  background-position: center center !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(65,181,255,.26),
+    0 0 22px rgba(65,181,255,.06) !important;
+}
+
+/* SURFACE — teal process-flow artwork. */
+.lane[data-department="SURFACE"] {
+  background-image:
+    linear-gradient(180deg,
+      rgba(2,13,17,.04) 0%,
+      rgba(2,13,17,.08) 38%,
+      rgba(2,13,17,.14) 72%,
+      rgba(2,13,17,.20) 100%),
+    url("assets/lane-surface-bg.png") !important;
+  background-position: center center !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(69,223,185,.28),
+    0 0 24px rgba(69,223,185,.07) !important;
+}
+
+/* AR — cyan radar/HUD artwork. */
+.lane[data-department="AR"] {
+  background-image:
+    linear-gradient(180deg,
+      rgba(3,11,22,.04) 0%,
+      rgba(3,11,22,.08) 38%,
+      rgba(3,11,22,.14) 72%,
+      rgba(3,11,22,.20) 100%),
+    url("assets/lane-ar-bg.png") !important;
+  background-position: center center !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(78,226,241,.26),
+    0 0 24px rgba(78,226,241,.07) !important;
+}
+
+/* FINISH — purple precision energy artwork. */
+.lane[data-department="FINISH"] {
+  background-image:
+    linear-gradient(180deg,
+      rgba(8,6,18,.03) 0%,
+      rgba(8,6,18,.07) 38%,
+      rgba(8,6,18,.12) 72%,
+      rgba(8,6,18,.18) 100%),
+    url("assets/lane-finish-bg.png") !important;
+  background-position: center center !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(156,124,255,.30),
+    0 0 26px rgba(156,124,255,.08) !important;
+}
+
+/* Put live data cleanly over the artwork without masking the image. */
+.lane[data-department] .lane__head,
+.lane[data-department] .lane__stations,
+.lane[data-department] .lane__more,
+.lane[data-department] .lane__actions {
+  position: relative;
+  z-index: 2;
+}
+
+/* Only localized readability behind text rows — no full-card dark wash. */
+.lane[data-department] .station-row {
+  background:
+    linear-gradient(90deg,
+      rgba(2,8,16,.18) 0%,
+      rgba(2,8,16,.08) 48%,
+      rgba(2,8,16,.02) 100%) !important;
+  backdrop-filter: blur(.35px);
+  -webkit-backdrop-filter: blur(.35px);
+}
+
+.lane[data-department] .lane__head {
+  background:
+    linear-gradient(180deg,
+      rgba(2,8,16,.10),
+      rgba(2,8,16,.02)) !important;
+}
+
+.lane[data-department] .lane__more {
+  background:
+    linear-gradient(180deg,
+      rgba(5,16,28,.58),
+      rgba(3,11,22,.48)) !important;
+  backdrop-filter: blur(1.4px);
+  -webkit-backdrop-filter: blur(1.4px);
+}
+
+/* Keep all live values crisp. */
+.lane[data-department] .lane__name,
+.lane[data-department] .lane__value,
+.lane[data-department] .lane__share,
+.lane[data-department] .station-row__name,
+.lane[data-department] .station-row__desc,
+.lane[data-department] .station-row__value,
+.lane[data-department] .lane__more {
+  text-shadow:
+    0 1px 2px rgba(0,0,0,.65),
+    0 0 10px rgba(2,8,16,.38) !important;
+}
+
+/* Slight hover zoom adds life without hiding the art. */
+.lane[data-department] {
+  transition:
+    transform .22s ease,
+    box-shadow .22s ease,
+    border-color .22s ease,
+    background-size .6s ease;
+}
+
+.lane[data-department]:hover {
+  background-size: 104% auto !important;
+}
+
+/* Embedded mode: keep the artwork equally visible. */
+html.is-embedded .lane[data-department] {
+  background-size: cover !important;
+}
+
+@media (max-width: 1200px) {
+  .lane[data-department="INVENTORY"],
+  .lane[data-department="SURFACE"],
+  .lane[data-department="AR"],
+  .lane[data-department="FINISH"] {
+    background-size: cover !important;
+    background-position: center center !important;
+  }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V3.0 — BOTTLENECK COMMAND RAIL UPGRADE
+   Keeps all values, rank, severity, gauge and ordering dynamic from JS.
+   Visual-only update for the Current Bottlenecks block.
+   ======================================================================== */
+
+.bottleneck-panel {
+  position: relative;
+  min-height: 100%;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(88, 180, 220, .24);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(255, 191, 64, .08), transparent 28%),
+    radial-gradient(circle at 16% 10%, rgba(72, 210, 240, .08), transparent 26%),
+    linear-gradient(180deg, rgba(7, 20, 35, .96), rgba(4, 13, 24, .98));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    inset 0 0 0 1px rgba(67, 161, 204, .08),
+    0 18px 42px rgba(0,0,0,.18);
+}
+
+.bottleneck-panel::before,
+.bottleneck-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bottleneck-panel::before {
+  opacity: .44;
+  background:
+    radial-gradient(circle at 84% 16%, rgba(255,187,59,.18) 0 2px, transparent 3px),
+    radial-gradient(circle at 79% 22%, rgba(255,187,59,.10) 0 1px, transparent 2px),
+    radial-gradient(circle at 85% 18%, transparent 0 34px, rgba(255,187,59,.11) 35px 36px, transparent 37px 100%),
+    radial-gradient(circle at 85% 18%, transparent 0 56px, rgba(255,187,59,.07) 57px 58px, transparent 59px 100%),
+    linear-gradient(rgba(66, 155, 198, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(66, 155, 198, .03) 1px, transparent 1px);
+  background-size: auto, auto, auto, auto, 22px 22px, 22px 22px;
+}
+
+.bottleneck-panel::after {
+  background:
+    linear-gradient(135deg, transparent 0 63%, rgba(255, 194, 72, .06) 72%, transparent 83%),
+    linear-gradient(90deg, transparent 0%, rgba(73, 214, 239, .05) 14%, transparent 30%),
+    linear-gradient(180deg, rgba(255,255,255,.02), transparent 24%);
+  mix-blend-mode: screen;
+}
+
+.bottleneck-panel__head {
+  position: relative;
+  min-height: 58px;
+  padding: 0 12px 0 6px;
+  border-bottom: 1px solid rgba(86, 203, 239, .15);
+}
+
+.bottleneck-panel__head::after {
+  opacity: .75;
+  right: 4px;
+  width: 72px;
+  height: 8px;
+  border-radius: 20px;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(255,194,72,.95) 0 8px,
+      transparent 8px 12px);
+  box-shadow: 0 0 12px rgba(255,194,72,.15);
+}
+
+.bottleneck-panel__head h2 {
+  color: #e7f8fc;
+  font-size: .84rem;
+  letter-spacing: .12em;
+  text-shadow: 0 0 18px rgba(66, 214, 239, .08);
+}
+
+.bottleneck-panel__reticle {
+  border-color: rgba(79,226,241,.58);
+  box-shadow:
+    0 0 12px rgba(79,226,241,.16),
+    inset 0 0 0 1px rgba(79,226,241,.12);
+  animation: fwReticle 5.8s linear infinite;
+}
+
+.bottleneck-list {
+  position: relative;
+  z-index: 1;
+  gap: 11px;
+  padding: 12px 0 4px;
+}
+
+.bottleneck-card {
+  --severity: var(--fw-amber);
+  position: relative;
+  grid-template-columns: 36px minmax(0, 1fr) 68px;
+  min-height: 124px;
+  padding: 12px 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--severity) 42%, transparent);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 92% 20%, color-mix(in srgb, var(--severity) 14%, transparent), transparent 24%),
+    linear-gradient(180deg, rgba(8, 18, 32, .92), rgba(6, 15, 27, .95));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--severity) 7%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.018),
+    0 0 0 rgba(0,0,0,0);
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    background .18s ease;
+}
+
+.bottleneck-card--critical { --severity: #ff647a; }
+.bottleneck-card--high     { --severity: #ffbf43; }
+.bottleneck-card--medium   { --severity: #d7cf42; }
+
+.bottleneck-card::before,
+.bottleneck-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bottleneck-card::before {
+  opacity: .55;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.015), transparent 26%),
+    linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--severity) 5%, transparent) 16%, transparent 38%),
+    radial-gradient(circle at 86% 26%, color-mix(in srgb, var(--severity) 18%, transparent) 0 1px, transparent 2px),
+    radial-gradient(circle at 86% 26%, transparent 0 20px, color-mix(in srgb, var(--severity) 16%, transparent) 21px 22px, transparent 23px 100%);
+}
+
+.bottleneck-card::after {
+  opacity: .34;
+  background:
+    linear-gradient(100deg,
+      transparent 0%,
+      transparent 42%,
+      color-mix(in srgb, var(--severity) 12%, transparent) 50%,
+      transparent 58%,
+      transparent 100%);
+  transform: translateX(-120%);
+  animation: fwBottleneckSweep 7s ease-in-out infinite;
+}
+
+.bottleneck-card:nth-child(2)::after { animation-delay: -1.2s; }
+.bottleneck-card:nth-child(3)::after { animation-delay: -2.4s; }
+.bottleneck-card:nth-child(4)::after { animation-delay: -3.6s; }
+.bottleneck-card:nth-child(5)::after { animation-delay: -4.8s; }
+
+.bottleneck-card:hover {
+  transform: translateX(-2px);
+  border-color: color-mix(in srgb, var(--severity) 66%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--severity) 10%, transparent),
+    0 0 22px color-mix(in srgb, var(--severity) 10%, transparent);
+}
+
+.bottleneck-card__rank {
+  position: relative;
+  z-index: 1;
+  width: 31px;
+  height: 31px;
+  border-radius: 8px;
+  border: 1px solid var(--severity);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--severity) 16%, transparent),
+      color-mix(in srgb, var(--severity) 7%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  color: var(--severity);
+}
+
+.bottleneck-card__body {
+  position: relative;
+  z-index: 1;
+}
+
+.bottleneck-card__name {
+  color: #eff9fc;
+  font-size: .92rem;
+  line-height: 1.12;
+  text-shadow: 0 1px 0 rgba(0,0,0,.36);
+}
+
+.bottleneck-card__department,
+.bottleneck-card__share {
+  color: #8ca1b5;
+}
+
+.bottleneck-card__severity {
+  margin-top: 9px;
+  border: 1px solid color-mix(in srgb, var(--severity) 92%, transparent);
+  border-radius: 5px;
+  color: color-mix(in srgb, white 12%, var(--severity));
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--severity) 16%, transparent),
+      color-mix(in srgb, var(--severity) 8%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.bottleneck-card__share {
+  margin-top: 8px;
+}
+
+.bottleneck-card__gauge {
+  position: relative;
+  z-index: 1;
+  width: 64px;
+  height: 64px;
+  background:
+    radial-gradient(circle, rgba(7,17,30,.96) 57%, transparent 58%),
+    conic-gradient(var(--severity) var(--gauge), rgba(255,255,255,.08) 0);
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--severity) 18%, transparent),
+    inset 0 0 0 1px rgba(255,255,255,.04);
+  animation: fwGaugeBreath 3.8s ease-in-out infinite;
+}
+
+.bottleneck-card__gauge strong,
+.bottleneck-card__gauge span {
+  text-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+
+@keyframes fwBottleneckSweep {
+  0%, 18% { opacity: 0; transform: translateX(-125%); }
+  26%     { opacity: .24; }
+  50%     { opacity: .38; }
+  66%     { opacity: .16; }
+  80%, 100% { opacity: 0; transform: translateX(125%); }
+}
+
+@media (max-width: 900px) {
+  .bottleneck-card {
+    min-height: 112px;
+    grid-template-columns: 32px minmax(0, 1fr) 60px;
+    padding: 11px 9px;
+  }
+
+  .bottleneck-card__gauge {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+
+/* =========================================================
+   FACILITY WIP V3.1 — SUPPORT & OPERATIONS IMAGE UPGRADE
+   Built on the latest full Facility WIP CSS.
+   Keeps all live values and JS behavior unchanged.
+   Required assets in ./assets/:
+   - support-facility-map-bg.png
+   - support-breakage-bg.png
+   - support-customer-service-bg.png
+   - support-lms-bg.png
+   - support-incoming-bg.png
+   ========================================================= */
+
+.support-zone {
+  grid-template-columns: 280px minmax(0, 1fr) !important;
+  gap: 12px !important;
+  padding: 12px !important;
+  overflow: hidden;
+  border: 1px solid rgba(49, 176, 255, 0.22) !important;
+  border-radius: 18px !important;
+  background:
+    radial-gradient(circle at 16% 20%, rgba(46, 179, 255, .05), transparent 32%),
+    linear-gradient(180deg, rgba(8, 22, 39, 0.92), rgba(3, 12, 24, 0.96)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(100, 210, 255, 0.05),
+    0 18px 40px rgba(0, 0, 0, 0.24) !important;
+}
+
+.facility-map {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  min-height: 140px !important;
+  padding: 10px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(72, 181, 255, 0.28) !important;
+  background: rgba(4, 14, 27, .90) !important;
+  box-shadow:
+    inset 0 0 32px rgba(31, 135, 216, 0.1),
+    0 10px 28px rgba(0,0,0,.15) !important;
+}
+
+.facility-map::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(180deg, rgba(5, 17, 30, 0.05), rgba(3, 10, 20, 0.22)),
+    url("./assets/support-facility-map-bg.png");
+  background-position: 62% 58%;
+  background-size: 128% auto;
+  background-repeat: no-repeat;
+  opacity: .88;
+  filter: saturate(1.15) brightness(1.04) contrast(1.06);
+}
+
+.facility-map::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(4,12,22,.62) 0%, rgba(4,12,22,.18) 36%, rgba(4,12,22,.06) 100%),
+    linear-gradient(180deg, rgba(255,255,255,.015), transparent 42%, rgba(3,10,20,.24));
+}
+
+.facility-map__head,
+.facility-map__grid {
+  position: relative;
+  z-index: 2;
+}
+
+.facility-map__head {
+  color: #74d8ff !important;
+  text-shadow: 0 0 12px rgba(54, 210, 255, 0.3);
+}
+
+.facility-map__grid {
+  height: 96px !important;
+  margin-top: 10px !important;
+  opacity: .68;
+  border-color: rgba(56, 192, 255, 0.20) !important;
+  background:
+    linear-gradient(rgba(36, 239, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(36, 239, 255, 0.07) 1px, transparent 1px) !important;
+  background-size: 18px 18px !important;
+  box-shadow: inset 0 0 18px rgba(28, 139, 214, 0.18) !important;
+}
+
+.facility-map__grid i {
+  border-color: rgba(90, 229, 255, 0.72) !important;
+  background: rgba(52, 214, 255, 0.12) !important;
+  box-shadow: 0 0 10px rgba(46, 208, 255, 0.24) !important;
+}
+
+.support-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin: 0 !important;
+}
+
+.support-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  grid-template-rows: auto auto;
+  justify-content: start;
+  min-height: 140px !important;
+  padding: 20px 12px 14px 76px !important;
+  border-radius: 14px !important;
+  clip-path: none !important;
+  text-align: left;
+  border: 1px solid rgba(62, 168, 236, 0.22) !important;
+  background:
+    linear-gradient(150deg, rgba(6, 20, 34, 0.94), rgba(4, 14, 26, 0.96)) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(110, 211, 255, 0.04),
+    inset 0 0 34px rgba(17, 61, 100, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.18) !important;
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
+
+.support-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: .72;
+  mix-blend-mode: screen;
+  filter: saturate(1.10) brightness(1.02) contrast(1.05);
+  transition: transform .45s ease, opacity .35s ease;
+}
+
+.support-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+.support-card::before {
+  position: absolute;
+  left: 14px;
+  top: 20px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  font-size: 1.5rem;
+  background: rgba(6, 18, 30, 0.46);
+  box-shadow:
+    inset 0 0 14px color-mix(in srgb, currentColor 16%, transparent),
+    0 0 12px color-mix(in srgb, currentColor 10%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.support-card[data-department="BREAKAGE"]::before { content: "⚡"; }
+.support-card[data-department="CUSTOMER SERVICE"]::before { content: "◉"; }
+.support-card[data-department="LMS"]::before { content: "◆"; }
+.support-card[data-department="INCOMING QUEUES"]::before { content: "⇩"; }
+
+.support-card__name,
+.support-card__value {
+  position: relative;
+  z-index: 2;
+  text-shadow:
+    0 1px 0 rgba(0,0,0,.40),
+    0 0 14px rgba(0,0,0,.28);
+}
+
+.support-card__name {
+  grid-column: 2;
+  align-self: end;
+  color: #a7d5e7 !important;
+  font-size: .65rem;
+  letter-spacing: .16em;
+}
+
+.support-card__value {
+  grid-column: 2;
+  align-self: start;
+  color: #effbff;
+  font-size: 1.95rem !important;
+}
+
+.support-card[data-department="BREAKAGE"]::after {
+  background-image:
+    linear-gradient(90deg, rgba(8,16,27,.92) 0%, rgba(8,16,27,.68) 34%, rgba(8,16,27,.18) 100%),
+    url("./assets/support-breakage-bg.png");
+  background-position: 54% center;
+}
+
+.support-card[data-department="CUSTOMER SERVICE"]::after {
+  background-image:
+    linear-gradient(90deg, rgba(8,16,27,.92) 0%, rgba(8,16,27,.70) 34%, rgba(8,16,27,.16) 100%),
+    url("./assets/support-customer-service-bg.png");
+  background-position: 58% center;
+}
+
+.support-card[data-department="LMS"]::after {
+  background-image:
+    linear-gradient(90deg, rgba(8,16,27,.92) 0%, rgba(8,16,27,.70) 34%, rgba(8,16,27,.16) 100%),
+    url("./assets/support-lms-bg.png");
+  background-position: 64% center;
+}
+
+.support-card[data-department="INCOMING QUEUES"]::after {
+  background-image:
+    linear-gradient(90deg, rgba(8,16,27,.92) 0%, rgba(8,16,27,.68) 34%, rgba(8,16,27,.14) 100%),
+    url("./assets/support-incoming-bg.png");
+  background-position: 54% center;
+}
+
+.support-card--breakage {
+  color: #ffae40 !important;
+  border-color: rgba(255, 174, 64, 0.28) !important;
+}
+
+.support-card--customer-service {
+  color: #b7cdfa !important;
+  border-color: rgba(164, 196, 255, 0.24) !important;
+}
+
+.support-card--lms {
+  color: #73cfff !important;
+  border-color: rgba(102, 217, 255, 0.24) !important;
+}
+
+.support-card--incoming {
+  color: #51e2e9 !important;
+  border-color: rgba(64, 229, 255, 0.28) !important;
+}
+
+.support-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px rgba(110, 211, 255, 0.06),
+    inset 0 0 36px rgba(17, 61, 100, 0.16),
+    0 16px 34px rgba(0, 0, 0, 0.22) !important;
+}
+
+.support-card:hover::after {
+  transform: scale(1.035);
+  opacity: .84;
+}
+
+.system-footer {
+  gap: 4px !important;
+  margin-top: 7px !important;
+}
+
+.system-footer span {
+  min-height: 36px !important;
+  border: 1px solid rgba(68, 129, 166, 0.18) !important;
+  border-radius: 8px !important;
+  background:
+    linear-gradient(180deg, rgba(8,21,36,.72), rgba(5,15,27,.84)) !important;
+  color: #83b3c8 !important;
+}
+
+.system-footer span i {
+  box-shadow: 0 0 8px currentColor;
+  animation: fwSupportStatusPulse 2.6s ease-in-out infinite;
+}
+
+.system-footer span:nth-child(2) i { animation-delay: -.6s; }
+.system-footer span:nth-child(3) i { animation-delay: -1.2s; }
+.system-footer span:nth-child(4) i { animation-delay: -1.8s; }
+
+@keyframes fwSupportStatusPulse {
+  0%,100% { opacity: .58; transform: scale(.85); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@media (max-width: 1180px) {
+  .support-zone {
+    grid-template-columns: 1fr !important;
+  }
+
+  .support-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .support-strip {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support-card::after,
+  .system-footer span i {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* ========================================================================
+   FACILITY WIP V3.2 — SUPPORT IMAGE VISIBILITY FIX
+   The previous support pass buried the PNGs under ~90% dark gradients.
+   This final override applies the actual artwork directly to each card.
+   Live values remain untouched.
+   ======================================================================== */
+
+/* Facility map: direct image background */
+.facility-map {
+  background-image:
+    linear-gradient(90deg, rgba(4,12,22,.18), rgba(4,12,22,.04)),
+    url("./assets/support-facility-map-bg.png") !important;
+  background-size: cover !important;
+  background-position: center 58% !important;
+  background-repeat: no-repeat !important;
+}
+
+.facility-map::before {
+  display: none !important;
+}
+
+.facility-map::after {
+  background:
+    linear-gradient(180deg, rgba(3,10,18,.04), rgba(3,10,18,.16)) !important;
+  opacity: 1 !important;
+}
+
+.facility-map__grid {
+  opacity: .52;
+}
+
+/* Shared support card image treatment */
+.support-card {
+  background-color: #071525 !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center center !important;
+}
+
+/* Disable the old pseudo-image layer completely. */
+.support-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* BREAKAGE — orange damage/energy HUD */
+.support-card[data-department="BREAKAGE"] {
+  background-image:
+    linear-gradient(90deg,
+      rgba(5,13,23,.72) 0%,
+      rgba(5,13,23,.40) 38%,
+      rgba(5,13,23,.10) 76%,
+      rgba(5,13,23,.16) 100%),
+    url("./assets/support-breakage-bg.png") !important;
+  background-position: center center !important;
+}
+
+/* CUSTOMER SERVICE — blue communications HUD */
+.support-card[data-department="CUSTOMER SERVICE"] {
+  background-image:
+    linear-gradient(90deg,
+      rgba(5,13,23,.68) 0%,
+      rgba(5,13,23,.34) 40%,
+      rgba(5,13,23,.08) 76%,
+      rgba(5,13,23,.14) 100%),
+    url("./assets/support-customer-service-bg.png") !important;
+  background-position: 60% center !important;
+}
+
+/* LMS — cyan/purple network HUD */
+.support-card[data-department="LMS"] {
+  background-image:
+    linear-gradient(90deg,
+      rgba(5,13,23,.68) 0%,
+      rgba(5,13,23,.34) 40%,
+      rgba(5,13,23,.08) 76%,
+      rgba(5,13,23,.14) 100%),
+    url("./assets/support-lms-bg.png") !important;
+  background-position: 72% center !important;
+}
+
+/* INCOMING — teal flow/data channels */
+.support-card[data-department="INCOMING QUEUES"] {
+  background-image:
+    linear-gradient(90deg,
+      rgba(5,13,23,.68) 0%,
+      rgba(5,13,23,.32) 38%,
+      rgba(5,13,23,.06) 74%,
+      rgba(5,13,23,.12) 100%),
+    url("./assets/support-incoming-bg.png") !important;
+  background-position: center center !important;
+}
+
+/* Keep icons readable without covering the artwork */
+.support-card::before {
+  background: rgba(5,15,27,.52) !important;
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+}
+
+.support-card__name,
+.support-card__value {
+  text-shadow:
+    0 1px 0 rgba(0,0,0,.46),
+    0 0 12px rgba(3,10,18,.48) !important;
+}
+
+.support-card:hover {
+  background-size: 104% auto !important;
+}
+
+/* Keep the background visible at laptop widths too. */
+@media (max-width: 1200px) {
+  .support-card[data-department] {
+    background-size: cover !important;
+  }
+}

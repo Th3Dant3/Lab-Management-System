@@ -51,6 +51,20 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", e => {
     if (e.key === "Enter") login();
   });
+
+  // ── Zenni Horizon live command interactions ──
+  const body = document.body;
+  const authFields = [userEl, passwordEl].filter(Boolean);
+
+  authFields.forEach(field => {
+    field.addEventListener("focus", () => body.classList.add("auth-focus"));
+    field.addEventListener("blur", () => {
+      if (!authFields.some(el => el === document.activeElement)) {
+        body.classList.remove("auth-focus");
+      }
+    });
+  });
+
 });
 
 /**************************************************
@@ -60,17 +74,29 @@ function setMessage(text, type = "warning") {
   const wrap = document.getElementById("messageWrap");
   const el   = document.getElementById("message");
   if (!wrap || !el) return;
+
   wrap.classList.remove("warning", "success", "error");
   wrap.classList.add(type);
   el.textContent = text;
+
+  // Visual state only — does not change authentication logic.
+  document.body.classList.toggle("auth-success", type === "success");
+  document.body.classList.toggle("auth-error", type === "error");
 }
 
 function setLoading(isLoading) {
   const btn     = document.getElementById("loginBtn");
   const btnText = document.getElementById("loginBtnText");
   if (!btn || !btnText) return;
+
   btn.disabled        = isLoading;
   btnText.textContent = isLoading ? "Signing In..." : "Sign In";
+
+  // Drive the command-core animation from the real login state.
+  document.body.classList.toggle("auth-active", isLoading);
+  if (isLoading) {
+    document.body.classList.remove("auth-error", "auth-success");
+  }
 }
 
 function setProgress(pct) {

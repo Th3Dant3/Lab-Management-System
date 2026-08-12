@@ -1534,3 +1534,3592 @@ body.lms-loading * { cursor: none !important; }
     height: calc(100vh - 210px);
   }
 }
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V2 — HOMEPAGE UPGRADE
+   Visual standard aligned with the Zenni Horizon login.
+   Existing IDs, labels, pages, tabs, APIs and permission behavior remain intact.
+   ============================================================ */
+
+:root {
+  --cc-bg-0: #050b16;
+  --cc-bg-1: #07111f;
+  --cc-bg-2: #0a1424;
+  --cc-panel: rgba(9, 19, 36, 0.84);
+  --cc-panel-strong: rgba(10, 21, 40, 0.94);
+  --cc-card: rgba(12, 24, 44, 0.86);
+  --cc-card-hover: rgba(15, 31, 55, 0.94);
+
+  --cc-cyan: #42dce8;
+  --cc-cyan-2: #69eaf3;
+  --cc-purple: #8b63f6;
+  --cc-green: #46e3a2;
+  --cc-amber: #f5c84b;
+  --cc-red: #ff7385;
+
+  --cc-text: #eef7ff;
+  --cc-muted: #b7c5d8;
+  --cc-dim: #7487a1;
+
+  --cc-border: rgba(109, 164, 214, 0.12);
+  --cc-border-hi: rgba(80, 222, 236, 0.28);
+
+  --gold: var(--cc-cyan);
+  --steel: var(--cc-cyan);
+  --ice: var(--cc-cyan-2);
+  --green: var(--cc-green);
+  --orange: var(--cc-purple);
+  --violet: var(--cc-purple);
+  --t1: var(--cc-text);
+  --t2: var(--cc-muted);
+  --t3: var(--cc-dim);
+  --bg: var(--cc-bg-0);
+  --panel: #081321;
+  --card: #0c1829;
+  --hover: #10233a;
+  --border: var(--cc-border);
+  --border-md: rgba(109,164,214,.16);
+  --border-hi: var(--cc-border-hi);
+  --accent-cyan: var(--cc-cyan);
+}
+
+/* ---------- PAGE ENVIRONMENT ---------- */
+html {
+  background: var(--cc-bg-0);
+}
+
+body {
+  position: relative;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 34% 18%, rgba(52, 201, 225, 0.08), transparent 25%),
+    radial-gradient(circle at 78% 28%, rgba(139, 99, 246, 0.08), transparent 25%),
+    linear-gradient(180deg, var(--cc-bg-0) 0%, #06101c 46%, #050b13 100%);
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 68px 0 0 216px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::before {
+  opacity: .34;
+  background-image:
+    linear-gradient(rgba(80, 218, 232, .026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 218, 232, .026) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(circle at 50% 25%, #000 8%, rgba(0,0,0,.7) 42%, transparent 88%);
+  -webkit-mask-image: radial-gradient(circle at 50% 25%, #000 8%, rgba(0,0,0,.7) 42%, transparent 88%);
+  animation: ccGridDrift 24s linear infinite;
+}
+
+body::after {
+  background:
+    radial-gradient(circle at 40% 12%, rgba(66,220,232,.09), transparent 20%),
+    radial-gradient(circle at 74% 23%, rgba(139,99,246,.08), transparent 22%);
+  animation: ccAtmosphere 12s ease-in-out infinite alternate;
+}
+
+/* Legacy fullscreen hex animation is retired. */
+#page-bg-canvas { display: none !important; }
+
+/* ---------- TOP COMMAND / TELEMETRY BAR ---------- */
+.command-bar {
+  height: 78px;
+  background: rgba(5, 13, 26, 0.94);
+  border-bottom: 1px solid rgba(101, 174, 218, 0.13);
+  box-shadow: 0 10px 40px rgba(0,0,0,.22);
+  backdrop-filter: blur(18px);
+}
+
+.cb-brand {
+  min-width: 216px;
+  border-right: 1px solid rgba(101, 174, 218, 0.10);
+}
+
+.cb-brand-canvas {
+  display: none !important;
+}
+
+.cb-brand-text-over {
+  padding: 0 22px;
+}
+
+.cb-name {
+  color: #fff;
+  font-size: 15px;
+  letter-spacing: .12em;
+}
+
+.cb-sub {
+  color: var(--cc-cyan);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .19em;
+}
+
+.cb-metrics {
+  border-right: 1px solid rgba(101,174,218,.10);
+  gap: 0;
+}
+
+.cb-metric {
+  min-width: 0;
+  padding: 0 24px;
+  border-right: 1px solid rgba(101,174,218,.09);
+  background: transparent !important;
+  transition: background .18s ease, box-shadow .18s ease;
+}
+
+.cb-metric:hover {
+  background: rgba(66,220,232,.035) !important;
+}
+
+.cb-metric::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  height: 2px;
+  opacity: .55;
+  background: linear-gradient(90deg, transparent, var(--cc-cyan), transparent);
+}
+
+.cb-metric--facility::after {
+  background: linear-gradient(90deg, transparent, var(--cc-purple), transparent);
+}
+
+.cb-metric:nth-child(3)::after {
+  background: linear-gradient(90deg, transparent, var(--cc-green), transparent);
+}
+
+.cb-m-label {
+  color: #9fb2c9;
+  font-size: 9px;
+  letter-spacing: .16em;
+  margin-bottom: 4px;
+}
+
+.cb-m-val {
+  font-size: 29px;
+  color: var(--cc-text);
+  text-shadow: none;
+}
+
+.cb-m-val--gold,
+.cb-m-val--steel {
+  color: var(--cc-cyan);
+}
+
+.cb-m-val--orange {
+  color: #a98aff;
+}
+
+.cb-m-val--green {
+  color: var(--cc-green);
+}
+
+.cb-m-sub {
+  color: #8297af;
+  font-size: 9px;
+  letter-spacing: .03em;
+}
+
+.cb-sparkline {
+  height: 25px;
+  opacity: .28;
+}
+
+.cb-right {
+  padding: 0 18px;
+  gap: 13px;
+}
+
+.live-tag {
+  padding: 7px 10px;
+  border: 1px solid rgba(70,227,162,.18);
+  border-radius: 999px;
+  background: rgba(70,227,162,.055);
+  color: var(--cc-green);
+}
+
+.live-dot {
+  background: var(--cc-green);
+  box-shadow: 0 0 10px rgba(70,227,162,.85);
+}
+
+.cb-date {
+  color: #8398b2;
+}
+
+.cb-time {
+  color: #f4f9ff;
+  font-size: 15px;
+}
+
+.user-chip {
+  padding: 6px 10px;
+  border-color: rgba(89,176,224,.17);
+  border-radius: 12px;
+  background: rgba(24,48,76,.30);
+}
+
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(66,220,232,.88), rgba(139,99,246,.92));
+  box-shadow: 0 0 20px rgba(76,211,230,.14);
+}
+
+.user-role {
+  color: #8296ad;
+}
+
+.logout-btn {
+  color: #7890aa;
+}
+
+/* ---------- CLEAN GROUPED SIDEBAR ---------- */
+.section-nav {
+  top: 78px;
+  width: 216px;
+  min-height: calc(100vh - 78px);
+  padding: 18px 12px 26px;
+  gap: 5px;
+  background:
+    linear-gradient(180deg, rgba(7,17,31,.98), rgba(6,14,25,.98));
+  border-right: 1px solid rgba(103,169,211,.11);
+  box-shadow: 16px 0 50px rgba(0,0,0,.16);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(66,220,232,.15) transparent;
+}
+
+.nav-group-label {
+  padding: 13px 12px 6px;
+  color: #5d7189;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+}
+
+.nav-group-label:first-child {
+  padding-top: 2px;
+}
+
+.nav-item,
+.nav-item--anim,
+.nav-item--facility {
+  min-height: 48px;
+  width: 100%;
+  padding: 0 !important;
+  border: 1px solid transparent !important;
+  border-left: 1px solid transparent !important;
+  border-radius: 12px;
+  background: transparent !important;
+  overflow: hidden;
+  color: #8fa3bb;
+  transition:
+    color .18s ease,
+    background .18s ease,
+    border-color .18s ease,
+    transform .18s ease,
+    box-shadow .18s ease;
+}
+
+.nav-item:hover,
+.nav-item--anim:hover {
+  color: #e0edf8;
+  background: rgba(60,132,177,.065) !important;
+  border-color: rgba(86,173,220,.10) !important;
+  transform: translateX(2px);
+}
+
+.nav-item.active,
+.nav-item--anim.active {
+  color: #f4fbff !important;
+  background:
+    linear-gradient(90deg, rgba(66,220,232,.11), rgba(139,99,246,.055)) !important;
+  border-color: rgba(66,220,232,.20) !important;
+  box-shadow:
+    inset 3px 0 0 var(--cc-cyan),
+    0 8px 24px rgba(0,0,0,.12);
+}
+
+.nav-item--facility {
+  min-height: 62px;
+  margin-bottom: 2px;
+}
+
+.facility-nav-icon {
+  width: 34px;
+  height: 34px;
+  margin-left: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 10px;
+  color: var(--cc-cyan);
+  border: 1px solid rgba(66,220,232,.22);
+  background: rgba(66,220,232,.07);
+  box-shadow: inset 0 0 16px rgba(66,220,232,.04);
+}
+
+.facility-nav-copy {
+  padding: 11px 10px;
+}
+
+.facility-nav-copy strong {
+  color: inherit;
+  font-size: 12px;
+  letter-spacing: .05em;
+}
+
+.facility-nav-copy span {
+  color: #6f839b;
+  font-size: 8px;
+  margin-top: 2px;
+}
+
+.nav-canvas {
+  display: none !important;
+}
+
+.nav-canvas-wrap {
+  width: 100%;
+}
+
+.nav-label-row {
+  min-height: 48px;
+  padding: 0 13px;
+  border-top: 0;
+  color: inherit;
+  gap: 11px;
+  font-size: 11px;
+  letter-spacing: .075em;
+}
+
+.nav-icon {
+  width: 16px;
+  height: 16px;
+  opacity: .78;
+  color: var(--cc-cyan);
+}
+
+.nav-item.active .nav-icon,
+.nav-item--anim.active .nav-icon {
+  stroke: var(--cc-cyan) !important;
+  opacity: 1;
+}
+
+.nav-item.active .nav-label-row,
+.nav-item--anim.active .nav-label-row {
+  color: #f4fbff !important;
+}
+
+/* ---------- MAIN WORKSPACE ---------- */
+.main {
+  position: relative;
+  z-index: 1;
+  margin-left: 216px;
+  padding: 32px 32px 68px;
+  min-height: calc(100vh - 78px);
+}
+
+.tab-content {
+  position: relative;
+  z-index: 1;
+}
+
+.module-head {
+  margin-bottom: 18px;
+}
+
+.module-label {
+  color: #bdcada;
+  font-size: 11px;
+  letter-spacing: .16em;
+}
+
+.module-label::before {
+  width: 24px;
+  height: 2px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--cc-cyan), var(--cc-purple));
+  box-shadow: 0 0 10px rgba(66,220,232,.24);
+}
+
+/* ---------- COMMAND CARDS ---------- */
+.cards-grid {
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+#operations .cards-grid {
+  grid-template-columns: minmax(380px, 1.18fr) repeat(2, minmax(300px, 1fr));
+}
+
+.card {
+  min-width: 0;
+  min-height: 228px;
+  border-radius: 18px;
+  border: 1px solid rgba(104,160,206,.13);
+  background:
+    linear-gradient(145deg, rgba(13,27,49,.88), rgba(8,18,34,.93));
+  box-shadow:
+    0 18px 48px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.025);
+  backdrop-filter: blur(12px);
+  transform: none !important;
+  transition:
+    border-color .22s ease,
+    box-shadow .22s ease,
+    background .22s ease,
+    translate .22s ease !important;
+}
+
+.card:hover {
+  transform: none !important;
+  translate: 0 -3px;
+  border-color: rgba(66,220,232,.25);
+  background:
+    linear-gradient(145deg, rgba(16,34,59,.94), rgba(9,21,39,.96));
+  box-shadow:
+    0 24px 58px rgba(0,0,0,.30),
+    0 0 28px rgba(66,220,232,.045),
+    inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.card--featured,
+#investigation-card {
+  border-color: rgba(66,220,232,.24);
+  background:
+    radial-gradient(circle at 13% 2%, rgba(66,220,232,.075), transparent 30%),
+    linear-gradient(145deg, rgba(14,31,55,.94), rgba(8,19,36,.96));
+}
+
+#investigation-card::after {
+  content: "LIVE WORKFLOW";
+  position: absolute;
+  right: 18px;
+  bottom: 15px;
+  color: rgba(66,220,232,.34);
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .18em;
+}
+
+.card-accent {
+  height: 2px;
+  opacity: .75;
+  background: linear-gradient(90deg, var(--cc-cyan), rgba(139,99,246,.55), transparent 88%);
+}
+
+.card-accent--violet {
+  background: linear-gradient(90deg, var(--cc-purple), rgba(66,220,232,.38), transparent 88%);
+}
+
+.card-accent--green {
+  background: linear-gradient(90deg, var(--cc-green), rgba(66,220,232,.35), transparent 88%);
+}
+
+.card-accent--amber {
+  background: linear-gradient(90deg, var(--cc-amber), rgba(139,99,246,.25), transparent 88%);
+}
+
+.card-inner {
+  padding: 24px 24px 22px;
+  gap: 18px;
+}
+
+.card-title {
+  color: #f3f8ff;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.card-desc {
+  color: #aebed0;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.card-bg-canvas,
+.card-particle-canvas,
+.card-sheen {
+  display: none !important;
+}
+
+.badge {
+  border: 1px solid rgba(94,159,207,.16);
+  background: rgba(89,142,187,.08);
+  color: #9db4cb;
+}
+
+.badge--lms-live,
+.badge--inventory,
+.badge--productivity {
+  color: var(--cc-green);
+  background: rgba(70,227,162,.08);
+  border-color: rgba(70,227,162,.20);
+}
+
+.badge--lms,
+.badge--quality {
+  color: var(--cc-cyan);
+  background: rgba(66,220,232,.07);
+  border-color: rgba(66,220,232,.18);
+}
+
+.badge--engineering,
+.badge--training {
+  color: var(--cc-amber);
+  background: rgba(245,200,75,.07);
+  border-color: rgba(245,200,75,.18);
+}
+
+.badge--violet {
+  color: #b69cff;
+  background: rgba(139,99,246,.08);
+  border-color: rgba(139,99,246,.20);
+}
+
+/* Metrics inside featured cards */
+.card-metrics {
+  border: 1px solid rgba(104,160,206,.11);
+  border-radius: 14px;
+  background: rgba(4,12,25,.32);
+}
+
+.metric-val {
+  color: #edf8ff;
+  font-size: 23px;
+}
+
+.metric-lbl {
+  color: #879ab0;
+  letter-spacing: .09em;
+}
+
+.metric-divider {
+  background: rgba(114,159,196,.10);
+}
+
+.card-tags .tag,
+.tag {
+  background: rgba(73,108,145,.08);
+  border-color: rgba(99,151,197,.13);
+  color: #9eb1c5;
+}
+
+/* Actions */
+.card-btn {
+  min-height: 38px;
+  width: fit-content;
+  padding: 0 17px;
+  border: 1px solid rgba(66,220,232,.20);
+  border-radius: 11px;
+  background: linear-gradient(110deg, rgba(66,220,232,.92), rgba(92,140,246,.92));
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(48,177,213,.12);
+  font-weight: 700;
+}
+
+.card-btn:hover {
+  box-shadow:
+    0 10px 30px rgba(48,177,213,.20),
+    0 0 18px rgba(66,220,232,.10);
+  filter: brightness(1.06);
+}
+
+.card-btn--violet {
+  border-color: rgba(139,99,246,.25);
+  background: linear-gradient(110deg, #6d82ee, var(--cc-purple));
+  color: #fff;
+}
+
+.card-btn--green {
+  border-color: rgba(70,227,162,.22);
+  background: linear-gradient(110deg, #36cf9c, #45bdda);
+  color: #041810;
+}
+
+.card-btn--amber {
+  border-color: rgba(245,200,75,.24);
+  background: linear-gradient(110deg, #dcae3c, #d78342);
+  color: #160e00;
+}
+
+/* ---------- FACILITY WIP EMBED ---------- */
+.facility-home {
+  background: transparent;
+}
+
+.facility-home__head {
+  padding: 2px 2px 18px;
+}
+
+.facility-home__head span {
+  color: var(--cc-cyan);
+}
+
+.facility-home__head h1 {
+  color: #eff8ff;
+}
+
+.facility-home__status {
+  color: var(--cc-green);
+  border-color: rgba(70,227,162,.17);
+  background: rgba(70,227,162,.05);
+}
+
+.facility-home__status i {
+  background: var(--cc-green);
+  box-shadow: 0 0 10px rgba(70,227,162,.8);
+}
+
+.facility-home__frame-shell {
+  border: 1px solid rgba(100,164,207,.13);
+  border-radius: 18px;
+  background: rgba(7,17,31,.70);
+  box-shadow: 0 24px 70px rgba(0,0,0,.20);
+  overflow: hidden;
+}
+
+/* ---------- LOADER: SAME FUNCTION, NEW VISUAL LANGUAGE ---------- */
+.lms-loader {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(66,220,232,.10), transparent 28%),
+    radial-gradient(circle at 60% 60%, rgba(139,99,246,.09), transparent 28%),
+    #050b16;
+}
+
+.loader-brand {
+  color: #f3f9ff;
+}
+
+.loader-sub,
+.loader-status,
+.loader-pct {
+  color: #8295ac;
+}
+
+.loader-fill-gold,
+.loader-fill-cyan {
+  background: linear-gradient(90deg, var(--cc-cyan), var(--cc-purple)) !important;
+}
+
+.ldt.active {
+  color: var(--cc-cyan);
+  border-color: rgba(66,220,232,.28);
+  background: rgba(66,220,232,.07);
+}
+
+/* ---------- MOTION: INFORMATIONAL, NOT DECORATIVE ---------- */
+.live-dot,
+.badge--lms-live::before,
+.facility-home__status i {
+  animation: ccLivePulse 2.4s ease-in-out infinite;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,.035) 48%, transparent 70%);
+  transform: translateX(-25%);
+  transition: opacity .22s ease;
+}
+
+.card:hover::before {
+  opacity: 1;
+  animation: ccCardSweep 1.2s ease-out 1;
+}
+
+/* ---------- MID-DESKTOP ---------- */
+@media (max-width: 1600px) {
+  .command-bar { height: 74px; }
+  .section-nav { top: 74px; min-height: calc(100vh - 74px); width: 204px; }
+  .main { margin-left: 204px; padding: 28px 26px 60px; }
+  body::before, body::after { inset: 74px 0 0 204px; }
+
+  .cb-brand { min-width: 204px; }
+  .cb-metric { padding: 0 18px; }
+  .cb-m-val { font-size: 26px; }
+
+  #operations .cards-grid {
+    grid-template-columns: minmax(340px, 1.12fr) repeat(2, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 1366px) {
+  .cb-brand { min-width: 188px; }
+  .cb-brand-text-over { padding: 0 16px; }
+  .cb-metric { padding: 0 14px; }
+  .cb-m-val { font-size: 24px; }
+  .cb-right { gap: 8px; padding: 0 10px; }
+  .live-tag { display: none; }
+  .user-chip { padding: 5px 8px; }
+
+  .section-nav { width: 188px; }
+  .main { margin-left: 188px; padding: 24px 22px 54px; }
+  body::before, body::after { left: 188px; }
+
+  #operations .cards-grid {
+    grid-template-columns: repeat(2, minmax(300px, 1fr));
+  }
+  #investigation-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1100px) {
+  .command-bar {
+    height: 72px;
+  }
+
+  .cb-brand {
+    min-width: 72px;
+    width: 72px;
+  }
+  .cb-name { font-size: 11px; }
+  .cb-sub { display: none; }
+  .cb-brand-text-over { padding: 0 11px; }
+
+  .cb-right .cb-datetime { display: none; }
+  .user-info { display: none; }
+
+  .section-nav {
+    top: 72px;
+    width: 72px;
+    min-height: calc(100vh - 72px);
+    padding: 14px 8px;
+  }
+
+  .nav-group-label,
+  .facility-nav-copy,
+  .nav-label-row span {
+    display: none;
+  }
+
+  .nav-item,
+  .nav-item--anim,
+  .nav-item--facility {
+    min-height: 50px;
+    display: grid;
+    place-items: center;
+  }
+
+  .facility-nav-icon {
+    margin: 0;
+  }
+
+  .nav-label-row {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .main {
+    margin-left: 72px;
+    padding: 22px 18px 50px;
+  }
+
+  body::before,
+  body::after {
+    inset: 72px 0 0 72px;
+  }
+
+  .cards-grid,
+  #operations .cards-grid {
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .command-bar {
+    position: relative;
+    height: auto;
+    min-height: 68px;
+    flex-wrap: wrap;
+  }
+
+  .cb-brand {
+    width: 50%;
+    min-width: 0;
+    min-height: 62px;
+  }
+
+  .cb-right {
+    width: 50%;
+    justify-content: flex-end;
+    min-height: 62px;
+    order: 2;
+  }
+
+  .cb-metrics {
+    order: 3;
+    width: 100%;
+    flex-basis: 100%;
+    min-height: 64px;
+    border-top: 1px solid rgba(101,174,218,.09);
+  }
+
+  .cb-metric {
+    padding: 10px 12px;
+  }
+
+  .cb-m-val {
+    font-size: 21px;
+  }
+
+  .cb-m-sub,
+  .cb-sparkline {
+    display: none;
+  }
+
+  .section-nav {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+    gap: 6px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(103,169,211,.11);
+  }
+
+  .nav-group-label {
+    display: none;
+  }
+
+  .nav-item,
+  .nav-item--anim,
+  .nav-item--facility {
+    flex: 0 0 48px;
+    width: 48px;
+    min-height: 46px;
+    margin: 0;
+  }
+
+  .main {
+    margin-left: 0;
+    padding: 18px 14px 42px;
+  }
+
+  body::before,
+  body::after {
+    inset: 126px 0 0 0;
+  }
+
+  .cards-grid,
+  #operations .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #investigation-card {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .cb-metrics {
+    grid-template-columns: repeat(3, minmax(0,1fr));
+  }
+
+  .cb-m-label {
+    font-size: 7px;
+  }
+
+  .cb-m-val {
+    font-size: 18px;
+  }
+
+  .user-chip {
+    background: transparent;
+    border: 0;
+  }
+
+  .card-inner {
+    padding: 20px 18px;
+  }
+
+  .card {
+    min-height: 210px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after,
+  .live-dot,
+  .badge--lms-live::before,
+  .facility-home__status i,
+  .card:hover::before {
+    animation: none !important;
+  }
+
+  .card,
+  .nav-item,
+  .nav-item--anim {
+    transition: none !important;
+  }
+}
+
+@keyframes ccGridDrift {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 52px 52px, 52px 52px; }
+}
+
+@keyframes ccAtmosphere {
+  from { opacity: .70; transform: translate3d(-.5%,0,0); }
+  to   { opacity: 1; transform: translate3d(.8%,.5%,0); }
+}
+
+@keyframes ccLivePulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: .50; transform: scale(.82); }
+}
+
+@keyframes ccCardSweep {
+  from { transform: translateX(-45%); }
+  to   { transform: translateX(55%); }
+}
+
+
+/* Visual helpers migrated out of index.html */
+.card--training {
+  border-color: rgba(245,200,75,.16);
+}
+
+.wip-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--cc-amber);
+  opacity: .72;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* Custom cursor retired; native cursor is faster and less distracting. */
+.lms-cursor {
+  display: none !important;
+}
+
+
+/* ============================================================
+   FACILITY HOME — COMPACT EMBED
+   Removes the redundant homepage Facility WIP heading and gives
+   the embedded WIP / Incoming KPI view the reclaimed vertical space.
+   ============================================================ */
+.facility-home__head {
+  display: none !important;
+}
+
+.facility-home {
+  padding-top: 10px;
+}
+
+.facility-home__frame-shell {
+  height: calc(100vh - 104px);
+  min-height: 720px;
+}
+
+@media (max-width: 1600px) {
+  .facility-home__frame-shell {
+    height: calc(100vh - 98px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .facility-home__frame-shell {
+    height: calc(100vh - 96px);
+    min-height: 660px;
+  }
+}
+
+@media (max-width: 760px) {
+  .facility-home {
+    padding-top: 6px;
+  }
+
+  .facility-home__frame-shell {
+    height: calc(100vh - 150px);
+    min-height: 620px;
+  }
+}
+
+
+/* ============================================================
+   TOP TELEMETRY — REMOVE REDUNDANT FACILITY WIP KPI
+   Facility WIP is already the active page and is displayed inside
+   the embedded Facility WIP command center.
+   ============================================================ */
+.cb-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.cb-metric {
+  min-width: 0;
+}
+
+.cb-metric:nth-child(2)::after {
+  background: linear-gradient(90deg, transparent, var(--cc-green), transparent);
+}
+
+/* Keep both remaining KPIs visible at compact widths. */
+@media (max-width: 600px) {
+  .cb-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .cb-metric:last-child {
+    display: flex !important;
+  }
+}
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V3 — LIVE WORKSPACE ENVIRONMENT
+   Fills the empty workspace with a visible but professional
+   animated optical/data background. No HTML or JS changes needed.
+   ============================================================ */
+
+/* The workspace itself becomes the animation stage. */
+.main {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 52% 20%, rgba(48, 205, 228, .035), transparent 30%),
+    radial-gradient(circle at 78% 54%, rgba(124, 86, 241, .035), transparent 34%);
+}
+
+.main > .tab-content {
+  position: relative;
+  z-index: 3;
+}
+
+/* Moving technical floor / network field. */
+.main::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  left: 216px;
+  right: 0;
+  top: 78px;
+  bottom: 0;
+  pointer-events: none;
+
+  background:
+    /* active data nodes */
+    radial-gradient(circle at 18% 24%, rgba(93,232,246,.70) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 34% 62%, rgba(93,232,246,.48) 0 1px, transparent 2.4px),
+    radial-gradient(circle at 47% 32%, rgba(166,119,255,.54) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 62% 74%, rgba(93,232,246,.54) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 77% 38%, rgba(166,119,255,.55) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 88% 68%, rgba(93,232,246,.42) 0 1px, transparent 2.5px),
+
+    /* faint network corridors */
+    linear-gradient(115deg, transparent 0 21%, rgba(75,214,233,.035) 21.1% 21.2%, transparent 21.3% 100%),
+    linear-gradient(62deg, transparent 0 38%, rgba(139,99,246,.030) 38.1% 38.2%, transparent 38.3% 100%),
+
+    /* command grid */
+    linear-gradient(rgba(75,214,233,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(75,214,233,.035) 1px, transparent 1px);
+
+  background-size:
+    auto, auto, auto, auto, auto, auto,
+    100% 100%, 100% 100%,
+    54px 54px, 54px 54px;
+
+  opacity: .58;
+  mask-image: radial-gradient(ellipse at 60% 42%, #000 6%, rgba(0,0,0,.92) 45%, rgba(0,0,0,.38) 82%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse at 60% 42%, #000 6%, rgba(0,0,0,.92) 45%, rgba(0,0,0,.38) 82%, transparent 100%);
+
+  animation:
+    ccWorkspaceGrid 16s linear infinite,
+    ccWorkspaceNodes 7s ease-in-out infinite alternate;
+}
+
+/* Optical command core / radar atmosphere. */
+.main::after {
+  content: "";
+  position: fixed;
+  z-index: 1;
+  width: min(760px, 48vw);
+  aspect-ratio: 1;
+  left: calc(216px + 54%);
+  top: 57%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 50%;
+
+  background:
+    /* center energy */
+    radial-gradient(circle,
+      rgba(72,221,237,.10) 0 5%,
+      transparent 5.5% 13%,
+      rgba(72,221,237,.07) 13.2% 13.7%,
+      transparent 14% 23%,
+      rgba(139,99,246,.065) 23.2% 23.7%,
+      transparent 24% 34%,
+      rgba(72,221,237,.055) 34.2% 34.6%,
+      transparent 35% 47%,
+      rgba(139,99,246,.045) 47.2% 47.6%,
+      transparent 48% 100%),
+
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(72,221,237,.085) 0deg 1.5deg,
+      transparent 1.5deg 13deg,
+      rgba(139,99,246,.055) 13deg 14deg,
+      transparent 14deg 28deg
+    );
+
+  filter:
+    drop-shadow(0 0 42px rgba(49,208,228,.07))
+    drop-shadow(0 0 80px rgba(139,99,246,.05));
+
+  opacity: .62;
+  animation:
+    ccWorkspaceOrbit 32s linear infinite,
+    ccWorkspaceCorePulse 6s ease-in-out infinite;
+}
+
+/* Active tab gets its own atmospheric wash over the empty space. */
+.tab-content.active::before,
+.tab-content.active::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* broad color atmosphere */
+.tab-content.active::before {
+  left: 216px;
+  right: 0;
+  top: 78px;
+  bottom: 0;
+  background:
+    radial-gradient(circle at 33% 20%, rgba(66,220,232,.10), transparent 27%),
+    radial-gradient(circle at 78% 28%, rgba(139,99,246,.08), transparent 29%),
+    radial-gradient(circle at 58% 88%, rgba(43,159,210,.055), transparent 30%);
+  filter: blur(10px);
+  opacity: .68;
+  animation: ccWorkspaceAtmosphere 10s ease-in-out infinite alternate;
+}
+
+/* moving telemetry beam */
+.tab-content.active::after {
+  left: 216px;
+  right: 0;
+  height: 2px;
+  top: 16%;
+  opacity: 0;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(65,218,234,.05) 14%,
+      rgba(103,237,248,.52) 49%,
+      rgba(139,99,246,.22) 72%,
+      transparent 100%);
+  box-shadow:
+    0 0 10px rgba(65,218,234,.24),
+    0 0 24px rgba(65,218,234,.08);
+  animation: ccWorkspaceScan 8s ease-in-out infinite;
+}
+
+/* Different areas get a restrained identity without changing labels. */
+.main:has(#production.active) .tab-content.active::before {
+  background:
+    radial-gradient(circle at 34% 18%, rgba(66,220,232,.12), transparent 28%),
+    radial-gradient(circle at 76% 30%, rgba(139,99,246,.10), transparent 30%),
+    radial-gradient(circle at 54% 84%, rgba(65,218,234,.06), transparent 30%);
+}
+
+.main:has(#inventory.active) .tab-content.active::before {
+  background:
+    radial-gradient(circle at 28% 22%, rgba(70,227,162,.10), transparent 28%),
+    radial-gradient(circle at 78% 32%, rgba(66,220,232,.08), transparent 30%),
+    radial-gradient(circle at 58% 86%, rgba(70,227,162,.045), transparent 30%);
+}
+
+.main:has(#productivity.active) .tab-content.active::before {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(66,220,232,.10), transparent 28%),
+    radial-gradient(circle at 80% 28%, rgba(139,99,246,.11), transparent 32%),
+    radial-gradient(circle at 58% 86%, rgba(139,99,246,.05), transparent 32%);
+}
+
+.main:has(#training.active) .tab-content.active::before {
+  background:
+    radial-gradient(circle at 30% 18%, rgba(245,200,75,.075), transparent 26%),
+    radial-gradient(circle at 78% 26%, rgba(139,99,246,.08), transparent 30%),
+    radial-gradient(circle at 58% 84%, rgba(245,200,75,.035), transparent 30%);
+}
+
+.main:has(#system.active) .tab-content.active::before {
+  background:
+    radial-gradient(circle at 30% 18%, rgba(139,99,246,.11), transparent 28%),
+    radial-gradient(circle at 78% 30%, rgba(66,220,232,.08), transparent 30%);
+}
+
+/* Cards now visually belong to the animated environment instead of floating on black. */
+.card {
+  box-shadow:
+    0 18px 48px rgba(0,0,0,.24),
+    0 0 0 1px rgba(75,166,218,.018),
+    inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+.card:hover {
+  box-shadow:
+    0 24px 58px rgba(0,0,0,.32),
+    0 0 36px rgba(66,220,232,.055),
+    inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+/* Very faint lower vignette keeps the animation from looking like wallpaper. */
+.main .tab-content.active {
+  min-height: calc(100vh - 142px);
+}
+
+/* Keep the Facility iframe clean; it already fills its workspace. */
+#facility.active::before,
+#facility.active::after {
+  display: none;
+}
+
+.main:has(#facility.active)::after {
+  opacity: .08;
+}
+
+/* Medium desktop alignment */
+@media (max-width: 1600px) {
+  .main::before,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 204px;
+  }
+
+  .main::after {
+    left: calc(204px + 54%);
+    width: min(680px, 50vw);
+  }
+}
+
+@media (max-width: 1366px) {
+  .main::before,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 188px;
+  }
+
+  .main::after {
+    left: calc(188px + 54%);
+    width: min(600px, 52vw);
+  }
+}
+
+@media (max-width: 1100px) {
+  .main::before,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 72px;
+    top: 72px;
+  }
+
+  .main::after {
+    left: calc(72px + 54%);
+    width: min(540px, 58vw);
+  }
+}
+
+@media (max-width: 760px) {
+  .main::before,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 0;
+    top: 126px;
+  }
+
+  .main::after {
+    left: 56%;
+    width: 520px;
+    opacity: .34;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main::before,
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    animation: none !important;
+  }
+}
+
+/* ---------- V3 MOTION ---------- */
+@keyframes ccWorkspaceGrid {
+  from {
+    background-position:
+      0 0, 0 0, 0 0, 0 0, 0 0, 0 0,
+      0 0, 0 0,
+      0 0, 0 0;
+  }
+  to {
+    background-position:
+      8px -6px, -6px 8px, 5px -7px, -8px -5px, 6px 7px, -7px 6px,
+      0 0, 0 0,
+      54px 54px, 54px 54px;
+  }
+}
+
+@keyframes ccWorkspaceNodes {
+  from { opacity: .38; filter: brightness(.92); }
+  to   { opacity: .68; filter: brightness(1.15); }
+}
+
+@keyframes ccWorkspaceOrbit {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes ccWorkspaceCorePulse {
+  0%,100% { opacity: .44; filter: drop-shadow(0 0 38px rgba(49,208,228,.06)); }
+  50%     { opacity: .68; filter: drop-shadow(0 0 54px rgba(49,208,228,.10)); }
+}
+
+@keyframes ccWorkspaceAtmosphere {
+  from { opacity: .50; transform: translate3d(-.7%, -.4%, 0) scale(.99); }
+  to   { opacity: .78; transform: translate3d(.8%, .5%, 0) scale(1.025); }
+}
+
+@keyframes ccWorkspaceScan {
+  0%, 8% {
+    top: 16%;
+    opacity: 0;
+  }
+  16% {
+    opacity: .62;
+  }
+  68% {
+    opacity: .28;
+  }
+  84%,100% {
+    top: 88%;
+    opacity: 0;
+  }
+}
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V4 — PRODUCTION NETWORK BACKGROUND
+   Replaces the large radar wheel with a distributed manufacturing
+   data network that visually supports Inventory → Surface → AR → Finish.
+   ============================================================ */
+
+/* Remove the centralized radar/core visual from V3. */
+.main::after {
+  content: "";
+  position: fixed;
+  z-index: 1;
+  left: 216px;
+  right: 0;
+  top: 78px;
+  bottom: 0;
+  width: auto;
+  aspect-ratio: auto;
+  transform: none;
+  border-radius: 0;
+  pointer-events: none;
+
+  background:
+    /* major hub glows */
+    radial-gradient(circle at 18% 70%, rgba(72,226,240,.16) 0 5px, rgba(72,226,240,.08) 6px 16px, transparent 18px),
+    radial-gradient(circle at 34% 58%, rgba(72,226,240,.18) 0 5px, rgba(72,226,240,.08) 6px 17px, transparent 19px),
+    radial-gradient(circle at 53% 66%, rgba(72,226,240,.18) 0 5px, rgba(72,226,240,.07) 6px 17px, transparent 19px),
+    radial-gradient(circle at 72% 54%, rgba(151,105,255,.20) 0 5px, rgba(151,105,255,.08) 6px 17px, transparent 19px),
+    radial-gradient(circle at 86% 68%, rgba(151,105,255,.18) 0 5px, rgba(151,105,255,.07) 6px 17px, transparent 19px),
+
+    /* secondary network nodes */
+    radial-gradient(circle at 25% 80%, rgba(92,235,247,.70) 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 76%, rgba(92,235,247,.52) 0 2px, transparent 3px),
+    radial-gradient(circle at 61% 81%, rgba(92,235,247,.55) 0 2px, transparent 3px),
+    radial-gradient(circle at 79% 77%, rgba(171,127,255,.58) 0 2px, transparent 3px),
+    radial-gradient(circle at 92% 58%, rgba(171,127,255,.48) 0 2px, transparent 3px),
+
+    /* faint atmospheric depth */
+    radial-gradient(circle at 38% 64%, rgba(66,220,232,.055), transparent 28%),
+    radial-gradient(circle at 77% 61%, rgba(139,99,246,.065), transparent 30%);
+
+  filter:
+    drop-shadow(0 0 24px rgba(66,220,232,.06))
+    drop-shadow(0 0 50px rgba(139,99,246,.04));
+
+  opacity: .74;
+  animation: ccNetworkBreath 7s ease-in-out infinite alternate;
+}
+
+/* Distributed production routes layered across the empty workspace. */
+.main .tab-content.active::marker {
+  content: "";
+}
+
+.main {
+  --network-cyan: rgba(72,226,240,.12);
+  --network-purple: rgba(151,105,255,.10);
+}
+
+/* Route canvas using pseudo-layer on active tab */
+.tab-content.active {
+  position: relative;
+}
+
+.tab-content.active > * {
+  position: relative;
+  z-index: 3;
+}
+
+.tab-content.active .module-head,
+.tab-content.active .cards-grid {
+  position: relative;
+  z-index: 4;
+}
+
+/* Network line layer */
+.tab-content.active::before {
+  left: 216px;
+  right: 0;
+  top: 78px;
+  bottom: 0;
+  filter: none;
+  opacity: .90;
+
+  background:
+    /* route 1 */
+    linear-gradient(11deg,
+      transparent 0 16%,
+      rgba(72,226,240,.055) 16.2% 16.35%,
+      transparent 16.5% 100%),
+
+    /* route 2 */
+    linear-gradient(-8deg,
+      transparent 0 28%,
+      rgba(72,226,240,.050) 28.2% 28.35%,
+      transparent 28.5% 100%),
+
+    /* route 3 */
+    linear-gradient(16deg,
+      transparent 0 44%,
+      rgba(151,105,255,.050) 44.2% 44.35%,
+      transparent 44.5% 100%),
+
+    /* route 4 */
+    linear-gradient(-13deg,
+      transparent 0 58%,
+      rgba(72,226,240,.045) 58.2% 58.35%,
+      transparent 58.5% 100%),
+
+    /* route 5 */
+    linear-gradient(7deg,
+      transparent 0 73%,
+      rgba(151,105,255,.045) 73.2% 73.35%,
+      transparent 73.5% 100%),
+
+    radial-gradient(circle at 28% 64%, rgba(66,220,232,.08), transparent 24%),
+    radial-gradient(circle at 79% 62%, rgba(139,99,246,.08), transparent 28%);
+
+  animation: ccNetworkAtmosphere 12s ease-in-out infinite alternate;
+}
+
+/* Animated data pulses moving left → right */
+.tab-content.active::after {
+  left: 216px;
+  right: 0;
+  top: 78px;
+  bottom: 0;
+  height: auto;
+  opacity: .88;
+
+  background:
+    radial-gradient(circle, rgba(172,251,255,.95) 0 2px, transparent 3px) 18% 70% / 88px 6px repeat-x,
+    radial-gradient(circle, rgba(111,239,249,.88) 0 1.8px, transparent 2.8px) 27% 58% / 104px 6px repeat-x,
+    radial-gradient(circle, rgba(190,148,255,.90) 0 1.8px, transparent 2.8px) 50% 66% / 116px 6px repeat-x,
+    radial-gradient(circle, rgba(111,239,249,.80) 0 1.7px, transparent 2.7px) 66% 54% / 96px 6px repeat-x,
+    radial-gradient(circle, rgba(190,148,255,.82) 0 1.7px, transparent 2.7px) 78% 68% / 110px 6px repeat-x;
+
+  mask-image: linear-gradient(to right, transparent 8%, #000 20%, #000 88%, transparent 98%);
+  -webkit-mask-image: linear-gradient(to right, transparent 8%, #000 20%, #000 88%, transparent 98%);
+
+  filter: drop-shadow(0 0 7px rgba(88,231,246,.42));
+  animation: ccNetworkPackets 5.6s linear infinite;
+}
+
+/* Section-specific accent identities */
+.main:has(#production.active) {
+  --network-cyan: rgba(72,226,240,.15);
+  --network-purple: rgba(151,105,255,.11);
+}
+
+.main:has(#inventory.active) .main::after {
+  opacity: .78;
+}
+
+.main:has(#inventory.active) .tab-content.active::before {
+  background:
+    linear-gradient(9deg, transparent 0 18%, rgba(70,227,162,.055) 18.2% 18.35%, transparent 18.5% 100%),
+    linear-gradient(-11deg, transparent 0 42%, rgba(72,226,240,.048) 42.2% 42.35%, transparent 42.5% 100%),
+    radial-gradient(circle at 32% 65%, rgba(70,227,162,.09), transparent 26%),
+    radial-gradient(circle at 78% 62%, rgba(72,226,240,.07), transparent 28%);
+}
+
+.main:has(#productivity.active) .tab-content.active::before {
+  background:
+    linear-gradient(12deg, transparent 0 21%, rgba(72,226,240,.050) 21.2% 21.35%, transparent 21.5% 100%),
+    linear-gradient(-9deg, transparent 0 55%, rgba(151,105,255,.055) 55.2% 55.35%, transparent 55.5% 100%),
+    radial-gradient(circle at 34% 64%, rgba(72,226,240,.08), transparent 26%),
+    radial-gradient(circle at 80% 64%, rgba(151,105,255,.09), transparent 30%);
+}
+
+.main:has(#training.active) .tab-content.active::before {
+  background:
+    linear-gradient(10deg, transparent 0 24%, rgba(245,200,75,.045) 24.2% 24.35%, transparent 24.5% 100%),
+    linear-gradient(-10deg, transparent 0 60%, rgba(151,105,255,.040) 60.2% 60.35%, transparent 60.5% 100%),
+    radial-gradient(circle at 34% 64%, rgba(245,200,75,.065), transparent 26%),
+    radial-gradient(circle at 80% 62%, rgba(151,105,255,.07), transparent 30%);
+}
+
+.main:has(#system.active) .tab-content.active::before {
+  background:
+    linear-gradient(8deg, transparent 0 32%, rgba(151,105,255,.060) 32.2% 32.35%, transparent 32.5% 100%),
+    linear-gradient(-12deg, transparent 0 66%, rgba(72,226,240,.045) 66.2% 66.35%, transparent 66.5% 100%),
+    radial-gradient(circle at 36% 62%, rgba(151,105,255,.09), transparent 28%),
+    radial-gradient(circle at 78% 63%, rgba(72,226,240,.065), transparent 28%);
+}
+
+/* Very faint manufacturing intelligence signature */
+.main::marker {
+  content: "";
+}
+
+
+.main .tab-content.active:not(#facility) {
+  min-height: calc(100vh - 142px);
+}
+
+/* Add a subtle bottom signature without extra HTML */
+.main .tab-content.active:not(#facility) .cards-grid::after {
+  content: "REAL-TIME MANUFACTURING INTELLIGENCE";
+  position: fixed;
+  left: calc(216px + 50%);
+  bottom: 26px;
+  transform: translateX(-50%);
+  color: rgba(104,179,206,.24);
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .24em;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Do not add this signature to the Facility iframe tab. */
+#facility .cards-grid::after {
+  display: none !important;
+}
+
+/* Slightly stronger depth below card rows so empty tabs feel intentional. */
+.tab-content.active:not(#facility) .cards-grid {
+  padding-bottom: 120px;
+}
+
+/* ---------- RESPONSIVE ALIGNMENT ---------- */
+@media (max-width: 1600px) {
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 204px;
+  }
+
+  .main .tab-content.active:not(#facility) .cards-grid::after {
+    left: calc(204px + 50%);
+  }
+}
+
+@media (max-width: 1366px) {
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 188px;
+  }
+
+  .main .tab-content.active:not(#facility) .cards-grid::after {
+    left: calc(188px + 50%);
+  }
+}
+
+@media (max-width: 1100px) {
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 72px;
+    top: 72px;
+  }
+
+  .main .tab-content.active:not(#facility) .cards-grid::after {
+    left: calc(72px + 50%);
+  }
+}
+
+@media (max-width: 760px) {
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 0;
+    top: 126px;
+  }
+
+  .main .tab-content.active:not(#facility) .cards-grid::after {
+    left: 50%;
+    bottom: 16px;
+    font-size: 7px;
+    letter-spacing: .18em;
+  }
+}
+
+/* ---------- NETWORK MOTION ---------- */
+@keyframes ccNetworkBreath {
+  from {
+    opacity: .52;
+    filter:
+      drop-shadow(0 0 20px rgba(66,220,232,.045))
+      drop-shadow(0 0 42px rgba(139,99,246,.035));
+  }
+  to {
+    opacity: .80;
+    filter:
+      drop-shadow(0 0 28px rgba(66,220,232,.085))
+      drop-shadow(0 0 56px rgba(139,99,246,.060));
+  }
+}
+
+@keyframes ccNetworkAtmosphere {
+  from {
+    opacity: .64;
+    transform: translate3d(-.5%, -.3%, 0);
+  }
+  to {
+    opacity: .92;
+    transform: translate3d(.7%, .4%, 0);
+  }
+}
+
+@keyframes ccNetworkPackets {
+  from {
+    background-position:
+      0 70%,
+      0 58%,
+      0 66%,
+      0 54%,
+      0 68%;
+  }
+  to {
+    background-position:
+      176px 70%,
+      208px 58%,
+      232px 66%,
+      192px 54%,
+      220px 68%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V5 — HYBRID LIVE SYSTEM
+   Cleaner V2 layout + controlled V1 motion language:
+   - compact sidebar micro-animation
+   - card ambient canvases
+   - alternating workspace modes: Network / HUD / Ambient
+   - KPI refresh pulse
+   ============================================================ */
+
+/* ---------- SIDEBAR MICRO-ANIMATION ---------- */
+.nav-canvas {
+  display: block !important;
+  width: 100%;
+  height: 30px !important;
+  opacity: .58;
+  margin: 2px 0 -2px;
+  pointer-events: none;
+  filter: saturate(.9);
+  transition: opacity .2s ease, filter .2s ease;
+}
+
+.nav-item--anim {
+  min-height: 66px !important;
+}
+
+.nav-item--anim .nav-canvas-wrap {
+  display: grid;
+  grid-template-rows: 30px 34px;
+  align-items: center;
+}
+
+.nav-item--anim .nav-label-row {
+  min-height: 34px;
+  padding: 0 12px 7px;
+}
+
+.nav-item--anim:hover .nav-canvas,
+.nav-item--anim.active .nav-canvas {
+  opacity: .92;
+  filter: saturate(1.15) brightness(1.08);
+}
+
+.nav-item--anim.active {
+  box-shadow:
+    inset 3px 0 0 var(--cc-cyan),
+    0 8px 26px rgba(0,0,0,.13),
+    0 0 20px rgba(66,220,232,.035);
+}
+
+/* Keep Facility item compact and clean. */
+.nav-item--facility {
+  min-height: 62px !important;
+}
+
+/* ---------- CARD AMBIENT ANIMATION ---------- */
+.card-bg-canvas {
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: .10 !important;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: screen;
+}
+
+.card:hover .card-bg-canvas {
+  opacity: .18 !important;
+}
+
+.card-inner {
+  position: relative;
+  z-index: 2;
+}
+
+/* Keep the heavy reactive particle layer and 3D sheen retired. */
+.card-particle-canvas,
+.card-sheen {
+  display: none !important;
+}
+
+/* Soft breathing edge gives cards movement even when their canvas is subtle. */
+.card {
+  animation: ccCardAmbient 8s ease-in-out infinite;
+}
+
+.card:nth-child(2) { animation-delay: -1.3s; }
+.card:nth-child(3) { animation-delay: -2.6s; }
+.card:nth-child(4) { animation-delay: -3.9s; }
+.card:nth-child(5) { animation-delay: -5.2s; }
+.card:nth-child(6) { animation-delay: -6.5s; }
+
+/* ---------- KPI LIVE / REFRESH RESPONSE ---------- */
+.cb-metric {
+  overflow: hidden;
+}
+
+.cb-metric::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(72,226,240,.05) 42%,
+      rgba(72,226,240,.16) 50%,
+      transparent 58%);
+  transform: translateX(-100%);
+}
+
+.cb-metric.kpi-refresh::before {
+  animation: ccKpiSweep 1.1s ease-out 1;
+}
+
+.cb-metric.kpi-refresh .cb-m-val {
+  animation: ccKpiValue 1s ease-out 1;
+}
+
+/* ---------- BACKGROUND MODE SYSTEM ---------- */
+
+/* Network is the base mode from V4. */
+body.cc-bg-network .main::after,
+body:not(.cc-bg-hud):not(.cc-bg-ambient) .main::after {
+  opacity: .74;
+}
+
+body.cc-bg-network .tab-content.active::after,
+body:not(.cc-bg-hud):not(.cc-bg-ambient) .tab-content.active::after {
+  opacity: .88;
+}
+
+/* HUD mode: circular optical telemetry returns, but controlled and off-center. */
+body.cc-bg-hud .main::after {
+  left: calc(216px + 66%);
+  right: auto;
+  top: 58%;
+  bottom: auto;
+  width: min(700px, 46vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  opacity: .52;
+
+  background:
+    radial-gradient(circle,
+      rgba(72,226,240,.08) 0 5%,
+      transparent 5.5% 13%,
+      rgba(72,226,240,.075) 13.2% 13.7%,
+      transparent 14% 24%,
+      rgba(151,105,255,.065) 24.2% 24.7%,
+      transparent 25% 36%,
+      rgba(72,226,240,.050) 36.2% 36.6%,
+      transparent 37% 49%,
+      rgba(151,105,255,.040) 49.2% 49.6%,
+      transparent 50% 100%),
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(72,226,240,.075) 0deg 1.3deg,
+      transparent 1.3deg 12deg,
+      rgba(151,105,255,.048) 12deg 13deg,
+      transparent 13deg 27deg
+    );
+
+  animation:
+    ccV5HudOrbit 28s linear infinite,
+    ccV5HudPulse 6s ease-in-out infinite;
+}
+
+body.cc-bg-hud .tab-content.active::before {
+  background:
+    radial-gradient(circle at 34% 24%, rgba(66,220,232,.075), transparent 26%),
+    radial-gradient(circle at 76% 50%, rgba(139,99,246,.11), transparent 30%),
+    linear-gradient(90deg, transparent 0 48%, rgba(72,226,240,.035) 49.5% 50.5%, transparent 52% 100%);
+  opacity: .74;
+}
+
+body.cc-bg-hud .tab-content.active::after {
+  height: 2px;
+  top: 15%;
+  bottom: auto;
+  background:
+    linear-gradient(90deg,
+      transparent,
+      rgba(72,226,240,.10),
+      rgba(121,243,252,.62),
+      rgba(151,105,255,.22),
+      transparent);
+  mask-image: none;
+  -webkit-mask-image: none;
+  opacity: 0;
+  animation: ccV5HudScan 7.5s ease-in-out infinite;
+}
+
+/* Ambient mode: deliberately quieter for visual breathing room. */
+body.cc-bg-ambient .main::after {
+  left: 216px;
+  right: 0;
+  top: 78px;
+  bottom: 0;
+  width: auto;
+  aspect-ratio: auto;
+  transform: none;
+  border-radius: 0;
+  opacity: .44;
+  background:
+    radial-gradient(circle at 36% 48%, rgba(66,220,232,.09), transparent 25%),
+    radial-gradient(circle at 76% 44%, rgba(139,99,246,.085), transparent 28%),
+    radial-gradient(circle at 55% 78%, rgba(66,220,232,.035), transparent 27%);
+  animation: ccV5AmbientBreath 9s ease-in-out infinite alternate;
+}
+
+body.cc-bg-ambient .tab-content.active::before {
+  opacity: .54;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(66,220,232,.065), transparent 30%),
+    radial-gradient(circle at 76% 28%, rgba(139,99,246,.06), transparent 32%);
+  animation: ccV5AmbientDrift 12s ease-in-out infinite alternate;
+}
+
+body.cc-bg-ambient .tab-content.active::after {
+  opacity: .32;
+  background:
+    radial-gradient(circle, rgba(109,239,250,.72) 0 1.5px, transparent 2.5px) 0 68% / 142px 5px repeat-x,
+    radial-gradient(circle, rgba(180,137,255,.62) 0 1.5px, transparent 2.5px) 0 78% / 178px 5px repeat-x;
+  mask-image: linear-gradient(to right, transparent 10%, #000 26%, #000 84%, transparent 96%);
+  -webkit-mask-image: linear-gradient(to right, transparent 10%, #000 26%, #000 84%, transparent 96%);
+  animation: ccV5AmbientPackets 10s linear infinite;
+}
+
+/* Smooth transitions between visual modes. */
+.main::after,
+.tab-content.active::before,
+.tab-content.active::after {
+  transition:
+    opacity 1.6s ease,
+    filter 1.6s ease;
+}
+
+/* Facility stays visually quiet because iframe owns its content. */
+body.cc-bg-hud #facility.active::before,
+body.cc-bg-hud #facility.active::after,
+body.cc-bg-ambient #facility.active::before,
+body.cc-bg-ambient #facility.active::after {
+  display: none !important;
+}
+
+/* ---------- RESPONSIVE MODE ALIGNMENT ---------- */
+@media (max-width: 1600px) {
+  body.cc-bg-hud .main::after {
+    left: calc(204px + 66%);
+  }
+  body.cc-bg-ambient .main::after {
+    left: 204px;
+    top: 74px;
+  }
+}
+
+@media (max-width: 1366px) {
+  .nav-item--anim {
+    min-height: 60px !important;
+  }
+
+  .nav-canvas {
+    height: 26px !important;
+  }
+
+  .nav-item--anim .nav-canvas-wrap {
+    grid-template-rows: 26px 32px;
+  }
+
+  body.cc-bg-hud .main::after {
+    left: calc(188px + 67%);
+    width: min(580px, 48vw);
+  }
+
+  body.cc-bg-ambient .main::after {
+    left: 188px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .nav-canvas {
+    display: none !important;
+  }
+
+  .nav-item--anim {
+    min-height: 50px !important;
+  }
+
+  .nav-item--anim .nav-canvas-wrap {
+    display: block;
+  }
+
+  body.cc-bg-hud .main::after {
+    left: calc(72px + 66%);
+    width: min(520px, 56vw);
+  }
+
+  body.cc-bg-ambient .main::after {
+    left: 72px;
+    top: 72px;
+  }
+}
+
+@media (max-width: 760px) {
+  body.cc-bg-hud .main::after {
+    left: 62%;
+    width: 500px;
+    opacity: .30;
+  }
+
+  body.cc-bg-ambient .main::after {
+    left: 0;
+    top: 126px;
+  }
+}
+
+/* ---------- V5 KEYFRAMES ---------- */
+@keyframes ccCardAmbient {
+  0%,100% {
+    border-color: rgba(104,160,206,.13);
+    box-shadow:
+      0 18px 48px rgba(0,0,0,.24),
+      inset 0 1px 0 rgba(255,255,255,.025);
+  }
+  50% {
+    border-color: rgba(84,196,220,.17);
+    box-shadow:
+      0 20px 52px rgba(0,0,0,.26),
+      0 0 22px rgba(66,220,232,.025),
+      inset 0 1px 0 rgba(255,255,255,.03);
+  }
+}
+
+@keyframes ccKpiSweep {
+  from { transform: translateX(-100%); opacity: 0; }
+  18%  { opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes ccKpiValue {
+  0%,100% { transform: scale(1); filter: brightness(1); }
+  45%     { transform: scale(1.045); filter: brightness(1.22); }
+}
+
+@keyframes ccV5HudOrbit {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes ccV5HudPulse {
+  0%,100% { opacity: .38; filter: drop-shadow(0 0 30px rgba(66,220,232,.05)); }
+  50%     { opacity: .60; filter: drop-shadow(0 0 48px rgba(66,220,232,.09)); }
+}
+
+@keyframes ccV5HudScan {
+  0%,8%   { top: 15%; opacity: 0; }
+  18%     { opacity: .54; }
+  70%     { opacity: .22; }
+  86%,100% { top: 88%; opacity: 0; }
+}
+
+@keyframes ccV5AmbientBreath {
+  from { opacity: .34; filter: brightness(.95); }
+  to   { opacity: .52; filter: brightness(1.07); }
+}
+
+@keyframes ccV5AmbientDrift {
+  from { transform: translate3d(-.5%, -.4%, 0); opacity: .46; }
+  to   { transform: translate3d(.7%, .4%, 0); opacity: .62; }
+}
+
+@keyframes ccV5AmbientPackets {
+  from { background-position: 0 68%, 0 78%; }
+  to   { background-position: 284px 68%, 356px 78%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after,
+  .cb-metric.kpi-refresh::before,
+  .cb-metric.kpi-refresh .cb-m-val {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V5.1 — SIDEBAR + KPI MOTION UPGRADE
+   Medium animated sidebar cards + live telemetry KPI motion.
+   No HTML/JS/API changes required.
+   ============================================================ */
+
+/* ---------- MEDIUM ANIMATED SIDEBAR ---------- */
+.section-nav {
+  width: 228px !important;
+  padding: 18px 12px 26px !important;
+}
+
+.nav-group-label {
+  padding: 15px 14px 7px !important;
+  font-size: 9px;
+  letter-spacing: .19em;
+}
+
+.nav-item--facility {
+  min-height: 68px !important;
+  border-radius: 14px !important;
+}
+
+.facility-nav-icon {
+  width: 38px;
+  height: 38px;
+  margin-left: 14px;
+  border-radius: 11px;
+}
+
+.facility-nav-copy {
+  padding: 12px 11px;
+}
+
+.facility-nav-copy strong {
+  font-size: 12.5px;
+}
+
+.facility-nav-copy span {
+  font-size: 8.5px;
+}
+
+/* Animated navigation cards: larger visual area */
+.nav-item--anim {
+  min-height: 84px !important;
+  border-radius: 14px !important;
+}
+
+.nav-item--anim .nav-canvas-wrap {
+  display: grid !important;
+  grid-template-rows: 46px 36px !important;
+  align-items: center;
+}
+
+.nav-canvas {
+  display: block !important;
+  width: calc(100% - 18px) !important;
+  height: 46px !important;
+  margin: 4px 9px -2px !important;
+  opacity: .62 !important;
+  border-radius: 9px;
+  mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  transition:
+    opacity .22s ease,
+    filter .22s ease,
+    transform .22s ease;
+}
+
+.nav-item--anim .nav-label-row {
+  min-height: 36px !important;
+  padding: 0 14px 9px !important;
+  font-size: 11.5px !important;
+  gap: 10px !important;
+}
+
+.nav-item--anim .nav-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.nav-item--anim:hover .nav-canvas {
+  opacity: .82 !important;
+  filter: brightness(1.08) saturate(1.08);
+  transform: translateY(-1px);
+}
+
+.nav-item--anim.active .nav-canvas {
+  opacity: 1 !important;
+  filter:
+    brightness(1.16)
+    saturate(1.15)
+    drop-shadow(0 0 8px rgba(66,220,232,.18));
+}
+
+.nav-item--anim.active {
+  box-shadow:
+    inset 3px 0 0 var(--cc-cyan),
+    0 10px 28px rgba(0,0,0,.14),
+    0 0 22px rgba(66,220,232,.045) !important;
+}
+
+/* Main workspace follows the slightly wider nav */
+.main {
+  margin-left: 228px !important;
+}
+
+body::before,
+body::after {
+  left: 228px !important;
+}
+
+.main::before,
+.main::after,
+.tab-content.active::before,
+.tab-content.active::after {
+  left: 228px !important;
+}
+
+.main .tab-content.active:not(#facility) .cards-grid::after {
+  left: calc(228px + 50%) !important;
+}
+
+/* ---------- LIVE KPI TELEMETRY CARDS ---------- */
+.cb-metric {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(9,20,36,.44), rgba(5,12,24,.16)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.018),
+    inset 0 -1px 0 rgba(81,184,224,.025);
+  overflow: hidden;
+}
+
+/* Ambient glow behind each KPI */
+.cb-metric::after {
+  z-index: 0;
+  height: 2px !important;
+  opacity: .68 !important;
+  animation: ccKpiTopPulse 3.6s ease-in-out infinite;
+}
+
+.cb-metric:nth-child(1)::after {
+  background: linear-gradient(90deg, transparent, var(--cc-cyan), rgba(139,99,246,.35), transparent) !important;
+}
+
+.cb-metric:nth-child(2)::after {
+  background: linear-gradient(90deg, transparent, var(--cc-green), rgba(66,220,232,.30), transparent) !important;
+}
+
+/* Moving telemetry sheen */
+.cb-metric::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  width: 24%;
+  left: -28%;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(91,230,245,.025) 25%,
+      rgba(91,230,245,.085) 50%,
+      rgba(139,99,246,.025) 75%,
+      transparent 100%);
+  transform: skewX(-8deg);
+  animation: ccKpiTelemetrySweep 6.8s ease-in-out infinite;
+}
+
+.cb-metric:nth-child(2)::before {
+  animation-delay: -2.4s;
+}
+
+/* Keep text above motion */
+.cb-metric > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* KPI value breath */
+.cb-m-val {
+  text-shadow: 0 0 14px rgba(66,220,232,.06);
+  animation: ccKpiValueBreath 4.8s ease-in-out infinite;
+}
+
+.cb-metric:nth-child(2) .cb-m-val {
+  animation-delay: -1.8s;
+}
+
+/* Scanner Health gets a very soft live pulse */
+.cb-m-val--green {
+  text-shadow:
+    0 0 12px rgba(70,227,162,.14),
+    0 0 24px rgba(70,227,162,.05);
+}
+
+/* Sparkline is more visible and gently breathes */
+.cb-sparkline {
+  opacity: .38 !important;
+  filter: drop-shadow(0 0 5px rgba(66,220,232,.10));
+  animation: ccSparklineBreath 4.5s ease-in-out infinite;
+}
+
+.cb-metric:nth-child(2) .cb-sparkline {
+  animation-delay: -1.7s;
+}
+
+/* Label micro-pulse makes status feel alive without distraction */
+.cb-m-label {
+  animation: ccKpiLabelPulse 5.2s ease-in-out infinite;
+}
+
+.cb-metric:nth-child(2) .cb-m-label {
+  animation-delay: -2.2s;
+}
+
+/* Hover gives a stronger operational response */
+.cb-metric:hover {
+  background:
+    linear-gradient(180deg, rgba(12,27,48,.58), rgba(6,15,29,.22)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    inset 0 -1px 0 rgba(81,184,224,.045),
+    0 0 24px rgba(66,220,232,.035);
+}
+
+/* Existing refresh pulse remains stronger when JS adds kpi-refresh */
+.cb-metric.kpi-refresh {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.03),
+    0 0 28px rgba(66,220,232,.08);
+}
+
+.cb-metric.kpi-refresh .cb-m-val {
+  animation: ccKpiRefreshImpact .95s ease-out 1 !important;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 1600px) {
+  .section-nav {
+    width: 216px !important;
+  }
+
+  .main {
+    margin-left: 216px !important;
+  }
+
+  body::before,
+  body::after,
+  .main::before,
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 216px !important;
+  }
+
+  .main .tab-content.active:not(#facility) .cards-grid::after {
+    left: calc(216px + 50%) !important;
+  }
+
+  .nav-item--anim {
+    min-height: 78px !important;
+  }
+
+  .nav-item--anim .nav-canvas-wrap {
+    grid-template-rows: 42px 34px !important;
+  }
+
+  .nav-canvas {
+    height: 42px !important;
+  }
+}
+
+@media (max-width: 1366px) {
+  .section-nav {
+    width: 204px !important;
+  }
+
+  .main {
+    margin-left: 204px !important;
+  }
+
+  body::before,
+  body::after,
+  .main::before,
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 204px !important;
+  }
+
+  .main .tab-content.active:not(#facility) .cards-grid::after {
+    left: calc(204px + 50%) !important;
+  }
+
+  .nav-item--anim {
+    min-height: 72px !important;
+  }
+
+  .nav-item--anim .nav-canvas-wrap {
+    grid-template-rows: 38px 32px !important;
+  }
+
+  .nav-canvas {
+    height: 38px !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .section-nav {
+    width: 72px !important;
+  }
+
+  .main {
+    margin-left: 72px !important;
+  }
+
+  body::before,
+  body::after,
+  .main::before,
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 72px !important;
+  }
+
+  .nav-canvas {
+    display: none !important;
+  }
+
+  .nav-item--anim {
+    min-height: 50px !important;
+  }
+
+  .nav-item--anim .nav-canvas-wrap {
+    display: block !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .section-nav {
+    width: 100% !important;
+  }
+
+  .main {
+    margin-left: 0 !important;
+  }
+
+  body::before,
+  body::after,
+  .main::before,
+  .main::after,
+  .tab-content.active::before,
+  .tab-content.active::after {
+    left: 0 !important;
+  }
+}
+
+/* ---------- MOTION ---------- */
+@keyframes ccKpiTopPulse {
+  0%,100% {
+    opacity: .42;
+    filter: brightness(.95);
+  }
+  50% {
+    opacity: .86;
+    filter: brightness(1.18);
+  }
+}
+
+@keyframes ccKpiTelemetrySweep {
+  0%, 60% {
+    left: -28%;
+    opacity: 0;
+  }
+  68% {
+    opacity: .72;
+  }
+  86% {
+    left: 108%;
+    opacity: .20;
+  }
+  100% {
+    left: 108%;
+    opacity: 0;
+  }
+}
+
+@keyframes ccKpiValueBreath {
+  0%,100% {
+    filter: brightness(1);
+    transform: translateY(0);
+  }
+  50% {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes ccSparklineBreath {
+  0%,100% {
+    opacity: .28;
+    filter: brightness(.92) drop-shadow(0 0 3px rgba(66,220,232,.06));
+  }
+  50% {
+    opacity: .48;
+    filter: brightness(1.12) drop-shadow(0 0 6px rgba(66,220,232,.14));
+  }
+}
+
+@keyframes ccKpiLabelPulse {
+  0%,100% { opacity: .78; }
+  50%     { opacity: 1; }
+}
+
+@keyframes ccKpiRefreshImpact {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  38% {
+    transform: scale(1.055);
+    filter: brightness(1.28);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-metric::before,
+  .cb-metric::after,
+  .cb-m-val,
+  .cb-sparkline,
+  .cb-m-label,
+  .cb-metric.kpi-refresh .cb-m-val {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V5.2 — LIVE CARD INTERIORS
+   Makes the inside of dashboard cards visibly dynamic while
+   preserving text readability and existing card functionality.
+   ============================================================ */
+
+/* Stronger existing canvas animation inside every dashboard card. */
+.card-bg-canvas {
+  display: block !important;
+  opacity: .18 !important;
+  filter:
+    saturate(1.08)
+    brightness(1.02)
+    drop-shadow(0 0 4px rgba(71,220,238,.08));
+  transition:
+    opacity .25s ease,
+    filter .25s ease;
+}
+
+.card:hover .card-bg-canvas {
+  opacity: .30 !important;
+  filter:
+    saturate(1.18)
+    brightness(1.12)
+    drop-shadow(0 0 7px rgba(71,220,238,.15));
+}
+
+/* Keep real content above all decorative motion. */
+.card-inner {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.card-inner > * {
+  position: relative;
+  z-index: 3;
+}
+
+/* Slow moving internal scan band. */
+.card-inner::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: -18%;
+  top: -12%;
+  width: 34%;
+  height: 128%;
+  pointer-events: none;
+  opacity: 0;
+  transform: skewX(-12deg);
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(91,232,246,.025) 25%,
+      rgba(91,232,246,.075) 48%,
+      rgba(139,99,246,.035) 72%,
+      transparent 100%);
+  filter: blur(1px);
+  animation: ccCardInteriorSweep 7.4s ease-in-out infinite;
+}
+
+.card:nth-child(2) .card-inner::before { animation-delay: -1.1s; }
+.card:nth-child(3) .card-inner::before { animation-delay: -2.2s; }
+.card:nth-child(4) .card-inner::before { animation-delay: -3.3s; }
+.card:nth-child(5) .card-inner::before { animation-delay: -4.4s; }
+.card:nth-child(6) .card-inner::before { animation-delay: -5.5s; }
+
+/* Breathing internal glow, positioned away from text-heavy top-left. */
+.card-inner::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  right: -18%;
+  bottom: -34%;
+  width: 62%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: .28;
+  background:
+    radial-gradient(circle,
+      rgba(66,220,232,.12) 0%,
+      rgba(66,220,232,.055) 24%,
+      rgba(139,99,246,.035) 48%,
+      transparent 70%);
+  filter: blur(10px);
+  animation: ccCardGlowBreath 5.8s ease-in-out infinite alternate;
+}
+
+.card:nth-child(2n) .card-inner::after {
+  background:
+    radial-gradient(circle,
+      rgba(139,99,246,.12) 0%,
+      rgba(139,99,246,.050) 25%,
+      rgba(66,220,232,.030) 48%,
+      transparent 70%);
+}
+
+.card:nth-child(3n) .card-inner::after {
+  right: auto;
+  left: -18%;
+}
+
+/* Small animated telemetry activity markers along card bottom edge. */
+.card {
+  --cc-card-dot: rgba(82,229,243,.88);
+}
+
+.card::marker {
+  content: "";
+}
+
+.card .card-accent {
+  position: relative;
+  overflow: hidden;
+}
+
+.card .card-accent::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18%;
+  left: -22%;
+  background:
+    linear-gradient(90deg,
+      transparent,
+      rgba(255,255,255,.70),
+      transparent);
+  opacity: .46;
+  filter: blur(.4px);
+  animation: ccCardAccentTravel 4.8s ease-in-out infinite;
+}
+
+.card:nth-child(2) .card-accent::after { animation-delay: -.8s; }
+.card:nth-child(3) .card-accent::after { animation-delay: -1.6s; }
+.card:nth-child(4) .card-accent::after { animation-delay: -2.4s; }
+.card:nth-child(5) .card-accent::after { animation-delay: -3.2s; }
+.card:nth-child(6) .card-accent::after { animation-delay: -4s; }
+
+/* Make card tags feel connected to live telemetry without distracting movement. */
+.card-tags .tag,
+.card .tag {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-tags .tag::after,
+.card .tag::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(90deg,
+      transparent,
+      rgba(103,237,248,.10),
+      transparent);
+  transform: translateX(-100%);
+  animation: ccTagTelemetry 8s ease-in-out infinite;
+}
+
+.card-tags .tag:nth-child(2)::after,
+.card .tag:nth-child(2)::after { animation-delay: -1.2s; }
+
+.card-tags .tag:nth-child(3)::after,
+.card .tag:nth-child(3)::after { animation-delay: -2.4s; }
+
+.card-tags .tag:nth-child(4)::after,
+.card .tag:nth-child(4)::after { animation-delay: -3.6s; }
+
+.card-tags .tag:nth-child(5)::after,
+.card .tag:nth-child(5)::after { animation-delay: -4.8s; }
+
+/* Buttons gain a restrained periodic light pass even when not hovered. */
+.card-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(255,255,255,.20) 48%,
+      transparent 100%);
+  transform: translateX(-130%);
+  animation: ccCardButtonPulse 6.4s ease-in-out infinite;
+}
+
+.card:nth-child(2) .card-btn::before { animation-delay: -1.1s; }
+.card:nth-child(3) .card-btn::before { animation-delay: -2.2s; }
+.card:nth-child(4) .card-btn::before { animation-delay: -3.3s; }
+.card:nth-child(5) .card-btn::before { animation-delay: -4.4s; }
+.card:nth-child(6) .card-btn::before { animation-delay: -5.5s; }
+
+/* Special color identity inside specific card families. */
+.card--power .card-inner::after,
+.card--quality .card-inner::after {
+  background:
+    radial-gradient(circle,
+      rgba(151,105,255,.15) 0%,
+      rgba(151,105,255,.060) 26%,
+      rgba(66,220,232,.025) 52%,
+      transparent 72%);
+}
+
+.card--inventory .card-inner::after,
+.card--productivity .card-inner::after {
+  background:
+    radial-gradient(circle,
+      rgba(70,227,162,.13) 0%,
+      rgba(70,227,162,.052) 26%,
+      rgba(66,220,232,.028) 52%,
+      transparent 72%);
+}
+
+.card--training .card-inner::after {
+  background:
+    radial-gradient(circle,
+      rgba(245,200,75,.12) 0%,
+      rgba(245,200,75,.045) 26%,
+      rgba(139,99,246,.025) 52%,
+      transparent 72%);
+}
+
+/* Featured live card gets slightly stronger interior telemetry. */
+#investigation-card .card-bg-canvas,
+.card--featured .card-bg-canvas {
+  opacity: .24 !important;
+}
+
+#investigation-card:hover .card-bg-canvas,
+.card--featured:hover .card-bg-canvas {
+  opacity: .36 !important;
+}
+
+/* ---------- MOTION ---------- */
+@keyframes ccCardInteriorSweep {
+  0%, 58% {
+    left: -18%;
+    opacity: 0;
+  }
+  66% {
+    opacity: .66;
+  }
+  86% {
+    left: 104%;
+    opacity: .18;
+  }
+  100% {
+    left: 104%;
+    opacity: 0;
+  }
+}
+
+@keyframes ccCardGlowBreath {
+  from {
+    opacity: .18;
+    transform: scale(.92) translate3d(0, 4px, 0);
+  }
+  to {
+    opacity: .42;
+    transform: scale(1.08) translate3d(-7px, -5px, 0);
+  }
+}
+
+@keyframes ccCardAccentTravel {
+  0%, 52% {
+    left: -22%;
+    opacity: 0;
+  }
+  62% {
+    opacity: .62;
+  }
+  84% {
+    left: 108%;
+    opacity: .18;
+  }
+  100% {
+    left: 108%;
+    opacity: 0;
+  }
+}
+
+@keyframes ccTagTelemetry {
+  0%, 68% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  75% {
+    opacity: .7;
+  }
+  90% {
+    transform: translateX(100%);
+    opacity: .16;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes ccCardButtonPulse {
+  0%, 62% {
+    transform: translateX(-130%);
+    opacity: 0;
+  }
+  69% {
+    opacity: .55;
+  }
+  85% {
+    transform: translateX(130%);
+    opacity: .14;
+  }
+  100% {
+    transform: translateX(130%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-inner::before,
+  .card-inner::after,
+  .card .card-accent::after,
+  .card-tags .tag::after,
+  .card .tag::after,
+  .card-btn::before {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V5.3 — UNIVERSAL LIVE KPI SYSTEM
+   Applies the same professional live telemetry language to:
+   - top command-bar KPIs
+   - KPI metric groups inside cards
+   - standalone metric/stat cards
+   - future KPI cards using .kpi-live
+   ============================================================ */
+
+/* ---------- UNIVERSAL KPI SURFACES ---------- */
+.cb-metric,
+.card-metrics,
+.kpi-live,
+.kpi-card,
+.metric-card,
+.stat-card,
+[data-kpi-card] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* Ambient internal telemetry grid */
+.card-metrics::before,
+.kpi-live::before,
+.kpi-card::before,
+.metric-card::before,
+.stat-card::before,
+[data-kpi-card]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .26;
+  background:
+    linear-gradient(rgba(82,220,236,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(82,220,236,.035) 1px, transparent 1px),
+    radial-gradient(circle at 74% 22%, rgba(139,99,246,.07), transparent 26%);
+  background-size: 26px 26px, 26px 26px, 100% 100%;
+  animation: ccKpiGridMove 13s linear infinite;
+}
+
+/* Moving scan sweep */
+.card-metrics::after,
+.kpi-live::after,
+.kpi-card::after,
+.metric-card::after,
+.stat-card::after,
+[data-kpi-card]::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: -15%;
+  bottom: -15%;
+  width: 20%;
+  left: -24%;
+  pointer-events: none;
+  opacity: 0;
+  transform: skewX(-10deg);
+  background:
+    linear-gradient(90deg,
+      transparent,
+      rgba(97,234,248,.04),
+      rgba(97,234,248,.12),
+      rgba(151,105,255,.045),
+      transparent);
+  animation: ccKpiInteriorSweep 6.6s ease-in-out infinite;
+}
+
+/* Keep real KPI content above visual layers */
+.card-metrics > *,
+.kpi-live > *,
+.kpi-card > *,
+.metric-card > *,
+.stat-card > *,
+[data-kpi-card] > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------- INDIVIDUAL KPI CELLS ---------- */
+.card-metrics .metric,
+.kpi-live .metric,
+.kpi-card .metric,
+.metric-card .metric,
+.stat-card .metric,
+[data-kpi-card] .metric {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Pulse ring behind each metric value */
+.card-metrics .metric::before,
+.kpi-live .metric::before,
+.kpi-card .metric::before,
+.metric-card .metric::before,
+.stat-card .metric::before,
+[data-kpi-card] .metric::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 64px;
+  height: 64px;
+  transform: translate(-50%, -50%) scale(.72);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid rgba(74,225,241,.16);
+  box-shadow: 0 0 16px rgba(74,225,241,.05);
+  animation: ccKpiCellRing 4.8s ease-out infinite;
+}
+
+.card-metrics .metric:nth-child(3)::before,
+.card-metrics .metric:nth-child(5)::before,
+.kpi-live .metric:nth-child(3)::before,
+.kpi-live .metric:nth-child(5)::before {
+  border-color: rgba(151,105,255,.18);
+  box-shadow: 0 0 16px rgba(151,105,255,.055);
+}
+
+/* KPI values breathe subtly */
+.card-metrics .metric-val,
+.kpi-live .metric-val,
+.kpi-card .metric-val,
+.metric-card .metric-val,
+.stat-card .metric-val,
+[data-kpi-card] .metric-val {
+  position: relative;
+  z-index: 3;
+  text-shadow:
+    0 0 10px rgba(74,225,241,.06);
+  animation: ccMetricValueLive 4.4s ease-in-out infinite;
+}
+
+.card-metrics .metric:nth-child(3) .metric-val,
+.card-metrics .metric:nth-child(5) .metric-val {
+  animation-delay: -1.4s;
+}
+
+/* KPI labels pulse at a slower cadence */
+.card-metrics .metric-lbl,
+.kpi-live .metric-lbl,
+.kpi-card .metric-lbl,
+.metric-card .metric-lbl,
+.stat-card .metric-lbl,
+[data-kpi-card] .metric-lbl {
+  animation: ccMetricLabelLive 5.8s ease-in-out infinite;
+}
+
+/* Divider energy pulse */
+.card-metrics .metric-divider {
+  position: relative;
+  overflow: visible;
+}
+
+.card-metrics .metric-divider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 10%;
+  bottom: 10%;
+  width: 1px;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(to bottom,
+      transparent,
+      rgba(76,226,242,.55),
+      rgba(151,105,255,.34),
+      transparent);
+  opacity: .20;
+  animation: ccMetricDividerPulse 3.6s ease-in-out infinite;
+}
+
+/* ---------- TOP TELEMETRY KPIs ---------- */
+/* Add subtle bottom data-node motion */
+.cb-metric .cb-sparkline {
+  z-index: 1;
+}
+
+.cb-metric .cb-m-val,
+.cb-metric .cb-m-label,
+.cb-metric .cb-m-sub {
+  z-index: 2;
+}
+
+/* Animated corner status node */
+.cb-metric .cb-m-label::after {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 7px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: rgba(78,228,242,.82);
+  box-shadow: 0 0 7px rgba(78,228,242,.58);
+  animation: ccKpiTinyNode 2.8s ease-in-out infinite;
+}
+
+.cb-metric:nth-child(2) .cb-m-label::after {
+  background: rgba(70,227,162,.86);
+  box-shadow: 0 0 7px rgba(70,227,162,.58);
+  animation-delay: -1.2s;
+}
+
+/* ---------- REUSABLE KPI COLOR VARIANTS ---------- */
+.kpi-live--green,
+.kpi-card--green,
+[data-kpi-tone="green"] {
+  --kpi-live-color: 70, 227, 162;
+}
+
+.kpi-live--purple,
+.kpi-card--purple,
+[data-kpi-tone="purple"] {
+  --kpi-live-color: 151, 105, 255;
+}
+
+.kpi-live--amber,
+.kpi-card--amber,
+[data-kpi-tone="amber"] {
+  --kpi-live-color: 245, 200, 75;
+}
+
+.kpi-live--red,
+.kpi-card--red,
+[data-kpi-tone="red"] {
+  --kpi-live-color: 255, 115, 133;
+}
+
+.kpi-live,
+.kpi-card,
+.metric-card,
+.stat-card,
+[data-kpi-card] {
+  --kpi-live-color: 74, 225, 241;
+}
+
+.kpi-live .metric-val,
+.kpi-card .metric-val,
+.metric-card .metric-val,
+.stat-card .metric-val,
+[data-kpi-card] .metric-val {
+  text-shadow:
+    0 0 12px rgba(var(--kpi-live-color), .10);
+}
+
+/* ---------- HOVER / ACTIVE RESPONSE ---------- */
+.card-metrics:hover::after,
+.kpi-live:hover::after,
+.kpi-card:hover::after,
+.metric-card:hover::after,
+.stat-card:hover::after,
+[data-kpi-card]:hover::after {
+  animation-duration: 3.8s;
+}
+
+.card-metrics:hover .metric-val,
+.kpi-live:hover .metric-val,
+.kpi-card:hover .metric-val,
+.metric-card:hover .metric-val,
+.stat-card:hover .metric-val,
+[data-kpi-card]:hover .metric-val {
+  filter: brightness(1.12);
+}
+
+/* ---------- KPI UPDATE FLASH UTILITY ---------- */
+.kpi-live.kpi-refresh,
+.kpi-card.kpi-refresh,
+.metric-card.kpi-refresh,
+.stat-card.kpi-refresh,
+[data-kpi-card].kpi-refresh {
+  animation: ccUniversalKpiRefresh .9s ease-out 1;
+}
+
+.kpi-live.kpi-refresh .metric-val,
+.kpi-card.kpi-refresh .metric-val,
+.metric-card.kpi-refresh .metric-val,
+.stat-card.kpi-refresh .metric-val,
+[data-kpi-card].kpi-refresh .metric-val {
+  animation: ccKpiRefreshImpact .95s ease-out 1 !important;
+}
+
+/* ---------- MOTION ---------- */
+@keyframes ccKpiGridMove {
+  from {
+    background-position: 0 0, 0 0, 0 0;
+  }
+  to {
+    background-position: 26px 26px, 26px 26px, 0 0;
+  }
+}
+
+@keyframes ccKpiInteriorSweep {
+  0%, 56% {
+    left: -24%;
+    opacity: 0;
+  }
+  64% {
+    opacity: .70;
+  }
+  84% {
+    left: 108%;
+    opacity: .16;
+  }
+  100% {
+    left: 108%;
+    opacity: 0;
+  }
+}
+
+@keyframes ccKpiCellRing {
+  0%, 42% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.62);
+  }
+  58% {
+    opacity: .32;
+  }
+  90%,100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+@keyframes ccMetricValueLive {
+  0%,100% {
+    transform: translateY(0);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes ccMetricLabelLive {
+  0%,100% { opacity: .74; }
+  50%     { opacity: 1; }
+}
+
+@keyframes ccMetricDividerPulse {
+  0%,100% {
+    opacity: .12;
+    filter: brightness(.9);
+  }
+  50% {
+    opacity: .42;
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes ccKpiTinyNode {
+  0%,100% {
+    opacity: .36;
+    transform: scale(.75);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes ccUniversalKpiRefresh {
+  0%,100% {
+    box-shadow: inherit;
+  }
+  45% {
+    box-shadow:
+      0 0 0 1px rgba(74,225,241,.18),
+      0 0 28px rgba(74,225,241,.10),
+      inset 0 0 22px rgba(74,225,241,.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-metrics::before,
+  .card-metrics::after,
+  .card-metrics .metric::before,
+  .card-metrics .metric-val,
+  .card-metrics .metric-lbl,
+  .card-metrics .metric-divider::after,
+  .cb-metric .cb-m-label::after,
+  .kpi-live::before,
+  .kpi-live::after,
+  .kpi-card::before,
+  .kpi-card::after,
+  .metric-card::before,
+  .metric-card::after,
+  .stat-card::before,
+  .stat-card::after,
+  [data-kpi-card]::before,
+  [data-kpi-card]::after {
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   ZENNI COMMAND CENTER V5.4 — AUTHENTICATED USER PROFILE
+   Dynamic Full Name + Subrole/Role presentation with a restrained
+   live-session badge. Uses the existing #userAvatar/.user-name/
+   .user-role markup; no HTML change required.
+   ============================================================ */
+
+.user-chip {
+  position: relative;
+  isolation: isolate;
+  min-width: 164px;
+  max-width: 245px;
+  min-height: 48px;
+  padding: 6px 12px 6px 7px;
+  gap: 10px;
+  overflow: visible;
+  border: 1px solid rgba(84, 177, 220, .18);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(16, 38, 64, .48), rgba(12, 23, 45, .48));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    0 8px 24px rgba(0,0,0,.12);
+  transition:
+    border-color .22s ease,
+    background .22s ease,
+    box-shadow .22s ease,
+    transform .22s ease;
+}
+
+.user-chip::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: .30;
+  background:
+    linear-gradient(110deg,
+      transparent 0%,
+      rgba(66,220,232,.14) 24%,
+      transparent 42%,
+      transparent 62%,
+      rgba(139,99,246,.13) 80%,
+      transparent 100%);
+  background-size: 220% 100%;
+  animation: ccUserChipEdge 8s linear infinite;
+}
+
+.user-chip::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: 8px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cc-green);
+  box-shadow:
+    0 0 6px rgba(70,227,162,.78),
+    0 0 12px rgba(70,227,162,.26);
+  animation: ccUserLiveDot 2.6s ease-in-out infinite;
+}
+
+.user-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(66,220,232,.30);
+  background:
+    linear-gradient(135deg, rgba(18, 45, 73, .58), rgba(16, 27, 53, .58));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.035),
+    0 10px 28px rgba(0,0,0,.16),
+    0 0 24px rgba(66,220,232,.045);
+}
+
+/* Animated operator/authentication badge */
+.user-avatar {
+  position: relative;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255,255,255,.22), transparent 28%),
+    linear-gradient(135deg, rgba(55,211,227,.96), rgba(113,94,242,.96));
+  border: 1px solid rgba(115,233,246,.30);
+  box-shadow:
+    0 0 0 1px rgba(66,220,232,.05),
+    0 0 16px rgba(66,220,232,.13),
+    inset 0 1px 0 rgba(255,255,255,.12);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  animation: ccUserBadgeBreath 4.8s ease-in-out infinite;
+}
+
+/* Rotating/pulsing authentication ring */
+.user-avatar::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  border-top-color: rgba(81,228,241,.62);
+  border-right-color: rgba(139,99,246,.34);
+  border-bottom-color: rgba(70,227,162,.18);
+  box-shadow:
+    0 0 10px rgba(66,220,232,.07);
+  animation: ccUserAuthRing 9s linear infinite;
+}
+
+/* Secondary pulse ring */
+.user-avatar::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: 13px;
+  border: 1px solid rgba(83,227,241,.16);
+  opacity: 0;
+  animation: ccUserAuthPulse 4.2s ease-out infinite;
+}
+
+.user-info {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  max-width: 176px;
+  gap: 2px;
+}
+
+.user-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #edf8ff;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.05;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(66,220,232,.055);
+}
+
+.user-role {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #7f94ae;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  transition: color .2s ease;
+}
+
+.user-chip:hover .user-role {
+  color: #9fb4c9;
+}
+
+.user-chip:hover .user-avatar {
+  box-shadow:
+    0 0 0 1px rgba(66,220,232,.09),
+    0 0 22px rgba(66,220,232,.20),
+    0 0 34px rgba(139,99,246,.08),
+    inset 0 1px 0 rgba(255,255,255,.14);
+}
+
+/* Long names stay compact instead of making the top bar wider. */
+@media (max-width: 1450px) {
+  .user-chip {
+    min-width: 146px;
+    max-width: 190px;
+  }
+
+  .user-info {
+    max-width: 120px;
+  }
+
+  .user-name {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 1100px) {
+  /* Existing compact breakpoint hides .user-info.
+     Keep the animated badge visible. */
+  .user-chip {
+    min-width: 48px;
+    width: 48px;
+    padding: 6px;
+    justify-content: center;
+  }
+
+  .user-avatar {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+
+  .user-chip::after {
+    right: 3px;
+    top: 4px;
+  }
+}
+
+@media (max-width: 760px) {
+  .user-chip {
+    background: rgba(13,27,49,.34);
+    border: 1px solid rgba(84,177,220,.13);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-chip::before,
+  .user-chip::after,
+  .user-avatar,
+  .user-avatar::before,
+  .user-avatar::after {
+    animation: none !important;
+  }
+}
+
+@keyframes ccUserChipEdge {
+  from { background-position: 0% 50%; }
+  to   { background-position: 220% 50%; }
+}
+
+@keyframes ccUserLiveDot {
+  0%,100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: .46;
+    transform: scale(.78);
+  }
+}
+
+@keyframes ccUserBadgeBreath {
+  0%,100% {
+    filter: brightness(1);
+    transform: translateY(0);
+  }
+  50% {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+}
+
+@keyframes ccUserAuthRing {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ccUserAuthPulse {
+  0%, 46% {
+    opacity: 0;
+    transform: scale(.82);
+  }
+  58% {
+    opacity: .36;
+  }
+  88%,100% {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
