@@ -17,6 +17,64 @@ const API = 'https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704me
 const AUTO_REFRESH_MS = 60000;
 const USE_DEMO_ON_ERROR = false;
 
+/* ============================================================
+   PICKING PERFORMANCE AUDIT — LOGGING ONLY
+
+   IMPORTANT:
+   - No API mode changes.
+   - No cache changes.
+   - No retry changes.
+   - No render/data logic changes.
+   - Timings use performance.now(), which is relative to navigation start.
+   ============================================================ */
+let PICKPERF_FETCH_SEQ = 0;
+let PICKPERF_API_SEQ = 0;
+let PICKPERF_PENDING_READY = null;
+
+function pickPerfNow_() {
+  return (typeof performance !== 'undefined' && performance.now)
+    ? performance.now()
+    : Date.now();
+}
+
+function pickPerfStart_(label, details = {}) {
+  const token = {
+    label: String(label || 'step'),
+    startedAt: pickPerfNow_()
+  };
+
+  console.log(`[PickPerf] ▶ ${token.label}`, details);
+  return token;
+}
+
+function pickPerfEnd_(token, details = {}) {
+  if (!token) return 0;
+
+  const durationMs = pickPerfNow_() - token.startedAt;
+
+  console.log(
+    `[PickPerf] ✓ ${token.label}: ${durationMs.toFixed(1)} ms`,
+    details
+  );
+
+  return durationMs;
+}
+
+function pickPerfPoint_(label, details = {}) {
+  console.log(
+    `[PickPerf] ${label} at ${pickPerfNow_().toFixed(1)} ms after navigation start`,
+    details
+  );
+}
+
+pickPerfPoint_('JS executing');
+console.log('[PickPerf] Picking cache mode ENABLED. pickingDashboard now uses debug=false so Apps Script CacheService can serve PRODUCTION_FLOW_PICKING_DASHBOARD.');
+
+window.addEventListener('load', () => {
+  pickPerfPoint_('window.load');
+});
+
+
 const TRACKED = [
   'SF Scan & Verify',
   'FSV Scan & Verify',
@@ -308,6 +366,27 @@ function dismissLoader() {
 
   screen.classList.add('hidden');
 
+  if (PICKPERF_PENDING_READY) {
+    const ready = PICKPERF_PENDING_READY;
+    const totalReadyMs = pickPerfNow_() - ready.navigationBaseline;
+
+    console.log('[PickPerf] ✅ INITIAL PICKING DASHBOARD READY');
+    console.table({
+      timestamp: new Date().toISOString(),
+      fetchId: ready.fetchId,
+      apiAndProcessingMs: Number(ready.apiAndProcessingMs || 0).toFixed(1),
+      intentionalLoaderHoldMs: ready.loaderHoldMs,
+      totalReadyMs: totalReadyMs.toFixed(1)
+    });
+    console.log(
+      `[PickPerf] MAIN DASHBOARD TIME TO READY: ${totalReadyMs.toFixed(1)} ms (${(totalReadyMs / 1000).toFixed(2)} sec)`
+    );
+
+    PICKPERF_PENDING_READY = null;
+  } else {
+    pickPerfPoint_('Loader dismissed');
+  }
+
   setTimeout(() => {
     if (screen && screen.parentNode) {
       screen.parentNode.removeChild(screen);
@@ -316,6 +395,11 @@ function dismissLoader() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const bootPerf = pickPerfStart_('DOMContentLoaded → Picking boot');
+  pickPerfPoint_('DOMContentLoaded fired');
+
+  const uiPerf = pickPerfStart_('Picking UI initialization');
+
   const mainEl = document.querySelector('.main');
   const loaderEl = document.getElementById('loaderScreen');
 
@@ -357,7 +441,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initParticles();
 
-  fetchAll(true);
+  pickPerfEnd_(uiPerf, {
+    refreshMs: AUTO_REFRESH_MS
+  });
+
+  const initialFetchPromise = fetchAll(true);
+  void initialFetchPromise;
+  pickPerfEnd_(bootPerf, {
+    initialFetchStarted: true
+  });
+
   setInterval(() => fetchAll(false), AUTO_REFRESH_MS);
 
   setTimeout(() => {
@@ -576,7 +669,13 @@ function getPickingStationTargetText(station) {
    API
 ────────────────────────────────────────────────── */
 
-async function apiFetch(debug = true) {
+async function apiFetch(debug = false) {
+  const apiId = ++PICKPERF_API_SEQ;
+  const apiPerf = pickPerfStart_(`Picking API request #${apiId}`, {
+    debug,
+    action: 'pickingDashboard'
+  });
+
   /*
    * IMPORTANT:
    * This dashboard must call the Picking-specific Production Flow API action.
@@ -585,22 +684,60 @@ async function apiFetch(debug = true) {
    */
   const url = `${API}?action=pickingDashboard&debug=${debug ? 'true' : 'false'}&t=${Date.now()}`;
 
+  const requestStartedAt = pickPerfNow_();
+
   const res = await fetch(url, {
     method: 'GET',
     redirect: 'follow',
     cache: 'no-store'
   });
 
+  const responseHeadersMs = pickPerfNow_() - requestStartedAt;
+
+  console.log(
+    `[PickPerf] Picking API #${apiId} response headers: ${responseHeadersMs.toFixed(1)} ms`,
+    {
+      httpStatus: res.status,
+      ok: res.ok,
+      debug
+    }
+  );
+
   if (!res.ok) {
     const msg = `HTTP ${res.status}`;
+    pickPerfEnd_(apiPerf, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      httpStatus: res.status,
+      success: false
+    });
     logError('error', 'API HTTP Error', msg, 'Picking Dashboard API');
     throw new Error(msg);
   }
 
+  const bodyReadStartedAt = pickPerfNow_();
   const responseText = await res.text();
+  const bodyReadMs = pickPerfNow_() - bodyReadStartedAt;
+
+  console.log(
+    `[PickPerf] Picking API #${apiId} body read: ${bodyReadMs.toFixed(1)} ms`,
+    {
+      responseChars: responseText.length
+    }
+  );
+
+  const jsonParseStartedAt = pickPerfNow_();
 
   try {
     const payload = JSON.parse(responseText);
+    const jsonParseMs = pickPerfNow_() - jsonParseStartedAt;
+
+    console.log(
+      `[PickPerf] Picking API #${apiId} JSON parse: ${jsonParseMs.toFixed(1)} ms`,
+      {
+        status: payload?.status,
+        action: payload?.action
+      }
+    );
 
     if (payload && payload.action && payload.action !== 'pickingDashboard') {
       logError(
@@ -620,19 +757,41 @@ async function apiFetch(debug = true) {
       );
     }
 
+    pickPerfEnd_(apiPerf, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(bodyReadMs.toFixed(1)),
+      jsonParseMs: Number(jsonParseMs.toFixed(1)),
+      httpStatus: res.status,
+      success: payload?.status === 'success'
+    });
+
     return payload;
   } catch {
+    const jsonParseMs = pickPerfNow_() - jsonParseStartedAt;
+
+    pickPerfEnd_(apiPerf, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(bodyReadMs.toFixed(1)),
+      jsonParseMs: Number(jsonParseMs.toFixed(1)),
+      httpStatus: res.status,
+      success: false,
+      parseFailed: true
+    });
+
     logError('error', 'API JSON Parse Failed', responseText.slice(0, 160), 'Picking Dashboard API');
     throw new Error('Bad JSON from API');
   }
 }
-
 
 function sleepPickingDashboard_(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function fetchPickingPayloadWithRetry_(showToast = false) {
+  const retryPerf = pickPerfStart_('Picking payload retry cycle', {
+    showToast
+  });
+
   /*
    * The Picking API sometimes returns while the snapshot / daily log is still
    * finishing. Do not make supervisors refresh 5 times.
@@ -647,13 +806,32 @@ async function fetchPickingPayloadWithRetry_(showToast = false) {
   let lastPayload = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    lastPayload = await apiFetch(true);
+    const attemptPerf = pickPerfStart_(
+      `Picking retry attempt ${attempt}/${maxAttempts}`
+    );
+
+    lastPayload = await apiFetch(false);
+
+    const incomplete = !!(
+      lastPayload &&
+      lastPayload.status === 'success' &&
+      isPickingPayloadProbablyIncomplete_(lastPayload)
+    );
+
+    pickPerfEnd_(attemptPerf, {
+      status: lastPayload?.status,
+      incomplete
+    });
 
     if (!lastPayload || lastPayload.status !== 'success') {
+      pickPerfEnd_(retryPerf, {
+        attemptsUsed: attempt,
+        finalStatus: lastPayload?.status || 'empty'
+      });
       return lastPayload;
     }
 
-    if (!isPickingPayloadProbablyIncomplete_(lastPayload)) {
+    if (!incomplete) {
       if (attempt > 1) {
         logError(
           'info',
@@ -663,13 +841,25 @@ async function fetchPickingPayloadWithRetry_(showToast = false) {
         );
       }
 
+      pickPerfEnd_(retryPerf, {
+        attemptsUsed: attempt,
+        recovered: attempt > 1,
+        finalStatus: lastPayload?.status
+      });
+
       return lastPayload;
     }
 
     if (attempt < maxAttempts) {
+      const retryDelayMs = 700 + attempt * 450;
+
+      console.log(
+        `[PickPerf] ⏳ Retry delay after attempt ${attempt}: ${retryDelayMs} ms`
+      );
+
       loaderSetCursor(`Payload looked partial — retrying ${attempt}/${maxAttempts}`);
       loaderAppendLog(' WAIT ', 'wait', `Partial payload detected. Retry ${attempt}/${maxAttempts}...`);
-      await sleepPickingDashboard_(700 + attempt * 450);
+      await sleepPickingDashboard_(retryDelayMs);
     }
   }
 
@@ -679,6 +869,12 @@ async function fetchPickingPayloadWithRetry_(showToast = false) {
     'Retry limit reached. Rendering best payload received.',
     'fetchPickingPayloadWithRetry_'
   );
+
+  pickPerfEnd_(retryPerf, {
+    attemptsUsed: maxAttempts,
+    retryLimitReached: true,
+    finalStatus: lastPayload?.status
+  });
 
   return lastPayload;
 }
@@ -750,6 +946,15 @@ function isPickingPayloadProbablyIncomplete_(payload) {
 
 
 async function fetchAll(showToast = false) {
+  const fetchId = ++PICKPERF_FETCH_SEQ;
+  const fetchPerf = pickPerfStart_(
+    `${showToast ? 'INITIAL/MANUAL' : 'AUTO'} fetchAll #${fetchId}`,
+    {
+      showToast,
+      refreshMs: AUTO_REFRESH_MS
+    }
+  );
+
   /*
    * Loading should not clear the dashboard.
    * Keep last good numbers visible until a good API response arrives.
@@ -766,7 +971,16 @@ async function fetchAll(showToast = false) {
   loaderSetCursor('Querying picking floor data source');
 
   try {
+    const payloadWaitPerf = pickPerfStart_(
+      `Picking payload wait #${fetchId}`
+    );
+
     const payload = await fetchPickingPayloadWithRetry_(showToast);
+
+    const payloadWaitMs = pickPerfEnd_(payloadWaitPerf, {
+      status: payload?.status,
+      action: payload?.action
+    });
 
     if (payload.status !== 'success') {
       throw new Error(payload.message || 'API returned an error');
@@ -783,6 +997,10 @@ async function fetchAll(showToast = false) {
      * Build next state first.
      * Do not replace STATE until payload is confirmed good.
      */
+    const normalizePerf = pickPerfStart_(
+      `Normalize/build Picking state #${fetchId}`
+    );
+
     const nextWip = normalizeWip(payload.wip || payload.data || []);
     const normalizedDailyStats = normalizeDailyStats(
       payload.dailyStats || {},
@@ -874,12 +1092,30 @@ async function fetchAll(showToast = false) {
     /*
      * Only now replace STATE and repaint the page.
      */
+    const normalizeMs = pickPerfEnd_(normalizePerf, {
+      wipRows: nextWip.length,
+      movementRows: nextState.movement.length,
+      operatorRows: nextState.activityByOperator.length,
+      hourlyRows: nextState.hourlyActivity.length
+    });
+
     STATE = nextState;
 
     setLiveState('ok', 'LIVE');
 
+    let renderMs = 0;
+
     try {
+      const renderPerf = pickPerfStart_(
+        `renderAll #${fetchId}`
+      );
+
       renderAll();
+
+      renderMs = pickPerfEnd_(renderPerf, {
+        wipRows: STATE.wip.length,
+        operatorRows: STATE.activityByOperator.length
+      });
     } catch (renderErr) {
       console.error(renderErr);
       logError('error', 'Render Failed', renderErr.message || String(renderErr), 'renderAll');
@@ -891,6 +1127,28 @@ async function fetchAll(showToast = false) {
     loaderSetCheck('lc-stats', 'ok', 'READY');
     loaderSetCursor('Dashboard ready — launching');
     loaderAppendLog('  OK  ', 'ok', 'All systems online — launching dashboard');
+
+    const fetchAllMs = pickPerfEnd_(fetchPerf, {
+      payloadWaitMs: Number(payloadWaitMs.toFixed(1)),
+      normalizeMs: Number(normalizeMs.toFixed(1)),
+      renderMs: Number(renderMs.toFixed(1)),
+      loaderHoldMs: 900,
+      loaderBlockingUntilDismiss: true
+    });
+
+    if (showToast) {
+      PICKPERF_PENDING_READY = {
+        fetchId,
+        navigationBaseline: 0,
+        apiAndProcessingMs: fetchAllMs,
+        loaderHoldMs: 900
+      };
+
+      console.log(
+        `[PickPerf] Data/render ready for initial load #${fetchId}; loader intentionally remains for 900 ms`
+      );
+    }
+
     setTimeout(dismissLoader, 900);
 
     if (showToast) {
@@ -898,6 +1156,12 @@ async function fetchAll(showToast = false) {
     }
 
   } catch (err) {
+    pickPerfEnd_(fetchPerf, {
+      success: false,
+      error: err?.message || String(err),
+      errorLoaderHoldMs: 1200
+    });
+
     console.warn(err);
     logError('error', 'Fetch Failed', err.message, 'fetchAll → Picking WIP API');
 

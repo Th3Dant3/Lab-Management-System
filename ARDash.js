@@ -3,6 +3,118 @@
  * AR Dashboard Frontend
  *********************************************************/
 
+/* =====================================================
+   AR PERFORMANCE AUDIT LOGGER
+   Diagnostic only — does not change API/data behavior.
+===================================================== */
+const AR_PERF = {
+  navigationStartMs: performance.now(),
+  seq: 0,
+  initialReadyLogged: false,
+  currentLoadId: 0,
+  marks: new Map()
+};
+
+console.log(
+  `[ARPerf] JS executing at ${performance.now().toFixed(1)} ms after navigation start`
+);
+
+function arPerfStart(label) {
+  const id = `${++AR_PERF.seq}:${label}`;
+  AR_PERF.marks.set(id, performance.now());
+  console.log(`[ARPerf] ▶ ${label}`);
+  return id;
+}
+
+function arPerfEnd(id, details = {}) {
+  const started = AR_PERF.marks.get(id);
+  const label = String(id || "").replace(/^\d+:/, "");
+
+  if (started == null) {
+    console.warn(`[ARPerf] Missing timer for ${label}`);
+    return 0;
+  }
+
+  const duration = performance.now() - started;
+  AR_PERF.marks.delete(id);
+
+  console.log(
+    `[ARPerf] ✓ ${label}: ${duration.toFixed(1)} ms`,
+    details
+  );
+
+  return duration;
+}
+
+function arPerfNavigationTiming() {
+  try {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (!nav) return;
+
+    console.groupCollapsed("[ARPerf] Browser navigation timing");
+    console.table({
+      domInteractive: Math.round(nav.domInteractive),
+      domContentLoaded: Math.round(nav.domContentLoadedEventEnd),
+      windowLoad: Math.round(nav.loadEventEnd || performance.now()),
+      transferSize: nav.transferSize || 0,
+      encodedBodySize: nav.encodedBodySize || 0,
+      decodedBodySize: nav.decodedBodySize || 0
+    });
+    console.groupEnd();
+  } catch (err) {
+    console.warn("[ARPerf] Navigation timing unavailable:", err);
+  }
+}
+
+function arPerfSlowResources() {
+  try {
+    const rows = performance
+      .getEntriesByType("resource")
+      .map(r => ({
+        resource: String(r.name || "").split("/").pop().slice(0, 90),
+        durationMs: Number(r.duration.toFixed(1)),
+        transferKB: Number(((r.transferSize || 0) / 1024).toFixed(1)),
+        type: r.initiatorType || ""
+      }))
+      .sort((a, b) => b.durationMs - a.durationMs)
+      .slice(0, 12);
+
+    console.groupCollapsed("[ARPerf] Slowest page resources");
+    console.table(rows);
+    console.groupEnd();
+  } catch (err) {
+    console.warn("[ARPerf] Resource timing unavailable:", err);
+  }
+}
+
+window.showARPerformanceHistory = function() {
+  try {
+    const history = JSON.parse(localStorage.getItem("ar_perf_history") || "[]");
+    console.table(history);
+    return history;
+  } catch (err) {
+    console.warn("[ARPerf] Could not read history:", err);
+    return [];
+  }
+};
+
+window.clearARPerformanceHistory = function() {
+  localStorage.removeItem("ar_perf_history");
+  console.log("[ARPerf] Performance history cleared.");
+};
+
+function arPerfSaveInitialReady(record) {
+  try {
+    const key = "ar_perf_history";
+    const history = JSON.parse(localStorage.getItem(key) || "[]");
+    history.unshift(record);
+    localStorage.setItem(key, JSON.stringify(history.slice(0, 25)));
+  } catch (err) {
+    console.warn("[ARPerf] Could not save history:", err);
+  }
+}
+
+
 /* ─────────────────────────────────────────────────────
    LOADING SCREEN
 ───────────────────────────────────────────────────── */
@@ -294,24 +406,62 @@ function getStationColor(name, fallback = "#ff9900") {
 /* ─────────────────────────────────────────────────────
    API
 ───────────────────────────────────────────────────── */
-async function fetchJson(url) {
-  const res = await fetch(url, { cache: "no-store" });
+async function fetchJson(url, perfLabel = "API") {
+  const apiTimer = arPerfStart(`${perfLabel} API`);
+  const requestStarted = performance.now();
 
-  if (!res.ok) {
-    throw new Error(`API failed: ${res.status}`);
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    const responseHeadersMs = performance.now() - requestStarted;
+
+    if (!res.ok) {
+      arPerfEnd(apiTimer, {
+        responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+        httpStatus: res.status,
+        success: false
+      });
+      throw new Error(`API failed: ${res.status}`);
+    }
+
+    const parseTimer = arPerfStart(`${perfLabel} JSON parse`);
+    const payload = await res.json();
+    const jsonParseMs = arPerfEnd(parseTimer, {
+      httpStatus: res.status
+    });
+
+    if (payload.status && String(payload.status).toLowerCase() !== "success") {
+      arPerfEnd(apiTimer, {
+        responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+        jsonParseMs: Number(jsonParseMs.toFixed(1)),
+        httpStatus: res.status,
+        success: false,
+        apiStatus: payload.status
+      });
+      throw new Error(payload.message || "API returned an error.");
+    }
+
+    arPerfEnd(apiTimer, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      jsonParseMs: Number(jsonParseMs.toFixed(1)),
+      httpStatus: res.status,
+      success: true
+    });
+
+    return payload;
+
+  } catch (err) {
+    if (AR_PERF.marks.has(apiTimer)) {
+      arPerfEnd(apiTimer, {
+        success: false,
+        error: err?.message || String(err)
+      });
+    }
+    throw err;
   }
-
-  const payload = await res.json();
-
-  if (payload.status && String(payload.status).toLowerCase() !== "success") {
-    throw new Error(payload.message || "API returned an error.");
-  }
-
-  return payload;
 }
 
 async function fetchProductionFlowAR() {
-  return fetchJson(`${API_URL}?action=productionFlow&area=AR&debug=true`);
+  return fetchJson(`${API_URL}?action=productionFlow&area=AR`, "productionFlow AR");
 }
 
 function getAROwner() {
@@ -490,13 +640,13 @@ function applyARLMSOnlyVisibility() {
 async function fetchARRosterControl() {
   const owner = encodeURIComponent(getAROwner());
   const shift = encodeURIComponent(getARShift());
-  return fetchJson(`${API_URL}?action=getArRosterControl&owner=${owner}&shift=${shift}&debug=true`);
+  return fetchJson(`${API_URL}?action=getArRosterControl&owner=${owner}&shift=${shift}&debug=true`, "AR rosterControl");
 }
 
 async function fetchARCapacity() {
   const owner = encodeURIComponent(getAROwner());
   const shift = encodeURIComponent(getARShift());
-  return fetchJson(`${API_URL}?action=getArCapacityMetrics&owner=${owner}&shift=${shift}&debug=true`);
+  return fetchJson(`${API_URL}?action=getArCapacityMetrics&owner=${owner}&shift=${shift}`, "AR capacityMetrics");
 }
 
 async function saveARRosterAssignment(payload) {
@@ -533,9 +683,114 @@ async function clearARRosterAssignment(operatorName, role) {
 }
 
 async function loadARData() {
+  const loadId = ++AR_PERF.currentLoadId;
+  const isInitial = loadId === 1;
+  const loadLabel = `${isInitial ? "INITIAL" : "REFRESH"} loadARData #${loadId}`;
+  const loadTimer = arPerfStart(loadLabel);
+
+  /*
+    =========================================================
+    AR STAGE 1B — PRODUCTION FLOW FIRST
+    =========================================================
+
+    Startup sequence:
+      1) Production Flow AR runs ALONE.
+      2) Main AR dashboard renders.
+      3) Loader dismisses.
+      4) Capacity Metrics + Roster Control start afterward.
+      5) Background data re-renders AR when ready.
+
+    This avoids launching 3 Apps Script requests at the same
+    time during startup, which the Stage 1 test showed can
+    increase all three request times through contention.
+    =========================================================
+  */
+
   try {
-    const [flowPayload, capacityPayload, rosterPayload] = await Promise.all([
-      fetchProductionFlowAR(),
+    const flowTimer = arPerfStart(`AR main productionFlow wait #${loadId}`);
+    const flowPayload = await fetchProductionFlowAR();
+    const flowWaitMs = arPerfEnd(flowTimer, {
+      flowRows: Array.isArray(flowPayload?.productionFlow)
+        ? flowPayload.productionFlow.length
+        : 0
+    });
+
+    LAST_FLOW_PAYLOAD = flowPayload;
+
+    console.log("REAL AR FLOW PAYLOAD:", flowPayload);
+    console.table(flowPayload.productionFlow || []);
+
+    setLiveState(true);
+
+    const renderTimer = arPerfStart(`renderDashboard MAIN #${loadId}`);
+    renderDashboard(
+      LAST_FLOW_PAYLOAD,
+      LAST_CAPACITY_PAYLOAD
+    );
+    const renderMs = arPerfEnd(renderTimer, {
+      flowRows: Array.isArray(flowPayload?.productionFlow)
+        ? flowPayload.productionFlow.length
+        : 0,
+      capacityAvailableNow: Boolean(LAST_CAPACITY_PAYLOAD),
+      capacityBlockingMainLoad: false,
+      rosterBlockingMainLoad: false
+    });
+
+    if (window._arlDismiss) {
+      window._arlDismiss(true);
+    }
+
+    const totalLoadMs = arPerfEnd(loadTimer, {
+      productionFlowWaitMs: Number(flowWaitMs.toFixed(1)),
+      renderMs: Number(renderMs.toFixed(1)),
+      capacityBlockingMainLoad: false,
+      rosterBlockingMainLoad: false,
+      backgroundStartsAfterMainRender: true,
+      success: true
+    });
+
+    if (isInitial && !AR_PERF.initialReadyLogged) {
+      AR_PERF.initialReadyLogged = true;
+
+      const totalReadyMs = performance.now();
+
+      const record = {
+        timestamp: new Date().toISOString(),
+        totalReadyMs: Number(totalReadyMs.toFixed(1)),
+        loadARDataMs: Number(totalLoadMs.toFixed(1)),
+        productionFlowWaitMs: Number(flowWaitMs.toFixed(1)),
+        capacityMetricsMs: "starts after main / non-blocking",
+        rosterControlMs: "starts after main / non-blocking",
+        renderMs: Number(renderMs.toFixed(1)),
+        flowRows: Array.isArray(flowPayload?.productionFlow)
+          ? flowPayload.productionFlow.length
+          : 0
+      };
+
+      console.log("[ARPerf] ✅ INITIAL AR DASHBOARD READY");
+      console.table(record);
+      console.log(
+        `[ARPerf] MAIN DASHBOARD TIME TO READY: ${totalReadyMs.toFixed(1)} ms (${(totalReadyMs / 1000).toFixed(2)} sec)`
+      );
+
+      arPerfSaveInitialReady(record);
+
+      setTimeout(() => {
+        arPerfNavigationTiming();
+        arPerfSlowResources();
+      }, 0);
+    }
+
+    /*
+      =======================================================
+      START SECONDARY APIS ONLY AFTER MAIN AR IS VISIBLE
+      =======================================================
+    */
+    const backgroundTimer = arPerfStart(
+      `AR background capacity+roster AFTER MAIN #${loadId}`
+    );
+
+    const backgroundPromise = Promise.all([
       fetchARCapacity().catch(err => {
         console.warn("AR capacity metrics failed:", err);
         return null;
@@ -544,24 +799,81 @@ async function loadARData() {
         console.warn("AR roster control failed:", err);
         return null;
       })
-    ]);
+    ])
+      .then(([capacityPayload, rosterPayload]) => {
+        LAST_CAPACITY_PAYLOAD = capacityPayload || null;
+        AR_METRICS_STATE.metricsPayload = capacityPayload || null;
+        AR_METRICS_STATE.rosterPayload = rosterPayload || null;
+        AR_METRICS_STATE.owner = getAROwner();
+        AR_METRICS_STATE.shift = getARShift();
 
-    LAST_FLOW_PAYLOAD = flowPayload;
-    LAST_CAPACITY_PAYLOAD = capacityPayload || null;
-    AR_METRICS_STATE.metricsPayload = capacityPayload || null;
-    AR_METRICS_STATE.rosterPayload = rosterPayload || null;
-    AR_METRICS_STATE.owner = getAROwner();
-    AR_METRICS_STATE.shift = getARShift();
+        const backgroundRenderTimer = arPerfStart(
+          `background AR update render #${loadId}`
+        );
 
-    console.log("REAL AR FLOW PAYLOAD:", flowPayload);
-    console.table(flowPayload.productionFlow || []);
+        if (LAST_FLOW_PAYLOAD) {
+          renderDashboard(
+            LAST_FLOW_PAYLOAD,
+            LAST_CAPACITY_PAYLOAD
+          );
+        }
 
-    setLiveState(true);
-    renderDashboard(LAST_FLOW_PAYLOAD, LAST_CAPACITY_PAYLOAD);
+        const backgroundRenderMs = arPerfEnd(backgroundRenderTimer, {
+          capacityAvailable: Boolean(capacityPayload),
+          rosterAvailable: Boolean(rosterPayload),
+          flowAvailable: Boolean(LAST_FLOW_PAYLOAD)
+        });
 
-    if (window._arlDismiss) {
-      window._arlDismiss(true);
-    }
+        const backgroundMs = arPerfEnd(backgroundTimer, {
+          capacityAvailable: Boolean(capacityPayload),
+          rosterAvailable: Boolean(rosterPayload),
+          renderMs: Number(backgroundRenderMs.toFixed(1))
+        });
+
+        console.log(
+          `[ARPerf] Background Capacity + Roster finished AFTER MAIN for load #${loadId}: ${backgroundMs.toFixed(1)} ms`
+        );
+
+        console.log(
+          `[ARPerf] ✅ FULL AR DATA COMPLETE for load #${loadId}: ` +
+          `${performance.now().toFixed(1)} ms (${(performance.now() / 1000).toFixed(2)} sec) after navigation start`,
+          {
+            backgroundMs: Number(backgroundMs.toFixed(1)),
+            capacityAvailable: Boolean(capacityPayload),
+            rosterAvailable: Boolean(rosterPayload)
+          }
+        );
+
+        return {
+          capacityPayload,
+          rosterPayload,
+          backgroundMs,
+          renderMs: backgroundRenderMs
+        };
+      })
+      .catch(err => {
+        console.warn("AR background load failed:", err);
+
+        if (AR_PERF.marks.has(backgroundTimer)) {
+          arPerfEnd(backgroundTimer, {
+            success: false,
+            error: err?.message || String(err)
+          });
+        }
+
+        return {
+          capacityPayload: null,
+          rosterPayload: null,
+          backgroundMs: 0,
+          renderMs: 0
+        };
+      });
+
+    /*
+      Deliberately do not await backgroundPromise.
+      The main dashboard is already visible.
+    */
+    void backgroundPromise;
 
   } catch (err) {
     console.error("AR API ERROR:", err);
@@ -584,11 +896,19 @@ async function loadARData() {
     LAST_FLOW_PAYLOAD = emptyPayload;
     LAST_CAPACITY_PAYLOAD = null;
 
+    const errorRenderTimer = arPerfStart(`renderDashboard ERROR #${loadId}`);
     renderDashboard(emptyPayload, null);
+    const errorRenderMs = arPerfEnd(errorRenderTimer);
 
     if (window._arlDismiss) {
       window._arlDismiss(false);
     }
+
+    arPerfEnd(loadTimer, {
+      success: false,
+      renderMs: Number(errorRenderMs.toFixed(1)),
+      error: err?.message || String(err)
+    });
   }
 }
 
@@ -2996,12 +3316,33 @@ function bindEvents() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  const bootTimer = arPerfStart("DOMContentLoaded → AR boot");
+
+  console.log(
+    `[ARPerf] DOMContentLoaded fired at ${performance.now().toFixed(1)} ms`
+  );
+
+  const initTimer = arPerfStart("AR UI initialization");
   bindEvents();
   updateClock();
+  const initMs = arPerfEnd(initTimer);
+
   loadARData();
 
   setInterval(updateClock, 1000 * 30);
   setInterval(loadARData, REFRESH_MS);
+
+  arPerfEnd(bootTimer, {
+    uiInitializationMs: Number(initMs.toFixed(1)),
+    refreshMs: REFRESH_MS
+  });
+});
+
+window.addEventListener("load", () => {
+  console.log(
+    `[ARPerf] window.load fired at ${performance.now().toFixed(1)} ms`
+  );
+  arPerfNavigationTiming();
 });
 
 /* =====================================================
@@ -3990,3 +4331,5 @@ function renderARRosterControls(metricsPayload, rosterPayload) {
    USER_CONTROL_API_URL is intentionally not used by AR until its response shape is mapped.
 ───────────────────────────────────────────────────── */
 console.log("[AR Dashboard] Option A loaded. AR WIP, hourly, roster, and capacity = Production API.");
+console.log("[ARPerf] AR Production Flow cache mode ENABLED. productionFlow no longer uses debug=true.");
+console.log("[ARPerf] AR Capacity cache mode ENABLED. capacityMetrics no longer uses debug=true.");
