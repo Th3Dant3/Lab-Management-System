@@ -11,6 +11,53 @@
 
 const API = 'https://script.google.com/macros/s/AKfycbzpPE9mQznnF6oaIYW897SgqRVpsiMqZsTYj9HyMw0JADU31-6jN7slD_wJQs6f2njn/exec';
 
+
+/* ============================================================
+   POWER BREAKAGE PERFORMANCE AUDIT — LOGGING ONLY
+   No API URL, fetch order, dashboard calculations, filters,
+   charts, refresh cadence, or loader timing changes.
+============================================================ */
+const powerPerfState = {
+  loadSeq: 0,
+  initialLoadId: null,
+  initialDataReadyAt: null,
+  initialOverlayHideRequestedAt: null,
+  initialOverlayHiddenAt: null,
+  initialReadyLogged: false
+};
+
+function powerPerfNow_() {
+  return performance.now();
+}
+
+function powerPerfLog_(message, details = {}) {
+  console.log(`[PowerPerf] ${message}`, details);
+}
+
+function powerPerfStart_(label, details = {}) {
+  const startedAt = powerPerfNow_();
+  powerPerfLog_(`▶ ${label}`, details);
+  return startedAt;
+}
+
+function powerPerfEnd_(label, startedAt, details = {}) {
+  const elapsed = powerPerfNow_() - startedAt;
+  powerPerfLog_(`✓ ${label}: ${elapsed.toFixed(1)} ms`, details);
+  return elapsed;
+}
+
+powerPerfLog_(
+  `JS executing at ${powerPerfNow_().toFixed(1)} ms after navigation start`,
+  {}
+);
+
+window.addEventListener('load', () => {
+  powerPerfLog_(
+    `window.load at ${powerPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+});
+
 const CLR = {
   peach:  '#d28c64',
   peri:   '#e8a040',
@@ -37,16 +84,127 @@ let _flowBrk=[], _flowResearch=[];
    Apps Script. When supplied, script reads BREAKAGE_HISTORY
    instead of live sheets.
 ============================================================ */
-function fetchTab(tab, startDate, endDate) {
+async function fetchLiveBundle() {
+  const totalStartedAt = powerPerfStart_(
+    'API liveBundle',
+    {}
+  );
+
+  const headersStartedAt = powerPerfNow_();
+  const response = await fetch(`${API}?tab=liveBundle`);
+  const headersMs = powerPerfNow_() - headersStartedAt;
+
+  powerPerfLog_(
+    `API liveBundle response headers: ${headersMs.toFixed(1)} ms`,
+    {
+      httpStatus: response.status,
+      ok: response.ok
+    }
+  );
+
+  const bodyStartedAt = powerPerfNow_();
+  const responseText = await response.text();
+  const bodyMs = powerPerfNow_() - bodyStartedAt;
+
+  powerPerfLog_(
+    `API liveBundle body read: ${bodyMs.toFixed(1)} ms`,
+    { responseChars: responseText.length }
+  );
+
+  const parseStartedAt = powerPerfNow_();
+  const d = JSON.parse(responseText);
+  const parseMs = powerPerfNow_() - parseStartedAt;
+
+  const data = d?.data || {};
+
+  powerPerfLog_(
+    `API liveBundle JSON parse: ${parseMs.toFixed(1)} ms`,
+    {
+      status: d?.status,
+      breakageRows: Array.isArray(data.breakageSummary) ? data.breakageSummary.length : null,
+      reasonRows: Array.isArray(data.reasonSummary) ? data.reasonSummary.length : null,
+      researchRows: Array.isArray(data.powerResearch) ? data.powerResearch.length : null,
+      anomalyRows: Array.isArray(data.anomalies) ? data.anomalies.length : null
+    }
+  );
+
+  if (d.status !== 'ok') throw new Error(d.message);
+
+  powerPerfEnd_(
+    'API liveBundle',
+    totalStartedAt,
+    {
+      responseHeadersMs: Number(headersMs.toFixed(1)),
+      bodyReadMs: Number(bodyMs.toFixed(1)),
+      jsonParseMs: Number(parseMs.toFixed(1)),
+      responseChars: responseText.length
+    }
+  );
+
+  return data;
+}
+
+async function fetchTab(tab, startDate, endDate) {
   let url = `${API}?tab=${tab}`;
   if (startDate) url += `&startDate=${encodeURIComponent(startDate)}`;
   if (endDate)   url += `&endDate=${encodeURIComponent(endDate)}`;
-  return fetch(url)
-    .then(r => r.json())
-    .then(d => {
-      if (d.status !== 'ok') throw new Error(d.message);
-      return d.data;
-    });
+
+  const totalStartedAt = powerPerfStart_(
+    `API ${tab}`,
+    {
+      startDate: startDate || null,
+      endDate: endDate || null
+    }
+  );
+
+  const headersStartedAt = powerPerfNow_();
+  const response = await fetch(url);
+  const headersMs = powerPerfNow_() - headersStartedAt;
+
+  powerPerfLog_(
+    `API ${tab} response headers: ${headersMs.toFixed(1)} ms`,
+    {
+      httpStatus: response.status,
+      ok: response.ok
+    }
+  );
+
+  const bodyStartedAt = powerPerfNow_();
+  const responseText = await response.text();
+  const bodyMs = powerPerfNow_() - bodyStartedAt;
+
+  powerPerfLog_(
+    `API ${tab} body read: ${bodyMs.toFixed(1)} ms`,
+    { responseChars: responseText.length }
+  );
+
+  const parseStartedAt = powerPerfNow_();
+  const d = JSON.parse(responseText);
+  const parseMs = powerPerfNow_() - parseStartedAt;
+
+  powerPerfLog_(
+    `API ${tab} JSON parse: ${parseMs.toFixed(1)} ms`,
+    {
+      status: d?.status,
+      rowCount: Array.isArray(d?.data) ? d.data.length : null
+    }
+  );
+
+  if (d.status !== 'ok') throw new Error(d.message);
+
+  powerPerfEnd_(
+    `API ${tab}`,
+    totalStartedAt,
+    {
+      responseHeadersMs: Number(headersMs.toFixed(1)),
+      bodyReadMs: Number(bodyMs.toFixed(1)),
+      jsonParseMs: Number(parseMs.toFixed(1)),
+      responseChars: responseText.length,
+      rowCount: Array.isArray(d.data) ? d.data.length : null
+    }
+  );
+
+  return d.data;
 }
 
 /* ============================================================
@@ -722,6 +880,7 @@ function setLoadStep(id, state) {
 }
 
 function showOverlay() {
+  powerPerfLog_('Loading overlay shown', {});
   const o = document.getElementById('loadingOverlay');
   if (o) o.classList.remove('hidden');
   // Reset all steps
@@ -736,6 +895,17 @@ function showOverlay() {
 }
 
 function hideOverlay() {
+  const hideRequestedAt = powerPerfNow_();
+
+  if (powerPerfState.initialLoadId !== null && !powerPerfState.initialReadyLogged) {
+    powerPerfState.initialOverlayHideRequestedAt = hideRequestedAt;
+  }
+
+  powerPerfLog_(
+    'hideOverlay() called; existing 400 ms splash hide delay begins',
+    {}
+  );
+
   const bar = document.getElementById('paProgressBar');
   if (bar) bar.style.width = '100%';
   const lbl = document.getElementById('paProgressLabel');
@@ -748,6 +918,36 @@ function hideOverlay() {
   setTimeout(() => {
     const o = document.getElementById('loadingOverlay');
     if (o) o.classList.add('hidden');
+
+    if (
+      powerPerfState.initialLoadId !== null &&
+      !powerPerfState.initialReadyLogged
+    ) {
+      powerPerfState.initialOverlayHiddenAt = powerPerfNow_();
+      powerPerfState.initialReadyLogged = true;
+
+      const totalReadyMs = powerPerfState.initialOverlayHiddenAt;
+      const hideDelayMs = powerPerfState.initialOverlayHideRequestedAt == null
+        ? null
+        : powerPerfState.initialOverlayHiddenAt -
+          powerPerfState.initialOverlayHideRequestedAt;
+
+      powerPerfLog_('✅ INITIAL POWER BREAKAGE DASHBOARD READY', {
+        fetchId: powerPerfState.initialLoadId,
+        dataRenderReadyMs: powerPerfState.initialDataReadyAt == null
+          ? null
+          : powerPerfState.initialDataReadyAt.toFixed(1),
+        preHideDelayMs: 300,
+        overlayHideDelayMs: hideDelayMs == null
+          ? null
+          : Number(hideDelayMs.toFixed(1)),
+        totalReadyMs: Number(totalReadyMs.toFixed(1))
+      });
+
+      console.log(
+        `[PowerPerf] MAIN POWER BREAKAGE DASHBOARD TIME TO READY: ${totalReadyMs.toFixed(1)} ms (${(totalReadyMs / 1000).toFixed(2)} sec)`
+      );
+    }
   }, 400);
 }
 
@@ -1044,35 +1244,86 @@ function exportResearchXLSX() {
    LOAD ALL  (live — no date params sent to Apps Script)
 ============================================================ */
 async function loadAll() {
+  const loadId = ++powerPerfState.loadSeq;
+  const isInitialLoad = powerPerfState.initialLoadId === null;
+  if (isInitialLoad) powerPerfState.initialLoadId = loadId;
+
+  const totalStartedAt = powerPerfStart_(
+    `${isInitialLoad ? 'INITIAL ' : ''}Power Breakage load #${loadId}`,
+    {
+      requests: ['liveBundle'],
+      requestMode: 'single-live-bundle'
+    }
+  );
+
   showOverlay();
   document.getElementById('liveStatus').textContent   = 'Loading...';
   document.getElementById('liveDot').style.background = CLR.peri;
 
   try {
+    /*
+      POWER BREAKAGE STAGE 3:
+      One live browser request. The backend reads the four existing
+      Stage 2 live cache keys and combines them only for this HTTP response.
+      No combined CacheService value is created.
+    */
     setLoadStep('ls-brk', 'active');
-    const brk = await fetchTab('breakageSummary');
-    setLoadStep('ls-brk', 'done'); setLoadStep('ls-reason', 'active');
+    setLoadStep('ls-reason', 'active');
+    setLoadStep('ls-research', 'active');
+    setLoadStep('ls-anom', 'active');
 
-    const reason = await fetchTab('reasonSummary');
-    setLoadStep('ls-reason', 'done'); setLoadStep('ls-research', 'active');
+    const liveBundle = await fetchLiveBundle();
 
-    const research = await fetchTab('powerResearch');
-    setLoadStep('ls-research', 'done'); setLoadStep('ls-anom', 'active');
+    const brk      = Array.isArray(liveBundle.breakageSummary) ? liveBundle.breakageSummary : [];
+    const reason   = Array.isArray(liveBundle.reasonSummary)   ? liveBundle.reasonSummary   : [];
+    const research = Array.isArray(liveBundle.powerResearch)   ? liveBundle.powerResearch   : [];
+    const anom     = Array.isArray(liveBundle.anomalies)       ? liveBundle.anomalies       : [];
 
-    const anom = await fetchTab('anomalies');
+    setLoadStep('ls-brk', 'done');
+    setLoadStep('ls-reason', 'done');
+    setLoadStep('ls-research', 'done');
     setLoadStep('ls-anom', 'done');
+
+    const normalizeStartedAt = powerPerfStart_(
+      `Normalize datasets #${loadId}`,
+      {}
+    );
 
     _allBrk      = (Array.isArray(brk)      ? brk      : []).map(normalizeRow);
     _allReason   =  Array.isArray(reason)   ? reason   : [];
-    _allResearch = (Array.isArray(research)  ? research : []).map(normalizeRow);
-    _allAnom     = (Array.isArray(anom)      ? anom     : []).map(normalizeRow);
+    _allResearch = (Array.isArray(research) ? research : []).map(normalizeRow);
+    _allAnom     = (Array.isArray(anom)     ? anom     : []).map(normalizeRow);
 
-    // If single date filter is already set, re-fetch with that date
+    powerPerfEnd_(
+      `Normalize datasets #${loadId}`,
+      normalizeStartedAt,
+      {
+        breakageRows: _allBrk.length,
+        reasonRows: _allReason.length,
+        researchRows: _allResearch.length,
+        anomalyRows: _allAnom.length
+      }
+    );
+
     const dateVal = document.getElementById('dateSingle')?.value;
 
     if (dateVal) {
+      const historicalStartedAt = powerPerfStart_(
+        `Existing date filter reload #${loadId}`,
+        { dateVal }
+      );
       await applyDateFilter();
+      powerPerfEnd_(
+        `Existing date filter reload #${loadId}`,
+        historicalStartedAt,
+        {}
+      );
     } else {
+      const renderStartedAt = powerPerfStart_(
+        `Power Breakage build/render #${loadId}`,
+        {}
+      );
+
       _brk      = [..._allBrk];
       _reason   = [..._allReason];
       _research = [..._allResearch];
@@ -1082,14 +1333,51 @@ async function loadAll() {
       buildOverview();
       _flowBrk = [..._allBrk];
       _flowResearch = [..._allResearch];
-      populateFlowFilters(); renderFlow();
-      populateResearchFilters(); renderResearch();
+      populateFlowFilters();
+      renderFlow();
+      populateResearchFilters();
+      renderResearch();
       buildAlerts();
       buildWeekOptions();
 
       document.getElementById('liveStatus').textContent   = 'Live';
       document.getElementById('liveDot').style.background = '#d4c0a8';
       document.getElementById('liveDot').style.animation  = 'pulse 1.5s infinite';
+
+      powerPerfEnd_(
+        `Power Breakage build/render #${loadId}`,
+        renderStartedAt,
+        {
+          breakageRows: _brk.length,
+          reasonRows: _reason.length,
+          researchRows: _research.length,
+          anomalyRows: _anom.length
+        }
+      );
+    }
+
+    const totalMs = powerPerfEnd_(
+      `${isInitialLoad ? 'INITIAL ' : ''}Power Breakage load #${loadId}`,
+      totalStartedAt,
+      { success: true }
+    );
+
+    if (isInitialLoad) {
+      powerPerfState.initialDataReadyAt = powerPerfNow_();
+      powerPerfLog_(
+        `Data/render ready for initial Power Breakage load #${loadId}; existing code waits 300 ms before hideOverlay(), then hideOverlay waits 400 ms`,
+        {
+          apiAndRenderMs: Number(totalMs.toFixed(1)),
+          preHideDelayMs: 300,
+          overlayHideDelayMs: 400
+        }
+      );
+
+      powerPerfLog_(
+        'Main dashboard complete; starting deferred keep-warm ping',
+        {}
+      );
+      pingWarm();
     }
 
   } catch (err) {
@@ -1097,6 +1385,23 @@ async function loadAll() {
     document.getElementById('liveStatus').textContent   = 'Error';
     document.getElementById('liveDot').style.background = '#f87171';
     document.getElementById('liveDot').style.animation  = 'none';
+
+    powerPerfEnd_(
+      `${isInitialLoad ? 'INITIAL ' : ''}Power Breakage load #${loadId}`,
+      totalStartedAt,
+      {
+        success: false,
+        message: err?.message || String(err)
+      }
+    );
+
+    if (isInitialLoad) {
+      powerPerfLog_(
+        'Main dashboard failed; starting deferred keep-warm ping after main request settled',
+        {}
+      );
+      pingWarm();
+    }
   } finally {
     setTimeout(hideOverlay, 300);
   }
@@ -1109,10 +1414,27 @@ async function loadAll() {
    Also fires every 4 minutes in sync with the server-side trigger.
 ============================================================ */
 function pingWarm() {
-  fetch(`${API}?tab=keepwarm`).catch(() => {}); // silent — we don't need the response
+  const startedAt = powerPerfStart_('Keep-warm ping', {});
+  fetch(`${API}?tab=keepwarm`)
+    .then(r => {
+      powerPerfEnd_('Keep-warm ping', startedAt, {
+        httpStatus: r.status,
+        ok: r.ok
+      });
+    })
+    .catch(err => {
+      powerPerfEnd_('Keep-warm ping', startedAt, {
+        success: false,
+        message: err?.message || String(err)
+      });
+    });
 }
 
-pingWarm();
+/*
+  POWER BREAKAGE STAGE 1:
+  Initial keep-warm is deferred until the main dashboard finishes.
+  The recurring 4-minute keep-warm remains unchanged.
+*/
 setInterval(pingWarm, 4 * 60 * 1000);
 loadAll();
 
@@ -1715,7 +2037,15 @@ function exportSummaryTXT() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const domStartedAt = powerPerfStart_('DOMContentLoaded → Power Breakage boot', {});
+  powerPerfLog_(
+    `DOMContentLoaded fired at ${powerPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+
   document.getElementById('summaryTabBtn')?.addEventListener('click', () => {
     buildWeekOptions();
   });
+
+  powerPerfEnd_('DOMContentLoaded → Power Breakage boot', domStartedAt, {});
 });
