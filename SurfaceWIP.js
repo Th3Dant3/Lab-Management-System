@@ -5,7 +5,176 @@
 ========================================================= */
 "use strict";
 
+/* =========================================================
+   SURFACE LOAD PERFORMANCE LOGGER
+   Measures page boot, API calls, JSON parsing, rendering,
+   loader-ready time, and browser navigation timing.
+   ========================================================= */
+
+const SURFACE_PERF = {
+  startedAt: performance.now(),
+  initialReadyLogged: false,
+  fetchSequence: 0,
+  historyKey: "surface_wip_performance_history",
+  maxHistory: 20
+};
+
+function perfMs(value) {
+  return Math.round((Number(value) || 0) * 10) / 10;
+}
+
+function perfStart(label) {
+  const started = performance.now();
+  console.log(`[SurfacePerf] ▶ ${label}`);
+  return started;
+}
+
+function perfEnd(label, started, extra = {}) {
+  const duration = performance.now() - started;
+
+  console.log(
+    `[SurfacePerf] ✓ ${label}: ${perfMs(duration)} ms`,
+    extra
+  );
+
+  return duration;
+}
+
+function saveSurfacePerformanceLog_(entry) {
+  try {
+    const existing = JSON.parse(
+      localStorage.getItem(SURFACE_PERF.historyKey) || "[]"
+    );
+
+    existing.unshift(entry);
+
+    localStorage.setItem(
+      SURFACE_PERF.historyKey,
+      JSON.stringify(existing.slice(0, SURFACE_PERF.maxHistory))
+    );
+  } catch (err) {
+    console.warn("[SurfacePerf] Could not save local performance history:", err);
+  }
+}
+
+function getSurfacePerformanceHistory() {
+  try {
+    return JSON.parse(
+      localStorage.getItem(SURFACE_PERF.historyKey) || "[]"
+    );
+  } catch (err) {
+    return [];
+  }
+}
+
+function showSurfacePerformanceHistory() {
+  const rows = getSurfacePerformanceHistory();
+
+  if (!rows.length) {
+    console.log("[SurfacePerf] No saved load history yet.");
+    return rows;
+  }
+
+  console.table(rows);
+  return rows;
+}
+
+function clearSurfacePerformanceHistory() {
+  localStorage.removeItem(SURFACE_PERF.historyKey);
+  console.log("[SurfacePerf] Saved load history cleared.");
+}
+
+function logSurfaceNavigationTiming_() {
+  try {
+    const nav = performance.getEntriesByType("navigation")[0];
+
+    if (!nav) return;
+
+    const timing = {
+      "DNS": perfMs(nav.domainLookupEnd - nav.domainLookupStart),
+      "TCP": perfMs(nav.connectEnd - nav.connectStart),
+      "Request → First Byte": perfMs(nav.responseStart - nav.requestStart),
+      "HTML Download": perfMs(nav.responseEnd - nav.responseStart),
+      "DOM Interactive": perfMs(nav.domInteractive),
+      "DOMContentLoaded": perfMs(nav.domContentLoadedEventEnd),
+      "Window Load": perfMs(nav.loadEventEnd || performance.now()),
+      "Transferred KB": perfMs((nav.transferSize || 0) / 1024)
+    };
+
+    console.groupCollapsed("[SurfacePerf] Browser navigation timing");
+    console.table(timing);
+    console.groupEnd();
+  } catch (err) {
+    console.warn("[SurfacePerf] Navigation timing unavailable:", err);
+  }
+}
+
+function logSurfaceResourceTiming_() {
+  try {
+    const rows = performance
+      .getEntriesByType("resource")
+      .map(entry => ({
+        Resource: String(entry.name || "").split("/").pop().split("?")[0] || entry.name,
+        Type: entry.initiatorType || "resource",
+        "Duration ms": perfMs(entry.duration),
+        "Transfer KB": perfMs((entry.transferSize || 0) / 1024)
+      }))
+      .sort((a, b) => b["Duration ms"] - a["Duration ms"])
+      .slice(0, 15);
+
+    if (rows.length) {
+      console.groupCollapsed("[SurfacePerf] Slowest page resources");
+      console.table(rows);
+      console.groupEnd();
+    }
+  } catch (err) {
+    console.warn("[SurfacePerf] Resource timing unavailable:", err);
+  }
+}
+
+function logSurfaceInitialReady_(metrics = {}) {
+  if (SURFACE_PERF.initialReadyLogged) return;
+
+  SURFACE_PERF.initialReadyLogged = true;
+
+  const totalMs = performance.now();
+
+  const entry = {
+    timestamp: new Date().toISOString(),
+    totalReadyMs: perfMs(totalMs),
+    productionFlowMs: perfMs(metrics.productionFlowMs),
+    operatorActivityMs: metrics.operatorActivityMs
+      ? perfMs(metrics.operatorActivityMs)
+      : "background / non-blocking",
+    normalizeMs: perfMs(metrics.normalizeMs),
+    renderMs: perfMs(metrics.renderMs)
+  };
+
+  console.group("[SurfacePerf] ✅ INITIAL SURFACE DASHBOARD READY");
+  console.table(entry);
+  console.log(
+    `[SurfacePerf] MAIN DASHBOARD TIME TO READY: ${entry.totalReadyMs} ms (${(entry.totalReadyMs / 1000).toFixed(2)} sec)`
+  );
+  console.groupEnd();
+
+  saveSurfacePerformanceLog_(entry);
+
+  // Convenience helpers available from DevTools console:
+  window.showSurfacePerformanceHistory = showSurfacePerformanceHistory;
+  window.clearSurfacePerformanceHistory = clearSurfacePerformanceHistory;
+
+  setTimeout(() => {
+    logSurfaceNavigationTiming_();
+    logSurfaceResourceTiming_();
+  }, 0);
+}
+
+console.log(
+  `[SurfacePerf] JS executing at ${perfMs(performance.now())} ms after navigation start`
+);
+
 console.log("[SurfaceWIP] Option A loaded. Surface WIP and operator activity = Production API.");
+console.log("[SurfacePerf] Production cache mode ENABLED. API requests no longer use debug=true.");
 
 let hourlyInOutChart = null;
 
@@ -537,27 +706,126 @@ function normalizeProductionFlowPayload(payload) {
 }
 
 async function fetchData(forceRender = false) {
+  const fetchId = ++SURFACE_PERF.fetchSequence;
+  const isInitialLoad = !state.hasRenderedOnce;
+  const fullFetchStart = perfStart(
+    `${isInitialLoad ? "INITIAL" : "REFRESH"} fetchData #${fetchId}`
+  );
+
+  let productionFlowMs = 0;
+  let operatorActivityMs = 0;
+  let normalizeMs = 0;
+  let renderMs = 0;
+
   setSystemStatus("loading");
 
+  /*
+    PERFORMANCE CHANGE:
+    Start Operator Activity immediately, in parallel with Production Flow.
+    The main Surface dashboard does NOT wait for Operator Activity anymore.
+    Operator data continues loading in the background and updates its own tab
+    as soon as it finishes.
+  */
+  const operatorStart = perfStart(
+    `operatorActivity background #${fetchId}`
+  );
+
+  const operatorPromise = fetchOperatorActivity(true)
+    .then(result => {
+      operatorActivityMs = perfEnd(
+        `operatorActivity background #${fetchId}`,
+        operatorStart,
+        {
+          operatorRows: Array.isArray(state.operatorActivity)
+            ? state.operatorActivity.length
+            : 0,
+          success: !!result
+        }
+      );
+
+      console.log(
+        `[SurfacePerf] Operator background finished for fetch #${fetchId}: ${perfMs(operatorActivityMs)} ms`
+      );
+
+      return result;
+    })
+    .catch(err => {
+      operatorActivityMs = perfEnd(
+        `operatorActivity background #${fetchId} FAILED`,
+        operatorStart,
+        {
+          error: err?.message || String(err)
+        }
+      );
+
+      console.warn(
+        `[SurfacePerf] Operator background failed for fetch #${fetchId}:`,
+        err
+      );
+
+      return null;
+    });
+
   try {
-    const url = `${CONFIG.API_URL}?action=productionFlow&area=${encodeURIComponent(CONFIG.AREA || "Surface")}&debug=true&t=${Date.now()}`;
+    const url = `${CONFIG.API_URL}?action=productionFlow&area=${encodeURIComponent(CONFIG.AREA || "Surface")}&t=${Date.now()}`;
+
+    const productionStart = perfStart(
+      `productionFlow API #${fetchId}`
+    );
 
     const res = await fetch(url, {
       cache: "no-store"
     });
 
+    const responseHeadersMs = performance.now() - productionStart;
+
     if (!res.ok) {
       throw new Error("HTTP " + res.status);
     }
 
+    const jsonParseStart = perfStart(
+      `productionFlow JSON parse #${fetchId}`
+    );
+
     const rawJson = await res.json();
+
+    const jsonParseMs = perfEnd(
+      `productionFlow JSON parse #${fetchId}`,
+      jsonParseStart,
+      {
+        httpStatus: res.status
+      }
+    );
+
+    productionFlowMs = perfEnd(
+      `productionFlow API #${fetchId}`,
+      productionStart,
+      {
+        responseHeadersMs: perfMs(responseHeadersMs),
+        jsonParseMs: perfMs(jsonParseMs),
+        httpStatus: res.status
+      }
+    );
+
+    const normalizeStart = perfStart(
+      `normalize productionFlow #${fetchId}`
+    );
+
     const json = normalizeProductionFlowPayload(rawJson);
+
+    normalizeMs = perfEnd(
+      `normalize productionFlow #${fetchId}`,
+      normalizeStart,
+      {
+        flowRows: Array.isArray(json?.surfaceFlow)
+          ? json.surfaceFlow.length
+          : 0
+      }
+    );
 
     if (!json || json.status !== "success") {
       throw new Error(json?.message || "API returned error");
     }
-
-    await fetchOperatorActivity(true);
 
     const incomingFlow = Array.isArray(json.surfaceFlow) ? json.surfaceFlow : [];
     const incomingTransfers = Array.isArray(json.surfaceTransfers) ? json.surfaceTransfers : [];
@@ -569,6 +837,16 @@ async function fetchData(forceRender = false) {
       console.warn("[SurfaceWIP] Refresh returned empty productionFlow. Keeping last good data.");
       setSystemStatus("ok");
       updateLatestUpdatePill();
+
+      perfEnd(
+        `fetchData #${fetchId} kept last good data`,
+        fullFetchStart,
+        {
+          productionFlowMs: perfMs(productionFlowMs),
+          operatorRunningInBackground: true
+        }
+      );
+
       return;
     }
 
@@ -584,6 +862,16 @@ async function fetchData(forceRender = false) {
       state.lastFetch = new Date();
       setSystemStatus("ok");
       updateLatestUpdatePill();
+
+      perfEnd(
+        `fetchData #${fetchId} no-change refresh`,
+        fullFetchStart,
+        {
+          productionFlowMs: perfMs(productionFlowMs),
+          operatorRunningInBackground: true
+        }
+      );
+
       return;
     }
 
@@ -615,7 +903,29 @@ async function fetchData(forceRender = false) {
     updateReportMeta();
     updateLatestUpdatePill();
 
+    const renderStart = perfStart(
+      `renderAll #${fetchId}`
+    );
+
+    /*
+      Main dashboard renders immediately with Production Flow data.
+      Operator Activity may still be loading in the background.
+      fetchOperatorActivity() renders the Operator tab independently
+      when its request completes.
+    */
     renderAll();
+
+    renderMs = perfEnd(
+      `renderAll #${fetchId}`,
+      renderStart,
+      {
+        flowRows: incomingFlow.length,
+        operatorRowsAvailableNow: Array.isArray(state.operatorActivity)
+          ? state.operatorActivity.length
+          : 0,
+        operatorRunningInBackground: true
+      }
+    );
 
     state.hasRenderedOnce = true;
 
@@ -625,8 +935,51 @@ async function fetchData(forceRender = false) {
 
     hideSurfaceLoader();
 
+    const totalFetchMs = perfEnd(
+      `fetchData #${fetchId} MAIN READY`,
+      fullFetchStart,
+      {
+        productionFlowMs: perfMs(productionFlowMs),
+        normalizeMs: perfMs(normalizeMs),
+        renderMs: perfMs(renderMs),
+        operatorBlockingMainLoad: false
+      }
+    );
+
+    if (isInitialLoad) {
+      logSurfaceInitialReady_({
+        totalFetchMs,
+        productionFlowMs,
+        operatorActivityMs: 0,
+        normalizeMs,
+        renderMs
+      });
+
+      console.log(
+        "[SurfacePerf] Main Surface dashboard is ready. Operator Activity is continuing in background."
+      );
+
+      operatorPromise.then(() => {
+        console.log(
+          `[SurfacePerf] ✅ FULL SURFACE DATA COMPLETE: ${perfMs(performance.now())} ms (${(performance.now() / 1000).toFixed(2)} sec) after navigation start`
+        );
+      });
+    }
+
   } catch (err) {
     console.error("[SurfaceWIP] Fetch error:", err);
+
+    perfEnd(
+      `fetchData #${fetchId} FAILED`,
+      fullFetchStart,
+      {
+        error: err?.message || String(err),
+        productionFlowMs: perfMs(productionFlowMs),
+        normalizeMs: perfMs(normalizeMs),
+        renderMs: perfMs(renderMs),
+        operatorRunningInBackground: true
+      }
+    );
 
     if (state.hasRenderedOnce) {
       setSystemStatus("error");
@@ -644,7 +997,6 @@ async function fetchData(forceRender = false) {
     setTimeout(hideSurfaceLoader, 700);
   }
 }
-
 
 /* =========================================================
    SECTION 06B — OPERATOR COMMAND CENTER API/UI
@@ -684,31 +1036,49 @@ function normalizeOperatorActivityPayload(payload){
   return rows.map(row=>{ const hours=row.Hours||row.hours||{}; return {reportDate:getOperatorField(row,"ReportDate","reportDate",""),area:getOperatorField(row,"Area","area",CONFIG.AREA),flowStation:getOperatorField(row,"FlowStation","flowStation",""),accessPoint:getOperatorField(row,"AccessPoint","accessPoint",""),operator:normalizeOperatorDisplayName(getOperatorField(row,"Operator","operator","System / No Operator Captured")),total:num(getOperatorField(row,"Total","total",0)),hourlyTotal:num(getOperatorField(row,"HourlyTotal","hourlyTotal",0)),bestHour:getOperatorField(row,"BestHour","bestHour","—"),bestHourValue:num(getOperatorField(row,"BestHourValue","bestHourValue",0)),lastActiveHour:getOperatorField(row,"LastActiveHour","lastActiveHour","—"),hours}; }).filter(row=>isVisibleSurfaceOperatorStation(row.flowStation)).sort(sortOperatorRowsByStationOrder);
 }
 async function fetchOperatorActivity(quiet = true) {
+  const operatorFunctionStart = performance.now();
   const area = encodeURIComponent(CONFIG.AREA || "Surface");
   const stamp = Date.now();
 
   /*
     Surface Option A:
     Operator activity must come from the Production API, same as WIP.
-    debug=true bypasses short Apps Script cache while we validate the live dashboard.
+    Production mode intentionally omits debug=true so the Apps Script short cache can be used.
+    Browser fetch still uses cache:"no-store", so browser caching does not control freshness.
     operator_activity is kept as a fallback alias because the Production API supports both names.
   */
   const urls = [
-    `${CONFIG.API_URL}?action=operatorActivity&area=${area}&debug=true&t=${stamp}`,
-    `${CONFIG.API_URL}?action=operator_activity&area=${area}&debug=true&t=${stamp}`
+    `${CONFIG.API_URL}?action=operatorActivity&area=${area}&t=${stamp}`,
+    `${CONFIG.API_URL}?action=operator_activity&area=${area}&t=${stamp}`
   ];
 
   let lastError = null;
 
-  for (const url of urls) {
+  for (let attempt = 0; attempt < urls.length; attempt++) {
+    const url = urls[attempt];
+    const attemptStart = perfStart(
+      `operatorActivity API attempt ${attempt + 1}`
+    );
+
     try {
       const res = await fetch(url, { cache: "no-store" });
+
+      const headersMs = performance.now() - attemptStart;
 
       if (!res.ok) {
         throw new Error(`Operator API HTTP ${res.status}`);
       }
 
+      const parseStart = perfStart(
+        `operatorActivity JSON parse attempt ${attempt + 1}`
+      );
+
       const json = await res.json();
+
+      const parseMs = perfEnd(
+        `operatorActivity JSON parse attempt ${attempt + 1}`,
+        parseStart
+      );
 
       if (!json || String(json.status || "").toLowerCase() !== "success") {
         throw new Error(json?.message || "Operator API returned error");
@@ -721,13 +1091,47 @@ async function fetchOperatorActivity(quiet = true) {
       );
       state.operatorError = "";
 
+      const operatorRenderStart = perfStart(
+        `operatorActivity render attempt ${attempt + 1}`
+      );
+
       renderOperatorStationOptions();
       renderOperatorActivity();
+
+      const operatorRenderMs = perfEnd(
+        `operatorActivity render attempt ${attempt + 1}`,
+        operatorRenderStart
+      );
+
+      perfEnd(
+        `operatorActivity API attempt ${attempt + 1}`,
+        attemptStart,
+        {
+          responseHeadersMs: perfMs(headersMs),
+          jsonParseMs: perfMs(parseMs),
+          renderMs: perfMs(operatorRenderMs),
+          rows: state.operatorActivity.length,
+          httpStatus: res.status
+        }
+      );
+
+      console.log(
+        `[SurfacePerf] operatorActivity complete: ${perfMs(performance.now() - operatorFunctionStart)} ms`
+      );
 
       return json;
 
     } catch (err) {
       lastError = err;
+
+      perfEnd(
+        `operatorActivity API attempt ${attempt + 1} FAILED`,
+        attemptStart,
+        {
+          error: err?.message || String(err)
+        }
+      );
+
       console.warn("[SurfaceWIP] Operator activity attempt failed:", err, url);
     }
   }
@@ -740,8 +1144,13 @@ async function fetchOperatorActivity(quiet = true) {
     renderOperatorActivity();
   }
 
+  console.log(
+    `[SurfacePerf] operatorActivity failed after ${perfMs(performance.now() - operatorFunctionStart)} ms`
+  );
+
   return null;
 }
+
 function renderOperatorStationOptions(){ const select=document.getElementById("operatorStationFilter"); if(!select) return; const current=select.value||state.operatorFilter||"all", stations=state.operatorStationOptions||[]; select.innerHTML=`<option value="all">All Surface Operator Stations</option>${stations.map(st=>`<option value="${escapeHTML(st)}">${escapeHTML(st)}</option>`).join("")}`; select.value=stations.includes(current)?current:"all"; state.operatorFilter=select.value; }
 function getFilteredOperatorRows(){
   const rows=Array.isArray(state.operatorActivity)?state.operatorActivity.slice():[]; const stationFilter=state.operatorFilter||"all", search=String(state.operatorSearch||"").trim().toLowerCase(); let filtered=rows;
@@ -2834,7 +3243,15 @@ function initExport() {
 ========================================================= */
 
 function boot() {
+  const bootStart = perfStart("DOMContentLoaded → boot");
+
+  console.log(
+    `[SurfacePerf] DOMContentLoaded fired at ${perfMs(performance.now())} ms`
+  );
+
   startSurfaceLoaderAnimation();
+
+  const uiInitStart = perfStart("Surface UI initialization");
 
   initTabs();
   initFilters();
@@ -2844,11 +3261,15 @@ function boot() {
   updateClock();
   setInterval(updateClock, 1000);
 
+  perfEnd("Surface UI initialization", uiInitStart);
+
   fetchData(true);
 
   setInterval(() => {
     fetchData(false);
   }, CONFIG.REFRESH_MS);
+
+  perfEnd("DOMContentLoaded → boot", bootStart);
 }
 
 /* =================================================
@@ -2878,6 +3299,14 @@ document.querySelectorAll(".nav-item").forEach(button => {
 });
 
 document.addEventListener("DOMContentLoaded", boot);
+
+window.addEventListener("load", () => {
+  console.log(
+    `[SurfacePerf] window.load fired at ${perfMs(performance.now())} ms`
+  );
+
+  setTimeout(logSurfaceNavigationTiming_, 0);
+});
 
 function goBackToDashboard() {
   window.location.href = "index.html";
