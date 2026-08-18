@@ -7,6 +7,57 @@ const FINISH_OPERATOR_API_URL =
 const USER_CONTROL_API_URL =
   "https://script.google.com/macros/s/AKfycbwhcxW8dfFw_gJW2s0aZoUP3nhilqEA0S6S-9W9lvPpOtQaWLjAwfFSmo5HrsheP5jR/exec";
 
+
+/* =========================================================
+   FINISH PERFORMANCE AUDIT — LOGGING ONLY
+   No API mode, cache, refresh, loader, render, roster,
+   capacity, or dashboard logic is changed by this block.
+========================================================= */
+const FINISH_PERF_NAV_START =
+  (performance && performance.timeOrigin) ? performance.timeOrigin : Date.now();
+
+const finishPerfState = {
+  dashboardSeq: 0,
+  operatorSeq: 0,
+  initialDashboardFetchId: null,
+  initialDataRenderReadyAt: null,
+  initialLoaderDismissRequestedAt: null,
+  initialReadyLogged: false
+};
+
+function finishPerfNow_() {
+  return performance.now();
+}
+
+function finishPerfLog_(message, details = {}) {
+  console.log(`[FinishPerf] ${message}`, details);
+}
+
+function finishPerfStart_(label, details = {}) {
+  const startedAt = finishPerfNow_();
+  finishPerfLog_(`▶ ${label}`, details);
+  return startedAt;
+}
+
+function finishPerfEnd_(label, startedAt, details = {}) {
+  const elapsed = finishPerfNow_() - startedAt;
+  finishPerfLog_(`✓ ${label}: ${elapsed.toFixed(1)} ms`, details);
+  return elapsed;
+}
+
+finishPerfLog_(
+  `JS executing at ${finishPerfNow_().toFixed(1)} ms after navigation start`,
+  {}
+);
+
+window.addEventListener("load", () => {
+  finishPerfLog_(
+    `window.load at ${finishPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+});
+
+
 /* Personal-profile storage.
    This is NOT global. It saves operator roster and Certified/TQ/Training assignments
    under the logged-in dashboard username in localStorage.
@@ -1212,6 +1263,14 @@ const SHIFT_RULES = {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  const bootStartedAt = finishPerfStart_("DOMContentLoaded → Finish boot", {});
+  finishPerfLog_(
+    `DOMContentLoaded fired at ${finishPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+
+  const uiStartedAt = finishPerfStart_("Finish UI initialization", {});
+
   initTabs();
   applyLmsControlTabVisibility();
   initClock();
@@ -1221,6 +1280,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initOperatorCommandUI();
   initFinishThreeLineCell();
   initMorningSetupControls();
+
+  finishPerfEnd_("Finish UI initialization", uiStartedAt, {});
 
   loadDashboard({ showLoader: true });
   loadFinishOperatorActivity();
@@ -1232,6 +1293,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // Re-apply after any late panels/tabs finish rendering.
   setTimeout(applyFinishRestrictedTabVisibility, 500);
   setTimeout(applyFinishRestrictedTabVisibility, 2000);
+
+  finishPerfEnd_("DOMContentLoaded → Finish boot", bootStartedAt, {
+    initialDashboardStarted: true,
+    initialOperatorActivityStarted: true,
+    dashboardRefreshMs: 5 * 60 * 1000,
+    operatorRefreshMs: 5 * 60 * 1000
+  });
 });
 
 /* ===============================
@@ -1240,38 +1308,134 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadDashboard(options = {}) {
   const shouldShowLoader = options.showLoader !== false && !finishDashboardInitialLoadComplete;
+  const fetchId = ++finishPerfState.dashboardSeq;
+  const loadLabel = shouldShowLoader
+    ? `INITIAL Finish dashboard load #${fetchId}`
+    : `Finish dashboard refresh #${fetchId}`;
+  const loadStartedAt = finishPerfStart_(loadLabel, {
+    showLoader: shouldShowLoader,
+    cacheMode: "no-store"
+  });
 
   if (shouldShowLoader) {
+    finishPerfState.initialDashboardFetchId = fetchId;
     showLoading(true);
   }
 
+  let responseHeadersMs = 0;
+  let bodyReadMs = 0;
+  let jsonParseMs = 0;
+  let renderMs = 0;
+  let responseChars = 0;
+  let renderMode = "unknown";
+  let success = false;
+
   try {
+    const apiStartedAt = finishPerfStart_(`Finish Production Flow API #${fetchId}`, {
+      area: "Finish"
+    });
+
+    const headersStartedAt = finishPerfNow_();
     const response = await fetch(FINISH_API_URL, {
       method: "GET",
       cache: "no-store"
     });
+    responseHeadersMs = finishPerfNow_() - headersStartedAt;
+
+    finishPerfLog_(
+      `Finish API #${fetchId} response headers: ${responseHeadersMs.toFixed(1)} ms`,
+      {
+        httpStatus: response.status,
+        ok: response.ok
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`API failed with status ${response.status}`);
     }
 
-    const data = await response.json();
+    const bodyStartedAt = finishPerfNow_();
+    const responseText = await response.text();
+    bodyReadMs = finishPerfNow_() - bodyStartedAt;
+    responseChars = responseText.length;
+
+    finishPerfLog_(
+      `Finish API #${fetchId} body read: ${bodyReadMs.toFixed(1)} ms`,
+      { responseChars }
+    );
+
+    const parseStartedAt = finishPerfNow_();
+    const data = JSON.parse(responseText);
+    jsonParseMs = finishPerfNow_() - parseStartedAt;
+
+    finishPerfLog_(
+      `Finish API #${fetchId} JSON parse: ${jsonParseMs.toFixed(1)} ms`,
+      {
+        hasFinishDashboard: !!data?.finishDashboard,
+        hasAllStations: !!data?.finishDashboard?.allStations
+      }
+    );
+
+    finishPerfEnd_(`Finish Production Flow API #${fetchId}`, apiStartedAt, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(bodyReadMs.toFixed(1)),
+      jsonParseMs: Number(jsonParseMs.toFixed(1)),
+      responseChars,
+      httpStatus: response.status,
+      success: true
+    });
+
+    const renderStartedAt = finishPerfStart_(`Finish main render #${fetchId}`, {});
 
     if (data.finishDashboard?.allStations) {
+      renderMode = "enriched";
       renderEnrichedDashboard(data.finishDashboard);
     } else {
+      renderMode = "legacy";
       renderLegacyDashboard(data);
     }
 
+    renderMs = finishPerfEnd_(`Finish main render #${fetchId}`, renderStartedAt, {
+      renderMode
+    });
+
     lastSyncTime = Date.now();
     setText("syncAge", "just now");
+    success = true;
+
+    if (shouldShowLoader) {
+      finishPerfState.initialDataRenderReadyAt = finishPerfNow_();
+      finishPerfLog_(
+        `Data/render ready for initial Finish load #${fetchId}; loader intentionally remains for 350 ms`,
+        {
+          apiAndRenderMs: Number(
+            (finishPerfState.initialDataRenderReadyAt - loadStartedAt).toFixed(1)
+          )
+        }
+      );
+    }
   } catch (error) {
     console.error("Finish Dashboard Error:", error);
+    finishPerfLog_(`Finish dashboard load #${fetchId} ERROR`, {
+      message: error?.message || String(error)
+    });
     renderError(error);
   } finally {
     finishDashboardInitialLoadComplete = true;
 
+    const totalBeforeLoaderDismissMs = finishPerfEnd_(loadLabel, loadStartedAt, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(bodyReadMs.toFixed(1)),
+      jsonParseMs: Number(jsonParseMs.toFixed(1)),
+      renderMs: Number(renderMs.toFixed(1)),
+      renderMode,
+      loaderHoldMs: shouldShowLoader ? 350 : 0,
+      loaderBlockingUntilDismiss: shouldShowLoader,
+      success
+    });
+
     if (shouldShowLoader) {
+      finishPerfState.initialLoaderDismissRequestedAt = finishPerfNow_();
       showLoading(false);
     }
   }
@@ -3634,6 +3798,38 @@ function showLoading(show) {
 
   setTimeout(() => {
     loader.classList.add("hidden");
+
+    if (
+      finishPerfState.initialDashboardFetchId != null &&
+      !finishPerfState.initialReadyLogged
+    ) {
+      finishPerfState.initialReadyLogged = true;
+
+      const totalReadyMs = finishPerfNow_();
+      const dataRenderReadyMs =
+        finishPerfState.initialDataRenderReadyAt == null
+          ? null
+          : finishPerfState.initialDataRenderReadyAt;
+      const actualLoaderHoldMs =
+        finishPerfState.initialLoaderDismissRequestedAt == null
+          ? null
+          : finishPerfNow_() - finishPerfState.initialLoaderDismissRequestedAt;
+
+      finishPerfLog_("✅ INITIAL FINISH DASHBOARD READY", {
+        timestamp: new Date().toISOString(),
+        fetchId: finishPerfState.initialDashboardFetchId,
+        dataRenderReadyMs:
+          dataRenderReadyMs == null ? null : dataRenderReadyMs.toFixed(1),
+        intentionalLoaderHoldMs: 350,
+        actualLoaderHoldMs:
+          actualLoaderHoldMs == null ? null : actualLoaderHoldMs.toFixed(1),
+        totalReadyMs: totalReadyMs.toFixed(1)
+      });
+
+      console.log(
+        `[FinishPerf] MAIN FINISH DASHBOARD TIME TO READY: ${totalReadyMs.toFixed(1)} ms (${(totalReadyMs / 1000).toFixed(2)} sec)`
+      );
+    }
   }, 350);
 }
 
@@ -3949,24 +4145,86 @@ function renderOperatorFilter(station, operators) {
 }
 
 async function loadFinishOperatorActivity() {
+  const operatorId = ++finishPerfState.operatorSeq;
+  const totalStartedAt = finishPerfStart_(
+    `Finish Operator Activity load #${operatorId}`,
+    { cacheMode: "no-store" }
+  );
+
   const apiStatus = document.getElementById("operatorApiStatus");
   if (apiStatus) apiStatus.textContent = "Loading";
 
+  let responseHeadersMs = 0;
+  let bodyReadMs = 0;
+  let jsonParseMs = 0;
+  let buildRenderMs = 0;
+  let responseChars = 0;
+  let rowCount = 0;
+  let success = false;
+
   try {
+    const apiStartedAt = finishPerfStart_(
+      `Finish Operator Activity API #${operatorId}`,
+      { area: "Finish" }
+    );
+
+    const headersStartedAt = finishPerfNow_();
     const response = await fetch(FINISH_OPERATOR_API_URL, {
       method: "GET",
       cache: "no-store"
     });
+    responseHeadersMs = finishPerfNow_() - headersStartedAt;
+
+    finishPerfLog_(
+      `Finish Operator API #${operatorId} response headers: ${responseHeadersMs.toFixed(1)} ms`,
+      {
+        httpStatus: response.status,
+        ok: response.ok
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`Operator API failed with status ${response.status}`);
     }
 
-    const payload = await response.json();
+    const bodyStartedAt = finishPerfNow_();
+    const responseText = await response.text();
+    bodyReadMs = finishPerfNow_() - bodyStartedAt;
+    responseChars = responseText.length;
+
+    finishPerfLog_(
+      `Finish Operator API #${operatorId} body read: ${bodyReadMs.toFixed(1)} ms`,
+      { responseChars }
+    );
+
+    const parseStartedAt = finishPerfNow_();
+    const payload = JSON.parse(responseText);
+    jsonParseMs = finishPerfNow_() - parseStartedAt;
+
+    finishPerfLog_(
+      `Finish Operator API #${operatorId} JSON parse: ${jsonParseMs.toFixed(1)} ms`,
+      {
+        status: payload?.status,
+        success: payload?.success
+      }
+    );
+
+    finishPerfEnd_(`Finish Operator Activity API #${operatorId}`, apiStartedAt, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(bodyReadMs.toFixed(1)),
+      jsonParseMs: Number(jsonParseMs.toFixed(1)),
+      responseChars,
+      httpStatus: response.status
+    });
 
     if (payload.status === "error" || payload.success === false) {
       throw new Error(payload.message || "Operator API returned an error.");
     }
+
+    const renderStartedAt = finishPerfStart_(
+      `Finish Operator build/render #${operatorId}`,
+      {}
+    );
 
     const rows = (Array.isArray(payload.operatorActivity)
       ? payload.operatorActivity
@@ -3974,6 +4232,8 @@ async function loadFinishOperatorActivity() {
     ).filter(row => isFinishOperatorStationAllowed(
       row.FlowStation || row.flowStation || row.station || row.AccessPoint
     ));
+
+    rowCount = rows.length;
 
     finishOperatorState.rows = rows;
     finishOperatorState.stations = buildFinishOperatorStations(rows);
@@ -3984,11 +4244,33 @@ async function loadFinishOperatorActivity() {
     renderOperatorAssignmentConfigPanel();
     renderFinishThreeLineCell();
 
+    buildRenderMs = finishPerfEnd_(
+      `Finish Operator build/render #${operatorId}`,
+      renderStartedAt,
+      {
+        rowCount,
+        stationCount: Object.keys(finishOperatorState.stations || {}).length
+      }
+    );
+
     if (apiStatus) apiStatus.textContent = "Connected";
+    success = true;
   } catch (error) {
     console.error("Finish Operator Activity Error:", error);
+    finishPerfLog_(`Finish Operator Activity load #${operatorId} ERROR`, {
+      message: error?.message || String(error)
+    });
     if (apiStatus) apiStatus.textContent = "API Error";
     renderOperatorError(error);
+  } finally {
+    finishPerfEnd_(`Finish Operator Activity load #${operatorId}`, totalStartedAt, {
+      responseHeadersMs: Number(responseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(bodyReadMs.toFixed(1)),
+      jsonParseMs: Number(jsonParseMs.toFixed(1)),
+      buildRenderMs: Number(buildRenderMs.toFixed(1)),
+      rowCount,
+      success
+    });
   }
 }
 
