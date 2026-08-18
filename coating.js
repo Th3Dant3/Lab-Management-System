@@ -2,6 +2,54 @@ const API_URL = "https://script.google.com/macros/s/AKfycbxGEYOoJviGPzBSIX_Kh5X5
 
 console.log("Coating JS loaded");
 
+
+/* =====================================================
+   COATING PERFORMANCE AUDIT — LOGGING ONLY
+   No API URL, cache behavior, refresh cadence, loader timing,
+   dashboard calculations, history logic, or rendering logic changes.
+===================================================== */
+const coatingPerfState = {
+  loadSeq: 0,
+  previousDaySeq: 0,
+  initialLoadId: null,
+  initialDataReadyAt: null,
+  initialDismissRequestedAt: null,
+  initialFadeStartedAt: null,
+  initialReadyLogged: false
+};
+
+function coatingPerfNow_() {
+  return performance.now();
+}
+
+function coatingPerfLog_(message, details = {}) {
+  console.log(`[CoatingPerf] ${message}`, details);
+}
+
+function coatingPerfStart_(label, details = {}) {
+  const startedAt = coatingPerfNow_();
+  coatingPerfLog_(`▶ ${label}`, details);
+  return startedAt;
+}
+
+function coatingPerfEnd_(label, startedAt, details = {}) {
+  const elapsed = coatingPerfNow_() - startedAt;
+  coatingPerfLog_(`✓ ${label}: ${elapsed.toFixed(1)} ms`, details);
+  return elapsed;
+}
+
+coatingPerfLog_(
+  `JS executing at ${coatingPerfNow_().toFixed(1)} ms after navigation start`,
+  {}
+);
+
+window.addEventListener("load", () => {
+  coatingPerfLog_(
+    `window.load at ${coatingPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+});
+
 /* =====================================================
    GLOBAL VARIABLES
 ===================================================== */
@@ -438,18 +486,138 @@ function showTab(tabId, button) {
 ===================================================== */
 
 async function loadDashboard() {
+  const loadId = ++coatingPerfState.loadSeq;
+  const isInitialLoad = coatingPerfState.initialLoadId === null;
+  if (isInitialLoad) coatingPerfState.initialLoadId = loadId;
+
+  const loadStartedAt = coatingPerfStart_(
+    `${isInitialLoad ? "INITIAL " : ""}Coating dashboard load #${loadId}`,
+    {
+      currentDate,
+      refreshSeconds: refreshInterval,
+      requests: ["processed", "machine"]
+    }
+  );
+
   updateStatusBadge("updating");
   const startTime = performance.now();
   const dateParam = currentDate ? `&date=${encodeURIComponent(currentDate)}` : "";
 
-  const [processedRes, machineRes] = await Promise.all([
-    fetch(`${API_URL}?mode=processed${dateParam}`),
-    fetch(`${API_URL}?mode=machine${dateParam}`)
-  ]);
+  let processedResponseHeadersMs = 0;
+  let machineResponseHeadersMs = 0;
+  let processedBodyMs = 0;
+  let machineBodyMs = 0;
+  let processedParseMs = 0;
+  let machineParseMs = 0;
+  let renderMs = 0;
+  let processedChars = 0;
+  let machineChars = 0;
 
-  dashboardProcessed = await processedRes.json();
-  dashboardMachine   = await machineRes.json();
-  dashboardData      = dashboardProcessed;
+  const processedStartedAt = coatingPerfStart_(
+    `Processed API #${loadId}`,
+    { mode: "processed", currentDate }
+  );
+  const machineStartedAt = coatingPerfStart_(
+    `Machine API #${loadId}`,
+    { mode: "machine", currentDate }
+  );
+
+  const processedPromise = (async () => {
+    const headersStartedAt = coatingPerfNow_();
+    const response = await fetch(`${API_URL}?mode=processed${dateParam}`);
+    processedResponseHeadersMs = coatingPerfNow_() - headersStartedAt;
+
+    coatingPerfLog_(
+      `Processed API #${loadId} response headers: ${processedResponseHeadersMs.toFixed(1)} ms`,
+      { httpStatus: response.status, ok: response.ok }
+    );
+
+    const bodyStartedAt = coatingPerfNow_();
+    const responseText = await response.text();
+    processedBodyMs = coatingPerfNow_() - bodyStartedAt;
+    processedChars = responseText.length;
+
+    coatingPerfLog_(
+      `Processed API #${loadId} body read: ${processedBodyMs.toFixed(1)} ms`,
+      { responseChars: processedChars }
+    );
+
+    const parseStartedAt = coatingPerfNow_();
+    const payload = JSON.parse(responseText);
+    processedParseMs = coatingPerfNow_() - parseStartedAt;
+
+    coatingPerfLog_(
+      `Processed API #${loadId} JSON parse: ${processedParseMs.toFixed(1)} ms`,
+      {
+        hasSummary: !!payload?.summary,
+        hourlyRows: Array.isArray(payload?.hourly) ? payload.hourly.length : 0
+      }
+    );
+
+    coatingPerfEnd_(`Processed API #${loadId}`, processedStartedAt, {
+      responseHeadersMs: Number(processedResponseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(processedBodyMs.toFixed(1)),
+      jsonParseMs: Number(processedParseMs.toFixed(1)),
+      responseChars: processedChars,
+      httpStatus: response.status
+    });
+
+    return payload;
+  })();
+
+  const machinePromise = (async () => {
+    const headersStartedAt = coatingPerfNow_();
+    const response = await fetch(`${API_URL}?mode=machine${dateParam}`);
+    machineResponseHeadersMs = coatingPerfNow_() - headersStartedAt;
+
+    coatingPerfLog_(
+      `Machine API #${loadId} response headers: ${machineResponseHeadersMs.toFixed(1)} ms`,
+      { httpStatus: response.status, ok: response.ok }
+    );
+
+    const bodyStartedAt = coatingPerfNow_();
+    const responseText = await response.text();
+    machineBodyMs = coatingPerfNow_() - bodyStartedAt;
+    machineChars = responseText.length;
+
+    coatingPerfLog_(
+      `Machine API #${loadId} body read: ${machineBodyMs.toFixed(1)} ms`,
+      { responseChars: machineChars }
+    );
+
+    const parseStartedAt = coatingPerfNow_();
+    const payload = JSON.parse(responseText);
+    machineParseMs = coatingPerfNow_() - parseStartedAt;
+
+    coatingPerfLog_(
+      `Machine API #${loadId} JSON parse: ${machineParseMs.toFixed(1)} ms`,
+      {
+        hasSummary: !!payload?.summary,
+        hourlyRows: Array.isArray(payload?.hourly) ? payload.hourly.length : 0
+      }
+    );
+
+    coatingPerfEnd_(`Machine API #${loadId}`, machineStartedAt, {
+      responseHeadersMs: Number(machineResponseHeadersMs.toFixed(1)),
+      bodyReadMs: Number(machineBodyMs.toFixed(1)),
+      jsonParseMs: Number(machineParseMs.toFixed(1)),
+      responseChars: machineChars,
+      httpStatus: response.status
+    });
+
+    return payload;
+  })();
+
+  [dashboardProcessed, dashboardMachine] = await Promise.all([
+    processedPromise,
+    machinePromise
+  ]);
+  dashboardData = dashboardProcessed;
+
+  const renderStartedAt = coatingPerfStart_(
+    `Coating build/render #${loadId}`,
+    {}
+  );
 
   const summary = dashboardData.summary || {};
 
@@ -528,6 +696,47 @@ async function loadDashboard() {
   buildDailySummary(dashboardData);
   const todayKey = (() => { const n=new Date(); return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`; })();
   if (currentDate === null && weeklyCache) weeklyCache[todayKey] = dashboardData;
+
+  renderMs = coatingPerfEnd_(
+    `Coating build/render #${loadId}`,
+    renderStartedAt,
+    {
+      processedHourlyRows: Array.isArray(dashboardProcessed?.hourly)
+        ? dashboardProcessed.hourly.length
+        : 0,
+      machineHourlyRows: Array.isArray(dashboardMachine?.hourly)
+        ? dashboardMachine.hourly.length
+        : 0
+    }
+  );
+
+  const totalMs = coatingPerfEnd_(
+    `${isInitialLoad ? "INITIAL " : ""}Coating dashboard load #${loadId}`,
+    loadStartedAt,
+    {
+      processedHeadersMs: Number(processedResponseHeadersMs.toFixed(1)),
+      machineHeadersMs: Number(machineResponseHeadersMs.toFixed(1)),
+      processedBodyMs: Number(processedBodyMs.toFixed(1)),
+      machineBodyMs: Number(machineBodyMs.toFixed(1)),
+      processedParseMs: Number(processedParseMs.toFixed(1)),
+      machineParseMs: Number(machineParseMs.toFixed(1)),
+      renderMs: Number(renderMs.toFixed(1)),
+      success: true
+    }
+  );
+
+  if (isInitialLoad) {
+    coatingPerfState.initialDataReadyAt = coatingPerfNow_();
+    coatingPerfLog_(
+      `Data/render ready for initial Coating load #${loadId}; loader intentionally waits 250 ms before fade and 720 ms before display:none`,
+      {
+        apiAndRenderMs: Number(totalMs.toFixed(1)),
+        preFadeHoldMs: 250,
+        fadeDisplayNoneDelayMs: 720
+      }
+    );
+  }
+
   console.log("Load time (ms):", Math.round(performance.now() - startTime));
 }
 
@@ -611,6 +820,15 @@ function resetToToday() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  const coatingBootStartedAt = coatingPerfStart_(
+    "DOMContentLoaded → Coating boot",
+    {}
+  );
+  coatingPerfLog_(
+    `DOMContentLoaded fired at ${coatingPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+
   const liveBtn = document.getElementById("liveBtn");
   if (liveBtn) {
     liveBtn.addEventListener("click", () => {
@@ -687,6 +905,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // stepInterval and setLsStep defined inside DOMContentLoaded, but we need refs outside
   // The actual dismiss/stats functions are now defined at module level below
+
+  coatingPerfEnd_(
+    "DOMContentLoaded → Coating boot",
+    coatingBootStartedAt,
+    {
+      refreshSeconds: refreshInterval,
+      loaderStepIntervalMs: 420
+    }
+  );
 });
 
 // ── Module-level loading screen functions ──
@@ -736,20 +963,83 @@ window._dismissLoadingScreen = function() {
   if (barFill)  barFill.style.width = "100%";
   if (statusEl) statusEl.textContent = "Dashboard ready ✓";
   const loadScreen = document.getElementById("loadingScreen");
+
+  coatingPerfState.initialDismissRequestedAt = coatingPerfNow_();
+  coatingPerfLog_(
+    "Initial loader dismissal requested; intentional 250 ms hold begins",
+    {}
+  );
+
   setTimeout(() => {
+    coatingPerfState.initialFadeStartedAt = coatingPerfNow_();
+
+    coatingPerfLog_(
+      "Initial loader fade-out started",
+      {
+        holdMs: coatingPerfState.initialDismissRequestedAt == null
+          ? null
+          : Number(
+              (coatingPerfState.initialFadeStartedAt -
+               coatingPerfState.initialDismissRequestedAt).toFixed(1)
+            )
+      }
+    );
+
     if (loadScreen) {
       loadScreen.classList.add("fade-out");
-      setTimeout(() => { loadScreen.style.display = "none"; }, 720);
+
+      setTimeout(() => {
+        loadScreen.style.display = "none";
+
+        if (!coatingPerfState.initialReadyLogged) {
+          coatingPerfState.initialReadyLogged = true;
+          const readyAt = coatingPerfNow_();
+
+          coatingPerfLog_("✅ INITIAL COATING DASHBOARD READY", {
+            timestamp: new Date().toISOString(),
+            fetchId: coatingPerfState.initialLoadId,
+            dataRenderReadyMs:
+              coatingPerfState.initialDataReadyAt == null
+                ? null
+                : coatingPerfState.initialDataReadyAt.toFixed(1),
+            preFadeHoldMs: 250,
+            fadeDisplayNoneDelayMs: 720,
+            totalReadyMs: readyAt.toFixed(1)
+          });
+
+          console.log(
+            `[CoatingPerf] MAIN COATING DASHBOARD TIME TO READY: ${readyAt.toFixed(1)} ms (${(readyAt / 1000).toFixed(2)} sec)`
+          );
+        }
+      }, 720);
     }
-  }, 900);
+  }, 250);
 };
 
 loadDashboard().then(() => {
   if (typeof window._dismissLoadingScreen === "function") window._dismissLoadingScreen();
+
+  /*
+    COATING STAGE 1:
+    Previous-day data is useful for comparison, but it must not compete
+    with the two initial live dashboard requests. Start it only after
+    processed + machine have both completed.
+  */
+  coatingPerfLog_(
+    "Main live dashboard complete; starting deferred previous-day request",
+    {}
+  );
+  loadPreviousDay();
 }).catch(() => {
   if (typeof window._dismissLoadingScreen === "function") window._dismissLoadingScreen();
+
+  // Preserve previous-day availability even if the main load has a problem.
+  coatingPerfLog_(
+    "Main live dashboard failed; starting deferred previous-day request after main request settled",
+    {}
+  );
+  loadPreviousDay();
 });
-loadPreviousDay();
 
 /* =====================================================
    TREND CHART SYSTEM
@@ -2658,15 +2948,50 @@ function compareClear() {
 let previousDayData = null;
 
 async function loadPreviousDay() {
+  const prevId = ++coatingPerfState.previousDaySeq;
+  const totalStartedAt = coatingPerfStart_(
+    `Previous-day API load #${prevId}`,
+    {}
+  );
+
   try {
     const now  = new Date();
     const yest = new Date(now);
     yest.setDate(yest.getDate() - 1);
     const m = yest.getMonth() + 1, d = yest.getDate(), y = yest.getFullYear();
     const dateStr = `${m}/${d}/${y}`;
+
+    const headersStartedAt = coatingPerfNow_();
     const res = await fetch(`${API_URL}?mode=processed&date=${encodeURIComponent(dateStr)}`);
-    previousDayData = await res.json();
-  } catch(e) { previousDayData = null; }
+    const headersMs = coatingPerfNow_() - headersStartedAt;
+
+    coatingPerfLog_(
+      `Previous-day API #${prevId} response headers: ${headersMs.toFixed(1)} ms`,
+      { httpStatus: res.status, ok: res.ok, date: dateStr }
+    );
+
+    const bodyStartedAt = coatingPerfNow_();
+    const responseText = await res.text();
+    const bodyMs = coatingPerfNow_() - bodyStartedAt;
+
+    const parseStartedAt = coatingPerfNow_();
+    previousDayData = JSON.parse(responseText);
+    const parseMs = coatingPerfNow_() - parseStartedAt;
+
+    coatingPerfEnd_(`Previous-day API load #${prevId}`, totalStartedAt, {
+      responseHeadersMs: Number(headersMs.toFixed(1)),
+      bodyReadMs: Number(bodyMs.toFixed(1)),
+      jsonParseMs: Number(parseMs.toFixed(1)),
+      responseChars: responseText.length,
+      success: true
+    });
+  } catch(e) {
+    previousDayData = null;
+    coatingPerfEnd_(`Previous-day API load #${prevId}`, totalStartedAt, {
+      success: false,
+      message: e?.message || String(e)
+    });
+  }
 }
 
 /* =====================================================
