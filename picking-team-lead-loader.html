@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Picking Team Lead</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{height:100vh;overflow:hidden;background:#060511;color:#fff;font-family:'Rajdhani',sans-serif}
+.bg{position:fixed;inset:0;background:
+radial-gradient(circle at 50% 15%,rgba(57,120,255,.18),transparent 35%),
+radial-gradient(circle at 50% 90%,rgba(255,38,184,.16),transparent 36%),
+#060511}
+.rings{position:fixed;left:50%;top:50%;width:760px;height:760px;transform:translate(-50%,-50%);border:1px solid rgba(92,120,255,.08);border-radius:50%;
+box-shadow:0 0 0 70px rgba(255,255,255,.012),0 0 0 140px rgba(255,255,255,.01),0 0 0 210px rgba(255,255,255,.008)}
+.scanner{position:fixed;left:8%;right:8%;height:2px;top:0;background:linear-gradient(90deg,transparent,#ff36c8,#5ad7ff,transparent);box-shadow:0 0 18px #ff36c8;animation:scan 3.7s linear infinite}
+@keyframes scan{to{top:100vh}}
+.page{position:fixed;inset:0;display:grid;place-items:center}
+.card{width:min(720px,90vw);text-align:center;padding:44px 34px}
+.icon{width:88px;height:88px;margin:0 auto 18px;position:relative;border:2px solid #5ad7ff;border-radius:18px;transform:rotate(45deg);box-shadow:0 0 30px rgba(90,215,255,.25)}
+.icon:before,.icon:after{content:"";position:absolute;background:#ff36c8;box-shadow:0 0 12px #ff36c8}
+.icon:before{width:38px;height:3px;left:23px;top:41px}.icon:after{height:38px;width:3px;left:41px;top:23px}
+.kicker{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:5px;color:#7884b5;margin-bottom:8px}
+.name{font-size:72px;font-weight:700;line-height:.92;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 22px rgba(90,215,255,.2)}
+.role{font-size:26px;letter-spacing:5px;text-transform:uppercase;color:#ff62d3;margin:10px 0 28px}
+.scanbox{border:1px solid rgba(90,215,255,.25);padding:16px 18px;background:rgba(6,5,17,.52);position:relative}
+.scanbox:before,.scanbox:after{content:"";position:absolute;width:22px;height:22px;border-color:#5ad7ff}
+.scanbox:before{left:-1px;top:-1px;border-left:2px solid;border-top:2px solid}.scanbox:after{right:-1px;bottom:-1px;border-right:2px solid;border-bottom:2px solid}
+.top{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:#9ea7c8;margin-bottom:9px}
+.track{height:5px;background:#101328;overflow:hidden}
+.fill{height:100%;width:0;background:linear-gradient(90deg,#556cff,#5ad7ff,#ff36c8);animation:fill 6s ease forwards}
+@keyframes fill{to{width:100%}}
+.chips{display:flex;justify-content:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.chip{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;padding:5px 9px;border:1px solid rgba(255,255,255,.09);color:#7f89ad}
+.chip b{color:#66e4ff}
+@media(max-width:650px){.name{font-size:48px}.role{font-size:20px;letter-spacing:3px}}
+</style>
+</head>
+<body>
+<div class="bg"></div><div class="rings"></div><div class="scanner"></div>
+<div class="page"><div class="card">
+  <div class="icon"></div>
+  <div class="kicker">ZENNI LMS · PICKING COMMAND</div>
+  <div class="name" id="displayName">Team Lead</div>
+  <div class="role">Picking Team Lead</div>
+  <div class="scanbox">
+    <div class="top"><span id="sysTxt">Initializing pick control...</span><span id="pct">0%</span></div>
+    <div class="track"><div class="fill"></div></div>
+  </div>
+  <div class="chips"><div class="chip"><b>●</b> SCANNERS</div><div class="chip"><b>●</b> QUEUES</div><div class="chip"><b>●</b> TEAM METRICS</div></div>
+</div></div>
+<script>
+const LOADER_MESSAGES=["Initializing pick control...","Loading picking data...","Syncing scanner queues...","Building team metrics...","Dashboard loading..."];
+</script>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Team Lead";
+  document.getElementById("displayName").textContent=n;
+
+  const msgs=LOADER_MESSAGES;
+  let p=0;
+  const pEl=document.getElementById("pct");
+  const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);
+    pEl.textContent=p+"%";
+    const idx=Math.min(msgs.length-1,Math.floor(p/20));
+    sysEl.textContent=msgs[idx];
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  const MIN_TIME=6000;
+  const startTime=Date.now();
+  const preload=document.createElement("link");
+  preload.rel="prefetch";
+  preload.href="index.html";
+  document.head.appendChild(preload);
+
+  function go(){
+    const elapsed=Date.now()-startTime;
+    const remain=Math.max(0,MIN_TIME-elapsed);
+    setTimeout(()=>{
+      p=100;pEl.textContent="100%";clearInterval(iv);
+      setTimeout(()=>window.location.replace("index.html"),400);
+    },remain);
+  }
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(go).catch(go);
+  setTimeout(()=>window.location.replace("index.html"),10000);
+</script>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Team Lead</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{height:100vh;overflow:hidden;background:#07100b;color:#eafbf0;font-family:'Barlow Condensed',sans-serif}
+.bg{position:fixed;inset:0;background:
+linear-gradient(rgba(20,255,124,.035) 1px,transparent 1px),
+linear-gradient(90deg,rgba(20,255,124,.035) 1px,transparent 1px),
+radial-gradient(circle at 50% 45%,rgba(0,150,75,.12),transparent 42%),#07100b;background-size:42px 42px,42px 42px,auto,auto}
+.shelf{position:fixed;left:5%;right:5%;height:1px;background:rgba(89,255,156,.12)}
+.s1{top:24%}.s2{top:50%}.s3{top:76%}
+.boxes{position:fixed;inset:0;pointer-events:none}
+.box{position:absolute;width:90px;height:62px;border:1px solid rgba(89,255,156,.09)}
+.b1{left:8%;top:30%}.b2{left:15%;top:60%}.b3{right:11%;top:32%}.b4{right:18%;top:64%}
+.page{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+.console{width:min(790px,90vw);border:1px solid rgba(89,255,156,.24);background:rgba(4,15,9,.76);padding:38px 46px;box-shadow:0 0 70px rgba(0,180,90,.08)}
+.header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(89,255,156,.14);padding-bottom:13px;margin-bottom:28px}
+.brand{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:4px;color:#6e917b}.badge{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:#54ff9d}
+.hero{display:grid;grid-template-columns:1fr 180px;gap:34px;align-items:center}
+.name{font-size:64px;line-height:.95;text-transform:uppercase;font-weight:700}
+.role{font-size:24px;letter-spacing:4px;text-transform:uppercase;color:#59ff9c;margin-top:8px}
+.dept{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:#7f9e89;margin-top:7px}
+.cube{width:140px;height:140px;margin:auto;position:relative;border:1px solid rgba(89,255,156,.32);transform:rotate(45deg);box-shadow:0 0 35px rgba(89,255,156,.08)}
+.cube:before,.cube:after{content:"";position:absolute;border:1px solid rgba(89,255,156,.22)}
+.cube:before{inset:22px}.cube:after{inset:44px;background:rgba(89,255,156,.08)}
+.load{margin-top:32px}
+.row{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:#789083;margin-bottom:8px}
+.track{height:12px;background:repeating-linear-gradient(90deg,rgba(89,255,156,.08) 0 12px,transparent 12px 16px);border:1px solid rgba(89,255,156,.14);padding:2px}
+.fill{height:100%;width:0;background:#59ff9c;box-shadow:0 0 14px rgba(89,255,156,.6);animation:fill 6s steps(30,end) forwards}
+@keyframes fill{to{width:100%}}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:15px}
+.metric{border:1px solid rgba(89,255,156,.1);padding:9px;text-align:center;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.5px;color:#779684}
+.metric strong{display:block;color:#59ff9c;font-size:12px;margin-bottom:3px}
+@media(max-width:650px){.console{padding:30px 24px}.hero{grid-template-columns:1fr}.cube{display:none}.name{font-size:48px}}
+</style>
+</head>
+<body>
+<div class="bg"></div><div class="shelf s1"></div><div class="shelf s2"></div><div class="shelf s3"></div>
+<div class="boxes"><div class="box b1"></div><div class="box b2"></div><div class="box b3"></div><div class="box b4"></div></div>
+<div class="page"><div class="console">
+  <div class="header"><div class="brand">ZENNI LMS / INVENTORY CONTROL</div><div class="badge">SYSTEM READY</div></div>
+  <div class="hero">
+    <div><div class="name" id="displayName">Team Lead</div><div class="role">Inventory Team Lead</div><div class="dept">DISTRIBUTION & INVENTORY · OHIO</div></div>
+    <div class="cube"></div>
+  </div>
+  <div class="load">
+    <div class="row"><span id="sysTxt">Reading inventory control...</span><span id="pct">0%</span></div>
+    <div class="track"><div class="fill"></div></div>
+    <div class="metrics"><div class="metric"><strong>LIVE</strong>STOCK</div><div class="metric"><strong>SYNC</strong>LOCATIONS</div><div class="metric"><strong>READY</strong>TEAM</div></div>
+  </div>
+</div></div>
+<script>
+const LOADER_MESSAGES=["Reading inventory control...","Loading inventory data...","Syncing stock locations...","Validating inventory metrics...","Dashboard loading..."];
+</script>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Team Lead";
+  document.getElementById("displayName").textContent=n;
+
+  const msgs=LOADER_MESSAGES;
+  let p=0;
+  const pEl=document.getElementById("pct");
+  const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);
+    pEl.textContent=p+"%";
+    const idx=Math.min(msgs.length-1,Math.floor(p/20));
+    sysEl.textContent=msgs[idx];
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  const MIN_TIME=6000;
+  const startTime=Date.now();
+  const preload=document.createElement("link");
+  preload.rel="prefetch";
+  preload.href="index.html";
+  document.head.appendChild(preload);
+
+  function go(){
+    const elapsed=Date.now()-startTime;
+    const remain=Math.max(0,MIN_TIME-elapsed);
+    setTimeout(()=>{
+      p=100;pEl.textContent="100%";clearInterval(iv);
+      setTimeout(()=>window.location.replace("index.html"),400);
+    },remain);
+  }
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(go).catch(go);
+  setTimeout(()=>window.location.replace("index.html"),10000);
+</script>

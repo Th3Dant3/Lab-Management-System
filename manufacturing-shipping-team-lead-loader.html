@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manufacturing Shipping Team Lead</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{height:100vh;overflow:hidden;background:#071015;color:#fff;font-family:'Barlow Condensed',sans-serif}
+.bg{position:fixed;inset:0;background:
+radial-gradient(circle at 20% 25%,rgba(0,190,220,.16),transparent 30%),
+radial-gradient(circle at 85% 75%,rgba(255,150,0,.14),transparent 32%),
+linear-gradient(145deg,#071015,#0b1820 48%,#071015)}
+.grid{position:fixed;inset:0;opacity:.32;background-image:
+linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:34px 34px}
+.caution{position:fixed;left:-8%;right:-8%;height:26px;top:8%;transform:rotate(-2deg);opacity:.24;
+background:repeating-linear-gradient(135deg,#ffb000 0 18px,#111 18px 36px)}
+.caution.bottom{top:auto;bottom:8%;transform:rotate(2deg)}
+.beam{position:fixed;top:0;bottom:0;width:2px;background:linear-gradient(transparent,#00d9ff,transparent);filter:blur(.2px);opacity:.35;animation:beam 5s linear infinite}
+@keyframes beam{from{left:0}to{left:100vw}}
+.page{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:5}
+.panel{width:min(760px,88vw);padding:42px 54px;border:1px solid rgba(0,217,255,.3);background:rgba(5,15,20,.72);
+box-shadow:0 0 60px rgba(0,217,255,.08),inset 0 0 60px rgba(255,174,0,.025);backdrop-filter:blur(8px);position:relative}
+.panel:before,.panel:after{content:"";position:absolute;width:120px;height:4px;top:-2px}
+.panel:before{left:0;background:#00d9ff;box-shadow:0 0 18px #00d9ff}.panel:after{right:0;background:#ffad19;box-shadow:0 0 18px #ffad19}
+.eyebrow{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:4px;color:#8da5ad;margin-bottom:12px}
+.name{font-size:64px;line-height:.95;text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:18px}
+.role{display:inline-block;padding:9px 15px;border-left:4px solid #ffad19;background:rgba(255,173,25,.08);font-size:22px;letter-spacing:2px;text-transform:uppercase;color:#ffd27b}
+.route{margin:28px 0 24px;display:flex;align-items:center;gap:10px}
+.node{width:13px;height:13px;border:2px solid #00d9ff;border-radius:50%;box-shadow:0 0 12px rgba(0,217,255,.7)}
+.line{height:2px;flex:1;background:linear-gradient(90deg,#00d9ff,#ffad19);position:relative;overflow:hidden}
+.line:after{content:"";position:absolute;width:80px;inset:0 auto 0 -80px;background:linear-gradient(90deg,transparent,#fff,transparent);animation:flow 1.8s linear infinite}
+@keyframes flow{to{left:100%}}
+.status{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2px;color:#8ea4ac;margin-bottom:10px}
+.track{height:9px;border:1px solid rgba(255,255,255,.12);background:#061015;overflow:hidden}
+.fill{height:100%;width:0;background:linear-gradient(90deg,#00c9ee,#ffad19);animation:fill 6s ease forwards}
+@keyframes fill{to{width:100%}}
+.footer{display:flex;justify-content:space-between;margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;color:#5e737c}
+@media(max-width:650px){.panel{padding:34px 26px}.name{font-size:46px}.role{font-size:17px}}
+</style>
+</head>
+<body>
+<div class="bg"></div><div class="grid"></div><div class="caution"></div><div class="caution bottom"></div><div class="beam"></div>
+<div class="page"><div class="panel">
+  <div class="eyebrow">ZENNI LMS / DISTRIBUTION & INVENTORY</div>
+  <div class="name" id="displayName">Team Lead</div>
+  <div class="role">Manufacturing Shipping Team Lead</div>
+  <div class="route"><div class="node"></div><div class="line"></div><div class="node"></div><div class="line"></div><div class="node"></div></div>
+  <div class="status"><span id="sysTxt">Preparing outbound systems...</span><span id="pct">0%</span></div>
+  <div class="track"><div class="fill"></div></div>
+  <div class="footer"><span>DOCK FLOW ONLINE</span><span>ZENNI USA · OHIO</span></div>
+</div></div>
+<script>
+const LOADER_MESSAGES=["Preparing outbound systems...","Loading manufacturing shipping data...","Syncing dock activity...","Validating outbound flow...","Dashboard loading..."];
+</script>
+
+<script>
+  const n=sessionStorage.getItem("lms_fullname")||"Team Lead";
+  document.getElementById("displayName").textContent=n;
+
+  const msgs=LOADER_MESSAGES;
+  let p=0;
+  const pEl=document.getElementById("pct");
+  const sysEl=document.getElementById("sysTxt");
+  const iv=setInterval(()=>{
+    p=Math.min(99,p+Math.floor(Math.random()*2)+1);
+    pEl.textContent=p+"%";
+    const idx=Math.min(msgs.length-1,Math.floor(p/20));
+    sysEl.textContent=msgs[idx];
+    if(p>=99)clearInterval(iv);
+  },100);
+
+  const MIN_TIME=6000;
+  const startTime=Date.now();
+  const preload=document.createElement("link");
+  preload.rel="prefetch";
+  preload.href="index.html";
+  document.head.appendChild(preload);
+
+  function go(){
+    const elapsed=Date.now()-startTime;
+    const remain=Math.max(0,MIN_TIME-elapsed);
+    setTimeout(()=>{
+      p=100;pEl.textContent="100%";clearInterval(iv);
+      setTimeout(()=>window.location.replace("index.html"),400);
+    },remain);
+  }
+  fetch("index.html",{method:"GET",cache:"force-cache"}).then(go).catch(go);
+  setTimeout(()=>window.location.replace("index.html"),10000);
+</script>

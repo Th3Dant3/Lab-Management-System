@@ -29,6 +29,48 @@ const LOADER_MAP = {
   "JMOLING":        "loader_TEAMLEAD.html",  
 }
 
+/**************************************************
+ * ROLE / TITLE LOADER MAP — Distribution & Inventory
+ * Routes Team Leads automatically by operational area.
+ **************************************************/
+const TEAM_LEAD_LOADER_MAP = {
+  "MANUFACTURING SHIPPING": "manufacturing-shipping-team-lead-loader.html",
+  "PICKING":                "picking-team-lead-loader.html",
+  "INVENTORY":              "inventory-team-lead-loader.html",
+  "SHIPPING DISTRIBUTION":  "shipping-distribution-team-lead-loader.html"
+};
+
+function normalizeLoginValue(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function getTeamLeadLoader(data = {}) {
+  // Prefer a dedicated department/area field when the API provides one.
+  // Fall back to role because the current login API already returns data.role.
+  const area = normalizeLoginValue(
+    data.department ||
+    data.departmentName ||
+    data.area ||
+    data.team ||
+    data.role
+  );
+
+  // Prefer an explicit title field, then fall back to the existing subRole field.
+  const title = normalizeLoginValue(
+    data.title ||
+    data.jobTitle ||
+    data.position ||
+    data.subRole
+  );
+
+  if (!title.includes("TEAM LEAD")) return null;
+
+  return TEAM_LEAD_LOADER_MAP[area] || null;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const userEl     = document.getElementById("username");
   const passwordEl = document.getElementById("password");
@@ -180,6 +222,8 @@ async function handleLoginResponse(data, originalPassword) {
     sessionStorage.setItem("lms_user",         data.username);
     sessionStorage.setItem("lms_role",         data.role    || "");
     sessionStorage.setItem("lms_subrole",      data.subRole || "");
+    sessionStorage.setItem("lms_department",   data.department || data.departmentName || data.area || data.team || data.role || "");
+    sessionStorage.setItem("lms_title",        data.title || data.jobTitle || data.position || data.subRole || "");
     sessionStorage.setItem("lms_fullname",     fullName);
     sessionStorage.setItem("lms_firstname",    data.firstName || "");
     sessionStorage.setItem("lms_lastname",     data.lastName  || "");
@@ -200,7 +244,16 @@ async function handleLoginResponse(data, originalPassword) {
 
     sessionStorage.removeItem("lms_redirect_after_login");
 
-    const fallbackPage = LOADER_MAP[data.username] || "index.html";
+    const usernameKey = normalizeLoginValue(data.username);
+    const personalLoader = LOADER_MAP[usernameKey] || null;
+    const teamLeadLoader = getTeamLeadLoader(data);
+
+    // Routing priority:
+    // 1) exact protected page requested before login
+    // 2) existing personal/username loader
+    // 3) Distribution & Inventory Team Lead loader by area/title
+    // 4) main dashboard
+    const fallbackPage = personalLoader || teamLeadLoader || "index.html";
     const nextPage = requestedPage || fallbackPage;
 
     setTimeout(() => {
