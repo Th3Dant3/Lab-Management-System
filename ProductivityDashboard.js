@@ -9,6 +9,53 @@ const BREAKAGE_API_URL = 'https://script.google.com/macros/s/AKfycbxsZ7Bb5WYUyJe
 const CLIENT_CACHE_KEY = 'PRODUCTIVITY_HUB_SHEET_PAYLOAD_CACHE_V6_SATURDAY_SHIFT_FIX';
 const CLIENT_CACHE_TTL_MS = 15 * 60 * 1000;
 
+
+/************************************************************
+ * PRODUCTIVITY HUB — DETAILED PERFORMANCE AUDIT
+ * LOGGING ONLY. No API URLs, cache behavior, rendering logic,
+ * loader timing, filters, calculations, or refresh behavior changed.
+ ************************************************************/
+const PROD_PERF = {
+  initialBootStartedAt: performance.now(),
+  initialBootDataReadyAt: null,
+  initialLoaderFinishCalledAt: null,
+  initialReadyLogged: false,
+  bootSeq: 0,
+  currentBootId: 0
+};
+
+function prodPerfNow_() {
+  return performance.now();
+}
+
+function prodPerfLog_(message, details = {}) {
+  console.log(`[ProductivityPerf] ${message}`, details);
+}
+
+function prodPerfStart_(label, details = {}) {
+  const startedAt = prodPerfNow_();
+  prodPerfLog_(`▶ ${label}`, details);
+  return startedAt;
+}
+
+function prodPerfEnd_(label, startedAt, details = {}) {
+  const elapsed = prodPerfNow_() - startedAt;
+  prodPerfLog_(`✓ ${label}: ${elapsed.toFixed(1)} ms`, details);
+  return elapsed;
+}
+
+prodPerfLog_(
+  `JS executing at ${prodPerfNow_().toFixed(1)} ms after navigation start`,
+  {}
+);
+
+window.addEventListener('load', () => {
+  prodPerfLog_(
+    `window.load at ${prodPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+});
+
 const STATE = {
   meta: {},
   master: [],
@@ -203,8 +250,24 @@ function applyCachedBreakageWeekData(week, cached) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const domBootStartedAt = prodPerfStart_(
+    'DOMContentLoaded → Productivity boot',
+    {}
+  );
+
+  prodPerfLog_(
+    `DOMContentLoaded fired at ${prodPerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+
   bindEvents();
   reloadData();
+
+  prodPerfEnd_(
+    'DOMContentLoaded → Productivity boot',
+    domBootStartedAt,
+    {}
+  );
 });
 
 function bindEvents() {
@@ -412,6 +475,22 @@ function getDeptLabel(dept) {
 }
 
 function reloadData() {
+  const bootId = ++PROD_PERF.bootSeq;
+  PROD_PERF.currentBootId = bootId;
+
+  const wasInitiallyLoaded = STATE.hasLoadedOnce;
+  const isInitialBoot = !wasInitiallyLoaded;
+
+  const bootStartedAt = prodPerfStart_(
+    `${isInitialBoot ? 'INITIAL ' : ''}Productivity boot #${bootId}`,
+    {
+      apiAction: 'boot',
+      clientCacheKey: CLIENT_CACHE_KEY,
+      clientCacheTtlMs: CLIENT_CACHE_TTL_MS,
+      stage3Mode: 'instant-browser-cache-then-background-live'
+    }
+  );
+
   // Saturday fix: remove older browser cache keys that can keep showing only 2 days.
   [
     'PRODUCTIVITY_HUB_SHEET_PAYLOAD_CACHE_V5',
@@ -420,55 +499,288 @@ function reloadData() {
     try { localStorage.removeItem(key); } catch (err) {}
   });
 
+  const cacheCheckStartedAt = prodPerfStart_(
+    `Browser cache check #${bootId}`,
+    {}
+  );
+
   const cached = localStorage.getItem(CLIENT_CACHE_KEY);
+  let browserCacheUsed = false;
+  let browserCacheFresh = false;
 
   if (cached && !STATE.hasLoadedOnce) {
     try {
+      const parseCacheStartedAt = prodPerfNow_();
       const parsed = JSON.parse(cached);
+      const cacheParseMs = prodPerfNow_() - parseCacheStartedAt;
       const cachedData = parsed && parsed.data ? parsed.data : parsed;
       const savedAt = parsed && parsed.savedAt ? Number(parsed.savedAt) : 0;
-      const cacheFresh = savedAt ? (Date.now() - savedAt) < CLIENT_CACHE_TTL_MS : true;
+      const cacheFresh = savedAt
+        ? (Date.now() - savedAt) < CLIENT_CACHE_TTL_MS
+        : true;
+
+      browserCacheFresh = !!cacheFresh;
+
+      prodPerfLog_(
+        `Browser cache parse #${bootId}: ${cacheParseMs.toFixed(1)} ms`,
+        {
+          cacheFresh,
+          savedAgeMs: savedAt ? Date.now() - savedAt : null,
+          chars: cached.length
+        }
+      );
 
       if (cachedData && cacheFresh) {
+        const cachedHandleStartedAt = prodPerfStart_(
+          `handleData browser-cache #${bootId}`,
+          {}
+        );
+
         handleData(cachedData, true);
+
+        const cachedHandleMs = prodPerfEnd_(
+          `handleData browser-cache #${bootId}`,
+          cachedHandleStartedAt,
+          {}
+        );
+
+        browserCacheUsed = true;
+
         console.info('[Productivity Hub] boot loaded from browser cache instantly');
+
+        /*
+         * STAGE 3:
+         * We already have a complete fresh dashboard. Do not keep the
+         * full-screen loader up while the live API refresh runs.
+         */
+        PROD_PERF.initialBootDataReadyAt = prodPerfNow_();
+
+        prodPerfLog_(
+          `Stage 3 fresh browser cache ready #${bootId}`,
+          {
+            cacheRenderMs: Number(cachedHandleMs.toFixed(1)),
+            readyAtMs: Number(PROD_PERF.initialBootDataReadyAt.toFixed(1)),
+            liveRefreshWillContinue: true
+          }
+        );
+
+        finishLoadingScreen();
       }
     } catch (err) {
       console.warn('Bad Productivity Hub cache:', err);
     }
   }
 
+  prodPerfEnd_(
+    `Browser cache check #${bootId}`,
+    cacheCheckStartedAt,
+    {
+      found: !!cached,
+      fresh: browserCacheFresh,
+      used: browserCacheUsed
+    }
+  );
+
+  /*
+   * Only show the blocking loader when we still do not have usable data.
+   * With a fresh browser cache, the dashboard is already visible and the
+   * live request below becomes a quiet background refresh.
+   */
   if (!STATE.hasLoadedOnce) {
     startLoadingScreen();
     showLoading();
-  } else {
+  } else if (!browserCacheUsed) {
     showRefreshStatus('Refreshing live data...');
+  } else {
+    showRefreshStatus('Showing cached data · refreshing live data...');
   }
 
   startLoadTimer('boot');
 
+  const apiStartedAt = prodPerfStart_(
+    `Boot API #${bootId}`,
+    {
+      action: 'boot',
+      backgroundRefresh: browserCacheUsed
+    }
+  );
+
+  const headersStartedAt = prodPerfNow_();
+
   fetch(`${API_URL}?action=boot&ts=${Date.now()}`)
-    .then(r => r.text())
-    .then(text => {
+    .then(r => {
+      const headersMs = prodPerfNow_() - headersStartedAt;
+
+      prodPerfLog_(
+        `Boot API #${bootId} response headers: ${headersMs.toFixed(1)} ms`,
+        {
+          httpStatus: r.status,
+          ok: r.ok,
+          backgroundRefresh: browserCacheUsed
+        }
+      );
+
+      const bodyStartedAt = prodPerfNow_();
+
+      return r.text().then(bodyText => ({
+        bodyText,
+        headersMs,
+        bodyMs: prodPerfNow_() - bodyStartedAt
+      }));
+    })
+    .then(result => {
+      const { bodyText, headersMs, bodyMs } = result;
+
+      prodPerfLog_(
+        `Boot API #${bootId} body read: ${bodyMs.toFixed(1)} ms`,
+        {
+          responseChars: bodyText.length,
+          backgroundRefresh: browserCacheUsed
+        }
+      );
+
       let data;
+      const parseStartedAt = prodPerfNow_();
+
       try {
-        data = JSON.parse(text);
+        data = JSON.parse(bodyText);
       } catch (err) {
         throw new Error('API did not return JSON. Redeploy Apps Script and test /exec?action=boot.');
       }
+
+      const parseMs = prodPerfNow_() - parseStartedAt;
+
+      prodPerfLog_(
+        `Boot API #${bootId} JSON parse: ${parseMs.toFixed(1)} ms`,
+        {
+          apiMs: Number(data && (data.apiMs || data.serverMs) || 0),
+          cacheHit: !!(data && data._cache && data._cache.hit),
+          cacheKey: data && data._cache ? data._cache.key : '',
+          masterRows: Array.isArray(data.master) ? data.master.length : null,
+          dailyRows: Array.isArray(data.dailySnapshot) ? data.dailySnapshot.length : null,
+          fiscalWeeks: Array.isArray(data.fiscalWeeks) ? data.fiscalWeeks.length : null,
+          backgroundRefresh: browserCacheUsed
+        }
+      );
+
+      prodPerfEnd_(
+        `Boot API #${bootId}`,
+        apiStartedAt,
+        {
+          responseHeadersMs: Number(headersMs.toFixed(1)),
+          bodyReadMs: Number(bodyMs.toFixed(1)),
+          jsonParseMs: Number(parseMs.toFixed(1)),
+          responseChars: bodyText.length,
+          apiMs: Number(data && (data.apiMs || data.serverMs) || 0),
+          cacheHit: !!(data && data._cache && data._cache.hit),
+          backgroundRefresh: browserCacheUsed
+        }
+      );
+
+      const localStorageStartedAt = prodPerfNow_();
 
       localStorage.setItem(CLIENT_CACHE_KEY, JSON.stringify({
         savedAt: Date.now(),
         data
       }));
+
+      const localStorageMs = prodPerfNow_() - localStorageStartedAt;
+
+      prodPerfLog_(
+        `Boot browser-cache write #${bootId}: ${localStorageMs.toFixed(1)} ms`,
+        {}
+      );
+
+      const handleStartedAt = prodPerfStart_(
+        `handleData live #${bootId}`,
+        {
+          backgroundRefresh: browserCacheUsed
+        }
+      );
+
       handleData(data, false);
+
+      const handleMs = prodPerfEnd_(
+        `handleData live #${bootId}`,
+        handleStartedAt,
+        {
+          masterRows: STATE.master.length,
+          dailyRows: STATE.dailySnapshot.length,
+          summaryRows: STATE.summary.length,
+          fiscalWeeks: STATE.fiscalWeeks.length,
+          backgroundRefresh: browserCacheUsed
+        }
+      );
+
+      const totalMs = prodPerfEnd_(
+        `${isInitialBoot ? 'INITIAL ' : ''}Productivity boot #${bootId}`,
+        bootStartedAt,
+        {
+          success: true,
+          browserCacheUsed,
+          backgroundRefresh: browserCacheUsed,
+          handleDataMs: Number(handleMs.toFixed(1))
+        }
+      );
+
+      /*
+       * If there was no browser-cache fast path, preserve the original
+       * "live data is ready" timing behavior.
+       */
+      if (isInitialBoot && !browserCacheUsed) {
+        PROD_PERF.initialBootDataReadyAt = prodPerfNow_();
+
+        prodPerfLog_(
+          `Initial live Productivity data/render complete #${bootId}`,
+          {
+            dataRenderReadyMs: Number(PROD_PERF.initialBootDataReadyAt.toFixed(1)),
+            bootElapsedMs: Number(totalMs.toFixed(1))
+          }
+        );
+      }
+
+      if (browserCacheUsed) {
+        prodPerfLog_(
+          `Stage 3 background live refresh complete #${bootId}`,
+          {
+            totalBackgroundRefreshMs: Number(totalMs.toFixed(1)),
+            apiMs: Number(data && (data.apiMs || data.serverMs) || 0),
+            cacheHit: !!(data && data._cache && data._cache.hit)
+          }
+        );
+      }
+
       endLoadTimer('boot', getApiTimingMeta(data));
 
-      // Quietly ask the API to warm the next cache paths.
-      // This does not block the page.
       warmServerCacheQuietly();
     })
-    .catch(showError);
+    .catch(err => {
+      prodPerfEnd_(
+        `${isInitialBoot ? 'INITIAL ' : ''}Productivity boot #${bootId}`,
+        bootStartedAt,
+        {
+          success: false,
+          browserCacheUsed,
+          backgroundRefresh: browserCacheUsed,
+          message: err && err.message ? err.message : String(err)
+        }
+      );
+
+      /*
+       * If cached data is already on screen, a failed background refresh
+       * must not replace the dashboard with the blocking error state.
+       */
+      if (browserCacheUsed) {
+        console.warn(
+          '[Productivity Hub] Background live refresh failed; continuing with fresh browser cache.',
+          err
+        );
+        showRefreshStatus('Showing cached data · live refresh unavailable');
+        return;
+      }
+
+      showError(err);
+    });
 }
 
 function warmServerCacheQuietly() {
@@ -654,9 +966,18 @@ function getCurrentFiscalWeekKeyFromMeta(meta) {
 }
 
 function handleData(data, fromCache = false) {
+  const handlePerfStartedAt = prodPerfStart_(
+    `handleData internals (${fromCache ? 'browser-cache' : 'live'})`,
+    {}
+  );
   if (!data || data.ok === false) {
     throw new Error(data && data.message ? data.message : 'Invalid data response.');
   }
+
+  const stateBuildStartedAt = prodPerfStart_(
+    `State normalize/build (${fromCache ? 'browser-cache' : 'live'})`,
+    {}
+  );
 
   STATE.hasLoadedOnce = true;
 
@@ -690,11 +1011,39 @@ function handleData(data, fromCache = false) {
     };
   }
 
+  prodPerfEnd_(
+    `State normalize/build (${fromCache ? 'browser-cache' : 'live'})`,
+    stateBuildStartedAt,
+    {
+      masterRows: STATE.master.length,
+      summaryRows: STATE.summary.length,
+      dailyRows: STATE.dailySnapshot.length,
+      editRows: STATE.editSnapshot.length,
+      adjustmentRows: STATE.adjustments.length,
+      fiscalWeeks: STATE.fiscalWeeks.length
+    }
+  );
+
+  const renderPipelineStartedAt = prodPerfStart_(
+    `Adjust + meta + render (${fromCache ? 'browser-cache' : 'live'})`,
+    {}
+  );
+
   applyProductivityAdjustmentsToData();
 
   updateMeta();
   renderNavBar();
   renderEverything();
+
+  prodPerfEnd_(
+    `Adjust + meta + render (${fromCache ? 'browser-cache' : 'live'})`,
+    renderPipelineStartedAt,
+    {
+      activePage: STATE.activePage,
+      activeDept: STATE.activeDept,
+      activeShift: STATE.activeShift
+    }
+  );
 
   if (fromCache) {
     showRefreshStatus('Saved data loaded — refreshing live...');
@@ -711,6 +1060,12 @@ function handleData(data, fromCache = false) {
       fetchBreakageFallbackForWeek(currentWeek, 'boot');
     }
   }
+
+  prodPerfEnd_(
+    `handleData internals (${fromCache ? 'browser-cache' : 'live'})`,
+    handlePerfStartedAt,
+    {}
+  );
 }
 
 function normalizeRows(rows) {
@@ -3775,6 +4130,7 @@ function showLoading() {
 }
 
 function startLoadingScreen() {
+  prodPerfLog_('Loading screen started', {});
   const overlay = document.getElementById('appLoader');
   const bar = document.getElementById('loaderProgressBar');
   const pct = document.getElementById('loaderPercent');
@@ -3853,6 +4209,14 @@ function startLoadingScreen() {
 }
 
 function finishLoadingScreen() {
+  const finishLoaderStartedAt = prodPerfStart_(
+    'finishLoadingScreen()',
+    {}
+  );
+
+  if (!PROD_PERF.initialLoaderFinishCalledAt) {
+    PROD_PERF.initialLoaderFinishCalledAt = prodPerfNow_();
+  }
   const overlay = document.getElementById('appLoader');
   const bar = document.getElementById('loaderProgressBar');
   const pct = document.getElementById('loaderPercent');
@@ -3878,6 +4242,35 @@ function finishLoadingScreen() {
   setTimeout(() => {
     overlay.classList.add('hide');
     overlay.classList.remove('show');
+
+    const finishMs = prodPerfEnd_(
+      'finishLoadingScreen()',
+      finishLoaderStartedAt,
+      { configuredDelayMs: 100 }
+    );
+
+    if (!PROD_PERF.initialReadyLogged) {
+      PROD_PERF.initialReadyLogged = true;
+      const readyAt = prodPerfNow_();
+
+      prodPerfLog_(
+        '✅ INITIAL PRODUCTIVITY HUB READY',
+        {
+          dataRenderReadyMs: PROD_PERF.initialBootDataReadyAt == null
+            ? null
+            : Number(PROD_PERF.initialBootDataReadyAt.toFixed(1)),
+          loaderFinishCalledAtMs: PROD_PERF.initialLoaderFinishCalledAt == null
+            ? null
+            : Number(PROD_PERF.initialLoaderFinishCalledAt.toFixed(1)),
+          loaderFinishDurationMs: Number(finishMs.toFixed(1)),
+          totalReadyMs: Number(readyAt.toFixed(1))
+        }
+      );
+
+      console.log(
+        `[ProductivityPerf] MAIN PRODUCTIVITY HUB TIME TO READY: ${readyAt.toFixed(1)} ms (${(readyAt / 1000).toFixed(2)} sec)`
+      );
+    }
   }, 100);
 }
 

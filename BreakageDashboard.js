@@ -11,6 +11,54 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxsZ7Bb5WYUyJeECfMWFyOJ
 const BREAKAGE_CACHE_PREFIX = 'QUALITY_BREAKAGE_WEEK_CACHE_V6_REASON_OPERATOR_';
 const BREAKAGE_CACHE_TTL_MS = 60 * 60 * 1000;
 
+const BREAKAGE_BROWSER_CACHE_MAX_WEEKS = 2;
+
+
+/************************************************************
+ * BREAKAGE HUB PERFORMANCE AUDIT — LOGGING ONLY
+ * No API routes, cache TTLs, loading order, calculations,
+ * filters, or rendering behavior are intentionally changed.
+ ************************************************************/
+const BREAKAGE_PERF = {
+  navStart: performance.timeOrigin ? 0 : performance.now(),
+  bootSeq: 0,
+  requestSeq: 0,
+  initialReadyLogged: false
+};
+
+function breakagePerfNow_() {
+  return performance.now();
+}
+
+function breakagePerfLog_(label, meta) {
+  const payload = meta || {};
+  console.log(`[BreakagePerf] ${label}`, payload);
+}
+
+function breakagePerfStart_(label, meta) {
+  const startedAt = breakagePerfNow_();
+  breakagePerfLog_(`▶ ${label}`, meta || {});
+  return startedAt;
+}
+
+function breakagePerfEnd_(label, startedAt, meta) {
+  const elapsed = breakagePerfNow_() - startedAt;
+  breakagePerfLog_(`✓ ${label}: ${elapsed.toFixed(1)} ms`, meta || {});
+  return elapsed;
+}
+
+breakagePerfLog_(
+  `JS executing at ${breakagePerfNow_().toFixed(1)} ms after navigation start`,
+  {}
+);
+
+window.addEventListener('load', () => {
+  breakagePerfLog_(
+    `window.load at ${breakagePerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+});
+
 const STATE = {
   boot: null,
   week: null,
@@ -31,10 +79,18 @@ const STATE = {
 const $ = id => document.getElementById(id);
 
 document.addEventListener('DOMContentLoaded', () => {
+  const domStartedAt = breakagePerfStart_('DOMContentLoaded → Breakage boot', {});
+  breakagePerfLog_(
+    `DOMContentLoaded fired at ${breakagePerfNow_().toFixed(1)} ms after navigation start`,
+    {}
+  );
+
   startClock();
   bindEvents();
   startLoadingScreen();
   loadBoot();
+
+  breakagePerfEnd_('DOMContentLoaded → Breakage boot', domStartedAt, {});
 });
 
 /* CLOCK */
@@ -151,8 +207,31 @@ function startLoadingScreen() {
 }
 
 function finishLoadingScreen() {
+  const finishStartedAt = breakagePerfStart_('finishLoadingScreen()', {});
   updateLoader(100, 'Quality Hub ready.', 'render');
-  setTimeout(() => $('appLoader')?.classList.add('hide'), 350);
+  setTimeout(() => {
+    $('appLoader')?.classList.add('hide');
+
+    const finishMs = breakagePerfEnd_(
+      'finishLoadingScreen()',
+      finishStartedAt,
+      { configuredDelayMs: 350 }
+    );
+
+    if (!BREAKAGE_PERF.initialReadyLogged) {
+      BREAKAGE_PERF.initialReadyLogged = true;
+      breakagePerfLog_(
+        `✅ INITIAL BREAKAGE HUB READY`,
+        {
+          totalReadyMs: Number(breakagePerfNow_().toFixed(1)),
+          loaderFinishDurationMs: Number(finishMs.toFixed(1))
+        }
+      );
+      console.log(
+        `[BreakagePerf] MAIN BREAKAGE HUB TIME TO READY: ${breakagePerfNow_().toFixed(1)} ms (${(breakagePerfNow_()/1000).toFixed(2)} sec)`
+      );
+    }
+  }, 350);
 }
 
 function updateLoader(percent, message, step) {
@@ -186,6 +265,11 @@ function updateLoader(percent, message, step) {
 
 /* LOAD */
 async function loadBoot(force = false) {
+  const bootId = ++BREAKAGE_PERF.bootSeq;
+  const bootStartedAt = breakagePerfStart_(
+    `Breakage boot #${bootId}`,
+    { force: !!force }
+  );
   setLoading(true);
   updateLoader(22, force ? 'Refreshing Breakage Hub...' : 'Booting Quality Hub...', 'boot');
 
@@ -223,7 +307,16 @@ async function loadBoot(force = false) {
     renderWeekDropdowns();
 
     if (STATE.selectedWeek) {
+      const initialWeekStartedAt = breakagePerfNow_();
       await loadWeek(force);
+      breakagePerfLog_(
+        `Initial selected-week path #${bootId}: ${(breakagePerfNow_() - initialWeekStartedAt).toFixed(1)} ms`,
+        {
+          fiscalWeek: STATE.selectedWeek?.fiscalWeek || '',
+          weekStartDate: STATE.selectedWeek?.weekStartDate || '',
+          weekEndDate: STATE.selectedWeek?.weekEndDate || ''
+        }
+      );
     } else {
       STATE.week = null;
       renderEverything();
@@ -234,11 +327,28 @@ async function loadBoot(force = false) {
     showError(`Unable to load Breakage Hub. ${err.message || err}`);
   } finally {
     setLoading(false);
+    breakagePerfEnd_(
+      `Breakage boot #${bootId}`,
+      bootStartedAt,
+      {
+        selectedWeek: STATE.selectedWeek?.fiscalWeek || '',
+        weekRows: Array.isArray(STATE.week?.records) ? STATE.week.records.length : 0
+      }
+    );
   }
 }
 
 async function loadWeek(force = false) {
   if (!STATE.selectedWeek) return;
+
+  const weekPerfStartedAt = breakagePerfStart_(
+    `Week load ${STATE.selectedWeek.fiscalWeek || ''}`,
+    {
+      force: !!force,
+      weekStartDate: STATE.selectedWeek.weekStartDate || '',
+      weekEndDate: STATE.selectedWeek.weekEndDate || ''
+    }
+  );
 
   updateLoader(48, `Loading ${STATE.selectedWeek.fiscalWeek || 'selected week'}...`, 'week');
   showRefreshStatus(`Loading ${STATE.selectedWeek.fiscalWeek || 'selected week'}...`);
@@ -248,6 +358,11 @@ async function loadWeek(force = false) {
   if (!force && STATE.allWeeks[key]) {
     STATE.week = STATE.allWeeks[key];
     afterWeekLoaded('memory cache');
+    breakagePerfEnd_(
+      `Week load ${STATE.selectedWeek.fiscalWeek || ''}`,
+      weekPerfStartedAt,
+      { source: 'memory cache', records: Array.isArray(STATE.week?.records) ? STATE.week.records.length : 0 }
+    );
     return;
   }
 
@@ -257,6 +372,11 @@ async function loadWeek(force = false) {
       STATE.week = cached;
       STATE.allWeeks[key] = cached;
       afterWeekLoaded('browser cache');
+      breakagePerfEnd_(
+        `Week load ${STATE.selectedWeek.fiscalWeek || ''}`,
+        weekPerfStartedAt,
+        { source: 'browser cache', records: Array.isArray(STATE.week?.records) ? STATE.week.records.length : 0 }
+      );
       return;
     }
   }
@@ -269,7 +389,19 @@ async function loadWeek(force = false) {
   });
 
   try {
+    const summaryStartedAt = breakagePerfNow_();
     const summaryData = await fetchApiRaw(summaryParams.toString());
+    breakagePerfLog_(
+      `Week summary phase: ${(breakagePerfNow_() - summaryStartedAt).toFixed(1)} ms`,
+      {
+        fiscalWeek: STATE.selectedWeek?.fiscalWeek || '',
+        summaryRows: Array.isArray(summaryData.breakageSummaryRows)
+          ? summaryData.breakageSummaryRows.length
+          : Array.isArray(summaryData.breakageDailySnapshot)
+            ? summaryData.breakageDailySnapshot.length
+            : 0
+      }
+    );
 
     // The new API keeps boot fast. Load granular records only for dates
     // in the selected week, in parallel, so reasons/access points/operators work.
@@ -278,6 +410,17 @@ async function loadWeek(force = false) {
         .map(row => String(row.WorkDate || row.workDate || '').trim())
         .filter(Boolean)
     ));
+
+    breakagePerfLog_(
+      `Week detail fan-out starting`,
+      {
+        fiscalWeek: STATE.selectedWeek?.fiscalWeek || '',
+        dateCount: dateKeys.length,
+        dates: dateKeys
+      }
+    );
+
+    const detailsStartedAt = breakagePerfNow_();
 
     const detailPayloads = await Promise.all(
       dateKeys.map(async workDate => {
@@ -294,6 +437,14 @@ async function loadWeek(force = false) {
           return { breakageDateDetails: [] };
         }
       })
+    );
+
+    breakagePerfLog_(
+      `Week detail fan-out complete: ${(breakagePerfNow_() - detailsStartedAt).toFixed(1)} ms`,
+      {
+        fiscalWeek: STATE.selectedWeek?.fiscalWeek || '',
+        dateCount: dateKeys.length
+      }
     );
 
     const records = detailPayloads.flatMap(payload =>
@@ -314,10 +465,33 @@ async function loadWeek(force = false) {
         summaryData.breakageOperatorWeeklySummary || []
     };
 
+    const normalizeStartedAt = breakagePerfNow_();
     STATE.week = normalizeWeekPayload(payload);
+    const normalizeMs = breakagePerfNow_() - normalizeStartedAt;
+
     STATE.allWeeks[key] = STATE.week;
+
+    const cacheWriteStartedAt = breakagePerfNow_();
     saveCachedWeek(key, STATE.week);
+    const cacheWriteMs = breakagePerfNow_() - cacheWriteStartedAt;
+
+    const renderStartedAt = breakagePerfNow_();
     afterWeekLoaded('Breakage API');
+    const renderMs = breakagePerfNow_() - renderStartedAt;
+
+    breakagePerfEnd_(
+      `Week load ${STATE.selectedWeek.fiscalWeek || ''}`,
+      weekPerfStartedAt,
+      {
+        source: 'Breakage API',
+        dateCount: dateKeys.length,
+        records: Array.isArray(STATE.week?.records) ? STATE.week.records.length : 0,
+        associates: Array.isArray(STATE.week?.associates) ? STATE.week.associates.length : 0,
+        normalizeMs: Number(normalizeMs.toFixed(1)),
+        cacheWriteMs: Number(cacheWriteMs.toFixed(1)),
+        renderMs: Number(renderMs.toFixed(1))
+      }
+    );
   } catch (err) {
     console.error(err);
     showError(`Failed to load selected week. ${err.message || err}`);
@@ -569,10 +743,173 @@ function getCachedWeek(key) {
 }
 
 function saveCachedWeek(key, data) {
+  const storageKey = getCacheStorageKey(key);
+  const value = JSON.stringify({
+    savedAt: Date.now(),
+    data
+  });
+
+  function getBreakageCacheEntries_() {
+    const entries = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const storageName = localStorage.key(i);
+
+      if (
+        !storageName ||
+        !storageName.startsWith(
+          BREAKAGE_CACHE_PREFIX
+        )
+      ) {
+        continue;
+      }
+
+      let savedAt = 0;
+
+      try {
+        const raw =
+          localStorage.getItem(storageName);
+        const parsed = raw
+          ? JSON.parse(raw)
+          : null;
+
+        savedAt =
+          Number(
+            parsed &&
+            parsed.savedAt || 0
+          );
+      } catch (err) {
+        savedAt = 0;
+      }
+
+      entries.push({
+        key: storageName,
+        savedAt: savedAt
+      });
+    }
+
+    return entries.sort(function(a, b) {
+      return b.savedAt - a.savedAt;
+    });
+  }
+
+  function pruneOldBreakageCaches_(
+    keepStorageKey,
+    maxOtherEntries
+  ) {
+    const entries =
+      getBreakageCacheEntries_()
+        .filter(function(item) {
+          return item.key !== keepStorageKey;
+        });
+
+    entries
+      .slice(
+        Math.max(
+          Number(maxOtherEntries || 0),
+          0
+        )
+      )
+      .forEach(function(item) {
+        localStorage.removeItem(item.key);
+      });
+  }
+
   try {
-    localStorage.setItem(getCacheStorageKey(key), JSON.stringify({ savedAt: Date.now(), data }));
+    /*
+     * Keep only a bounded number of historical Breakage weeks.
+     * This prevents accumulated 1–3 MB week payloads from filling
+     * the browser's ~5 MB localStorage quota.
+     */
+    pruneOldBreakageCaches_(
+      storageKey,
+      BREAKAGE_BROWSER_CACHE_MAX_WEEKS - 1
+    );
+
+    localStorage.setItem(
+      storageKey,
+      value
+    );
+
+    console.info(
+      '[Quality Hub] Breakage browser cache saved',
+      {
+        weekKey: key,
+        chars: value.length,
+        maxWeeks:
+          BREAKAGE_BROWSER_CACHE_MAX_WEEKS
+      }
+    );
+
+    return true;
+
   } catch (err) {
-    console.warn('Breakage browser cache skipped:', err);
+    const isQuota =
+      err &&
+      (
+        err.name === 'QuotaExceededError' ||
+        err.code === 22 ||
+        err.code === 1014
+      );
+
+    if (!isQuota) {
+      console.warn(
+        'Breakage browser cache skipped:',
+        err
+      );
+      return false;
+    }
+
+    /*
+     * Quota recovery:
+     * remove ALL other Breakage week caches and retry once.
+     * Never clear unrelated localStorage used by other dashboards/auth.
+     */
+    try {
+      getBreakageCacheEntries_()
+        .filter(function(item) {
+          return item.key !== storageKey;
+        })
+        .forEach(function(item) {
+          localStorage.removeItem(item.key);
+        });
+
+      localStorage.setItem(
+        storageKey,
+        value
+      );
+
+      console.info(
+        '[Quality Hub] Breakage cache recovered after quota cleanup',
+        {
+          weekKey: key,
+          chars: value.length
+        }
+      );
+
+      return true;
+
+    } catch (retryErr) {
+      /*
+       * If one single week is larger than the browser quota,
+       * skip browser persistence. The in-memory STATE.allWeeks cache
+       * still serves the week for the current page session.
+       */
+      console.warn(
+        '[Quality Hub] Breakage week too large for browser cache; using memory only.',
+        {
+          weekKey: key,
+          chars: value.length,
+          error:
+            retryErr &&
+            retryErr.message
+              ? retryErr.message
+              : String(retryErr)
+        }
+      );
+
+      return false;
+    }
   }
 }
 
@@ -1349,15 +1686,79 @@ async function fetchApi(action) {
 }
 
 async function fetchApiRaw(query) {
+  const requestId = ++BREAKAGE_PERF.requestSeq;
+  const actionMatch = String(query || '').match(/(?:^|&)action=([^&]+)/);
+  const action = actionMatch ? decodeURIComponent(actionMatch[1]) : 'unknown';
+  const workDateMatch = String(query || '').match(/(?:^|&)workDate=([^&]+)/);
+  const workDate = workDateMatch ? decodeURIComponent(workDateMatch[1]) : '';
+
+  const requestStartedAt = breakagePerfStart_(
+    `API #${requestId} ${action}${workDate ? ` ${workDate}` : ''}`,
+    { action, workDate }
+  );
+
+  const headersStartedAt = breakagePerfNow_();
   const resp = await fetch(`${API_URL}?${query}`, { cache: 'no-store' });
+  const headersMs = breakagePerfNow_() - headersStartedAt;
+
+  breakagePerfLog_(
+    `API #${requestId} ${action} response headers: ${headersMs.toFixed(1)} ms`,
+    { status: resp.status, ok: resp.ok, workDate }
+  );
+
   if (!resp.ok) throw new Error(`API ${resp.status}`);
+
+  const bodyStartedAt = breakagePerfNow_();
   const text = await resp.text();
+  const bodyMs = breakagePerfNow_() - bodyStartedAt;
+
+  breakagePerfLog_(
+    `API #${requestId} ${action} body read: ${bodyMs.toFixed(1)} ms`,
+    { responseChars: text.length, workDate }
+  );
+
   let data;
+  const parseStartedAt = breakagePerfNow_();
+
   try {
     data = JSON.parse(text);
   } catch (err) {
     throw new Error('API did not return JSON. Redeploy Apps Script and test the action URL.');
   }
+
+  const parseMs = breakagePerfNow_() - parseStartedAt;
+
+  breakagePerfLog_(
+    `API #${requestId} ${action} JSON parse: ${parseMs.toFixed(1)} ms`,
+    {
+      apiMs: Number(data?.apiMs || data?.serverMs || 0),
+      cacheHit: !!(data?._cache?.hit),
+      cacheKey: data?._cache?.key || '',
+      workDate,
+      summaryRows: Array.isArray(data?.breakageSummaryRows)
+        ? data.breakageSummaryRows.length
+        : Array.isArray(data?.breakageDailySnapshot)
+          ? data.breakageDailySnapshot.length
+          : null,
+      detailRows: Array.isArray(data?.breakageDateDetails)
+        ? data.breakageDateDetails.length
+        : null
+    }
+  );
+
+  breakagePerfEnd_(
+    `API #${requestId} ${action}${workDate ? ` ${workDate}` : ''}`,
+    requestStartedAt,
+    {
+      headersMs: Number(headersMs.toFixed(1)),
+      bodyMs: Number(bodyMs.toFixed(1)),
+      parseMs: Number(parseMs.toFixed(1)),
+      chars: text.length,
+      apiMs: Number(data?.apiMs || data?.serverMs || 0),
+      cacheHit: !!(data?._cache?.hit)
+    }
+  );
+
   if (data?.ok === false) throw new Error(data.message || data.error || 'API ok=false');
   return data;
 }
