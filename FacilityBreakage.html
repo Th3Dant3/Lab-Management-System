@@ -234,7 +234,7 @@
           <div class="section-title">LAB TOTALS</div>
 
           <div class="lab-total-actions">
-            <label class="breakage-filter" for="productionBreakageOnly" title="Exclude LMS and Inventory from Lab Lenses Broken and Lab Lens %">
+            <label class="breakage-filter" for="productionBreakageOnly" title="Exclude LMS from Lab Lenses Broken and Lab Lens %">
               <input
                 type="checkbox"
                 id="productionBreakageOnly"
@@ -244,7 +244,7 @@
               <span class="breakage-filter__box" aria-hidden="true"></span>
               <span class="breakage-filter__text">
                 <strong>Production Breakage Only</strong>
-                <small>AR + Surface + Finish + Breakage</small>
+                <small>AR + Surface + Finish + Inventory + Breakage</small>
               </span>
             </label>
 
@@ -666,7 +666,7 @@
 
   </main>
 
-  <script src="FacilityBreakage.js?v=20260824-prod-filter"></script>
+  <script src="FacilityBreakage.js?v=20260824-a-reason-to-ar"></script>
 
   <script>
 (function applyRoleRestrictions() {

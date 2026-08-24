@@ -142,6 +142,182 @@ const U = {
   },
 };
 
+
+/* ═══════════════════════════════════════════════════════════
+   FRONT-END BREAKAGE OWNERSHIP RULE
+   Backend does not expose AR-OUT, so ownership is normalized here:
+   Any Finish reason beginning with "A-" is reassigned to AR.
+   Finish "F-" reasons remain in Finish.
+═══════════════════════════════════════════════════════════ */
+function normalizeAReasonsToAR(payload) {
+  if (!payload || !payload.finish || !payload.ar) return payload;
+
+  const d = payload;
+  const finish = d.finish;
+  const ar = d.ar;
+
+  finish.totals = finish.totals || { lensesBroken: 0, framesBroken: 0 };
+  ar.totals = ar.totals || { lensesBroken: 0, framesBroken: 0 };
+  finish.reasons = Array.isArray(finish.reasons) ? finish.reasons : [];
+  ar.reasons = Array.isArray(ar.reasons) ? ar.reasons : [];
+  finish.operators = Array.isArray(finish.operators) ? finish.operators : [];
+  ar.operators = Array.isArray(ar.operators) ? ar.operators : [];
+
+  const isAReason = reason => /^A-/i.test(String(reason || '').trim());
+
+  let movedLens = 0;
+  let movedFrames = 0;
+  const movingReasons = finish.reasons
+    .filter(r => isAReason(r.reason))
+    .map(r => ({
+      ...r,
+      lensesBroken: Number(r.lensesBroken || 0),
+      framesBroken: Number(r.framesBroken || 0)
+    }));
+
+  if (!movingReasons.length) return d;
+
+  movingReasons.forEach(r => {
+    movedLens += r.lensesBroken;
+    movedFrames += r.framesBroken;
+  });
+
+  finish.reasons = finish.reasons.filter(r => !isAReason(r.reason));
+
+  movingReasons.forEach(m => {
+    const key = String(m.reason || '').trim().toUpperCase();
+    const existing = ar.reasons.find(r =>
+      String(r.reason || '').trim().toUpperCase() === key
+    );
+    if (existing) {
+      existing.lensesBroken = Number(existing.lensesBroken || 0) + m.lensesBroken;
+      existing.framesBroken = Number(existing.framesBroken || 0) + m.framesBroken;
+    } else {
+      ar.reasons.push({ ...m });
+    }
+  });
+
+  const rerank = list => {
+    list.sort((a, b) =>
+      (Number(b.lensesBroken || 0) + Number(b.framesBroken || 0)) -
+      (Number(a.lensesBroken || 0) + Number(a.framesBroken || 0))
+    );
+    list.forEach((r, i) => { r.rank = i + 1; });
+  };
+  rerank(finish.reasons);
+  rerank(ar.reasons);
+
+  finish.totals.lensesBroken = Math.max(0, Number(finish.totals.lensesBroken || 0) - movedLens);
+  finish.totals.framesBroken = Math.max(0, Number(finish.totals.framesBroken || 0) - movedFrames);
+  ar.totals.lensesBroken = Number(ar.totals.lensesBroken || 0) + movedLens;
+  ar.totals.framesBroken = Number(ar.totals.framesBroken || 0) + movedFrames;
+
+  const arOperatorMap = new Map(
+    ar.operators.map(op => [String(op.operator || '').trim().toUpperCase(), op])
+  );
+
+  finish.operators.forEach(op => {
+    const opReasons = Array.isArray(op.reasons) ? op.reasons : [];
+    const moving = opReasons.filter(r => isAReason(r.reason));
+    if (!moving.length) return;
+
+    const lensMoved = moving.reduce((s, r) => s + Number(r.lenses || r.lensesBroken || 0), 0);
+    const frameMoved = moving.reduce((s, r) => s + Number(r.frames || r.framesBroken || 0), 0);
+
+    op.reasons = opReasons.filter(r => !isAReason(r.reason));
+    op.lensTotal = Math.max(0, Number(op.lensTotal || 0) - lensMoved);
+    op.frameTotal = Math.max(0, Number(op.frameTotal || 0) - frameMoved);
+
+    const remainingTotal = Number(op.total ?? ((op.lensTotal || 0) + (op.frameTotal || 0)));
+    op.total = Math.max(0, remainingTotal - lensMoved - frameMoved);
+
+    const key = String(op.operator || '').trim().toUpperCase();
+    let target = arOperatorMap.get(key);
+
+    if (!target) {
+      target = {
+        operator: op.operator,
+        reason: '',
+        reasons: [],
+        lensTotal: 0,
+        frameTotal: 0,
+        total: 0
+      };
+      ar.operators.push(target);
+      arOperatorMap.set(key, target);
+    }
+
+    target.reasons = Array.isArray(target.reasons) ? target.reasons : [];
+
+    moving.forEach(m => {
+      const reasonKey = String(m.reason || '').trim().toUpperCase();
+      const existing = target.reasons.find(r =>
+        String(r.reason || '').trim().toUpperCase() === reasonKey
+      );
+
+      if (existing) {
+        existing.lenses = Number(existing.lenses || existing.lensesBroken || 0) +
+                          Number(m.lenses || m.lensesBroken || 0);
+        existing.frames = Number(existing.frames || existing.framesBroken || 0) +
+                          Number(m.frames || m.framesBroken || 0);
+      } else {
+        target.reasons.push({ ...m });
+      }
+    });
+
+    target.lensTotal = Number(target.lensTotal || 0) + lensMoved;
+    target.frameTotal = Number(target.frameTotal || 0) + frameMoved;
+    target.total = Number(target.total || 0) + lensMoved + frameMoved;
+  });
+
+  finish.operators = finish.operators.filter(op => {
+    const total = Number(op.total ?? ((op.lensTotal || 0) + (op.frameTotal || 0)));
+    return total > 0 || (Array.isArray(op.reasons) && op.reasons.length > 0);
+  });
+
+  [...finish.operators, ...ar.operators].forEach(op => {
+    if (!Array.isArray(op.reasons)) return;
+    op.reasons.sort((a, b) =>
+      (Number(b.lenses || b.lensesBroken || 0) + Number(b.frames || b.framesBroken || 0)) -
+      (Number(a.lenses || a.lensesBroken || 0) + Number(a.frames || a.framesBroken || 0))
+    );
+    op.reason = op.reasons[0]?.reason || '';
+  });
+
+  if (d.summary) {
+    if (Array.isArray(d.summary.departments)) {
+      const finSummary = d.summary.departments.find(x =>
+        String(x.department || '').toUpperCase() === 'FINISH'
+      );
+      const arSummary = d.summary.departments.find(x =>
+        String(x.department || '').toUpperCase() === 'AR'
+      );
+      const lensCount = Number(d.lensCount || d.summary?.labTotal?.lensCount || 0);
+
+      if (finSummary) {
+        finSummary.lensesBroken = finish.totals.lensesBroken;
+        finSummary.framesBroken = finish.totals.framesBroken;
+        finSummary.lensBrkPct = lensCount > 0 ? finish.totals.lensesBroken / lensCount : 0;
+        finSummary.topReason = finish.reasons[0]?.reason || '';
+      }
+
+      if (arSummary) {
+        arSummary.lensesBroken = ar.totals.lensesBroken;
+        arSummary.framesBroken = ar.totals.framesBroken;
+        arSummary.lensBrkPct = lensCount > 0 ? ar.totals.lensesBroken / lensCount : 0;
+        arSummary.topReason = ar.reasons[0]?.reason || '';
+      }
+    }
+
+    d.summary.topReasons = d.summary.topReasons || {};
+    d.summary.topReasons.Finish = finish.reasons.slice(0, 3).map((r, i) => ({ ...r, rank: i + 1 }));
+    d.summary.topReasons.AR = ar.reasons.slice(0, 3).map((r, i) => ({ ...r, rank: i + 1 }));
+  }
+
+  console.info(`Moved ${movedLens} A-* lens breakage(s) from Finish to AR.`);
+  return d;
+}
+
 /* ═══════════════════════════════════════════════════════════
    CHART FACTORY — reusable builders
 ═══════════════════════════════════════════════════════════ */
@@ -268,8 +444,8 @@ function renderMeta(meta) {
 
 /* ── LAB TOTAL FILTER ─────────────────────────────────────
    Production mode intentionally affects lens breakage only:
-   AR + Surface + Finish + Breakage.
-   LMS and Inventory remain visible in department detail.
+   AR + Surface + Finish + Inventory + Breakage.
+   LMS remains visible in department detail.
    Frame metrics and shipped/order count remain unfiltered.
 ──────────────────────────────────────────────────────────── */
 function getDisplayedLabTotals(summary, meta = {}) {
@@ -279,7 +455,7 @@ function getDisplayedLabTotals(summary, meta = {}) {
   let labLensesBroken = Number(raw.labLensesBroken || 0);
 
   if (State.productionBreakageOnly) {
-    const allowed = new Set(['AR', 'SURFACE', 'FINISH', 'BREAKAGE']);
+    const allowed = new Set(['AR', 'SURFACE', 'FINISH', 'INVENTORY', 'BREAKAGE']);
 
     labLensesBroken = (summary?.departments || []).reduce((sum, d) => {
       const dept = String(d?.department || '').trim().toUpperCase();
@@ -331,7 +507,7 @@ function renderSummary(summary, meta, history) {
       label: 'Lab Lenses Broken',
       value: U.fmt(lt.labLensesBroken),
       sub: State.productionBreakageOnly
-        ? `of ${U.fmt(lt.lensCount)} lenses · excludes LMS + Inventory`
+        ? `of ${U.fmt(lt.lensCount)} lenses · excludes LMS`
         : `of ${U.fmt(lt.lensCount)} lenses · all departments`,
       accent: 'var(--cyan)',
       delta: ''
@@ -3515,7 +3691,7 @@ const App = {
     showTransition('history', 'Loading ' + dateStr + '…');
     try {
       const histRes = await API.all(dateStr);
-      const d       = histRes.data;
+      const d       = normalizeAReasonsToAR(histRes.data);
 
       if (!d.lensCount || d.lensCount === 0) {
         App.showToast('No snapshot found for ' + dateStr, 'error');
@@ -3564,7 +3740,7 @@ const App = {
     showTransition('live', 'Reading RawData…');
     try {
       const res = await API.all(); // live — no date param
-      const d   = res.data;
+      const d   = normalizeAReasonsToAR(res.data);
 
       // Empty RawData check
       if (!d.lensCount || d.lensCount === 0) {
@@ -3635,7 +3811,7 @@ const App = {
 
     App.showToast(
       State.productionBreakageOnly
-        ? 'Production breakage only: LMS + Inventory excluded'
+        ? 'Production breakage only: LMS excluded; Inventory counted'
         : 'All departments included in Lab Lens totals',
       'success'
     );

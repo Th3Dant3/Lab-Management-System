@@ -3516,7 +3516,7 @@ body::before {
 
 /* ═══════════════════════════════════════════════════════════
    PRODUCTION BREAKAGE FILTER
-   Default ON: excludes LMS + Inventory from Lab Lens totals.
+   Default ON: excludes LMS from Lab Lens totals; Inventory is counted.
    ═══════════════════════════════════════════════════════════ */
 .lab-total-actions {
   display: flex;
