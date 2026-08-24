@@ -53,6 +53,10 @@ let State = {
   summary: {},
   depts:   {},
   history: [],
+
+  // Default ON: Lab Lens totals match the LMS report when LMS + Inventory
+  // are not selected. Department cards remain visible for investigation.
+  productionBreakageOnly: true,
 };
 
 /* ── CHART.JS GLOBAL DEFAULTS ───────────────────────────── */
@@ -262,23 +266,84 @@ function renderMeta(meta) {
   }
 }
 
+/* ── LAB TOTAL FILTER ─────────────────────────────────────
+   Production mode intentionally affects lens breakage only:
+   AR + Surface + Finish + Breakage.
+   LMS and Inventory remain visible in department detail.
+   Frame metrics and shipped/order count remain unfiltered.
+──────────────────────────────────────────────────────────── */
+function getDisplayedLabTotals(summary, meta = {}) {
+  const raw = summary?.labTotal || {};
+  const lensCount = Number(meta.lensCount ?? raw.lensCount ?? 0) || 0;
+
+  let labLensesBroken = Number(raw.labLensesBroken || 0);
+
+  if (State.productionBreakageOnly) {
+    const allowed = new Set(['AR', 'SURFACE', 'FINISH', 'BREAKAGE']);
+
+    labLensesBroken = (summary?.departments || []).reduce((sum, d) => {
+      const dept = String(d?.department || '').trim().toUpperCase();
+      return allowed.has(dept)
+        ? sum + (Number(d?.lensesBroken) || 0)
+        : sum;
+    }, 0);
+  }
+
+  const labLensPct = lensCount > 0 ? labLensesBroken / lensCount : 0;
+
+  // Prefer the top-level API orderCount because it is refreshed independently
+  // and can be newer than summary.labTotal.orderCount.
+  const orderCount = Number(meta.orderCount ?? raw.orderCount ?? 0) || 0;
+  const framesBroken = Number(raw.framesBroken || 0);
+  const labFramePct = orderCount > 0 ? framesBroken / orderCount : 0;
+
+  return {
+    ...raw,
+    lensCount,
+    orderCount,
+    labLensesBroken,
+    labLensPct,
+    framesBroken,
+    labFramePct,
+  };
+}
+
 /* ── SUMMARY TAB ────────────────────────────────────────── */
 function renderSummary(summary, meta, history) {
   // Guard — skip if Overview tab elements not in DOM
   if (!document.getElementById('labKpis')) return;
-  const lt        = summary.labTotal;
+  const lt        = getDisplayedLabTotals(summary, meta);
   const labPct    = lt.labLensPct   * 100;
   const framePct  = lt.labFramePct  * 100;
 
   // get previous day's snapshot for delta
   const prev = history.length >= 2 ? history[history.length - 2] : null;
-  const prevLabPct   = prev ? U.parseHistoryPct(prev['Lab Lens %'])   : null;
-  const prevFramePct = prev ? U.parseHistoryPct(prev['Lab Frame %'])  : null;
+  // Saved history Lab Lens % may include LMS + Inventory, so do not compare
+  // it against the filtered production-only percentage.
+  const prevLabPct   = (!State.productionBreakageOnly && prev)
+    ? U.parseHistoryPct(prev['Lab Lens %'])
+    : null;
+  const prevFramePct = prev ? U.parseHistoryPct(prev['Lab Frame %']) : null;
 
   /* Lab KPIs */
   document.getElementById('labKpis').innerHTML = [
-    { label: 'Lab Lenses Broken', value: U.fmt(lt.labLensesBroken), sub: `of ${U.fmt(lt.lensCount)} lenses`, accent: 'var(--cyan)',  delta: '' },
-    { label: 'Lab Lens %',   value: U.pctRaw(labPct),   sub: 'Goal ≤5.00%', accent: U.statusColor(labPct,  5.00), badge: U.statusBadge(labPct, 5.00),  delta: U.deltaHtml(labPct, prevLabPct) },
+    {
+      label: 'Lab Lenses Broken',
+      value: U.fmt(lt.labLensesBroken),
+      sub: State.productionBreakageOnly
+        ? `of ${U.fmt(lt.lensCount)} lenses · excludes LMS + Inventory`
+        : `of ${U.fmt(lt.lensCount)} lenses · all departments`,
+      accent: 'var(--cyan)',
+      delta: ''
+    },
+    {
+      label: 'Lab Lens %',
+      value: U.pctRaw(labPct),
+      sub: State.productionBreakageOnly ? 'Goal ≤5.00% · Production only' : 'Goal ≤5.00% · All departments',
+      accent: U.statusColor(labPct, 5.00),
+      badge: U.statusBadge(labPct, 5.00),
+      delta: U.deltaHtml(labPct, prevLabPct)
+    },
     { label: 'Frames Broken', value: U.fmt(lt.framesBroken), sub: `of ${U.fmt(lt.orderCount)} orders`, accent: 'var(--amber)', delta: '' },
     { label: 'Frame Brk %',  value: U.pctRaw(framePct), sub: 'Goal ≤1.00%', accent: U.statusColor(framePct, 1.00), badge: U.statusBadge(framePct, 1.00), delta: U.deltaHtml(framePct, prevFramePct) },
     { label: 'Shipped Orders',  value: U.fmt(lt.orderCount), sub: 'Total Shipped today', accent: 'var(--muted)', delta: '' },
@@ -381,8 +446,8 @@ function renderSummary(summary, meta, history) {
 
 /* ── DAILY SUMMARY TAB ──────────────────────────────────── */
 function renderDaily(summary, history) {
-  const lt      = summary.labTotal;
-  const labPct  = lt.labLensPct  * 100;
+  const lt       = getDisplayedLabTotals(summary, State.meta);
+  const labPct   = lt.labLensPct  * 100;
   const framePct = lt.labFramePct * 100;
 
   const deptMap = {};
@@ -390,7 +455,9 @@ function renderDaily(summary, history) {
 
   // Get yesterday from history
   const prev = history.length >= 1 ? history[history.length - 1] : null;
-  const prevLabPct    = prev ? U.parseHistoryPct(prev['Lab Lens %'])    : null;
+  const prevLabPct    = (!State.productionBreakageOnly && prev)
+    ? U.parseHistoryPct(prev['Lab Lens %'])
+    : null;
   const prevFramePct  = prev ? U.parseHistoryPct(prev['Lab Frame %'])   : null;
   const prevARPct     = prev ? U.parseHistoryPct(prev['AR %'])          : null;
   const prevFinPct    = prev ? U.parseHistoryPct(prev['Fin %'])         : null;
@@ -3546,6 +3613,34 @@ const App = {
     btn.classList.remove('loading');
   },
 
+  toggleProductionBreakage(enabled) {
+    State.productionBreakageOnly = Boolean(enabled);
+
+    const checkbox = document.getElementById('productionBreakageOnly');
+    if (checkbox) checkbox.checked = State.productionBreakageOnly;
+
+    if (State.summary && State.summary.labTotal) {
+      renderSummary(State.summary, State.meta, State.history || []);
+
+      // If the Summary daily view is currently populated, keep its Lab metrics
+      // synchronized with the same filter.
+      try {
+        if (document.getElementById('dailyKpis')) {
+          renderDaily(State.summary, State.history || []);
+        }
+      } catch (err) {
+        console.debug('Daily summary filter refresh skipped:', err);
+      }
+    }
+
+    App.showToast(
+      State.productionBreakageOnly
+        ? 'Production breakage only: LMS + Inventory excluded'
+        : 'All departments included in Lab Lens totals',
+      'success'
+    );
+  },
+
   switchTab(id) {
     const tab = document.querySelector(`.nav-tab[data-tab="${id}"]`);
     if (tab) {
@@ -3655,6 +3750,11 @@ document.querySelectorAll('.nav-tab').forEach(btn => {
     else clearInterval(interval);
   }, 600);
 })();
+const productionBreakageCheckbox = document.getElementById('productionBreakageOnly');
+if (productionBreakageCheckbox) {
+  productionBreakageCheckbox.checked = State.productionBreakageOnly;
+}
+
 App.loadAll();
 /* ── AUTO-REFRESH — every 5 min, live mode only ─────────── */
 setInterval(() => {

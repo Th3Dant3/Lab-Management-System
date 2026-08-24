@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="FacilityBreakage.css?v=202604271947" />
+  <link rel="stylesheet" href="FacilityBreakage.css?v=20260824-prod-filter" />
   <style>
     .back-btn {
       display: inline-flex; align-items: center; gap: 7px;
@@ -232,7 +232,24 @@
       <div class="section-block">
         <div class="section-row">
           <div class="section-title">LAB TOTALS</div>
-          <button class="pill-btn" onclick="App.switchTab('summary')">DAILY OVERVIEW</button>
+
+          <div class="lab-total-actions">
+            <label class="breakage-filter" for="productionBreakageOnly" title="Exclude LMS and Inventory from Lab Lenses Broken and Lab Lens %">
+              <input
+                type="checkbox"
+                id="productionBreakageOnly"
+                checked
+                onchange="App.toggleProductionBreakage(this.checked)"
+              />
+              <span class="breakage-filter__box" aria-hidden="true"></span>
+              <span class="breakage-filter__text">
+                <strong>Production Breakage Only</strong>
+                <small>AR + Surface + Finish + Breakage</small>
+              </span>
+            </label>
+
+            <button class="pill-btn" onclick="App.switchTab('summary')">DAILY OVERVIEW</button>
+          </div>
         </div>
         <div class="kpi-grid" id="labKpis"></div>
       </div>
@@ -649,7 +666,7 @@
 
   </main>
 
-  <script src="FacilityBreakage.js?v=202604271947"></script>
+  <script src="FacilityBreakage.js?v=20260824-prod-filter"></script>
 
   <script>
 (function applyRoleRestrictions() {

@@ -3513,3 +3513,112 @@ body::before {
   background: linear-gradient(135deg, rgba(56,189,248,0.20), rgba(34,212,126,0.14)) !important;
   box-shadow: 0 0 14px rgba(56,189,248,0.18);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PRODUCTION BREAKAGE FILTER
+   Default ON: excludes LMS + Inventory from Lab Lens totals.
+   ═══════════════════════════════════════════════════════════ */
+.lab-total-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.breakage-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 6px 11px 6px 9px;
+  border: 1px solid rgba(56,189,248,0.24);
+  border-radius: 8px;
+  background: rgba(56,189,248,0.06);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.breakage-filter:hover {
+  border-color: rgba(56,189,248,0.55);
+  background: rgba(56,189,248,0.10);
+  transform: translateY(-1px);
+}
+
+.breakage-filter input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.breakage-filter__box {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1px solid rgba(255,255,255,0.28);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.04);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+  transition: all .18s ease;
+}
+
+.breakage-filter input:checked + .breakage-filter__box {
+  border-color: var(--cyan);
+  background: rgba(56,189,248,0.18);
+  box-shadow: 0 0 12px rgba(56,189,248,0.16);
+}
+
+.breakage-filter input:checked + .breakage-filter__box::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid var(--cyan);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.breakage-filter__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.05;
+}
+
+.breakage-filter__text strong {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: .2px;
+}
+
+.breakage-filter__text small {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: .15px;
+}
+
+@media (max-width: 760px) {
+  .section-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .lab-total-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .breakage-filter {
+    flex: 1 1 230px;
+  }
+}
