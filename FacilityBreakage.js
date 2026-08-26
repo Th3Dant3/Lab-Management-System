@@ -6,6 +6,136 @@
 
 'use strict';
 
+
+/* ═══════════════════════════════════════════════════════════
+   FACILITY BREAKAGE — PERFORMANCE AUDIT ONLY
+   No API URLs, calculations, render order, or refresh cadence changed.
+═══════════════════════════════════════════════════════════ */
+const FacilityPerf = (() => {
+  const navStart = performance.timeOrigin || Date.now();
+  let seq = 0;
+  let initialReadyLogged = false;
+
+  const now = () => performance.now();
+  const fmt = ms => `${ms.toFixed(1)} ms`;
+
+  function log(label, data = {}) {
+    console.log(`[FacilityPerf] ${label}`, data);
+  }
+
+  function start(label, data = {}) {
+    const id = ++seq;
+    const t0 = now();
+    log(`▶ ${label} #${id}`, data);
+
+    return {
+      id,
+      end(extra = {}) {
+        const ms = now() - t0;
+        log(`✓ ${label} #${id}: ${fmt(ms)}`, {
+          durationMs: Number(ms.toFixed(1)),
+          ...extra,
+        });
+        return ms;
+      },
+    };
+  }
+
+  function markInitialReady(extra = {}) {
+    if (initialReadyLogged) return;
+    initialReadyLogged = true;
+
+    const totalReadyMs = now();
+
+    console.log(
+      `[FacilityPerf] MAIN FACILITY BREAKAGE TIME TO READY: ${totalReadyMs.toFixed(1)} ms (${(totalReadyMs / 1000).toFixed(2)} sec)`
+    );
+
+    log('✅ INITIAL FACILITY BREAKAGE READY', {
+      totalReadyMs: Number(totalReadyMs.toFixed(1)),
+      ...extra,
+    });
+  }
+
+  return { log, start, markInitialReady, now };
+})();
+
+FacilityPerf.log(
+  `JS executing at ${performance.now().toFixed(1)} ms after navigation start`
+);
+
+document.addEventListener('DOMContentLoaded', () => {
+  FacilityPerf.log(
+    `DOMContentLoaded fired at ${performance.now().toFixed(1)} ms after navigation start`
+  );
+});
+
+window.addEventListener('load', () => {
+  FacilityPerf.log(
+    `window.load at ${performance.now().toFixed(1)} ms after navigation start`
+  );
+});
+
+/*
+ * Audit every network request on this page.
+ * Only measures fetch → response headers and preserves the original Response.
+ */
+const __facilityOriginalFetch = window.fetch.bind(window);
+let __facilityFetchId = 0;
+
+window.fetch = async function(...args) {
+  const requestId = ++__facilityFetchId;
+  const input = args[0];
+  const url =
+    typeof input === 'string'
+      ? input
+      : (input && input.url ? input.url : String(input || ''));
+
+  let label = 'fetch';
+
+  try {
+    const parsed = new URL(url, window.location.href);
+    label =
+      parsed.searchParams.get('action') ||
+      parsed.searchParams.get('area') ||
+      parsed.pathname.split('/').filter(Boolean).pop() ||
+      'fetch';
+  } catch (_) {}
+
+  const t0 = performance.now();
+
+  FacilityPerf.log(`▶ FETCH #${requestId} ${label}`, {
+    url: url.replace(/([?&]t=)\d+/g, '$1<timestamp>'),
+  });
+
+  try {
+    const response = await __facilityOriginalFetch(...args);
+    const elapsed = performance.now() - t0;
+
+    FacilityPerf.log(
+      `FETCH #${requestId} ${label} response headers: ${elapsed.toFixed(1)} ms`,
+      {
+        status: response.status,
+        ok: response.ok,
+      }
+    );
+
+    return response;
+  } catch (error) {
+    const elapsed = performance.now() - t0;
+
+    FacilityPerf.log(
+      `✗ FETCH #${requestId} ${label}: ${elapsed.toFixed(1)} ms`,
+      {
+        error: error && error.message ? error.message : String(error),
+      }
+    );
+
+    throw error;
+  }
+};
+
+
 /* ── CONFIG ─────────────────────────────────────────────── */
 const API_URL = 'https://script.google.com/macros/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec';
 const PRODUCTION_FLOW_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=productionFlow&area=All&debug=true";
@@ -78,9 +208,25 @@ Chart.defaults.scale.ticks.color               = CHART_DEFAULTS.textColor;
 ═══════════════════════════════════════════════════════════ */
 const API = {
   async get(action, params = {}) {
+    const audit = FacilityPerf.start(`API ${action}`, { params });
     const qs   = Object.entries(params).map(([k,v]) => `&${k}=${encodeURIComponent(v)}`).join('');
+
+    const fetchStarted = performance.now();
     const res  = await fetch(`${API_URL}?action=${action}${qs}`);
+    const headersMs = performance.now() - fetchStarted;
+
+    const jsonStarted = performance.now();
     const json = await res.json();
+    const jsonMs = performance.now() - jsonStarted;
+
+    audit.end({
+      headersMs: Number(headersMs.toFixed(1)),
+      jsonParseMs: Number(jsonMs.toFixed(1)),
+      httpStatus: res.status,
+      success: Boolean(json && json.success),
+      apiMs: json && (json.apiMs ?? json.serverMs ?? json.durationMs ?? null),
+    });
+
     if (!json.success) throw new Error(json.error || `API error: ${action}`);
     return json;
   },
@@ -484,6 +630,55 @@ function getDisplayedLabTotals(summary, meta = {}) {
   };
 }
 
+
+/* ── SUMMARY DAILY/WEEKLY FILTER HELPERS ──────────────────
+   Reuse the existing frontend Production Breakage rule:
+   AR + Surface + Finish + Inventory + Breakage count toward
+   Lab Lens totals. LMS remains visible as its own department.
+──────────────────────────────────────────────────────────── */
+function getDisplayedSummaryLabTotals_(d) {
+  return getDisplayedLabTotals(
+    d?.summary || {},
+    {
+      lensCount: d?.lensCount,
+      orderCount: d?.orderCount,
+    }
+  );
+}
+
+function getDisplayedWeeklyDay_(day) {
+  if (!day || !day.hasData || !State.productionBreakageOnly) {
+    return day;
+  }
+
+  const allowed = new Set([
+    'AR',
+    'SURFACE',
+    'FINISH',
+    'INVENTORY',
+    'BREAKAGE',
+  ]);
+
+  const labLenses = (day.departments || []).reduce((sum, dep) => {
+    const name = String(dep?.department || '').trim().toUpperCase();
+    return allowed.has(name)
+      ? sum + (Number(dep?.lensesBroken) || 0)
+      : sum;
+  }, 0);
+
+  const lensCount = Number(day.lensCount || 0);
+
+  return {
+    ...day,
+    labLenses,
+    labLensPct: lensCount > 0 ? (labLenses / lensCount) * 100 : 0,
+  };
+}
+
+function getDisplayedWeeklyDays_(days) {
+  return (days || []).map(getDisplayedWeeklyDay_);
+}
+
 /* ── SUMMARY TAB ────────────────────────────────────────── */
 function renderSummary(summary, meta, history) {
   // Guard — skip if Overview tab elements not in DOM
@@ -770,7 +965,8 @@ function renderWeekly(data) {
     return;
   }
 
-  const { days, weekStart, weekEnd, availableWeeks } = data;
+  const { weekStart, weekEnd, availableWeeks } = data;
+  const days = getDisplayedWeeklyDays_(data.days);
 
   document.getElementById('weeklyRangeBadge').textContent =
     `${weekStart || '—'} – ${weekEnd || '—'}`;
@@ -2141,45 +2337,155 @@ function buildWeeksFromHistoryDates_(dates) {
   )].sort((a, b) => parseDashDate_(b) - parseDashDate_(a));
 }
 
+let SUMMARY_INIT_PROMISE = null;
+
 async function initSummaryTab() {
-  try {
-    // Load available dates
-    const res = await API.get('history');
-    SUM.dates = res.data || [];
+  /*
+   * Single-flight guard:
+   * loadAll() preloads Summary, but a user can click Summary before
+   * that history request finishes. Previously that started a second
+   * 20–36 second history request because SUM.dates was still empty.
+   */
+  if (SUMMARY_INIT_PROMISE) {
+    FacilityPerf.log(
+      'Summary init joined existing history request'
+    );
+    return SUMMARY_INIT_PROMISE;
+  }
 
-    // Add today if live data available
-    if (State.meta?.lensCount > 0 && State.meta?.reportDate) {
-      const today = State.meta.reportDate;
-      if (!SUM.dates.includes(today)) SUM.dates.unshift(today);
+  SUMMARY_INIT_PROMISE = (async function() {
+    const audit = FacilityPerf.start(
+      'Summary init'
+    );
+
+    try {
+      // Load available dates once.
+      const historyStarted =
+        performance.now();
+
+      const res = await API.get('history');
+
+      const historyMs =
+        performance.now() - historyStarted;
+
+      SUM.dates =
+        Array.isArray(res.data)
+          ? res.data
+          : [];
+
+      // Add today if live data is available.
+      if (
+        State.meta?.lensCount > 0 &&
+        State.meta?.reportDate
+      ) {
+        const today =
+          State.meta.reportDate;
+
+        if (!SUM.dates.includes(today)) {
+          SUM.dates.unshift(today);
+        }
+      }
+
+      // Build weeks directly from the returned history dates.
+      SUM.weeks =
+        buildWeeksFromHistoryDates_(
+          SUM.dates
+        );
+
+      const ds =
+        document.getElementById(
+          'sumDateSelect'
+        );
+
+      if (ds) {
+        ds.innerHTML =
+          '<option value="">Select date…</option>' +
+          SUM.dates
+            .map(function(d) {
+              const isLive =
+                d === State.meta?.reportDate &&
+                State.meta?.lensCount > 0;
+
+              return (
+                `<option value="${d}">` +
+                `${d}${isLive ? ' ● Live' : ''}` +
+                `</option>`
+              );
+            })
+            .join('');
+      }
+
+      const ws =
+        document.getElementById(
+          'sumWeekSelect'
+        );
+
+      if (ws) {
+        ws.innerHTML =
+          '<option value="">Select week…</option>' +
+          SUM.weeks
+            .map(function(w) {
+              return (
+                `<option value="${w}">` +
+                `Week of ${w}` +
+                `</option>`
+              );
+            })
+            .join('');
+      }
+
+      FacilityPerf.log(
+        'Summary selectors populated',
+        {
+          dates: SUM.dates.length,
+          weeks: SUM.weeks.length,
+          historyMs:
+            Number(historyMs.toFixed(1))
+        }
+      );
+
+      // Preserve existing Daily auto-select behavior.
+      if (SUM.dates.length > 0) {
+        const ds2 =
+          document.getElementById(
+            'sumDateSelect'
+          );
+
+        if (ds2) {
+          ds2.value = SUM.dates[0];
+        }
+
+        await loadSumDate(
+          SUM.dates[0]
+        );
+      }
+
+      audit.end({
+        dates: SUM.dates.length,
+        weeks: SUM.weeks.length,
+        historyMs:
+          Number(historyMs.toFixed(1))
+      });
+
+    } catch (e) {
+      console.error(
+        'initSummaryTab:',
+        e
+      );
+
+      audit.end({
+        error:
+          e && e.message
+            ? e.message
+            : String(e)
+      });
+
+    } finally {
+      SUMMARY_INIT_PROMISE = null;
     }
+  })();
 
-    // Load available weeks
-   // Build available weeks from all saved history dates
-      SUM.weeks = buildWeeksFromHistoryDates_(SUM.dates);
-
-    // Populate date selects
-    const ds = document.getElementById('sumDateSelect');
-    if (ds) {
-      ds.innerHTML = '<option value="">Select date…</option>' +
-        SUM.dates.map(d => {
-          const isLive = d === State.meta?.reportDate && State.meta?.lensCount > 0;
-          return `<option value="${d}">${d}${isLive ? ' ● Live' : ''}</option>`;
-        }).join('');
-    }
-
-    const ws = document.getElementById('sumWeekSelect');
-    if (ws) {
-      ws.innerHTML = '<option value="">Select week…</option>' +
-        SUM.weeks.map(w => `<option value="${w}">Week of ${w}</option>`).join('');
-    }
-
-    // Auto-select first date
-    if (SUM.dates.length > 0) {
-      const ds2 = document.getElementById('sumDateSelect');
-      if (ds2) ds2.value = SUM.dates[0];
-      await loadSumDate(SUM.dates[0]);
-    }
-  } catch(e) { console.error('initSummaryTab:', e); }
+  return SUMMARY_INIT_PROMISE;
 }
 
 function setSummaryMode(mode) {
@@ -2684,7 +2990,7 @@ async function loadSumWeek(weekStart) {
 }
 
 function renderSumKpis(d) {
-  const lt       = d.summary?.labTotal || {};
+  const lt       = getDisplayedSummaryLabTotals_(d);
   const lc       = d.lensCount  || 1;
   const oc       = d.orderCount || 1;
   const labPct   = (lt.labLensPct  || 0) * 100;
@@ -2718,7 +3024,7 @@ function renderSumSidebar(d) {
   const el = document.getElementById('sumDeptSidebarItems');
   if (!el) return;
   const lc = d.lensCount || 1;
-  const lt = d.summary?.labTotal || {};
+  const lt = getDisplayedSummaryLabTotals_(d);
   const labPct = (lt.labLensPct||0)*100;
 
   // Lab Total + depts sorted high→low
@@ -2772,7 +3078,7 @@ function renderSumMain(d, deptKey) {
 
   if (deptKey === 'LAB') {
     // Full lab summary view (matches image 2 right panel)
-    const lt      = d.summary?.labTotal || {};
+    const lt      = getDisplayedSummaryLabTotals_(d);
     const labPct  = (lt.labLensPct||0)*100;
     const ok      = labPct <= 5.00;
     const depts   = [...(d.summary?.departments||[])].sort((a,b)=>b.lensesBroken-a.lensesBroken);
@@ -2804,7 +3110,7 @@ function renderSumMain(d, deptKey) {
     // Exec summary text
     const topReason = allReasons[0];
     const overGoal  = depts.filter(dep=>dep.lensBrkPct*100>({AR:0.50,Finish:1.70,Surface:2.80}[dep.department]||999));
-    const execText  = `As of ${d.reportDate||'today'}, the facility recorded ${U.fmt(lt.labLensesBroken||0)} lens breakages representing a ${labPct.toFixed(2)}% breakage rate across ${U.fmt(lc)} lenses processed. The lab is currently ${ok?'within':'exceeding'} the 5.00% facility goal.${overGoal.length?' '+overGoal.map(dep=>`${dep.department} is over goal at ${(dep.lensBrkPct*100).toFixed(2)}%.`).join(' '):'  All departments are operating within their respective goals.'} ${topReason?`The leading breakage cause facility-wide is ${topReason.reason} (${topReason.dept}) with ${topReason.count} lenses.`:''} ${noneTotal>0?`Unassigned operator entries were detected in ${noneDepts.join(', ')} — totaling ${noneTotal} lenses without operator attribution. Data integrity review is recommended.`:'All breakage records have been attributed to an operator or machine.'}`;
+    const execText  = `As of ${d.reportDate||'today'}, the facility recorded ${U.fmt(lt.labLensesBroken||0)} production lens breakages representing a ${labPct.toFixed(2)}% breakage rate across ${U.fmt(lc)} lenses processed. The lab is currently ${ok?'within':'exceeding'} the 5.00% facility goal.${overGoal.length?' '+overGoal.map(dep=>`${dep.department} is over goal at ${(dep.lensBrkPct*100).toFixed(2)}%.`).join(' '):'  All departments are operating within their respective goals.'} ${topReason?`The leading breakage cause facility-wide is ${topReason.reason} (${topReason.dept}) with ${topReason.count} lenses.`:''} ${noneTotal>0?`Unassigned operator entries were detected in ${noneDepts.join(', ')} — totaling ${noneTotal} lenses without operator attribution. Data integrity review is recommended.`:'All breakage records have been attributed to an operator or machine.'}`;
 
     el.innerHTML = `
       <div class="sum-main-title" style="color:var(--cyan)">FULL LAB SUMMARY</div>
@@ -2909,7 +3215,8 @@ function renderSumMain(d, deptKey) {
 }
 
 function renderSumWeekly(data) {
-  const { days, weekStart, weekEnd } = data;
+  const { weekStart, weekEnd } = data;
+  const days = getDisplayedWeeklyDays_(data.days);
   const daysWithData = days.filter(d=>d.hasData);
   const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
 
@@ -3076,7 +3383,8 @@ function generateSummaryReport() {
 
     btn.textContent = 'Building…';
 
-    const { days, weekStart, weekEnd } = wd;
+    const { weekStart, weekEnd } = wd;
+    const days = getDisplayedWeeklyDays_(wd.days);
     const daysWithData = days.filter(d => d.hasData);
     const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
     const fmt  = n => (n||0).toLocaleString();
@@ -3134,7 +3442,7 @@ function generateSummaryReport() {
       <p class="rpt-p">
         For the week of <strong>${weekStart} – ${weekEnd}</strong>, the facility captured data for <strong>${daysWithData.length} of 7 days</strong>.
         The weekly average lab breakage rate was <strong style="${sc(avgLab<=5.00)}">${pf(avgLab)}</strong> against the 5.00% facility goal.
-        A total of <strong style="color:var(--cyan)">${fmt(totalBroken)} lenses</strong> were broken across all captured days.
+        A total of <strong style="color:var(--cyan)">${fmt(totalBroken)} production lenses</strong> were broken across all captured days. LMS remains visible in department detail but is excluded from the Lab total when the Production Breakage filter is enabled.
         ${worstDay ? `The highest-breakage day was <strong style="color:var(--red)">${worstDay.day} ${worstDay.date?.slice(0,5)||''}</strong> at ${pf(worstDay.labLensPct)}.` : ''}
         ${bestDay  ? ` The lowest was <strong style="color:var(--green)">${bestDay.day} ${bestDay.date?.slice(0,5)||''}</strong> at ${pf(bestDay.labLensPct)}.` : ''}
       </p>
@@ -3244,7 +3552,7 @@ function generateSummaryReport() {
   const lensCount  = d.lensCount  || 1;
   const orderCount = d.orderCount || 1;
   const date       = d.reportDate || SUM.selectedDate || '—';
-  const lt         = d.summary?.labTotal || {};
+  const lt         = getDisplayedSummaryLabTotals_(d);
   const labPct     = (lt.labLensPct  || 0) * 100;
   const framePct   = (lt.labFramePct || 0) * 100;
   const DEPT_GOALS = { AR:0.50, Finish:1.70, Surface:2.80 };
@@ -3320,7 +3628,7 @@ function generateSummaryReport() {
       <!-- 1. Facility Overview -->
       <div class="rpt-h2">1. Facility Overview</div>
       <p class="rpt-p">On <strong>${date}</strong>, the facility processed <strong style="color:var(--cyan)">${fmt(lensCount)} lenses</strong> across <strong>${fmt(orderCount)} orders</strong>.
-      A total of <strong style="${sc(labOk)}">${fmt(lt.labLensesBroken||0)} lenses</strong> were broken, representing a <strong style="${sc(labOk)}">${labPct.toFixed(2)}%</strong> lab-wide breakage rate.
+      A total of <strong style="${sc(labOk)}">${fmt(lt.labLensesBroken||0)} production lenses</strong> were broken, representing a <strong style="${sc(labOk)}">${labPct.toFixed(2)}%</strong> production breakage rate. LMS remains visible in department detail but is excluded from this Lab total when the Production Breakage filter is enabled.
       The facility is <strong style="${sc(labOk)}">${labOk ? 'within' : 'exceeding'}</strong> the 5.00% facility goal${labOk ? ', with <strong>' + (5.00-labPct).toFixed(2) + 'pp of margin remaining</strong>.' : ', exceeding by <strong>' + (labPct-5.00).toFixed(2) + 'pp</strong>.'}
       Frame breakage: <strong style="${sc(frameOk)}">${fmt(lt.framesBroken||0)} frames (${framePct.toFixed(2)}%)</strong> — ${frameOk ? 'within' : 'exceeding'} the 1.00% goal.</p>
 
@@ -3735,12 +4043,32 @@ const App = {
   },
 
   async loadAll() {
+    const isInitialLoad = !FacilityPerf.__initialLoadStarted;
+    if (isInitialLoad) FacilityPerf.__initialLoadStarted = true;
+
+    const loadAudit = FacilityPerf.start(
+      isInitialLoad ? 'INITIAL loadAll' : 'loadAll refresh'
+    );
+
     const btn = document.getElementById('refreshBtn');
     btn.classList.add('loading');
     showTransition('live', 'Reading RawData…');
+
     try {
+      const apiStarted = performance.now();
       const res = await API.all(); // live — no date param
-      const d   = normalizeAReasonsToAR(res.data);
+      const apiMs = performance.now() - apiStarted;
+
+      const normalizeStarted = performance.now();
+      const d = normalizeAReasonsToAR(res.data);
+      const normalizeMs = performance.now() - normalizeStarted;
+
+      FacilityPerf.log('Live data received', {
+        apiMs: Number(apiMs.toFixed(1)),
+        normalizeMs: Number(normalizeMs.toFixed(1)),
+        lensCount: Number(d && d.lensCount || 0),
+        orderCount: Number(d && d.orderCount || 0),
+      });
 
       // Empty RawData check
       if (!d.lensCount || d.lensCount === 0) {
@@ -3748,6 +4076,19 @@ const App = {
         renderNoData(d);
         document.getElementById('loadingOverlay').classList.add('hidden');
         App.showToast('No live data — try History mode to view past data', 'error');
+
+        const totalLoadMs = loadAudit.end({
+          initial: isInitialLoad,
+          noData: true,
+        });
+
+        if (isInitialLoad) {
+          FacilityPerf.markInitialReady({
+            loadAllMs: Number(totalLoadMs.toFixed(1)),
+            noData: true,
+          });
+        }
+
         btn.classList.remove('loading');
         return;
       }
@@ -3764,6 +4105,8 @@ const App = {
       State.depts   = d;
       State.history = [];
 
+      const renderStarted = performance.now();
+
       App.setLiveMode();
       renderMeta(meta);
       renderSummary(d.summary, meta, []);
@@ -3777,8 +4120,27 @@ const App = {
       initSummaryTab(); // pre-load summary dates
 
       document.getElementById('loadingOverlay').classList.add('hidden');
+
+      const renderMs = performance.now() - renderStarted;
+
+      FacilityPerf.log('Primary render complete', {
+        renderMs: Number(renderMs.toFixed(1)),
+      });
+
       hideTransition();
       App.showToast('Live data loaded', 'success');
+
+      const totalLoadMs = loadAudit.end({
+        renderMs: Number(renderMs.toFixed(1)),
+        initial: isInitialLoad,
+      });
+
+      if (isInitialLoad) {
+        FacilityPerf.markInitialReady({
+          loadAllMs: Number(totalLoadMs.toFixed(1)),
+          renderMs: Number(renderMs.toFixed(1)),
+        });
+      }
 
     } catch (err) {
       console.error(err);
@@ -3798,14 +4160,24 @@ const App = {
     if (State.summary && State.summary.labTotal) {
       renderSummary(State.summary, State.meta, State.history || []);
 
-      // If the Summary daily view is currently populated, keep its Lab metrics
-      // synchronized with the same filter.
       try {
         if (document.getElementById('dailyKpis')) {
           renderDaily(State.summary, State.history || []);
         }
+
+        // Keep Summary → Daily synchronized with the same frontend filter.
+        if (SUM.data) {
+          renderSumKpis(SUM.data);
+          renderSumSidebar(SUM.data);
+          renderSumMain(SUM.data, SUM.selectedDept || 'LAB');
+        }
+
+        // Keep Summary → Weekly synchronized without re-fetching the API.
+        if (SUM.weekData) {
+          renderSumWeekly(SUM.weekData);
+        }
       } catch (err) {
-        console.debug('Daily summary filter refresh skipped:', err);
+        console.debug('Summary filter refresh skipped:', err);
       }
     }
 
