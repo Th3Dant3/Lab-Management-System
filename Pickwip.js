@@ -418,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loaderSetCheck('lc-api', 'loading', 'connecting');
 
   setupTabs();
+  applyPickingRoleVisibility_();
   setupOperatorControls();
   renderPickingJphConfigPanel();
 
@@ -464,10 +465,124 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 300);
 });
 
+
+/* ============================================================
+   ROLE VISIBILITY — JPH SETUP
+   Team Leads must not see or open JPH Setup.
+   Supervisor / Manager / Director / LMS / Admin behavior is unchanged.
+============================================================ */
+
+function normalizePickingRoleValue_(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+function isPickingTeamLead_() {
+  const role = normalizePickingRoleValue_(
+    sessionStorage.getItem('lms_role')
+  );
+
+  const subRole = normalizePickingRoleValue_(
+    sessionStorage.getItem('lms_subrole')
+  );
+
+  const title = normalizePickingRoleValue_(
+    sessionStorage.getItem('lms_title')
+  );
+
+  const values = [role, subRole, title].filter(Boolean);
+
+  return values.some(value =>
+    value === 'team lead' ||
+    value === 'teamlead' ||
+    value.includes('team lead')
+  );
+}
+
+function applyPickingRoleVisibility_() {
+  const isTeamLead = isPickingTeamLead_();
+
+  const jphNav = document.querySelector(
+    '.side-link[data-tab="personal"]'
+  );
+
+  const jphPanel = document.getElementById(
+    'tab-personal'
+  );
+
+  if (!isTeamLead) {
+    if (jphNav) {
+      jphNav.style.display = '';
+      jphNav.removeAttribute('aria-hidden');
+    }
+
+    return;
+  }
+
+  // Hide the sidebar entry.
+  if (jphNav) {
+    jphNav.style.display = 'none';
+    jphNav.setAttribute('aria-hidden', 'true');
+    jphNav.classList.remove('active');
+  }
+
+  // Hide the actual JPH Setup content as well.
+  if (jphPanel) {
+    jphPanel.classList.add('tab-hidden');
+    jphPanel.style.display = 'none';
+  }
+
+  // If the Team Lead somehow loaded while Personal/JPH was active,
+  // return them to the main Picking view.
+  const visiblePersonal =
+    jphPanel &&
+    !jphPanel.classList.contains('tab-hidden');
+
+  if (visiblePersonal) {
+    const fallbackBtn = document.querySelector(
+      '.side-link[data-tab="command-center"]'
+    );
+
+    const fallbackPanel = document.getElementById(
+      'tab-command-center'
+    );
+
+    document
+      .querySelectorAll('.side-link')
+      .forEach(btn => btn.classList.remove('active'));
+
+    document
+      .querySelectorAll('.tab-content')
+      .forEach(panel => panel.classList.add('tab-hidden'));
+
+    if (fallbackBtn) {
+      fallbackBtn.classList.add('active');
+    }
+
+    if (fallbackPanel) {
+      fallbackPanel.classList.remove('tab-hidden');
+    }
+  }
+
+  console.log(
+    '[PickingAccess] JPH Setup hidden for Team Lead'
+  );
+}
+
 function setupTabs() {
   document.querySelectorAll('.side-link[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = btn.dataset.tab;
+
+      // Defense-in-depth: Team Leads cannot open JPH Setup even if
+      // another script or browser state exposes the hidden button.
+      if (target === 'personal' && isPickingTeamLead_()) {
+        console.warn('[PickingAccess] Team Lead JPH Setup access blocked');
+        return;
+      }
 
       document.querySelectorAll('.side-link').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
