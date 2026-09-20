@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   
-  <script src="authGuard.js"></script>
+  <script src="../../authGuard.js"></script>
 <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <title>Surface Dashboard</title>
 
-  <link rel="stylesheet" href="SurfaceWIP.css?v=20260526-operator-command-no-line-constraints" />
+  <link rel="stylesheet" href="./SurfaceWIP.css?v=20260920-circle-visible-dynamic-arrows-v13" />
 </head>
 
 <body>
@@ -92,6 +92,18 @@
             </svg>
           </span>
           Process Flow
+        </button>
+
+        <button class="nav-item" data-tab="stations">
+          <span class="nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19V9"></path>
+              <path d="M10 19V5"></path>
+              <path d="M16 19v-7"></path>
+              <path d="M22 19V3"></path>
+            </svg>
+          </span>
+          Station Health
         </button>
 
         <button class="nav-item" data-tab="operators">
@@ -187,41 +199,47 @@
 
     <main class="main">
 
-      <header class="page-header">
+      <header class="page-header surface-command-header">
+        <div class="surface-header-copy">
+          <div class="surface-title-row">
+            <a href="../../index.html" class="surface-back-btn" aria-label="Back to dashboard">
+              <span aria-hidden="true">←</span>
+              <strong>Dashboard</strong>
+            </a>
+            <span class="surface-dept-chip">Surface Dept</span>
+          </div>
 
-        <div>
-          <div class="brand-kicker">Surface Dept</div>
-
-          <h1>Surface Dashboard</h1>
-
-          <div class="header-actions">
-            <div class="live-pill">
+          <div class="surface-title-line">
+            <h1>Surface Dashboard</h1>
+            <button type="button" class="live-pill live-pill-button" id="headerLiveButton" onclick="manualLiveRefresh(this)" title="Refresh live data now">
               <span class="pulse-dot"></span>
               LIVE MODE
-            </div>
+            </button>
+          </div>
 
+          <div class="surface-subtitle-line">Production · Optical · Zenni Lab</div>
+
+          <div class="header-actions surface-header-meta">
             <div class="auto-refresh">
               <span class="dot green-dot"></span>
               Auto-refreshing every 30s
             </div>
-
-            <div id="latestUpdatePill" class="latest-update-pill">
-              Latest Update: —
-            </div>
+            <div id="latestUpdatePill" class="latest-update-pill">Latest Update: —</div>
           </div>
         </div>
 
         <div class="surface-header-right">
           <div class="surface-header-actions">
-            <a href="index.html" class="surface-action-btn dashboard-btn" aria-label="Back to dashboard">
-              <span>←</span>
-              <strong>Back to Dashboard</strong>
-            </a>
-
-            <a href="FacilityBreakage.html" class="surface-action-btn breakage-btn" aria-label="Open Facility Breakage">
+            <a href="../../Breakage Dashboard/FacilityBreakage.html" class="surface-action-btn breakage-btn" aria-label="Open Facility Breakage">
               <span>⚠</span>
               <strong>Facility Breakage</strong>
             </a>
+          </div>
+
+          <div class="surface-header-visual" aria-hidden="true">
+            <div class="surface-lens-ring ring-a"></div>
+            <div class="surface-lens-ring ring-b"></div>
+            <div class="surface-lens-core"></div>
           </div>
 
           <div class="clock-card">
@@ -229,60 +247,128 @@
             <span id="clockDate">---</span>
           </div>
         </div>
-
       </header>
 
-      <section class="kpi-grid">
+      <section class="surface-overview-hero">
+        <div class="surface-overview-copy">
+          <span class="surface-eyebrow">Live · Surface Production</span>
+          <h2>Surface Overview</h2>
+          <p>Current WIP, bottleneck pressure, station throughput, and final Surface Inspection in one live command view.</p>
+        </div>
+        <div class="surface-overview-total">
+          <span>Total WIP</span>
+          <strong id="kpiTotalHero">—</strong>
+          <small>items currently in Surface</small>
+        </div>
+      </section>
 
-        <article class="kpi-card">
-          <div class="kpi-label">Total Surface WIP</div>
-          <div id="kpiTotal" class="kpi-value">—</div>
-          <div id="kpiActiveSteps" class="kpi-note">—</div>
+      <section class="kpi-grid surface-kpi-grid">
+        <article class="kpi-card surface-kpi-card surface-kpi-total">
+          <div class="surface-kpi-icon">▱</div>
+          <div class="surface-kpi-copy">
+            <div class="kpi-label">Total Surface WIP</div>
+            <div id="kpiTotal" class="kpi-value">—</div>
+            <div id="kpiActiveSteps" class="kpi-note">—</div>
+          </div>
+          <div class="surface-kpi-graphic bars-cyan"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </article>
 
-        <article class="kpi-card red">
-          <div class="kpi-label">Highest Bottleneck</div>
-          <div id="kpiBottleneck" class="kpi-value">—</div>
-          <div id="kpiBottleneckSub" class="kpi-note">—</div>
+        <article class="kpi-card red surface-kpi-card surface-kpi-bottleneck">
+          <div class="surface-kpi-icon">⚠</div>
+          <div class="surface-kpi-copy">
+            <div class="kpi-label">Highest Bottleneck</div>
+            <div id="kpiBottleneck" class="kpi-value">—</div>
+            <div id="kpiBottleneckSub" class="kpi-note">—</div>
+          </div>
+          <div class="surface-kpi-graphic bars-red"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </article>
 
-        <article class="kpi-card green">
-          <div class="kpi-label">Surface Main WIP</div>
-          <div id="kpiMain" class="kpi-value">—</div>
-          <div id="kpiIntake" class="kpi-note">Intake: —</div>
+        <article class="kpi-card green surface-kpi-card surface-kpi-main">
+          <div class="surface-kpi-icon">◇</div>
+          <div class="surface-kpi-copy">
+            <div class="kpi-label">Surface Main WIP</div>
+            <div id="kpiMain" class="kpi-value">—</div>
+            <div id="kpiIntake" class="kpi-note">Intake: —</div>
+          </div>
+          <div class="surface-kpi-graphic bars-green"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </article>
 
-        <article class="kpi-card orange">
-          <div class="kpi-label">Total Surface Inspection</div>
-          <div id="kpiInspection" class="kpi-value">—</div>
-          <div class="kpi-note">Total Scan of Inspection</div>
+        <article class="kpi-card orange surface-kpi-card surface-kpi-inspection">
+          <div class="surface-kpi-icon">⬡</div>
+          <div class="surface-kpi-copy">
+            <div class="kpi-label">Total Surface Inspection</div>
+            <div id="kpiInspection" class="kpi-value">—</div>
+            <div class="kpi-note">Total Scan of Inspection</div>
+          </div>
+          <div class="surface-kpi-graphic bars-orange"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </article>
-
       </section>
 
       <section id="tab-overview" class="tab-panel active">
-        <section class="transfer-shell surface-live-flow-v3-host">
-          <div class="transfer-shell__header">
+
+        <!-- =====================================================
+             PROCESS FLOW HERO — PRIMARY SURFACE VIEW
+             Each station and transition card loads its own image from ./assets/
+        ====================================================== -->
+        <section class="transfer-shell surface-live-flow-v3-host surface-process-flow-image-shell">
+          <div class="surface-flow-image-overlay" aria-hidden="true"></div>
+
+          <div class="transfer-shell__header surface-flow-image-header">
             <div>
-              <div class="transfer-title">Surface Live Flow</div>
-              <div class="transfer-subtitle">
-                Total Scan Today → Current WIP Moving → Next Station.
-              </div>
+              <span class="surface-eyebrow">Surface Production Flow</span>
+              <div class="transfer-title">Surface Process Flow</div>
+              <div class="transfer-subtitle">From intake to final inspection · Real-time WIP by station</div>
             </div>
 
-            <div id="transferMeta" class="transfer-meta">
-              Live Surface WIP
+            <div class="surface-flow-header-actions">
+              <button type="button" class="surface-v3-live-pill surface-v3-live-button" id="surfaceFlowLiveButton" onclick="manualLiveRefresh(this)" title="Refresh live data now">
+                <span></span>Live
+              </button>
+              <div id="transferMeta" class="transfer-meta">Live Surface WIP</div>
             </div>
           </div>
 
-          <div id="transferGrid" class="transfer-grid">
+          <div id="transferGrid" class="transfer-grid surface-process-flow-live-content">
             <div class="transfer-loading">
               <div class="spinner"></div>
               <span>Loading live Surface flow…</span>
             </div>
           </div>
         </section>
+
       </section>
+
+
+
+      <section id="tab-stations" class="tab-panel">
+<!-- =====================================================
+             STATION HEALTH — DEDICATED TAB
+        ====================================================== -->
+        <section class="surface-station-summary-shell">
+          <div class="surface-section-header">
+            <div>
+              <span class="surface-eyebrow">Current WIP by station</span>
+              <h2>Surface Station Health</h2>
+              <p>Live station pressure from the same current Surface WIP payload.</p>
+            </div>
+
+            <div class="surface-filter-row" role="group" aria-label="Surface flow filters">
+              <button class="filter-btn active" data-filter="all" type="button">All</button>
+              <button class="filter-btn" data-filter="critical" type="button">Watch / Critical</button>
+              <button class="filter-btn" data-filter="lineB" type="button">Line B</button>
+            </div>
+          </div>
+
+          <div id="bottleneckLabel" class="surface-bottleneck-banner">
+            Critical bottleneck detected in the live Surface flow.
+          </div>
+
+          <div id="flowGrid" class="surface-stage-grid">
+            <div class="flow-loading">Loading station health…</div>
+          </div>
+        </section>
+
+              </section>
 
       <section id="tab-detail" class="tab-panel">
         <header class="page-header page-header--slim">
@@ -401,6 +487,8 @@
           </div>
         </header>
 
+        <div id="reportMeta" class="surface-live-chip surface-report-meta">Report: — · Imported: —</div>
+
         <div id="reportTableWrap" class="report-table-wrap">
           <div class="flow-loading">Loading executive snapshot…</div>
         </div>
@@ -411,7 +499,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="SurfaceWIP.js?v=20260526-operator-command-no-line-constraints"></script>
+  <script src="./SurfaceWIP.js?v=20260920-circle-visible-dynamic-arrows-v13"></script>
 
 </body>
 </html>

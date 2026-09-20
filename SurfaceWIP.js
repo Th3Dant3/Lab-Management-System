@@ -5,176 +5,7 @@
 ========================================================= */
 "use strict";
 
-/* =========================================================
-   SURFACE LOAD PERFORMANCE LOGGER
-   Measures page boot, API calls, JSON parsing, rendering,
-   loader-ready time, and browser navigation timing.
-   ========================================================= */
-
-const SURFACE_PERF = {
-  startedAt: performance.now(),
-  initialReadyLogged: false,
-  fetchSequence: 0,
-  historyKey: "surface_wip_performance_history",
-  maxHistory: 20
-};
-
-function perfMs(value) {
-  return Math.round((Number(value) || 0) * 10) / 10;
-}
-
-function perfStart(label) {
-  const started = performance.now();
-  console.log(`[SurfacePerf] ▶ ${label}`);
-  return started;
-}
-
-function perfEnd(label, started, extra = {}) {
-  const duration = performance.now() - started;
-
-  console.log(
-    `[SurfacePerf] ✓ ${label}: ${perfMs(duration)} ms`,
-    extra
-  );
-
-  return duration;
-}
-
-function saveSurfacePerformanceLog_(entry) {
-  try {
-    const existing = JSON.parse(
-      localStorage.getItem(SURFACE_PERF.historyKey) || "[]"
-    );
-
-    existing.unshift(entry);
-
-    localStorage.setItem(
-      SURFACE_PERF.historyKey,
-      JSON.stringify(existing.slice(0, SURFACE_PERF.maxHistory))
-    );
-  } catch (err) {
-    console.warn("[SurfacePerf] Could not save local performance history:", err);
-  }
-}
-
-function getSurfacePerformanceHistory() {
-  try {
-    return JSON.parse(
-      localStorage.getItem(SURFACE_PERF.historyKey) || "[]"
-    );
-  } catch (err) {
-    return [];
-  }
-}
-
-function showSurfacePerformanceHistory() {
-  const rows = getSurfacePerformanceHistory();
-
-  if (!rows.length) {
-    console.log("[SurfacePerf] No saved load history yet.");
-    return rows;
-  }
-
-  console.table(rows);
-  return rows;
-}
-
-function clearSurfacePerformanceHistory() {
-  localStorage.removeItem(SURFACE_PERF.historyKey);
-  console.log("[SurfacePerf] Saved load history cleared.");
-}
-
-function logSurfaceNavigationTiming_() {
-  try {
-    const nav = performance.getEntriesByType("navigation")[0];
-
-    if (!nav) return;
-
-    const timing = {
-      "DNS": perfMs(nav.domainLookupEnd - nav.domainLookupStart),
-      "TCP": perfMs(nav.connectEnd - nav.connectStart),
-      "Request → First Byte": perfMs(nav.responseStart - nav.requestStart),
-      "HTML Download": perfMs(nav.responseEnd - nav.responseStart),
-      "DOM Interactive": perfMs(nav.domInteractive),
-      "DOMContentLoaded": perfMs(nav.domContentLoadedEventEnd),
-      "Window Load": perfMs(nav.loadEventEnd || performance.now()),
-      "Transferred KB": perfMs((nav.transferSize || 0) / 1024)
-    };
-
-    console.groupCollapsed("[SurfacePerf] Browser navigation timing");
-    console.table(timing);
-    console.groupEnd();
-  } catch (err) {
-    console.warn("[SurfacePerf] Navigation timing unavailable:", err);
-  }
-}
-
-function logSurfaceResourceTiming_() {
-  try {
-    const rows = performance
-      .getEntriesByType("resource")
-      .map(entry => ({
-        Resource: String(entry.name || "").split("/").pop().split("?")[0] || entry.name,
-        Type: entry.initiatorType || "resource",
-        "Duration ms": perfMs(entry.duration),
-        "Transfer KB": perfMs((entry.transferSize || 0) / 1024)
-      }))
-      .sort((a, b) => b["Duration ms"] - a["Duration ms"])
-      .slice(0, 15);
-
-    if (rows.length) {
-      console.groupCollapsed("[SurfacePerf] Slowest page resources");
-      console.table(rows);
-      console.groupEnd();
-    }
-  } catch (err) {
-    console.warn("[SurfacePerf] Resource timing unavailable:", err);
-  }
-}
-
-function logSurfaceInitialReady_(metrics = {}) {
-  if (SURFACE_PERF.initialReadyLogged) return;
-
-  SURFACE_PERF.initialReadyLogged = true;
-
-  const totalMs = performance.now();
-
-  const entry = {
-    timestamp: new Date().toISOString(),
-    totalReadyMs: perfMs(totalMs),
-    productionFlowMs: perfMs(metrics.productionFlowMs),
-    operatorActivityMs: metrics.operatorActivityMs
-      ? perfMs(metrics.operatorActivityMs)
-      : "background / non-blocking",
-    normalizeMs: perfMs(metrics.normalizeMs),
-    renderMs: perfMs(metrics.renderMs)
-  };
-
-  console.group("[SurfacePerf] ✅ INITIAL SURFACE DASHBOARD READY");
-  console.table(entry);
-  console.log(
-    `[SurfacePerf] MAIN DASHBOARD TIME TO READY: ${entry.totalReadyMs} ms (${(entry.totalReadyMs / 1000).toFixed(2)} sec)`
-  );
-  console.groupEnd();
-
-  saveSurfacePerformanceLog_(entry);
-
-  // Convenience helpers available from DevTools console:
-  window.showSurfacePerformanceHistory = showSurfacePerformanceHistory;
-  window.clearSurfacePerformanceHistory = clearSurfacePerformanceHistory;
-
-  setTimeout(() => {
-    logSurfaceNavigationTiming_();
-    logSurfaceResourceTiming_();
-  }, 0);
-}
-
-console.log(
-  `[SurfacePerf] JS executing at ${perfMs(performance.now())} ms after navigation start`
-);
-
-console.log("[SurfaceWIP] Option A loaded. Surface WIP and operator activity = Production API.");
-console.log("[SurfacePerf] Production cache mode ENABLED. API requests no longer use debug=true.");
+console.log("[SurfaceWIP] Full redesign loaded. Live Surface WIP and operator activity = Production API.");
 
 let hourlyInOutChart = null;
 
@@ -184,7 +15,7 @@ let hourlyInOutChart = null;
 ========================================================= */
 
 const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbztnf4_kTfKzcDDnsgMhPQgB0V_m5jsMmDngGQtaiPlnYKgTYN-pQp3OrAnpTEz6Spzeg/exec",
   AREA: "Surface",
   REFRESH_MS: 30_000,
 
@@ -706,126 +537,27 @@ function normalizeProductionFlowPayload(payload) {
 }
 
 async function fetchData(forceRender = false) {
-  const fetchId = ++SURFACE_PERF.fetchSequence;
-  const isInitialLoad = !state.hasRenderedOnce;
-  const fullFetchStart = perfStart(
-    `${isInitialLoad ? "INITIAL" : "REFRESH"} fetchData #${fetchId}`
-  );
-
-  let productionFlowMs = 0;
-  let operatorActivityMs = 0;
-  let normalizeMs = 0;
-  let renderMs = 0;
-
   setSystemStatus("loading");
 
-  /*
-    PERFORMANCE CHANGE:
-    Start Operator Activity immediately, in parallel with Production Flow.
-    The main Surface dashboard does NOT wait for Operator Activity anymore.
-    Operator data continues loading in the background and updates its own tab
-    as soon as it finishes.
-  */
-  const operatorStart = perfStart(
-    `operatorActivity background #${fetchId}`
-  );
-
-  const operatorPromise = fetchOperatorActivity(true)
-    .then(result => {
-      operatorActivityMs = perfEnd(
-        `operatorActivity background #${fetchId}`,
-        operatorStart,
-        {
-          operatorRows: Array.isArray(state.operatorActivity)
-            ? state.operatorActivity.length
-            : 0,
-          success: !!result
-        }
-      );
-
-      console.log(
-        `[SurfacePerf] Operator background finished for fetch #${fetchId}: ${perfMs(operatorActivityMs)} ms`
-      );
-
-      return result;
-    })
-    .catch(err => {
-      operatorActivityMs = perfEnd(
-        `operatorActivity background #${fetchId} FAILED`,
-        operatorStart,
-        {
-          error: err?.message || String(err)
-        }
-      );
-
-      console.warn(
-        `[SurfacePerf] Operator background failed for fetch #${fetchId}:`,
-        err
-      );
-
-      return null;
-    });
-
   try {
-    const url = `${CONFIG.API_URL}?action=productionFlow&area=${encodeURIComponent(CONFIG.AREA || "Surface")}&t=${Date.now()}`;
-
-    const productionStart = perfStart(
-      `productionFlow API #${fetchId}`
-    );
+    const url = `${CONFIG.API_URL}?action=productionFlow&area=${encodeURIComponent(CONFIG.AREA || "Surface")}&debug=true&t=${Date.now()}`;
 
     const res = await fetch(url, {
       cache: "no-store"
     });
 
-    const responseHeadersMs = performance.now() - productionStart;
-
     if (!res.ok) {
       throw new Error("HTTP " + res.status);
     }
 
-    const jsonParseStart = perfStart(
-      `productionFlow JSON parse #${fetchId}`
-    );
-
     const rawJson = await res.json();
-
-    const jsonParseMs = perfEnd(
-      `productionFlow JSON parse #${fetchId}`,
-      jsonParseStart,
-      {
-        httpStatus: res.status
-      }
-    );
-
-    productionFlowMs = perfEnd(
-      `productionFlow API #${fetchId}`,
-      productionStart,
-      {
-        responseHeadersMs: perfMs(responseHeadersMs),
-        jsonParseMs: perfMs(jsonParseMs),
-        httpStatus: res.status
-      }
-    );
-
-    const normalizeStart = perfStart(
-      `normalize productionFlow #${fetchId}`
-    );
-
     const json = normalizeProductionFlowPayload(rawJson);
-
-    normalizeMs = perfEnd(
-      `normalize productionFlow #${fetchId}`,
-      normalizeStart,
-      {
-        flowRows: Array.isArray(json?.surfaceFlow)
-          ? json.surfaceFlow.length
-          : 0
-      }
-    );
 
     if (!json || json.status !== "success") {
       throw new Error(json?.message || "API returned error");
     }
+
+    await fetchOperatorActivity(true);
 
     const incomingFlow = Array.isArray(json.surfaceFlow) ? json.surfaceFlow : [];
     const incomingTransfers = Array.isArray(json.surfaceTransfers) ? json.surfaceTransfers : [];
@@ -837,16 +569,6 @@ async function fetchData(forceRender = false) {
       console.warn("[SurfaceWIP] Refresh returned empty productionFlow. Keeping last good data.");
       setSystemStatus("ok");
       updateLatestUpdatePill();
-
-      perfEnd(
-        `fetchData #${fetchId} kept last good data`,
-        fullFetchStart,
-        {
-          productionFlowMs: perfMs(productionFlowMs),
-          operatorRunningInBackground: true
-        }
-      );
-
       return;
     }
 
@@ -862,16 +584,6 @@ async function fetchData(forceRender = false) {
       state.lastFetch = new Date();
       setSystemStatus("ok");
       updateLatestUpdatePill();
-
-      perfEnd(
-        `fetchData #${fetchId} no-change refresh`,
-        fullFetchStart,
-        {
-          productionFlowMs: perfMs(productionFlowMs),
-          operatorRunningInBackground: true
-        }
-      );
-
       return;
     }
 
@@ -903,29 +615,7 @@ async function fetchData(forceRender = false) {
     updateReportMeta();
     updateLatestUpdatePill();
 
-    const renderStart = perfStart(
-      `renderAll #${fetchId}`
-    );
-
-    /*
-      Main dashboard renders immediately with Production Flow data.
-      Operator Activity may still be loading in the background.
-      fetchOperatorActivity() renders the Operator tab independently
-      when its request completes.
-    */
     renderAll();
-
-    renderMs = perfEnd(
-      `renderAll #${fetchId}`,
-      renderStart,
-      {
-        flowRows: incomingFlow.length,
-        operatorRowsAvailableNow: Array.isArray(state.operatorActivity)
-          ? state.operatorActivity.length
-          : 0,
-        operatorRunningInBackground: true
-      }
-    );
 
     state.hasRenderedOnce = true;
 
@@ -935,51 +625,8 @@ async function fetchData(forceRender = false) {
 
     hideSurfaceLoader();
 
-    const totalFetchMs = perfEnd(
-      `fetchData #${fetchId} MAIN READY`,
-      fullFetchStart,
-      {
-        productionFlowMs: perfMs(productionFlowMs),
-        normalizeMs: perfMs(normalizeMs),
-        renderMs: perfMs(renderMs),
-        operatorBlockingMainLoad: false
-      }
-    );
-
-    if (isInitialLoad) {
-      logSurfaceInitialReady_({
-        totalFetchMs,
-        productionFlowMs,
-        operatorActivityMs: 0,
-        normalizeMs,
-        renderMs
-      });
-
-      console.log(
-        "[SurfacePerf] Main Surface dashboard is ready. Operator Activity is continuing in background."
-      );
-
-      operatorPromise.then(() => {
-        console.log(
-          `[SurfacePerf] ✅ FULL SURFACE DATA COMPLETE: ${perfMs(performance.now())} ms (${(performance.now() / 1000).toFixed(2)} sec) after navigation start`
-        );
-      });
-    }
-
   } catch (err) {
     console.error("[SurfaceWIP] Fetch error:", err);
-
-    perfEnd(
-      `fetchData #${fetchId} FAILED`,
-      fullFetchStart,
-      {
-        error: err?.message || String(err),
-        productionFlowMs: perfMs(productionFlowMs),
-        normalizeMs: perfMs(normalizeMs),
-        renderMs: perfMs(renderMs),
-        operatorRunningInBackground: true
-      }
-    );
 
     if (state.hasRenderedOnce) {
       setSystemStatus("error");
@@ -997,6 +644,7 @@ async function fetchData(forceRender = false) {
     setTimeout(hideSurfaceLoader, 700);
   }
 }
+
 
 /* =========================================================
    SECTION 06B — OPERATOR COMMAND CENTER API/UI
@@ -1036,49 +684,31 @@ function normalizeOperatorActivityPayload(payload){
   return rows.map(row=>{ const hours=row.Hours||row.hours||{}; return {reportDate:getOperatorField(row,"ReportDate","reportDate",""),area:getOperatorField(row,"Area","area",CONFIG.AREA),flowStation:getOperatorField(row,"FlowStation","flowStation",""),accessPoint:getOperatorField(row,"AccessPoint","accessPoint",""),operator:normalizeOperatorDisplayName(getOperatorField(row,"Operator","operator","System / No Operator Captured")),total:num(getOperatorField(row,"Total","total",0)),hourlyTotal:num(getOperatorField(row,"HourlyTotal","hourlyTotal",0)),bestHour:getOperatorField(row,"BestHour","bestHour","—"),bestHourValue:num(getOperatorField(row,"BestHourValue","bestHourValue",0)),lastActiveHour:getOperatorField(row,"LastActiveHour","lastActiveHour","—"),hours}; }).filter(row=>isVisibleSurfaceOperatorStation(row.flowStation)).sort(sortOperatorRowsByStationOrder);
 }
 async function fetchOperatorActivity(quiet = true) {
-  const operatorFunctionStart = performance.now();
   const area = encodeURIComponent(CONFIG.AREA || "Surface");
   const stamp = Date.now();
 
   /*
     Surface Option A:
     Operator activity must come from the Production API, same as WIP.
-    Production mode intentionally omits debug=true so the Apps Script short cache can be used.
-    Browser fetch still uses cache:"no-store", so browser caching does not control freshness.
+    debug=true bypasses short Apps Script cache while we validate the live dashboard.
     operator_activity is kept as a fallback alias because the Production API supports both names.
   */
   const urls = [
-    `${CONFIG.API_URL}?action=operatorActivity&area=${area}&t=${stamp}`,
-    `${CONFIG.API_URL}?action=operator_activity&area=${area}&t=${stamp}`
+    `${CONFIG.API_URL}?action=operatorActivity&area=${area}&debug=true&t=${stamp}`,
+    `${CONFIG.API_URL}?action=operator_activity&area=${area}&debug=true&t=${stamp}`
   ];
 
   let lastError = null;
 
-  for (let attempt = 0; attempt < urls.length; attempt++) {
-    const url = urls[attempt];
-    const attemptStart = perfStart(
-      `operatorActivity API attempt ${attempt + 1}`
-    );
-
+  for (const url of urls) {
     try {
       const res = await fetch(url, { cache: "no-store" });
-
-      const headersMs = performance.now() - attemptStart;
 
       if (!res.ok) {
         throw new Error(`Operator API HTTP ${res.status}`);
       }
 
-      const parseStart = perfStart(
-        `operatorActivity JSON parse attempt ${attempt + 1}`
-      );
-
       const json = await res.json();
-
-      const parseMs = perfEnd(
-        `operatorActivity JSON parse attempt ${attempt + 1}`,
-        parseStart
-      );
 
       if (!json || String(json.status || "").toLowerCase() !== "success") {
         throw new Error(json?.message || "Operator API returned error");
@@ -1091,47 +721,13 @@ async function fetchOperatorActivity(quiet = true) {
       );
       state.operatorError = "";
 
-      const operatorRenderStart = perfStart(
-        `operatorActivity render attempt ${attempt + 1}`
-      );
-
       renderOperatorStationOptions();
       renderOperatorActivity();
-
-      const operatorRenderMs = perfEnd(
-        `operatorActivity render attempt ${attempt + 1}`,
-        operatorRenderStart
-      );
-
-      perfEnd(
-        `operatorActivity API attempt ${attempt + 1}`,
-        attemptStart,
-        {
-          responseHeadersMs: perfMs(headersMs),
-          jsonParseMs: perfMs(parseMs),
-          renderMs: perfMs(operatorRenderMs),
-          rows: state.operatorActivity.length,
-          httpStatus: res.status
-        }
-      );
-
-      console.log(
-        `[SurfacePerf] operatorActivity complete: ${perfMs(performance.now() - operatorFunctionStart)} ms`
-      );
 
       return json;
 
     } catch (err) {
       lastError = err;
-
-      perfEnd(
-        `operatorActivity API attempt ${attempt + 1} FAILED`,
-        attemptStart,
-        {
-          error: err?.message || String(err)
-        }
-      );
-
       console.warn("[SurfaceWIP] Operator activity attempt failed:", err, url);
     }
   }
@@ -1144,13 +740,8 @@ async function fetchOperatorActivity(quiet = true) {
     renderOperatorActivity();
   }
 
-  console.log(
-    `[SurfacePerf] operatorActivity failed after ${perfMs(performance.now() - operatorFunctionStart)} ms`
-  );
-
   return null;
 }
-
 function renderOperatorStationOptions(){ const select=document.getElementById("operatorStationFilter"); if(!select) return; const current=select.value||state.operatorFilter||"all", stations=state.operatorStationOptions||[]; select.innerHTML=`<option value="all">All Surface Operator Stations</option>${stations.map(st=>`<option value="${escapeHTML(st)}">${escapeHTML(st)}</option>`).join("")}`; select.value=stations.includes(current)?current:"all"; state.operatorFilter=select.value; }
 function getFilteredOperatorRows(){
   const rows=Array.isArray(state.operatorActivity)?state.operatorActivity.slice():[]; const stationFilter=state.operatorFilter||"all", search=String(state.operatorSearch||"").trim().toLowerCase(); let filtered=rows;
@@ -1484,7 +1075,6 @@ function renderAll() {
   renderKPIs();
   renderFlowGrid();
   renderTransferTunnel();
-  renderHourlyInOutComparison();
   renderFlowDetail();
   renderLines();
   renderAlerts();
@@ -1509,6 +1099,7 @@ function renderKPIs() {
   const inspectionTotal = getStationScanTotal("Surface Inspection");
 
   setText("kpiTotal", total.toLocaleString());
+  setText("kpiTotalHero", total.toLocaleString());
   setText("kpiMain", num(s.SurfaceMainWIP).toLocaleString());
   setText("kpiActiveSteps", `${num(s.ActiveSteps)} active · ${num(s.EmptySteps)} empty steps`);
   setText("kpiIntake", `Intake (SF Scan): ${num(s.SurfaceIntakeWIP).toLocaleString()}`);
@@ -1696,16 +1287,18 @@ function renderContinuousSurfaceFlow(rows) {
     .slice()
     .sort((a, b) => num(a.FromOrder) - num(b.FromOrder));
 
+  const stations = buildSurfaceMockStations_(orderedRows);
+
   const totalMoving = orderedRows.reduce((sum, row) => {
     return sum + calcEstimatedMoving(row);
   }, 0);
 
-  const totalScansToday = (state.surfaceScanSummary || []).reduce((sum, row) => {
-    return sum + num(row.TotalScansToday);
+  const totalScansToday = stations.reduce((sum, station) => {
+    return sum + getStationScanTotal(station.step);
   }, 0);
 
-  const activeStations = (state.surfaceFlow || []).filter(row => {
-    return num(row.CurrentJobTotal) > 0 && !(CONFIG.LINE_A_OFFLINE && isLineA(row.FlowStep));
+  const activeStations = stations.filter(station => {
+    return getSurfaceCurrentWip_(station.step) > 0;
   }).length;
 
   const bottleneckRow = (state.surfaceFlow || [])
@@ -1713,17 +1306,11 @@ function renderContinuousSurfaceFlow(rows) {
     .slice()
     .sort((a, b) => num(b.CurrentJobTotal) - num(a.CurrentJobTotal))[0] || {};
 
-  const bottleneckName = safeText(bottleneckRow.DisplayName || bottleneckRow.FlowStep, "No bottleneck");
   const bottleneckWip = num(bottleneckRow.CurrentJobTotal);
-  const bottleneckStatus = bottleneckWip >= CONFIG.WIP_CRITICAL ? "Critical" : bottleneckWip >= CONFIG.WIP_HIGH ? "Watch" : "Stable";
-
-  const watchCount = (state.surfaceFlow || []).filter(row => {
-    const wip = num(row.CurrentJobTotal);
-    return wip >= CONFIG.WIP_HIGH && !(CONFIG.LINE_A_OFFLINE && isLineA(row.FlowStep));
-  }).length;
-
-  const flowCards = buildSerpentineFlowCards(orderedRows);
-  const flowRows = chunkCards(flowCards, 5);
+  const bottleneckStatus =
+    bottleneckWip >= CONFIG.WIP_CRITICAL ? "Critical" :
+    bottleneckWip >= CONFIG.WIP_HIGH ? "Watch" :
+    "Stable";
 
   const updateTime =
     state.lastUpdateTime ||
@@ -1732,45 +1319,283 @@ function renderContinuousSurfaceFlow(rows) {
     new Date();
 
   return `
-    <section class="continuous-flow-shell surface-v3-flow option3-command-shell option3-clean-shell">
-
-      <div class="surface-v3-bg-orb orb-one"></div>
-      <div class="surface-v3-bg-orb orb-two"></div>
-      <div class="surface-v3-bg-orb orb-three"></div>
-
-      <div class="option3-clean-toolbar">
+    <section class="surface-mock-flow-shell">
+      <div class="surface-mock-flow-toolbar">
         <div>
-          <span class="option3-section-label">Process Flow</span>
-          
+          <span class="surface-mock-kicker">Surface Production Flow</span>
+          <h2>Surface Process Flow</h2>
+          <p>From intake to final inspection · Real-time WIP by station</p>
         </div>
 
-        <div class="option3-clean-meta">
-          <span class="option3-status-chip ${bottleneckStatus.toLowerCase()}">${bottleneckStatus}</span>
-          <span class="surface-v3-live-pill"><span></span>Live</span>
-          <span class="surface-v3-updated">${formatDisplayDateTime(updateTime)}</span>
+        <div class="surface-mock-live-meta">
+          <span class="surface-mock-status ${bottleneckStatus.toLowerCase()}">${bottleneckStatus}</span>
+          <button type="button" class="surface-mock-live-button" onclick="manualLiveRefresh(this)" title="Refresh live Surface data">
+            <span class="surface-mock-live-dot"></span> Live
+          </button>
+          <span class="surface-mock-updated">${formatDisplayDateTime(updateTime)}</span>
         </div>
       </div>
 
-      <div class="option3-layout option3-layout-clean">
-<main class="option3-flow-stage option3-flow-stage-clean">
-          <div class="serpentine-flow-wrap surface-v3-serpentine option3-serpentine">
-            ${flowRows.map((rowCards, rowIndex) => renderSerpentineRow(rowCards, rowIndex, flowRows.length)).join("")}
-          </div>
-        </main>
-      </div>
-
-      <div class="surface-v3-bottom-strip option3-bottom-strip option3-bottom-strip-clean">
-        <div class="surface-v3-status-card">
-          <div class="surface-v3-mini-icon">🛡</div>
-          <div><span>System Health</span><strong>Operational</strong></div>
+      <div class="surface-mock-flow-scroll">
+        <div class="surface-mock-flow-grid">
+          ${stations.map((station, index) => {
+            const transition = orderedRows[index] || null;
+            return renderSurfaceMockFlowColumn_(station, transition, index, stations.length);
+          }).join("")}
         </div>
-
-        <div class="surface-v3-mini-metric"><span>Stations Online</span><strong>${activeStations.toLocaleString()}/10</strong></div>
-        <div class="surface-v3-mini-metric"><span>Watch Areas</span><strong>${watchCount.toLocaleString()}</strong></div>
-        <div class="surface-v3-mini-metric"><span>Moving WIP</span><strong>${totalMoving.toLocaleString()}</strong></div>
-        <div class="surface-v3-live-note"><span></span>Live data updates every 30 seconds</div>
       </div>
+
+      ${renderSurfaceDynamicBottomMetrics_(stations, orderedRows, activeStations, totalMoving, totalScansToday)}
     </section>
+  `;
+}
+
+
+function renderSurfaceDynamicBottomMetrics_(stations, orderedRows, activeStations, totalMoving, totalScansToday) {
+  const stationCount = Math.max(stations.length, 1);
+  const onlinePct = Math.max(0, Math.min(100, Math.round((activeStations / stationCount) * 100)));
+
+  const movingValues = orderedRows.map(row => Math.max(0, calcEstimatedMoving(row)));
+  const movingMax = Math.max(...movingValues, 1);
+  const movingBars = movingValues.map((value, index) => {
+    const h = Math.max(12, Math.round((value / movingMax) * 100));
+    const hot = value === movingMax && value > 0 ? " hot" : "";
+    const title = safeText(orderedRows[index]?.TransitionName || "");
+    return `<i class="surface-live-bar${hot}" style="--h:${h}%;" title="${escapeHTML(title)}: ${value.toLocaleString()}"></i>`;
+  }).join("");
+
+  const scanValues = stations.map(station => Math.max(0, getStationScanTotal(station.step)));
+  const scanMax = Math.max(...scanValues, 1);
+
+  const chartW = 220;
+  const chartH = 62;
+  const padX = 4;
+  const padY = 5;
+  const usableW = chartW - (padX * 2);
+  const usableH = chartH - (padY * 2);
+
+  const points = scanValues.map((value, index) => {
+    const x = scanValues.length <= 1
+      ? chartW / 2
+      : padX + (index / (scanValues.length - 1)) * usableW;
+    const y = padY + usableH - ((value / scanMax) * usableH);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+
+  const scanDots = scanValues.map((value, index) => {
+    const x = scanValues.length <= 1
+      ? chartW / 2
+      : padX + (index / (scanValues.length - 1)) * usableW;
+    const y = padY + usableH - ((value / scanMax) * usableH);
+    const label = safeText(stations[index]?.display || stations[index]?.step || "Station");
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.3"><title>${escapeHTML(label)}: ${value.toLocaleString()}</title></circle>`;
+  }).join("");
+
+  const onlineClass =
+    onlinePct >= 100 ? "good" :
+    onlinePct >= 80 ? "watch" :
+    "critical";
+
+  return `
+    <div class="surface-live-summary-grid">
+      <article class="surface-live-summary-card stations ${onlineClass}">
+        <div class="surface-live-summary-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M4 18h16M6 18v-5h3v5M10.5 18V8h3v10M15 18v-8h3v8"/>
+          </svg>
+        </div>
+
+        <div class="surface-live-summary-copy">
+          <span>Stations Online</span>
+          <strong>${activeStations.toLocaleString()} <em>/ ${stationCount.toLocaleString()}</em></strong>
+          <small>Current Surface stations with active WIP</small>
+        </div>
+
+        <div class="surface-live-gauge" style="--pct:${onlinePct};">
+          <div>
+            <strong>${onlinePct}%</strong>
+            <small>ONLINE</small>
+          </div>
+        </div>
+      </article>
+
+      <article class="surface-live-summary-card moving">
+        <div class="surface-live-summary-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M4 8l4 4-4 4M10 8l4 4-4 4"/>
+          </svg>
+        </div>
+
+        <div class="surface-live-summary-copy">
+          <span>Moving WIP</span>
+          <strong>${totalMoving.toLocaleString()}</strong>
+          <small>Live WIP feeding the next Surface station</small>
+        </div>
+
+        <div class="surface-live-bars" aria-label="Current WIP by transition">
+          ${movingBars}
+        </div>
+      </article>
+
+      <article class="surface-live-summary-card scans">
+        <div class="surface-live-summary-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M5 8V5h3M16 5h3v3M19 16v3h-3M8 19H5v-3M8 12h8"/>
+          </svg>
+        </div>
+
+        <div class="surface-live-summary-copy">
+          <span>Total Scan Today</span>
+          <strong>${totalScansToday.toLocaleString()}</strong>
+          <small>Live scan distribution across Surface stations</small>
+        </div>
+
+        <div class="surface-live-sparkline">
+          <svg viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="none" role="img" aria-label="Current station scan distribution">
+            <defs>
+              <linearGradient id="surfaceScanFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="currentColor" stop-opacity=".34"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polyline class="surface-live-spark-fill" points="${padX},${chartH-padY} ${points} ${chartW-padX},${chartH-padY}"/>
+            <polyline class="surface-live-spark-line" points="${points}"/>
+            ${scanDots}
+          </svg>
+          <span>STATION DISTRIBUTION</span>
+        </div>
+      </article>
+    </div>
+  `;
+}
+
+
+function buildSurfaceMockStations_(orderedRows) {
+  if (!orderedRows.length) return [];
+
+  const stations = [
+    {
+      step: orderedRows[0].FromStep,
+      display: orderedRows[0].FromDisplayName
+    }
+  ];
+
+  orderedRows.forEach(row => {
+    stations.push({
+      step: row.ToStep,
+      display: row.ToDisplayName
+    });
+  });
+
+  const seen = new Set();
+  return stations.filter(station => {
+    const key = safeText(station.step, station.display).toUpperCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getSurfaceCurrentWip_(step) {
+  const key = safeText(step, "").toUpperCase();
+  const row = (state.surfaceFlow || []).find(item => {
+    return safeText(item.FlowStep, "").toUpperCase() === key;
+  });
+  return num(row?.CurrentJobTotal);
+}
+
+function getSurfaceMockTheme_(step) {
+  const key = safeText(step, "").toUpperCase();
+
+  if (key.includes("UNBOX")) return "red";
+  if (key.includes("BLOCK")) return "yellow";
+  if (key.includes("COOL") || key.includes("IQ")) return "cyan";
+  if (key.includes("GENERAT") || key.includes("ORBIT")) return "orange";
+  if (key.includes("POLISH")) return "purple";
+  if (key.includes("ENGRAV")) return "cyan";
+  if (key.includes("DETAP")) return "green";
+  if (key.includes("COAT") || key.includes("54R")) return "blue";
+  if (key.includes("INSPECTION")) return "gold";
+  return "cyan";
+}
+
+function renderSurfaceMockFlowColumn_(station, transition, index, totalStations) {
+  const display = getStationScanDisplay(station.step, station.display);
+  const scanTotal = getStationScanTotal(station.step);
+  const bg = getSurfaceProcessStationBg(station.step);
+  const theme = getSurfaceMockTheme_(station.step);
+  const stationNumber = String(index + 1).padStart(2, "0");
+  const isLast = index === totalStations - 1;
+
+  let transitionMarkup = "";
+  if (transition && !isLast) {
+    const moving = calcEstimatedMoving(transition);
+    const severity =
+      moving >= CONFIG.WIP_CRITICAL ? "critical" :
+      moving >= CONFIG.WIP_HIGH ? "watch" :
+      "normal";
+    const routeBg = getSurfaceProcessRouteBg(transition.FromStep, transition.ToStep);
+
+    transitionMarkup = `
+      <div class="surface-mock-transfer ${severity}" style="--surface-transfer-bg:url('${routeBg}')">
+        <svg
+          class="surface-mock-transfer-connectors"
+          viewBox="0 0 260 92"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          style="--flow-speed:${moving >= CONFIG.WIP_CRITICAL ? '0.72s' : moving >= CONFIG.WIP_HIGH ? '0.95s' : '1.35s'}"
+        >
+          <!-- SOURCE TOTAL -> WIP CIRCLE
+               Starts from source station's bottom-right lane and ends at circle top-left. -->
+          <path class="surface-flow-link surface-flow-link-down"
+                d="M 18 8 C 54 10, 82 34, 106 72"></path>
+          <path class="surface-flow-head surface-flow-head-down"
+                d="M 95 64 L 106 72 L 101 58 Z"></path>
+
+          <!-- WIP CIRCLE -> NEXT TOTAL
+               Starts at circle top-right and ends at destination station's bottom-left lane. -->
+          <path class="surface-flow-link surface-flow-link-up"
+                d="M 154 72 C 178 34, 206 10, 242 8"></path>
+          <path class="surface-flow-head surface-flow-head-up"
+                d="M 231 7 L 242 8 L 234 19 Z"></path>
+
+          <circle class="surface-flow-pulse surface-flow-pulse-down" r="3.3">
+            <animateMotion
+              dur="${moving >= CONFIG.WIP_CRITICAL ? '0.72s' : moving >= CONFIG.WIP_HIGH ? '0.95s' : '1.35s'}"
+              repeatCount="indefinite"
+              path="M 18 8 C 54 10, 82 34, 106 72"
+            />
+          </circle>
+
+          <circle class="surface-flow-pulse surface-flow-pulse-up" r="3.3">
+            <animateMotion
+              dur="${moving >= CONFIG.WIP_CRITICAL ? '0.72s' : moving >= CONFIG.WIP_HIGH ? '0.95s' : '1.35s'}"
+              repeatCount="indefinite"
+              path="M 154 72 C 178 34, 206 10, 242 8"
+            />
+          </circle>
+        </svg>
+        <strong>${moving.toLocaleString()}</strong>
+        <span>Jobs Moving To</span>
+        <small>${safeText(transition.ToDisplayName, transition.ToStep)}</small>
+      </div>
+    `;
+  } else {
+    transitionMarkup = "";
+  }
+
+  return `
+    <div class="surface-mock-flow-column theme-${theme}">
+      <article class="surface-mock-station" style="--surface-station-bg:url('${bg}')">
+        <div class="surface-mock-station-number">${stationNumber}</div>
+        <div class="surface-mock-station-icon" aria-hidden="true">${iconForStep(station.step)}</div>
+        <div class="surface-mock-station-name">Total ${display} Today</div>
+        <div class="surface-mock-station-value">${scanTotal.toLocaleString()}</div>
+        <div class="surface-mock-machine-art" aria-hidden="true"></div>
+      </article>
+
+      ${transitionMarkup}
+    </div>
   `;
 }
 
@@ -1877,13 +1702,55 @@ function renderSerpentineCard(card) {
 
 
 
+
+function getSurfaceProcessStationBg(step) {
+  const key = safeText(step, "").toUpperCase();
+
+  const backgrounds = {
+    "SF SCAN & VERIFY": "./assets/01_sf_scan_verify.png",
+    "SURFACE UNBOX": "./assets/02_sf_unbox.png",
+    "BLOCKING LINE B": "./assets/03_auto_blockers.png",
+    "COOLING STORAGE": "./assets/04_iq_star.png",
+    "GENERATING LINE B": "./assets/05_orbit_generator.png",
+    "POLISHING LINE B": "./assets/06_polisher.png",
+    "ENGRAVING LINE B": "./assets/07_engraver.png",
+    "DETAPING LINE B": "./assets/08_detaper.png",
+    "COATING LINE B": "./assets/09_54r_coater.png",
+    "SURFACE INSPECTION": "./assets/10_surface_inspection_out.png"
+  };
+
+  return backgrounds[key] || "";
+}
+
+function getSurfaceProcessRouteBg(fromStep, toStep) {
+  const route = `${safeText(fromStep, "").toUpperCase()}→${safeText(toStep, "").toUpperCase()}`;
+
+  const backgrounds = {
+    "SF SCAN & VERIFY→SURFACE UNBOX": "./assets/01_sf_scan_verify_to_sf_unbox_bg.png",
+    "SURFACE UNBOX→BLOCKING LINE B": "./assets/02_sf_unbox_to_auto_blockers_bg.png",
+    "BLOCKING LINE B→COOLING STORAGE": "./assets/03_auto_blockers_to_iq_star_bg.png",
+    "COOLING STORAGE→GENERATING LINE B": "./assets/04_iq_star_to_orbit_generator_bg.png",
+    "GENERATING LINE B→POLISHING LINE B": "./assets/05_orbit_generator_to_polisher_bg.png",
+    "POLISHING LINE B→ENGRAVING LINE B": "./assets/06_polisher_to_engraver_bg.png",
+    "ENGRAVING LINE B→DETAPING LINE B": "./assets/07_engraver_to_detaper_bg.png",
+    "DETAPING LINE B→COATING LINE B": "./assets/08_detaper_to_54r_coater_bg.png",
+    "COATING LINE B→SURFACE INSPECTION": "./assets/09_54r_coater_to_surface_inspection_out_bg.png"
+  };
+
+  return backgrounds[route] || "";
+}
+
 function renderContinuousStationCard(station) {
   const scanTotal = getStationScanTotal(station.step);
   const display = getStationScanDisplay(station.step, station.display);
   const peak = getStationPeakText(station.step);
+  const bg = getSurfaceProcessStationBg(station.step);
+
+  const bgClass = bg ? " process-card-has-bg" : "";
+  const bgStyle = bg ? ` style="--surface-card-bg:url('${bg}')"` : "";
 
   return `
-    <article class="continuous-station-card">
+    <article class="continuous-station-card${bgClass}" data-step="${escapeHTML(safeText(station.step))}"${bgStyle}>
       <div class="surface-v3-station-icon" aria-hidden="true">
         ${iconForStep(station.step)}
       </div>
@@ -1914,8 +1781,13 @@ function renderContinuousConveyor(row) {
     (_, i) => `<span class="transfer-packet" style="--delay:${i * 0.34}s"></span>`
   ).join("");
 
+  const bg = getSurfaceProcessRouteBg(row.FromStep, row.ToStep);
+
+  const bgClass = bg ? " process-card-has-bg" : "";
+  const bgStyle = bg ? ` style="--surface-card-bg:url('${bg}')"` : "";
+
   return `
-    <article class="continuous-conveyor ${severity}">
+    <article class="continuous-conveyor ${severity}${bgClass}" data-route="${escapeHTML(safeText(row.FromStep))}→${escapeHTML(safeText(row.ToStep))}"${bgStyle}>
       <div class="transfer-conveyor-head">
         <div class="transfer-conveyor-title">Current WIP Moving</div>
         <div class="transfer-conveyor-count">${wip.toLocaleString()}</div>
@@ -2074,8 +1946,7 @@ function renderHourlyInOutComparison() {
   grid.querySelectorAll(".hourly-transition-btn").forEach(button => {
     button.addEventListener("click", () => {
       state.activeComparisonIndex = num(button.dataset.comparisonIndex);
-      renderHourlyInOutComparison();
-    });
+        });
   });
 
   renderHourlyInOutTrendChart(selected);
@@ -3185,6 +3056,34 @@ function updateClock() {
 }
 
 
+
+let manualLiveRefreshBusy = false;
+
+async function manualLiveRefresh(triggerEl) {
+  if (manualLiveRefreshBusy) return;
+
+  manualLiveRefreshBusy = true;
+  const buttons = Array.from(document.querySelectorAll('.surface-v3-live-button, .live-pill-button'));
+  buttons.forEach(btn => {
+    btn.classList.add('is-refreshing');
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+  });
+
+  try {
+    await fetchData(true);
+  } catch (error) {
+    console.error('[Surface] manual live refresh failed', error);
+  } finally {
+    manualLiveRefreshBusy = false;
+    buttons.forEach(btn => {
+      btn.classList.remove('is-refreshing');
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+    });
+  }
+}
+
 /* =========================================================
    SECTION 22 — EVENTS
 ========================================================= */
@@ -3243,15 +3142,7 @@ function initExport() {
 ========================================================= */
 
 function boot() {
-  const bootStart = perfStart("DOMContentLoaded → boot");
-
-  console.log(
-    `[SurfacePerf] DOMContentLoaded fired at ${perfMs(performance.now())} ms`
-  );
-
   startSurfaceLoaderAnimation();
-
-  const uiInitStart = perfStart("Surface UI initialization");
 
   initTabs();
   initFilters();
@@ -3261,15 +3152,11 @@ function boot() {
   updateClock();
   setInterval(updateClock, 1000);
 
-  perfEnd("Surface UI initialization", uiInitStart);
-
   fetchData(true);
 
   setInterval(() => {
     fetchData(false);
   }, CONFIG.REFRESH_MS);
-
-  perfEnd("DOMContentLoaded → boot", bootStart);
 }
 
 /* =================================================
@@ -3299,14 +3186,6 @@ document.querySelectorAll(".nav-item").forEach(button => {
 });
 
 document.addEventListener("DOMContentLoaded", boot);
-
-window.addEventListener("load", () => {
-  console.log(
-    `[SurfacePerf] window.load fired at ${perfMs(performance.now())} ms`
-  );
-
-  setTimeout(logSurfaceNavigationTiming_, 0);
-});
 
 function goBackToDashboard() {
   window.location.href = "index.html";

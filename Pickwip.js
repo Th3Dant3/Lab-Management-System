@@ -12,7 +12,7 @@
    - Replenishment Count Today = drop from Replenishment
 */
 
-const API = 'https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec';
+const API = 'https://script.google.com/macros/s/AKfycbztnf4_kTfKzcDDnsgMhPQgB0V_m5jsMmDngGQtaiPlnYKgTYN-pQp3OrAnpTEz6Spzeg/exec';
 
 const AUTO_REFRESH_MS = 60000;
 const USE_DEMO_ON_ERROR = false;
