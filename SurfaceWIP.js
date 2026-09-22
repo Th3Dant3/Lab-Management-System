@@ -1214,6 +1214,7 @@ function renderTransferTunnel() {
 
   meta.style.display = "none";
   grid.innerHTML = renderContinuousSurfaceFlow(rows);
+  watchSurfaceWeightArrows_(grid);
 }
 
 function buildLiveTransferRowsFromSurfaceFlow_() {
@@ -1338,10 +1339,14 @@ function renderContinuousSurfaceFlow(rows) {
 
       <div class="surface-mock-flow-scroll">
         <div class="surface-mock-flow-grid">
+          <svg class="surface-weight-arrows" aria-hidden="true"></svg>
           ${stations.map((station, index) => {
             const transition = orderedRows[index] || null;
             return renderSurfaceMockFlowColumn_(station, transition, index, stations.length);
           }).join("")}
+          <div class="surface-average-block-weight-row">
+            ${renderSurfaceAverageBlockWeight_(orderedRows)}
+          </div>
         </div>
       </div>
 
@@ -1519,6 +1524,75 @@ function getSurfaceMockTheme_(step) {
   return "cyan";
 }
 
+function isSurfaceWeightFeed_(row) {
+  return ["Cooling Storage", "Generating Line B", "Polishing Line B", "Engraving Line B"].includes(row.ToStep);
+}
+
+let surfaceWeightArrowObserver_ = null;
+let surfaceWeightArrowFrame_ = 0;
+
+function watchSurfaceWeightArrows_(host) {
+  if (surfaceWeightArrowObserver_) surfaceWeightArrowObserver_.disconnect();
+  cancelAnimationFrame(surfaceWeightArrowFrame_);
+  const draw = () => {
+    cancelAnimationFrame(surfaceWeightArrowFrame_);
+    surfaceWeightArrowFrame_ = requestAnimationFrame(() => drawSurfaceWeightArrows_(host));
+  };
+  const grid = host.querySelector(".surface-mock-flow-grid");
+  if (!grid) return;
+  surfaceWeightArrowObserver_ = new ResizeObserver(draw);
+  surfaceWeightArrowObserver_.observe(grid);
+  draw();
+}
+
+function drawSurfaceWeightArrows_(host) {
+  const grid = host.querySelector(".surface-mock-flow-grid");
+  const svg = host.querySelector(".surface-weight-arrows");
+  const target = host.querySelector(".surface-average-block-weight");
+  if (!grid || !svg || !target) return;
+  const bounds = grid.getBoundingClientRect();
+  const end = target.getBoundingClientRect();
+  if (!bounds.width || !end.width) return;
+  svg.setAttribute("viewBox", `0 0 ${bounds.width} ${bounds.height}`);
+  const feeds = [...host.querySelectorAll('[data-weight-feed="true"]')];
+  const paths = feeds.map((feed, index) => {
+    const start = feed.getBoundingClientRect();
+    const x1 = start.left + start.width / 2 - bounds.left;
+    const y1 = start.bottom - bounds.top + 4;
+    // Four separate endpoints follow the upper edge of the gold circle.
+    const fraction = (index - (feeds.length - 1) / 2) * 0.4;
+    const radius = end.width / 2 + 5;
+    const x2 = end.left + end.width / 2 - bounds.left + fraction * radius;
+    const y2 = end.top + end.height / 2 - bounds.top - Math.sqrt(1 - fraction * fraction) * radius;
+    const bendY = y1 + (y2 - y1) * 0.5;
+    const route = `M ${x1} ${y1} C ${x1} ${bendY}, ${x2} ${bendY}, ${x2} ${y2}`;
+    return `<path d="${route}" marker-end="url(#surface-weight-arrowhead)" />
+      <circle class="surface-weight-packet" r="3">
+        <animateMotion dur="2.4s" begin="-${index * 0.6}s" repeatCount="indefinite" calcMode="paced" path="${route}" />
+      </circle>`;
+  }).join("");
+  svg.innerHTML = `<defs><marker id="surface-weight-arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M 0 0 L 10 5 L 0 10 Z" /></marker></defs>${paths}`;
+}
+
+// Use the same transition values as the four Jobs Moving To circles.
+function renderSurfaceAverageBlockWeight_(rows) {
+  const weight = rows
+    .filter(isSurfaceWeightFeed_)
+    .reduce((sum, row) => sum + calcEstimatedMoving(row), 0) * 0.608;
+  const display = weight.toLocaleString(undefined, {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+
+  return `
+    <div class="surface-mock-transfer surface-average-block-weight"
+         title="(Jobs Moving to IQ Star + Orbit Generator + Polisher + Engraver) × 0.608">
+      <strong>${display}</strong>
+      <span>AVG WEIGHT OF BLOCK</span>
+      <small>Calculated weight</small>
+    </div>
+  `;
+}
+
 function renderSurfaceMockFlowColumn_(station, transition, index, totalStations) {
   const display = getStationScanDisplay(station.step, station.display);
   const scanTotal = getStationScanTotal(station.step);
@@ -1537,7 +1611,7 @@ function renderSurfaceMockFlowColumn_(station, transition, index, totalStations)
     const routeBg = getSurfaceProcessRouteBg(transition.FromStep, transition.ToStep);
 
     transitionMarkup = `
-      <div class="surface-mock-transfer ${severity}" style="--surface-transfer-bg:url('${routeBg}')">
+      <div class="surface-mock-transfer ${severity}" data-weight-feed="${isSurfaceWeightFeed_(transition)}" style="--surface-transfer-bg:url('${routeBg}')">
         <svg
           class="surface-mock-transfer-connectors"
           viewBox="0 0 260 92"
@@ -1580,8 +1654,6 @@ function renderSurfaceMockFlowColumn_(station, transition, index, totalStations)
         <small>${safeText(transition.ToDisplayName, transition.ToStep)}</small>
       </div>
     `;
-  } else {
-    transitionMarkup = "";
   }
 
   return `
