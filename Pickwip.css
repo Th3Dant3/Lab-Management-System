@@ -5662,3 +5662,118 @@ body{
   }
 }
 
+/* ══════════════════════════════════════════════════
+   ZENNI USA DASHBOARD HOME BUTTON
+   Final override — header navigation only
+   ══════════════════════════════════════════════════ */
+.back-btn{
+  position:relative !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:8px !important;
+  height:34px !important;
+  padding:0 15px !important;
+
+  border:1px solid rgba(25,200,255,.48) !important;
+  border-radius:9px !important;
+
+  background:
+    linear-gradient(135deg,rgba(25,200,255,.14),rgba(22,139,255,.055) 58%,rgba(7,20,33,.76)) !important;
+
+  color:#c8efff !important;
+  font-size:11px !important;
+  font-weight:800 !important;
+  letter-spacing:.045em !important;
+  white-space:nowrap !important;
+
+  cursor:pointer !important;
+  overflow:hidden !important;
+  flex-shrink:0 !important;
+
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.025),
+    0 0 18px rgba(25,200,255,.08) !important;
+
+  transform:none !important;
+  transition:
+    background .22s ease,
+    border-color .22s ease,
+    color .22s ease,
+    box-shadow .22s ease,
+    transform .18s ease !important;
+}
+
+.back-btn::before{
+  content:"" !important;
+  position:absolute !important;
+  inset:0 !important;
+  pointer-events:none !important;
+  background:linear-gradient(
+    110deg,
+    transparent 12%,
+    rgba(255,255,255,.10) 46%,
+    transparent 74%
+  ) !important;
+  transform:translateX(-135%) !important;
+  transition:transform .5s ease !important;
+}
+
+.back-btn:hover::before{
+  transform:translateX(135%) !important;
+}
+
+.back-btn:hover{
+  background:
+    linear-gradient(135deg,rgba(25,200,255,.22),rgba(22,139,255,.10) 58%,rgba(7,20,33,.84)) !important;
+  border-color:rgba(25,200,255,.78) !important;
+  color:#effbff !important;
+
+  box-shadow:
+    inset 0 0 18px rgba(25,200,255,.07),
+    0 0 18px rgba(25,200,255,.16),
+    0 0 34px rgba(22,139,255,.08) !important;
+
+  transform:translateY(-1px) !important;
+}
+
+.back-btn:active{
+  transform:translateY(0) scale(.98) !important;
+}
+
+.back-btn .back-home-icon{
+  width:15px !important;
+  height:15px !important;
+  opacity:.92 !important;
+  color:var(--cyan) !important;
+  filter:drop-shadow(0 0 5px rgba(25,200,255,.55)) !important;
+  transition:transform .22s ease,filter .22s ease,opacity .22s ease !important;
+}
+
+.back-btn:hover .back-home-icon{
+  opacity:1 !important;
+  transform:scale(1.08) !important;
+  filter:drop-shadow(0 0 8px rgba(25,200,255,.78)) !important;
+}
+
+.back-btn span{
+  position:relative !important;
+  z-index:1 !important;
+}
+
+/* Keep the header compact on narrower screens. */
+@media (max-width:900px){
+  .back-btn{
+    padding:0 11px !important;
+  }
+
+  .back-btn span{
+    font-size:0 !important;
+  }
+
+  .back-btn span::after{
+    content:"Home" !important;
+    font-size:11px !important;
+  }
+}
+
