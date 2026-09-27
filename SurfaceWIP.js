@@ -1587,7 +1587,7 @@ function renderSurfaceAverageBlockWeight_(rows) {
     <div class="surface-mock-transfer surface-average-block-weight"
          title="(Jobs Moving to IQ Star + Orbit Generator + Polisher + Engraver) × 0.608">
       <strong>${display}</strong>
-      <span>AVG WEIGHT OF BLOCK</span>
+      <span>AVG Weight of the Alloy</span>
       <small>Calculated weight</small>
     </div>
   `;

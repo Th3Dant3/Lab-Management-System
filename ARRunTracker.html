@@ -109,6 +109,14 @@ input[type=time]:focus{border-color:var(--orange);}
 .calc-val{font-family:var(--mono);font-size:16px;font-weight:600;display:block;}
 .calc-lbl{font-family:var(--mono);font-size:7px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;display:block;margin-top:2px;}
 
+/* ── EOS COMBINED WIP SUMMARY ── */
+.eos-wip-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:0 0 12px;}
+.eos-wip-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px 18px;position:relative;overflow:hidden;}
+.eos-wip-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--orange);}
+.eos-wip-lbl{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin-bottom:6px;}
+.eos-wip-val{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--orange);line-height:1;}
+.eos-wip-sub{font-family:var(--mono);font-size:8px;color:var(--dim2);margin-top:5px;}
+
 /* ── HOURLY ENTRY ── */
 .hr-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
 .hr-btn{font-family:var(--mono);font-size:9px;padding:4px 9px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--dim);cursor:pointer;transition:all .15s;}
@@ -490,6 +498,20 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
   <div class="sec-hd"><span>End of Shift — WIP Snapshot per Station</span></div>
   <div class="three-col snapshot-two" id="eosGrid"></div>
 
+  <div class="sec-hd"><span>EOS Combined WIP — Green + Blue</span></div>
+  <div class="eos-wip-summary">
+    <div class="eos-wip-card">
+      <div class="eos-wip-lbl">WIP Before Oven</div>
+      <div class="eos-wip-val" id="eos_before_oven">0</div>
+      <div class="eos-wip-sub">Surface Inspection + AR-IN + Basket + T40</div>
+    </div>
+    <div class="eos-wip-card">
+      <div class="eos-wip-lbl">WIP After Oven</div>
+      <div class="eos-wip-val" id="eos_after_oven">0</div>
+      <div class="eos-wip-sub">Oven + Sector + Chamber + DeRing</div>
+    </div>
+  </div>
+
   <div class="sec-hd"><span>Shift Delta — BOS vs EOS</span></div>
   <div class="panel gap" id="deltaPanel">
     <div class="panel-body">
@@ -650,12 +672,16 @@ async function apiPost(body) {
 }
 
 async function loadDayFromAPI(date,silent) {
+  const loadStarted=performance.now();
   if(!silent) setApiStatus('loading','LOADING…');
   try {
     const data=await apiGet({action:'getAll',date});
     if(data.error) throw new Error(data.error);
     dayCache[date]=data;
+    const apiReceived=performance.now();
     applyDayData(data);
+    const loadFinished=performance.now();
+    console.log('[ARPerf] API round trip:', Math.round(apiReceived-loadStarted)+'ms', '| render:', Math.round(loadFinished-apiReceived)+'ms', '| total:', Math.round(loadFinished-loadStarted)+'ms', '| backend:', data._perf||{});
     setApiStatus('ok','API ✓');
   } catch(e) {
     setApiStatus('err','API ✗');
@@ -671,9 +697,10 @@ function applyDayData(data) {
   totalHours=Math.max(totalHours,maxHr,activeHour+1);
   buildHourBtns(hours);
   switchHour(activeHour,hours);
-  renderHistory();
-  calcBosAll();
-  updateKPIs();
+  // loadSectionInputs already recalculates BOS/EOS color totals.
+  // switchHour already refreshes hourly history/KPIs through onHrChange().
+  // Only refresh the views not covered by those paths.
+  if(activeTab!=='hourly') updateKPIs();
   updateTimeline('bos');
   updateDelta(data.bos,data.eos);
 }
@@ -741,11 +768,20 @@ function calcSnapshotColor(prefix, c) {
   setEl(`${prefix}_${c}_left`,left);
   const nEl=document.getElementById(`${prefix}_${c}_need`);
   if(nEl){nEl.textContent=need;nEl.style.color=need===0?'var(--green)':need<20?'var(--red)':'var(--orange)';}
+  if(prefix==='eos') updateEosCombinedWip();
   return {total,runs,left,toNext:need};
 }
 
+function updateEosCombinedWip(){
+  const beforeKeys=['surface','arin','basket','t40'];
+  const afterKeys=['oven','sector','chamber','dering'];
+  const sumKeys=keys=>['g','b'].reduce((total,c)=>total+keys.reduce((sub,key)=>sub+getN(`eos_${c}_${key}`),0),0);
+  setEl('eos_before_oven',sumKeys(beforeKeys));
+  setEl('eos_after_oven',sumKeys(afterKeys));
+}
+
 function calcBosAll(){['g','b'].forEach(c=>calcSnapshotColor('bos',c));updateTimeline('bos');updateKPIs();}
-function calcEosAll(){['g','b'].forEach(c=>calcSnapshotColor('eos',c));}
+function calcEosAll(){['g','b'].forEach(c=>calcSnapshotColor('eos',c));updateEosCombinedWip();}
 
 function loadSectionInputs(prefix,data){
   if(!data) return;

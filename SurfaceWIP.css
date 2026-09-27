@@ -12865,3 +12865,107 @@ body{
     display:none;
   }
 }
+
+/* =========================================================
+   ZENNI USA DASHBOARD — STANDARD HOME BUTTON
+   Matches the Picking Dashboard navigation style.
+   ========================================================= */
+
+.zenni-home-btn {
+  height: 34px;
+  padding: 0 14px;
+  gap: 8px;
+
+  border-radius: 9px;
+  border: 1px solid rgba(34, 211, 238, 0.52);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(34, 211, 238, 0.12),
+      rgba(14, 165, 233, 0.055) 58%,
+      rgba(5, 18, 34, 0.78)
+    );
+
+  color: #dff8ff;
+
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: none;
+  text-decoration: none;
+  white-space: nowrap;
+
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.025),
+    0 0 16px rgba(34, 211, 238, 0.10);
+
+  transition:
+    transform 0.18s ease,
+    border-color 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.22s ease,
+    color 0.22s ease;
+}
+
+.zenni-home-btn strong {
+  font: inherit;
+  color: inherit;
+}
+
+.zenni-home-btn .zenni-home-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+
+  color: #67e8f9;
+
+  filter:
+    drop-shadow(0 0 4px rgba(34, 211, 238, 0.55));
+
+  transition:
+    transform 0.22s ease,
+    filter 0.22s ease;
+}
+
+.zenni-home-btn:hover {
+  transform: translateY(-1px);
+
+  border-color: rgba(34, 211, 238, 0.82);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(34, 211, 238, 0.20),
+      rgba(14, 165, 233, 0.09) 58%,
+      rgba(5, 18, 34, 0.86)
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    inset 0 0 16px rgba(34, 211, 238, 0.06),
+    0 0 20px rgba(34, 211, 238, 0.18);
+}
+
+.zenni-home-btn:hover .zenni-home-icon {
+  transform: scale(1.08);
+  filter:
+    drop-shadow(0 0 7px rgba(34, 211, 238, 0.78));
+}
+
+.zenni-home-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+@media (max-width: 680px) {
+  .zenni-home-btn {
+    padding: 0 11px;
+  }
+
+  .zenni-home-btn strong {
+    font-size: 10px;
+  }
+}
+
