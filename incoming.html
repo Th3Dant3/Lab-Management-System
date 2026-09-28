@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Incoming Jobs — Command Center</title>
-<link rel="stylesheet" href="incoming.css">
+<link rel="stylesheet" href="incoming.css?v=20260928-vr-lens">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
@@ -379,7 +379,7 @@
 
 </main>
 
-<script src="incoming.js"></script>
+<script src="incoming.js?v=20260928-vr-lens"></script>
 
 <!-- Patch JS: new features wired to new HTML elements -->
 <script>
@@ -413,7 +413,7 @@ function buildDonut(data, grandTotal) {
   const vals  = depts.map(d => data[d]._total ?? 0);
   const cols  = depts.map(d => ({
     Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa',
-    Surface:'#38bdf8', 'Frame Only':'#fb923c'
+    Surface:'#38bdf8', 'Frame Only':'#fb923c', VR:'#2dd4bf'
   }[d] || '#818cf8'));
 
   if (donutChart) { donutChart.destroy(); donutChart = null; }
@@ -477,7 +477,7 @@ function buildVelocityStrip(data) {
   const ampm = now.getHours() < 12 ? 'AM' : 'PM';
   const curHr = `${h12}:00 ${ampm}`;
 
-  const deptCols = { Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa', Surface:'#38bdf8', 'Frame Only':'#fb923c' };
+  const deptCols = { Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa', Surface:'#38bdf8', 'Frame Only':'#fb923c', VR:'#2dd4bf' };
   let total = 0;
   const parts = [];
 
@@ -513,7 +513,7 @@ function buildVelocityStrip(data) {
 function buildTicker(data) {
   const el = document.getElementById('tickerItems');
   if (!el) return;
-  const deptCols = { Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa', Surface:'#38bdf8', 'Frame Only':'#fb923c' };
+  const deptCols = { Finish:'#22d3ee', Speciality:'#a78bfa', Specialty:'#a78bfa', Surface:'#38bdf8', 'Frame Only':'#fb923c', VR:'#2dd4bf' };
   const items = [];
   Object.keys(data).forEach(dept => {
     if (dept === '_total') return;

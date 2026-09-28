@@ -175,7 +175,8 @@ const DEPT_COLORS = {
   "Speciality": "#a78bfa",
   "Specialty":  "#a78bfa",
   "Surface":    "#38bdf8",
-  "Frame Only": "#fb923c"
+  "Frame Only": "#fb923c",
+  "VR":         "#2dd4bf"
 };
 
 /* ===== QUEUE COLORS ===== */
@@ -186,6 +187,8 @@ const QUEUE_COLORS = {
   "Overnight Queue":"#FACC15","In Overnight Queue":"#FACC15","Surface Overnight Delivery":"#FACC15","Fin Overnight Delivery":"#A3A3A3",
   "Fin Rush Delivery":"#86EFAC",
   "Beast Queue":"#A855F7","In Beast Queue":"#A855F7","Beast Surface Queue":"#D946EF","Beast Finish Queue":"#14B8A6",
+  "In Finish Valve Queue":"#4ADE80","Finish Valve Queue":"#4ADE80",
+  "In Surface Valve Queue":"#14B8A6","Surface Valve Queue":"#14B8A6",
   "Frame Only Queue":"#22C55E","In Frame Only Queue":"#22C55E","Frame Only Test Queue":"#15803D",
   "Test Jobs Queue":"#2DD4BF","Echo Queue":"#FB923C","All Queued Jobs":"#10B981"
 };
@@ -385,6 +388,9 @@ function getQueueColor(n) {
   if (q.includes("standard"))    return "#3B82F6";
   if (q.includes("overnight"))   return "#FACC15";
   if (q.includes("beast"))       return "#A855F7";
+  if (q.includes("finish valve"))return "#4ADE80";
+  if (q.includes("surface valve"))return "#14B8A6";
+  if (q.includes("valve"))       return "#2DD4BF";
   if (q.includes("frame only"))  return "#22C55E";
   if (q.includes("test"))        return "#2DD4BF";
   if (q.includes("echo"))        return "#FB923C";
@@ -401,7 +407,7 @@ function toBarFill(c) {
 
 /* ===== DEPT ABBREVIATION ===== */
 function deptAbbr(dept) {
-  const map = { "Finish":"FIN","Surface":"SUR","Speciality":"SPE","Specialty":"SPE","Frame Only":"FRM" };
+  const map = { "Finish":"FIN","Surface":"SUR","Speciality":"SPE","Specialty":"SPE","Frame Only":"FRM","VR":"VR" };
   return map[dept] || dept.slice(0,3).toUpperCase();
 }
 
@@ -602,8 +608,8 @@ async function loadData() {
 
 /* ── Topbar dept stats ── */
 function _updateTopbarDepts(data, yesterdayData) {
-  const deptMap  = { 'Finish':'Finish','Speciality':'Speciality','Specialty':'Speciality','Surface':'Surface','Frame Only':'FrameOnly' };
-  const colorMap = { 'Finish':'#22d3ee','Speciality':'#a78bfa','Specialty':'#a78bfa','Surface':'#38bdf8','Frame Only':'#fb923c' };
+  const deptMap  = { 'Finish':'Finish','Speciality':'Speciality','Specialty':'Speciality','Surface':'Surface','Frame Only':'FrameOnly','VR':'VR' };
+  const colorMap = { 'Finish':'#22d3ee','Speciality':'#a78bfa','Specialty':'#a78bfa','Surface':'#38bdf8','Frame Only':'#fb923c','VR':'#2dd4bf' };
 
   /* Build current hour key in exact HOUR_ORDER format e.g. "3:00 PM" */
   const now = new Date();
@@ -661,7 +667,7 @@ function renderAll(data, total, yesterdayData) {
 }
 
 /* ===== GEOMETRIC KPI CARD SHAPES ===== */
-const KPI_GEO_TYPES = { 'Finish':'squares','Speciality':'triangles','Specialty':'triangles','Surface':'diamonds','Frame Only':'hexagons' };
+const KPI_GEO_TYPES = { 'Finish':'squares','Speciality':'triangles','Specialty':'triangles','Surface':'diamonds','Frame Only':'hexagons','VR':'diamonds' };
 
 function makeKpiGeo(col, type) {
   const shapes = {
@@ -1192,7 +1198,7 @@ function buildHourlyChart(data) {
   if (selectedQueues.length === 0) {
     if (chart) { chart.destroy(); chart = null; }
 
-    const deptOrder = ["Finish", "Speciality", "Specialty", "Surface", "Frame Only"];
+    const deptOrder = ["Finish", "Speciality", "Specialty", "Surface", "Frame Only", "VR"];
     const deptKeys = Object.keys(data)
       .filter(dept => dept !== "_total")
       .sort((a, b) => {
@@ -1454,6 +1460,7 @@ const TREND_DEPT_CFG = [
   { key:"Specialty",  label:"Speciality", color:"#a855f7", alpha:"rgba(168,85,247,.94)"  },
   { key:"Surface",    label:"Surface",    color:"#3b82f6", alpha:"rgba(59,130,246,.94)"  },
   { key:"Frame Only", label:"Frame Only", color:"#fb923c", alpha:"rgba(251,146,60,.96)"  },
+  { key:"VR",         label:"VR",         color:"#2dd4bf", alpha:"rgba(45,212,191,.96)"  },
 ];
 
 // ── view switch ──────────────────────────────────

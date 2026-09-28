@@ -21,6 +21,7 @@
   --c-surface:   #38bdf8;
   --c-specialty: #a78bfa;
   --c-frame:     #fb923c;
+  --c-vr:        #2dd4bf;
   --font-ui:   'Inter', system-ui, sans-serif;
   --font-mono: 'Space Mono', monospace;
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
@@ -2033,3 +2034,136 @@ body::before { opacity:.24; animation-duration:140s; }
     display: block !important;
   }
 }
+
+
+/* ========================================================================
+   VR DEPARTMENT — VALVE / BEAST SUPPORT
+   Added for the API department "VR".
+   Keeps the existing layout and uses a teal department identity.
+   ======================================================================== */
+
+.kpi-card[data-dept="VR"] {
+  --kc:#2dd4bf;
+  border-color:rgba(45,212,191,.42);
+  background-image:
+    radial-gradient(circle at 84% 42%,rgba(45,212,191,.14),transparent 28%),
+    linear-gradient(180deg,rgba(4,15,28,.96),rgba(3,11,22,.98));
+  background-repeat:no-repeat !important;
+  background-size:100% 100% !important;
+  background-position:center !important;
+}
+
+.kpi-card[data-dept="VR"]::before {
+  background:
+    linear-gradient(90deg,
+      rgba(3,11,21,.99) 0%,
+      rgba(3,11,21,.97) 30%,
+      rgba(3,11,21,.88) 43%,
+      rgba(3,11,21,.55) 54%,
+      rgba(3,11,21,.18) 68%,
+      rgba(3,11,21,.03) 100%),
+    linear-gradient(180deg,
+      rgba(3,11,21,.18) 0%,
+      transparent 28%,
+      transparent 68%,
+      rgba(3,11,21,.54) 100%) !important;
+}
+
+.kpi-card[data-dept="VR"]:hover {
+  border-color:rgba(45,212,191,.72) !important;
+  box-shadow:0 16px 48px rgba(0,0,0,.55),0 0 30px rgba(45,212,191,.12) !important;
+}
+
+/* Five live departments on wide screens. */
+@media (min-width:1051px) {
+  .kpi-strip {
+    grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+  }
+}
+
+/* Preserve existing responsive behavior on smaller screens. */
+@media (max-width:1050px) {
+  .kpi-strip {
+    grid-template-columns:repeat(2,1fr) !important;
+  }
+}
+
+@media (max-width:640px) {
+  .kpi-strip {
+    grid-template-columns:1fr !important;
+  }
+}
+
+/* ========================================================================
+   VR LENS KPI ARTWORK — FINAL ASSET WIRING
+   Uses the VR lens concept image while preserving all live KPI values.
+   ======================================================================== */
+
+.kpi-card[data-dept="VR"] {
+  --kc:#2dd4bf !important;
+  background-color:#06101d !important;
+  background-image:url("./assets/incoming-vr-lens-bg.png") !important;
+  background-repeat:no-repeat !important;
+  background-size:auto 84% !important;
+  background-position:106% 50% !important;
+  border-color:rgba(45,212,191,.42) !important;
+}
+
+/* Match the approved KPI composition: live data stays clean on the left,
+   VR lens artwork remains visible as the right-side accent. */
+.kpi-card[data-dept="VR"]::before {
+  content:'' !important;
+  position:absolute !important;
+  inset:0 !important;
+  height:auto !important;
+  z-index:1 !important;
+  pointer-events:none !important;
+  box-shadow:none !important;
+  background:
+    linear-gradient(90deg,
+      rgba(3,11,21,.99) 0%,
+      rgba(3,11,21,.97) 28%,
+      rgba(3,11,21,.86) 42%,
+      rgba(3,11,21,.52) 54%,
+      rgba(3,11,21,.16) 68%,
+      rgba(3,11,21,.02) 100%),
+    linear-gradient(180deg,
+      rgba(3,11,21,.14) 0%,
+      transparent 30%,
+      transparent 70%,
+      rgba(3,11,21,.50) 100%) !important;
+}
+
+.kpi-card[data-dept="VR"]::after {
+  z-index:2 !important;
+}
+
+.kpi-card[data-dept="VR"] .kpi-lbl,
+.kpi-card[data-dept="VR"] .kpi-num,
+.kpi-card[data-dept="VR"] .kpi-num-wrap,
+.kpi-card[data-dept="VR"] .kpi-hour-badge,
+.kpi-card[data-dept="VR"] .kpi-hour-smart,
+.kpi-card[data-dept="VR"] .kpi-chg,
+.kpi-card[data-dept="VR"] .kpi-alert-badge,
+.kpi-card[data-dept="VR"] .kpi-share-wrap,
+.kpi-card[data-dept="VR"] .kpi-top-queue,
+.kpi-card[data-dept="VR"] .kpi-delta-badge,
+.kpi-card[data-dept="VR"] .kpi-sparkline {
+  position:relative;
+  z-index:5 !important;
+}
+
+.kpi-card[data-dept="VR"]:hover {
+  border-color:rgba(45,212,191,.72) !important;
+  box-shadow:
+    0 16px 48px rgba(0,0,0,.55),
+    0 0 30px rgba(45,212,191,.15) !important;
+}
+
+@media (max-width:1100px) {
+  .kpi-card[data-dept="VR"] {
+    background-size:auto 74% !important;
+    background-position:110% 54% !important;
+  }
+}
+
