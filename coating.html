@@ -174,12 +174,16 @@
   <span class="alert-close" onclick="document.getElementById('alertBanner').style.display='none'">×</span>
 </div>
 
+<!-- AUTO-REFRESH INDICATOR (non-blocking; driven by coating.js) -->
+<div id="refreshBar" class="refresh-bar" aria-hidden="true"></div>
+<div id="refreshToast" class="refresh-toast" role="status" aria-live="polite"></div>
+
 <!-- HEADER -->
 <div class="site-header">
   <div class="header-left">
-    <button class="back-btn" onclick="window.location.href='index.html'">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Dashboard
+    <button class="back-btn" onclick="window.location.href='index.html'" aria-label="Back to Zenni USA Dashboard">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Zenni USA Dashboard
     </button>
     <div class="header-divider"></div>
     <div class="logo-block">
@@ -188,15 +192,22 @@
     </div>
   </div>
   <div class="header-right">
-    <button class="facility-btn" onclick="window.location.href='FacilityBreakage.html'">
+    <div class="now-clock" aria-live="off">
+      <span class="now-date" id="nowDate">--</span>
+      <span class="now-time" id="nowTime">--</span>
+    </div>
+    <div class="header-divider"></div>
+    <button class="facility-btn" onclick="window.location.href='FacilityBreakage.html'" aria-label="Open Facility Breakage">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3 10 8.5l3 3-2.5 4L12 21" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Facility Breakage
     </button>
     <div class="header-divider"></div>
-    <label class="filter-label">Date</label>
+    <label class="filter-label" for="historyDate">Date</label>
     <div class="date-wrap">
       <input type="date" id="historyDate" class="date-input" onchange="applyDateFilter()" />
     </div>
-    <button id="liveBtn" onclick="resetToToday()" class="btn-today">Today</button>
+    <!-- click handled once in coating.js (DOMContentLoaded); inline onclick removed to stop a double load -->
+    <button id="liveBtn" class="btn-today">Today</button>
     <div class="header-divider"></div>
     <span id="refreshTimer" class="refresh-timer">Loading...</span>
     <span id="refreshStatus" class="status-badge live">● Live</span>
@@ -225,37 +236,43 @@
   <!-- ══ OVERVIEW ══ -->
   <div id="overview" class="tab-content active">
 
-    <!-- AI INSIGHTS -->
-    <div class="insights-card">
-      <div class="insights-label">AI Insights</div>
-      <div id="insightBox" class="insight-box">
-        <span class="insight-item insight-loading" style="width:200px;">&nbsp;</span>
-        <span class="insight-item insight-loading" style="width:160px;">&nbsp;</span>
-        <span class="insight-item insight-loading" style="width:220px;">&nbsp;</span>
+    <!-- OVERVIEW FLOW (rendered by buildOverviewFlow in coating.js) -->
+    <div class="ov-shift" id="ovShift">
+      <span class="ov-shift-label">Shift progress <span id="ovShiftWindow">--</span></span>
+      <div class="ov-track" aria-hidden="true"><div class="ov-track-fill" id="ovShiftFill"></div><div class="ov-track-now" id="ovShiftNow"></div></div>
+      <span class="ov-shift-state" id="ovShiftState">--</span>
+    </div>
+
+    <section class="ov-flow" aria-labelledby="ovFlowHeading">
+      <h3 class="ov-flow-title" id="ovFlowHeading">Coating flow</h3>
+      <div class="ov-flow-stage" id="ovFlowStage">
+        <svg class="ov-flow-svg" id="ovFlowSvg" viewBox="0 0 1200 240" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+
+        <div class="ov-node ov-node-main" style="left:0%;top:28%;width:22%">
+          <div class="ov-node-t" id="ovCoatedLabel">Coated today</div>
+          <div class="ov-node-v" id="ovCoated">--</div>
+          <div class="ov-node-s" id="ovCoatedSub">&nbsp;</div>
+        </div>
+
+        <div class="ov-node ov-node-ok"    style="left:78%;top:4%;width:22%"><div class="ov-node-t">Healthy · 15 min or less</div><div class="ov-node-v" id="ovHealthy">--</div></div>
+        <div class="ov-node ov-node-watch" style="left:78%;top:29%;width:22%"><div class="ov-node-t">Watch · 15 to 30 min</div><div class="ov-node-v" id="ovWatchN">--</div></div>
+        <div class="ov-node ov-node-bad"   style="left:78%;top:54%;width:22%"><div class="ov-node-t">Delayed · over 30 min</div><div class="ov-node-v" id="ovDelayedN">--</div></div>
+        <div class="ov-node ov-node-info"  style="left:78%;top:79%;width:22%"><div class="ov-node-t">Overnight</div><div class="ov-node-v" id="ovOvernightN">--</div></div>
+
+        <div class="ov-node ov-node-break" style="left:30%;top:73%;width:27%">
+          <div class="ov-node-t">Broken lenses</div>
+          <div class="ov-node-v" id="ovBroken">--</div>
+          <div class="ov-node-s" id="ovBrokenSub">&nbsp;</div>
+        </div>
       </div>
-    </div>
+      <p class="ov-warn" id="ovFlowWarn" role="status"></p>
+    </section>
 
-    <!-- KPI CARDS -->
-    <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">Total Coating Jobs</div><div class="kpi-value teal" id="totalJobs">--</div></div>
-      <div class="kpi-card"><div class="kpi-label">Total Lenses</div><div class="kpi-value" id="totalLenses">--</div></div>
-      <div class="kpi-card"><div class="kpi-label">Total Lenses Broken</div><div class="kpi-value" id="totalBroken">--</div></div>
-      <div class="kpi-card"><div class="kpi-label">Coating Brkg %</div><div class="kpi-value" id="rxBreakage">--</div></div>
-      <div class="kpi-card"><div class="kpi-label">Breakage Peak Hour</div><div class="kpi-value yellow" id="peakHour">--</div></div>
-    </div>
-
-    <div class="kpi-grid">
-      <div class="kpi-card accent-green"><div class="kpi-label">Same Day Lens Brkg</div><div class="kpi-value green" id="sameDayBreakage">--</div></div>
-      <div class="kpi-card accent-yellow"><div class="kpi-label">Previous Day Lens Brkg</div><div class="kpi-value yellow" id="yesterdayBreakage">--</div></div>
-      <div class="kpi-card accent-red"><div class="kpi-label">Over 2+ Days Lens Brkg</div><div class="kpi-value red" id="twoPlusBreakage">--</div></div>
-      <div class="kpi-card"><div class="kpi-label">Brkg Avg Time (hrs)</div><div class="kpi-value" id="avgTime">--</div></div>
-    </div>
-
-    <div class="kpi-grid">
-      <div class="kpi-card accent-green"><div class="kpi-label">Workflow Healthy</div><div class="kpi-value green" id="flowHealthy">--</div></div>
-      <div class="kpi-card accent-yellow"><div class="kpi-label">Workflow Watch</div><div class="kpi-value yellow" id="flowWatch">--</div></div>
-      <div class="kpi-card accent-red"><div class="kpi-label">Workflow Delayed</div><div class="kpi-value red" id="flowDelayed">--</div></div>
-      <div class="kpi-card accent-blue"><div class="kpi-label">Overnight Carryover</div><div class="kpi-value blue" id="flowOvernight">--</div></div>
+    <div class="ov-facts">
+      <div class="ov-fact"><span class="ov-fact-label">Same-day breakage</span><b id="ovSameDayPct">--</b><span id="ovSameDaySub">&nbsp;</span></div>
+      <div class="ov-fact"><span class="ov-fact-label">Top coater for breakage</span><b id="ovTopCoater">--</b><span id="ovTopCoaterSub">&nbsp;</span></div>
+      <div class="ov-fact"><span class="ov-fact-label">Top reason</span><b id="ovTopReason">--</b><span id="ovTopReasonSub">&nbsp;</span></div>
+      <div class="ov-fact"><span class="ov-fact-label" id="ovProjLabel">Projected by end of shift</span><b id="ovProjection">--</b><span id="ovProjSub">&nbsp;</span></div>
     </div>
 
     <!-- HOURLY TABLE -->
@@ -290,38 +307,71 @@
   <!-- ══ TRENDS ══ -->
   <div id="trends" class="tab-content">
     <div class="section-label">Breakage Trend</div>
-    <div class="chart-toolbar">
+    <div class="chart-toolbar trend-toolbar">
       <button id="processedBtn" class="mode-btn active" onclick="switchTrend('processed')">Breakage Processed</button>
       <button id="machineBtn"   class="mode-btn"        onclick="switchTrend('machine')">Machine Scan</button>
+      <span class="trend-colorby">Color breakage by
+        <button class="trend-colorby-btn active" data-by="age" onclick="setTrendColorBy('age')">Age</button>
+        <button class="trend-colorby-btn" data-by="reason" onclick="setTrendColorBy('reason')">Reason</button>
+        <button class="trend-colorby-btn" data-by="both" onclick="setTrendColorBy('both')">Both</button>
+      </span>
     </div>
-    <div class="chart-card" style="height:460px;"><canvas id="trendChart"></canvas></div>
+    <p class="trend-mode-hint" id="trendModeHint"></p>
+    <div class="trend-card">
+      <div class="trend-legend" id="trendLegend"></div>
+      <div class="trend-canvas-wrap"><canvas id="trendChart"></canvas></div>
+      <div class="trend-flow-row" id="trendFlowRow" aria-label="Jobs on watch and delayed per hour"></div>
+    </div>
+    <div class="trend-summary" id="trendSummary"></div>
 
     <div class="section-label" style="margin-top:24px;">Detaper → Coater Flow Analysis</div>
     <div class="flow-stats">
       <div class="flow-stat-pill">
-        <span class="flow-stat-label">Healthy Jobs</span>
+        <span class="flow-stat-label">Healthy jobs · 15 min or less</span>
         <span class="flow-stat-value green" id="flowStatHealthy">--</span>
+        <span class="flow-stat-sub" id="flowStatHealthySub"></span>
       </div>
       <div class="flow-stat-pill">
-        <span class="flow-stat-label">Watch Jobs</span>
+        <span class="flow-stat-label">Watch jobs · 16 to 30 min</span>
         <span class="flow-stat-value yellow" id="flowStatWatch">--</span>
+        <span class="flow-stat-sub" id="flowStatWatchSub"></span>
       </div>
       <div class="flow-stat-pill">
-        <span class="flow-stat-label">Delayed Jobs</span>
+        <span class="flow-stat-label">Delayed jobs · over 30 min</span>
         <span class="flow-stat-value red" id="flowStatDelayed">--</span>
+        <span class="flow-stat-sub" id="flowStatDelayedSub"></span>
       </div>
       <div class="flow-stat-pill">
-        <span class="flow-stat-label">Breakage Events</span>
+        <span class="flow-stat-label">Broken lenses</span>
         <span class="flow-stat-value pink" id="flowStatBreakage">--</span>
+        <span class="flow-stat-sub" id="flowStatBreakageSub"></span>
       </div>
     </div>
     <div class="chart-toolbar">
       <button id="avgFlowBtn"        class="mode-btn active" onclick="switchFlowMode('average')">Overall Avg</button>
       <button id="machineFlowBtn"    class="mode-btn"        onclick="switchFlowMode('machine')">By Machine</button>
-      <button id="individualFlowBtn" class="mode-btn"        onclick="switchFlowMode('individual')">Individual RX</button>
     </div>
-    <div class="chart-card" style="height:460px;"><canvas id="flowChart"></canvas></div>
-    <div class="flow-legend-hint">Click any line in the legend above to show / hide it</div>
+    <div class="flow-card" id="flowCard">
+      <div class="flow-card-top">
+        <div class="trend-legend" id="flowLegend"></div>
+        <button type="button" class="flow-full-btn" id="flowFullBtn" onclick="toggleFlowFullscreen()">Full screen</button>
+      </div>
+      <div class="flow-canvas-wrap"><canvas id="flowChart"></canvas></div>
+      <div class="trend-flow-row" id="flowJobsRow" aria-label="Jobs coated per hour"></div>
+    </div>
+    <div class="flow-legend-hint flow-other-only">Click any line in the legend above to show / hide it</div>
+    <div class="flow-cards">
+      <section class="flow-card-sm">
+        <h3 class="fc-title">Do broken jobs flow slower?</h3>
+        <p class="fc-sub">Average detaper-to-coater flow time today.</p>
+        <div id="flowCompare"></div>
+      </section>
+      <section class="flow-card-sm">
+        <h3 class="fc-title">Breakage rate by flow group</h3>
+        <p class="fc-sub">Same-day broken lenses ÷ lenses in that group (jobs × 2).</p>
+        <div id="flowRate"></div>
+      </section>
+    </div>
   </div>
 
   <!-- ══ REASONS ══ -->
@@ -332,8 +382,58 @@
 
   <!-- ══ MACHINES ══ -->
   <div id="machines" class="tab-content">
+    <!-- COATER BAY (rendered by buildCoaterBay in coating.js) -->
+    <section class="coater-bay" aria-labelledby="coaterBayTitle">
+      <div class="bay-head">
+        <div>
+          <h2 id="coaterBayTitle" class="bay-title">Coater bay</h2>
+          <p class="bay-sub">Breakage by coater for the selected day. Coaters run in parallel, so jobs don't pass from one to the next.</p>
+        </div>
+        <div class="bay-legend" aria-label="Status thresholds">
+          <span class="lg lg-ok">Under 1%</span>
+          <span class="lg lg-watch">1 to 3%</span>
+          <span class="lg lg-high">3 to 6%</span>
+          <span class="lg lg-crit">6% and up</span>
+        </div>
+      </div>
+      <div class="bay-rail">
+        <span class="bay-io">From detaper</span>
+        <div id="coaterBay" class="bay-grid">
+          <div class="coater-card is-loading"><div class="cc-skel"></div></div>
+          <div class="coater-card is-loading"><div class="cc-skel"></div></div>
+          <div class="coater-card is-loading"><div class="cc-skel"></div></div>
+          <div class="coater-card is-loading"><div class="cc-skel"></div></div>
+          <div class="coater-card is-loading"><div class="cc-skel"></div></div>
+        </div>
+        <span class="bay-io">To inspection</span>
+      </div>
+      <p class="bay-note">Lenses are counted as jobs &times; 2, the same basis as Total Lenses on Overview.</p>
+    </section>
+
     <div class="section-label">Machine Performance</div>
     <div class="chart-card" style="height:520px;"><canvas id="machineChart"></canvas></div>
+
+    <div class="mx-age-legend" aria-label="Breakage age colors">
+      <span class="age-key age-same">Same day</span>
+      <span class="age-key age-prev">Previous day</span>
+      <span class="age-key age-old">2+ days</span>
+      <span class="age-key age-unk">Age unknown</span>
+      <span class="mx-age-note" id="machineAgeNote"></span>
+    </div>
+    <div class="mx-grid">
+      <section class="mx-panel" aria-labelledby="mxReasonTitle">
+        <h3 id="mxReasonTitle" class="mx-title">Why each coater broke lenses</h3>
+        <p class="mx-sub">Broken lenses by coater and reason. Brighter cells mean more lenses.</p>
+        <div id="machineReasonMatrix" class="mx-body"><div class="mx-empty">Loading…</div></div>
+      </section>
+      <section class="mx-panel" aria-labelledby="mxHourTitle">
+        <h3 id="mxHourTitle" class="mx-title">When each coater broke lenses</h3>
+        <p class="mx-sub">Broken lenses by coater and hour, from the machine report. Previous-day lenses can show in hours that haven't happened yet today.</p>
+        <div id="machineHourHeat" class="mx-body"><div class="mx-empty">Loading…</div></div>
+      </section>
+    </div>
+    <p id="machineReconcile" class="mx-reconcile" role="status"></p>
+    <p id="machineSourceNote" class="mx-source-note" role="status"></p>
   </div>
 
   <!-- ══ DATE COMPARISON ══ -->

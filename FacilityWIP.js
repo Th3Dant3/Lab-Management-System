@@ -1384,16 +1384,59 @@
     });
   }
 
+  /*
+   * Incoming VR routing fallback.
+   *
+   * The Facility Hub API now normalizes these routes server-side, but this
+   * client-side fallback protects the page when it is pointed at an older
+   * deployment or when a cached payload still contains Department = VR.
+   *
+   * VR + In Finish Valve Queue  -> Finish
+   * VR + In Surface Valve Queue -> Surface
+   * VR + In Beast Queue         -> Specialty
+   *
+   * Unknown VR queues are intentionally left as VR instead of guessing.
+   */
+  function normalizeIncomingQueueRow(row) {
+    const source = row && typeof row === "object" ? row : {};
+    const department = String(source.department || "Unassigned").trim();
+    const queue = String(source.queue || "").trim();
+
+    if (normalizeKey(department) !== "VR") {
+      return { ...source, department };
+    }
+
+    const queueKey = normalizeKey(queue);
+
+    if (queueKey.includes("FINISH VALVE")) {
+      return { ...source, department: "Finish" };
+    }
+
+    if (queueKey.includes("SURFACE VALVE")) {
+      return { ...source, department: "Surface" };
+    }
+
+    if (queueKey.includes("BEAST")) {
+      return { ...source, department: "Specialty" };
+    }
+
+    return { ...source, department };
+  }
+
   function renderIncomingQueues(rows) {
     elements.incomingQueueList.innerHTML = "";
 
-    if (rows.length === 0) {
+    const normalizedRows = Array.isArray(rows)
+      ? rows.map(normalizeIncomingQueueRow)
+      : [];
+
+    if (normalizedRows.length === 0) {
       elements.incomingQueueList.innerHTML =
         '<div class="empty-state">No Incoming queue data is available.</div>';
       return;
     }
 
-    rows
+    normalizedRows
       .slice()
       .sort((a, b) => {
         return (
