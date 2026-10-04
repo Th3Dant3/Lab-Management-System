@@ -75,7 +75,8 @@ let _brk=[], _reason=[], _research=[], _anom=[];
 // Full loaded sets (always the complete live server response)
 let _allBrk=[], _allReason=[], _allResearch=[], _allAnom=[];
 
-// RX Flow has its own work-date dataset so changing Flow never changes Overview.
+// RX Flow has its own dataset (filters there never change Overview). It is
+// filled from the live report, or from history when a header date is selected.
 let _flowBrk=[], _flowResearch=[];
 
 /* ============================================================
@@ -228,9 +229,12 @@ function fmtDate(s) {
 }
 
 function diffMin(a, b) {
+  // Missing, unparseable, or out-of-order timestamps return null (no timing), never 0.
+  if (!a || !b) return null;
   const da = new Date(a), db = new Date(b);
-  if (isNaN(da) || isNaN(db)) return 0;
-  return Math.max(0, (db - da) / 60000);
+  if (isNaN(da) || isNaN(db)) return null;
+  const m = (db - da) / 60000;
+  return m >= 0 ? m : null;
 }
 
 function avgArr(arr) {
@@ -312,57 +316,50 @@ function buildBarList(elId, entries) {
    OVERVIEW
 ============================================================ */
 function buildOverview() {
+  /* Overview v6 — see OVERVIEW HELPERS at the end of this file.
+     Timing averages use only jobs that have a timing (untimed = excluded, not 0). */
   const totalJobs = _brk.length;
   const totalLens = _brk.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
-  const ar41Avg   = avgArr(_brk.map(r => r.AR41_to_Breakage_Min));
-  const brkAvg    = avgArr(_brk.map(r => r.Breakage_to_Processed_Min));
+  const ar41      = ovTimingStats_(_brk, 'AR41_to_Breakage_Min');
+  const brkPro    = ovTimingStats_(_brk, 'Breakage_to_Processed_Min');
+  const ar41Avg   = ar41.avg;
+  const mode      = ovRenderMode_();
 
-  document.getElementById('m-jobs').textContent     = totalJobs;
-  document.getElementById('m-jobs-sub').textContent  = `${totalLens} lenses total`;
-  document.getElementById('m-lens').textContent     = totalLens;
-  document.getElementById('m-lens-sub').textContent  = `across ${totalJobs} jobs`;
-  document.getElementById('m-ar41brk').textContent  = fmtMin(ar41Avg);
-  document.getElementById('m-brkpro').textContent   = fmtMin(brkAvg);
+  if (mode === 'switch') ovFadeIn_();
 
-  // Banner
+  // ── Context title (follows the selected date) ──
+  ovRenderContext_();
+
+  // ── Data-quality note (sheet errors such as #N/A) ──
+  ovRenderDataQuality_(_brk);
+
+  // ── KPI: jobs / lenses ──
+  ovSetCount_('m-jobs', totalJobs, mode);
+  ovSetCount_('m-lens', totalLens, mode);
+  ovJobsDelta_(totalJobs, mode);
+
+  // ── KPI: reason split (jobs) ──
+  const rsnAgg = {};
+  _brk.forEach(r => {
+    const k = r.BrkReason || 'Unknown';
+    if (!rsnAgg[k]) rsnAgg[k] = { jobs: 0, lens: 0 };
+    rsnAgg[k].jobs += 1;
+    rsnAgg[k].lens += (parseInt(r.LensesBroken) || 0);
+  });
+  const rsnE = Object.entries(rsnAgg).sort((a, b) => b[1].jobs - a[1].jobs);
+  ovRenderReasonSplit_(rsnE, totalJobs, mode);
+
+  // ── KPI: timing (average of timed jobs + coverage + per-reason) ──
+  ovRenderTiming_('ar', 'm-ar41brk', ar41, totalJobs, rsnE, 'AR41_to_Breakage_Min', mode);
+  ovRenderTiming_('bp', 'm-brkpro',  brkPro, totalJobs, rsnE, 'Breakage_to_Processed_Min', mode);
+
+  // ── Banner (event strip) — unchanged wording, now uses the corrected average ──
   const worst = [..._brk].sort((a, b) => (parseFloat(b.AR41_to_Breakage_Min) || 0) - (parseFloat(a.AR41_to_Breakage_Min) || 0))[0];
   if (worst) document.getElementById('bannerSub').textContent =
     `${worst.BrkSourceMachine || worst.AR41Machine} — avg AR41→Brk ${fmtMin(ar41Avg)} · ${totalJobs} jobs`;
-  const now = new Date();
-  document.getElementById('bannerTime').textContent =
-    `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+  document.getElementById('bannerTime').textContent = fmtEtStamp_(new Date());  // ET, 12-hour
 
-  // Reason timing
-  const rValid  = _reason.filter(r => r.JobCount > 0);
-  const maxAR41 = Math.max(...rValid.map(r => parseFloat(r.AvgAR41_to_Breakage_Min) || 0), 1);
-  const maxBrk  = Math.max(...rValid.map(r => parseFloat(r.AvgBreakage_to_Processed_Min) || 0), 1);
-  const timingEl = document.getElementById('reasonTimingList');
-  if (timingEl) {
-    timingEl.innerHTML = `<div class="reason-timing">${rValid.map(r => {
-      const ar41v = parseFloat(r.AvgAR41_to_Breakage_Min) || 0;
-      const brkv  = parseFloat(r.AvgBreakage_to_Processed_Min) || 0;
-      const color = reasonColor(r.BrkReason);
-      return `
-        <div class="rt-block">
-          <div class="rt-name" style="color:${color}">${r.BrkReason}
-            <span class="rt-jobs">${r.JobCount} jobs · ${r.TotalLensesBroken || '--'} lenses</span>
-          </div>
-          <div class="rt-row">
-            <div class="rt-row-label">AR41 → Brk</div>
-            <div class="rt-track"><div class="rt-fill" style="width:${Math.round(ar41v / maxAR41 * 100)}%;background:${color}"></div></div>
-            <div class="rt-val">${fmtMin(ar41v)}</div>
-          </div>
-          <div class="rt-row">
-            <div class="rt-row-label">Brk → Proc</div>
-            <div class="rt-track"><div class="rt-fill" style="width:${Math.round(brkv / maxBrk * 100)}%;background:${color};opacity:0.6"></div></div>
-            <div class="rt-val">${fmtMin(brkv)}</div>
-          </div>
-          ${rValid.indexOf(r) < rValid.length - 1 ? '<div class="rt-divider"></div>' : ''}
-        </div>`;
-    }).join('')}</div>`;
-  }
-
-  // BrkSource machine bars
+  // ── Where it broke: jobs by BrkSource machine ──
   const srcAgg = {}, srcRx = {};
   _brk.forEach(r => {
     const s = r.BrkSourceMachine || 'Unknown';
@@ -370,42 +367,34 @@ function buildOverview() {
     if (!srcRx[s]) srcRx[s] = [];
     srcRx[s].push(r);
   });
-  const srcE  = Object.entries(srcAgg).sort((a, b) => b[1] - a[1]);
-  const srcEl = document.getElementById('srcBarList');
-  if (srcEl) {
-    const max = srcE[0]?.[1] || 1;
-    srcEl.innerHTML = srcE.map(([label, val]) => {
-      const jobs = srcRx[label] || [];
-      const rc   = {};
-      const tl   = jobs.reduce((s, j) => s + (parseInt(j.LensesBroken) || 0), 0);
-      jobs.forEach(j => { const r = j.BrkReason || '?'; rc[r] = (rc[r] || 0) + 1; });
-      const tipLines = [...Object.entries(rc).map(([r, c]) => `${r}: ${c}`), `Lenses: ${tl}`].join(' · ');
-      return `<div class="bar-row" title="${tipLines}">
-        <div class="bar-label">${label}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val / max * 100)}%;background:${CLR.teal}"></div></div>
-        <div class="bar-val">${val}</div>
-      </div>`;
-    }).join('');
-  }
+  const srcE = Object.entries(srcAgg).sort((a, b) => b[1] - a[1]);
+  ovRenderBars_('srcBarList', srcE, 'jobs', mode, label => {
+    const jobs = srcRx[label] || [];
+    const rc = {};
+    const tl = jobs.reduce((s, j) => s + (parseInt(j.LensesBroken) || 0), 0);
+    jobs.forEach(j => { const r = j.BrkReason || '?'; rc[r] = (rc[r] || 0) + 1; });
+    return [...Object.entries(rc).map(([r, c]) => `${r}: ${c}`), `Lenses: ${tl}`].join(' · ');
+  });
+  const srcSum = srcE.reduce((s, e) => s + e[1], 0);
+  const srcMax = srcE[0]?.[1] || 0;
+  const srcSmall = srcE.length > 0 && srcMax < OV_SMALL_N;
+  document.getElementById('ovSrcTags').innerHTML = '';   // badge removed by request; footer states the small sample
+  document.getElementById('ovSrcFoot').innerHTML = srcE.length
+    ? `Total <b>${srcSum}</b> jobs${srcSum === totalJobs ? '' : ` <span class="ov-bad">≠ ${totalJobs} in KPI</span>`}.` +
+      (srcSmall ? ` Every machine has fewer than ${OV_SMALL_N} jobs, so differences of 1–2 are noise.` : '')
+    : '';
 
-  // Material bars
+  // ── What broke: lenses by material ──
   const matAgg = {};
   _brk.forEach(r => { const m = r.Material || 'Unknown'; matAgg[m] = (matAgg[m] || 0) + (parseInt(r.LensesBroken) || 0); });
   const matE = Object.entries(matAgg).sort((a, b) => b[1] - a[1]);
-  buildBarList('matList', matE.map(([label, val], i) => [label, val, val, CLR.series[i % CLR.series.length]]));
+  ovRenderBars_('matList', matE, 'lenses', mode);
+  const matSum = matE.reduce((s, e) => s + e[1], 0);
+  document.getElementById('ovMatFoot').innerHTML = matE.length
+    ? `Total <b>${matSum}</b> lenses${matSum === totalLens ? '' : ` <span class="ov-bad">≠ ${totalLens} in KPI</span>`}. Counted in lenses, not jobs.`
+    : '';
 
-  // Reason donut
-  const rsnAgg = {};
-  _brk.forEach(r => { const k = r.BrkReason || 'Unknown'; rsnAgg[k] = (rsnAgg[k] || 0) + 1; });
-  const rsnE = Object.entries(rsnAgg).sort((a, b) => b[1] - a[1]);
-  document.getElementById('reasonLeg').innerHTML = rsnE.map(([r, c]) =>
-    `<span class="leg-item"><span class="leg-sq" style="background:${reasonColor(r)}"></span>${r} — ${c}</span>`
-  ).join('');
-  mkChart('reasonPieC', 'doughnut', rsnE.map(e => e[0]), [{
-    data: rsnE.map(e => e[1]),
-    backgroundColor: rsnE.map(e => reasonColor(e[0])),
-    borderWidth: 2, borderColor: '#0d1015',
-  }], { plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } });
+  ovAfterRender_();
 }
 
 /* ============================================================
@@ -472,6 +461,10 @@ document.addEventListener('mousemove', e => { if (tip && tip.style.display === '
    RENDER FLOW
 ============================================================ */
 function renderFlow() {
+  /* RX Flow v6 — Option A: process pipeline + every job on one shared clock.
+     A stage with no recorded time is never drawn as a bar. It is labelled
+     "skipped" (a later stage exists, or the viewed day is over) or
+     "not scanned yet" (live view, after the job's last recorded scan). */
   const fR = document.getElementById('filterReason').value;
   const fS = document.getElementById('filterSource').value;
   const fA = document.getElementById('filterAR41').value;
@@ -484,101 +477,131 @@ function renderFlow() {
   const filteredLenses = data.reduce((sum, r) => sum + (parseInt(r.LensesBroken, 10) || 0), 0);
   document.getElementById('flowCount').textContent = `${data.length} jobs · ${filteredLenses} lenses`;
 
-  if (!data.length) {
+  const resMap = {};
+  _flowResearch.forEach(r => { resMap[String(r.RxNumber)] = r; });
+
+  const histDate = document.getElementById('dateSingle')?.value || '';
+  const anchor   = histDate || isoLocalDate();          // the day being viewed
+  const dayLbl   = histDate ? ovPrettyDate_(histDate) : 'today';
+
+  // ── Stage minutes per job (null = no recorded time) ──
+  const jobs = data.map(r => {
+    const res = resMap[String(r.RxNumber)];
+    const srcTime = getSourceScanTime(r, res);
+    const s1 = srcTime ? diffMin(srcTime, r.AR41ScanTime) : null;
+    const s2 = parseFloat(r.AR41_to_Breakage_Min);
+    const s3 = parseFloat(r.Breakage_to_Processed_Min);
+    const st = [s1, s2, s3].map(v => Number.isFinite(v) ? v : null);
+    const total = st.reduce((a, v) => a + (v || 0), 0);
+    return { r, res, srcTime, st, total, runDate: sourceRunDate(r, res) };
+  });
+
+  flowRenderPipeline_(jobs);
+
+  if (!jobs.length) {
     document.getElementById('flowList').innerHTML = '<div class="empty">No jobs match filters</div>';
     return;
   }
 
-  const resMap = {};
-  _flowResearch.forEach(r => { resMap[String(r.RxNumber)] = r; });
-  const today = isoLocalDate();
+  // ── Shared time scale for every row ──
+  const axisMax = flowNiceMax_(Math.max(60, ...jobs.map(j => j.total)));
+  const pct = m => (m / axisMax) * 100;
 
-  const runToday = [];
-  const runPrevious = [];
-
-  data.forEach(r => {
-    const res = resMap[String(r.RxNumber)];
-    const runDate = sourceRunDate(r, res);
-    if (runDate === today) runToday.push(r);
-    else runPrevious.push(r);
+  const runToday = [], runPrevious = [], runUnknown = [];
+  jobs.forEach(j => {
+    if (j.runDate === anchor) runToday.push(j);
+    else if (j.runDate && j.runDate < anchor) runPrevious.push(j);
+    else runUnknown.push(j);
   });
 
-  function makeJourneyRow(r) {
-    const res = resMap[String(r.RxNumber)];
-    const src = (r.BrkSourceMachine || '').toUpperCase();
-    const srcTime = getSourceScanTime(r, res);
-    const d1 = srcTime ? diffMin(srcTime, r.AR41ScanTime) : 0;
-    const d2 = parseFloat(r.AR41_to_Breakage_Min) || 0;
-    const d3 = parseFloat(r.Breakage_to_Processed_Min) || 0;
-    const total = d1 + d2 + d3 || 1;
-    const p1 = Math.max(d1 > 0 ? 1 : 0, Math.round(d1 / total * 100));
-    const p2 = Math.max(1, Math.round(d2 / total * 100));
-    const p3 = Math.max(1, 100 - p1 - p2);
+  const STAGE = [
+    { cls: 'seg-1', short: 'Transit',    tipHead: '① JOB IN TRANSIT — SOURCE TO AR41',     dur: 'Transit Time' },
+    { cls: 'seg-2', short: 'Identify',   tipHead: '② BREAKAGE IDENTIFIED — AR41 TO TABLE', dur: 'Identification Time' },
+    { cls: 'seg-3', short: 'Processing', tipHead: '③ BREAKAGE PROCESSING — TABLE TO REORDER', dur: 'Processing Time' },
+  ];
 
-    const srcMachine = r.BrkSourceMachine || res?.ORBMachine || '?';
+  function makeTip(segClass, headerLabel, rows, durationLabel, durationVal) {
+    const rowsHtml = rows.map(([lbl, val]) =>
+      `<div class="tip-row"><div class="tip-row-label">${lbl}</div><div class="tip-row-val">${val}</div></div>`
+    ).join('<div class="tip-divider"></div>');
+    return `<div class="tip-header ${segClass}">${headerLabel}</div>
+            <div class="tip-body">${rowsHtml}</div>
+            <div class="tip-duration">
+              <span class="tip-duration-label">${durationLabel}</span>
+              <span class="tip-duration-val ${segClass}">${durationVal}</span>
+            </div>`;
+  }
+
+  // Missing stages → "skipped" / "not scanned yet", merged when consecutive
+  function skipText(st) {
+    const last = st.reduce((acc, v, i) => (v !== null ? i : acc), -1);
+    const labels = [];
+    st.forEach((v, i) => {
+      if (v !== null) return;
+      const trailing = i > last;
+      labels.push({ i, kind: (!histDate && trailing) ? 'pending' : 'skipped' });
+    });
+    if (!labels.length) return '';
+    if (labels.length === 3) {
+      return `<span class="fj-skip" title="No scan time was recorded for any stage">${histDate ? 'All stages skipped' : 'No stage scanned yet'}</span>`;
+    }
+    const groups = [];
+    labels.forEach(l => {
+      const g = groups[groups.length - 1];
+      if (g && g.kind === l.kind && g.last === l.i - 1) { g.names.push(STAGE[l.i].short); g.last = l.i; }
+      else groups.push({ kind: l.kind, names: [STAGE[l.i].short], last: l.i });
+    });
+    return groups.map(g => {
+      const what = g.names.join(' + ');
+      return g.kind === 'pending'
+        ? `<span class="fj-skip pending" title="No scan recorded yet — the job may still be on its way">${what} not scanned yet</span>`
+        : `<span class="fj-skip" title="No scan time recorded for this stage (skipped, or scanned out of order)">${what} skipped</span>`;
+    }).join('');
+  }
+
+  function makeRow(j) {
+    const { r, res, srcTime, st, total } = j;
+    const src = (r.BrkSourceMachine || '').toUpperCase();
+    const srcMachine  = r.BrkSourceMachine || res?.ORBMachine || '?';
     const ar41Machine = r.AR41Machine || '?';
     const srcLabel = src.includes('ORB') ? `ORB — ${srcMachine}` : (src.includes('OTB') ? `OTB — ${srcMachine}` : srcMachine);
     const operatorScan = r.OperatorScan || res?.OperatorScan || '—';
 
-    function makeTip(segClass, headerLabel, rows, durationLabel, durationVal, durClass) {
-      const rowsHtml = rows.map(([lbl, val]) =>
-        `<div class="tip-row"><div class="tip-row-label">${lbl}</div><div class="tip-row-val">${val}</div></div>`
-      ).join('<div class="tip-divider"></div>');
-      return `<div class="tip-header ${segClass}">${headerLabel}</div>
-              <div class="tip-body">${rowsHtml}</div>
-              <div class="tip-duration">
-                <span class="tip-duration-label">${durationLabel}</span>
-                <span class="tip-duration-val ${durClass}">${durationVal}</span>
-              </div>`;
-    }
+    const tipRows = [
+      [['Source Machine', srcLabel], ['Departed Source', fmtDate(srcTime)], ['Source Run Day', safeIsoDate(srcTime) || 'Unavailable'],
+       ['Arrived AR41', fmtDate(r.AR41ScanTime)], ['AR41 Machine', ar41Machine]],
+      [['AR41 Machine', ar41Machine], ['AR41 Scan Time', fmtDate(r.AR41ScanTime)], ['Operator Scan', operatorScan],
+       ['Scan to Breakage Table', fmtDate(r.BrkTableScanTime)]],
+      [['Operator Scan', operatorScan], ['Breakage Table Scan', fmtDate(r.BrkTableScanTime)],
+       ['Breakage Processed', fmtDate(r.BreakageProcessedTime)], ['Breakage Reason', r.BrkReason || '—']],
+    ];
 
-    const t1 = d1 > 0 ? makeTip('seg-peach', '① JOB IN TRANSIT — SOURCE TO AR41', [
-      ['Source Machine', srcLabel],
-      ['Departed Source', fmtDate(srcTime)],
-      ['Source Run Day', safeIsoDate(srcTime) || 'Unavailable'],
-      ['Arrived AR41', fmtDate(r.AR41ScanTime)],
-      ['AR41 Machine', ar41Machine],
-    ], 'Transit Time', fmtMin(d1), 'seg-peach') : null;
+    let segs = '';
+    st.forEach((v, i) => {
+      if (v === null) return;
+      const tip = makeTip(STAGE[i].cls, STAGE[i].tipHead, tipRows[i], STAGE[i].dur, fmtMin(v)).replace(/'/g, '&#39;');
+      segs += `<div class="fj-seg ${STAGE[i].cls}" style="width:${total ? v / total * 100 : 0}%" data-tip='${tip}' onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()"></div>`;
+    });
 
-    const t2 = makeTip('seg-peri', '② BREAKAGE IDENTIFIED — AR41 TO TABLE', [
-      ['AR41 Machine', ar41Machine],
-      ['AR41 Scan Time', fmtDate(r.AR41ScanTime)],
-      ['Operator Scan', operatorScan],
-      ['Scan to Breakage Table', fmtDate(r.BrkTableScanTime)],
-    ], 'Identification Time', fmtMin(d2), 'seg-peri');
-
-    const t3 = makeTip('seg-teal', '③ BREAKAGE PROCESSING — TABLE TO REORDER', [
-      ['Operator Scan', operatorScan],
-      ['Breakage Table Scan', fmtDate(r.BrkTableScanTime)],
-      ['Breakage Processed', fmtDate(r.BreakageProcessedTime)],
-      ['Breakage Reason', r.BrkReason || '—'],
-    ], 'Processing Time', fmtMin(d3), 'seg-teal');
+    const dots = st.map((v, i) => `<i class="fj-dot ${STAGE[i].cls}${v !== null ? ' on' : ''}" title="${STAGE[i].short}: ${v !== null ? fmtMin(v) : 'no scan'}"></i>`).join('');
 
     return `
-      <div class="gantt-row">
-        <div class="gantt-rx" title="${r.RxNumber}">${r.RxNumber}</div>
-        <div class="gantt-bar">
-          ${d1 > 0 && t1 ? `<div class="gantt-seg seg-1" style="width:${p1}%;min-width:2px" data-tip='${t1.replace(/'/g,"&#39;")}' onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p1 > 10 ? fmtMin(d1) : ''}</div>` : ''}
-          <div class="gantt-seg seg-2" style="width:${p2}%;min-width:4px" data-tip='${t2.replace(/'/g,"&#39;")}' onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p2 > 10 ? fmtMin(d2) : ''}</div>
-          <div class="gantt-seg seg-3" style="width:${p3}%;min-width:4px" data-tip='${t3.replace(/'/g,"&#39;")}' onmouseenter="showTip(event,this.dataset.tip)" onmouseleave="hideTip()">${p3 > 10 ? fmtMin(d3) : ''}</div>
+      <div class="fj-row" data-rx="${ovEsc_(r.RxNumber)}" data-w="${pct(total)}">
+        <div class="fj-rx" title="${ovEsc_(r.RxNumber)}">${ovEsc_(r.RxNumber)}</div>
+        <span class="fj-reason">${ovEsc_(r.BrkReason || '--')}</span>
+        <div class="fj-lane">
+          <div class="fj-bar" style="width:${pct(total)}%">${segs}</div>
+          <div class="fj-after" style="left:${pct(total)}%">
+            <b class="fj-total">${total ? fmtMin(total) : '--'}</b>${skipText(st)}
+          </div>
         </div>
-        <span class="reason-pill ${reasonPillClass(r.BrkReason)}">${r.BrkReason || '--'}</span>
-        <div class="gantt-total">${fmtMin(total)}</div>
+        <span class="fj-dots">${dots}</span>
       </div>`;
   }
 
-  function journeyTotalMinutes(r) {
-    const res = resMap[String(r.RxNumber)];
-    const srcTime = getSourceScanTime(r, res);
-    const d1 = srcTime ? diffMin(srcTime, r.AR41ScanTime) : 0;
-    const d2 = parseFloat(r.AR41_to_Breakage_Min) || 0;
-    const d3 = parseFloat(r.Breakage_to_Processed_Min) || 0;
-    return d1 + d2 + d3;
-  }
-
   function makeGroup(title, subtitle, rows, groupClass) {
-    const sortedRows = [...rows].sort((a, b) => journeyTotalMinutes(b) - journeyTotalMinutes(a));
-    const lenses = sortedRows.reduce((sum, r) => sum + (parseInt(r.LensesBroken, 10) || 0), 0);
+    const sorted = [...rows].sort((a, b) => b.total - a.total);
+    const lenses = sorted.reduce((sum, j) => sum + (parseInt(j.r.LensesBroken, 10) || 0), 0);
     return `
       <section class="flow-run-group ${groupClass}">
         <div class="flow-run-head">
@@ -586,15 +609,30 @@ function renderFlow() {
             <div class="flow-run-title">${title}</div>
             <div class="flow-run-sub">${subtitle}</div>
           </div>
-          <div class="flow-run-count"><strong>${sortedRows.length}</strong> jobs <span>·</span> <strong>${lenses}</strong> lenses</div>
+          <div class="flow-run-count"><strong>${sorted.length}</strong> jobs <span>·</span> <strong>${lenses}</strong> lenses</div>
         </div>
-        <div class="flow-run-rows">${sortedRows.length ? sortedRows.map(makeJourneyRow).join('') : '<div class="empty">No breakages in this group</div>'}</div>
+        <div class="flow-run-rows">${sorted.length ? sorted.map(makeRow).join('') : '<div class="empty">No breakages in this group</div>'}</div>
       </section>`;
   }
 
+  // remember previous bar lengths so a refresh can extend bars instead of redrawing
+  const prevW = {};
+  document.querySelectorAll('#flowList .fj-row').forEach(el => { prevW[el.dataset.rx] = Number(el.dataset.w); });
+  const prevAnchor = flowState_.anchor;
+  flowState_.anchor = anchor;
+
   document.getElementById('flowList').innerHTML =
-    makeGroup('RUN TODAY', 'Source-machine scan date is today', runToday, 'run-today') +
-    makeGroup('RUN PREVIOUS DAYS', 'Source-machine scan date is before today', runPrevious, 'run-previous');
+    flowAxisHtml_(axisMax) +
+    (histDate
+      ? makeGroup(`RUN ${dayLbl.toUpperCase()}`, `Source-machine scan date is ${dayLbl}`, runToday, 'run-today') +
+        makeGroup(`RUN BEFORE ${dayLbl.toUpperCase()}`, `Source-machine scan date is before ${dayLbl}`, runPrevious, 'run-previous')
+      : makeGroup('RUN TODAY', 'Source-machine scan date is today', runToday, 'run-today') +
+        makeGroup('RUN PREVIOUS DAYS', 'Source-machine scan date is before today', runPrevious, 'run-previous')) +
+    (runUnknown.length
+      ? makeGroup('SOURCE DATE MISSING', `No ORB/OTB scan date${histDate ? `, or it is after ${dayLbl}` : ''} — check the source sheet`, runUnknown, 'run-unknown')
+      : '');
+
+  flowAnimate_(prevAnchor === anchor ? prevW : null);
 }
 
 /* ============================================================
@@ -677,6 +715,8 @@ function cylColors(keys) {
    RENDER RESEARCH
 ============================================================ */
 function renderResearch() {
+  /* Analysis v6 — plain-language Rx view.
+     Each job is counted once, by its stronger eye. Cutoffs: RX_CUTOFFS (end of file). */
   const fO = document.getElementById('resORB').value;
   const fR = document.getElementById('resReason').value;
   const fM = document.getElementById('resMaterial').value;
@@ -701,89 +741,76 @@ function renderResearch() {
   if (fM) data = data.filter(r => r.Material === fM);
 
   const totalLens = data.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
+  document.getElementById('res-jobs').textContent = data.length;
+  document.getElementById('res-lens').textContent = totalLens;
 
-  document.getElementById('res-jobs').textContent  = data.length;
-  document.getElementById('res-lens').textContent  = totalLens;
-
-  // Sph/Cyl charts — show "no Rx data" note in historical mode
   const isHistorical = (document.getElementById('dateSingle')?.value || '') !== '';
-  const noRxData = isHistorical && data.every(r => !r.R_Sph && !r.L_Sph);
+  const jobs  = data.map(r => ({ r, sph: rxStrongest_(r.R_Sph, r.L_Sph), cyl: rxStrongest_(r.R_Cyl, r.L_Cyl) }));
+  const noRx  = jobs.every(j => j.sph === null && j.cyl === null);
 
-  ['rsphC','lsphC','rcylC','lcylC'].forEach(id => {
-    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
-  });
-
-  // Show/hide historical note and handle Sph/Cyl charts
+  // ── Live-only note (history has no Rx) ──
   const rxNote = document.getElementById('rxHistoricalNote');
-  if (rxNote) rxNote.style.display = noRxData ? 'flex' : 'none';
+  if (rxNote) rxNote.style.display = (noRx && data.length) ? 'flex' : 'none';
+  const cards = document.getElementById('anRxCards');
+  if (cards) cards.hidden = noRx && data.length > 0;
 
-  if (noRxData) {
-    // Destroy any existing charts and show empty placeholder message
-    ['rsphC','lsphC','rcylC','lcylC'].forEach(id => {
-      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
-      const wrap = document.querySelector(`[data-canvas="${id}"]`);
-      if (wrap) wrap.innerHTML = `<div class="empty" style="height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;opacity:0.4">No prescription data in history</div>`;
+  anRenderHeadline_(jobs, totalLens, noRx);
+
+  // ── Sphere / cylinder cards ──
+  anRenderScale_('anSphScale', 'anSphMiss', jobs, 'sph', rxSphCats_());
+  anRenderScale_('anCylScale', 'anCylMiss', jobs, 'cyl', rxCylCats_());
+
+  // ── Material / reason bars ──
+  const agg = key => {
+    const m = {};
+    data.forEach(r => {
+      const k = r[key] || 'Unknown';
+      if (!m[k]) m[k] = { jobs: 0, lens: 0 };
+      m[k].jobs += 1; m[k].lens += (parseInt(r.LensesBroken) || 0);
     });
-  } else {
-    // Restore canvas elements if they were replaced by the empty message
-    ['rsphC','lsphC','rcylC','lcylC'].forEach(id => {
-      const wrap = document.querySelector(`[data-canvas="${id}"]`);
-      if (wrap && !document.getElementById(id)) {
-        wrap.innerHTML = '';
-        const c = document.createElement('canvas');
-        c.id = id; wrap.appendChild(c);
-      }
-    });
+    return Object.entries(m).sort((a, b) => b[1].jobs - a[1].jobs || b[1].lens - a[1].lens);
+  };
+  anRenderBars_('anMatBars', agg('Material'), data.length, () => CLR.teal, false);
+  anRenderBars_('anRsnBars', agg('BrkReason'), data.length, k => reasonColor(k), true);
 
-    const rsph = sphBuckets(data.map(r => parseFloat(r.R_Sph)));
-    mkChart('rsphC','bar',Object.keys(rsph),[{data:Object.values(rsph),backgroundColor:sphColors(Object.keys(rsph)),borderWidth:0,borderRadius:4}],{});
-
-    const lsph = sphBuckets(data.map(r => parseFloat(r.L_Sph)));
-    mkChart('lsphC','bar',Object.keys(lsph),[{data:Object.values(lsph),backgroundColor:sphColors(Object.keys(lsph)),borderWidth:0,borderRadius:4}],{});
-
-    const rcyl = cylBuckets(data.map(r => parseFloat(r.R_Cyl)));
-    mkChart('rcylC','bar',Object.keys(rcyl),[{data:Object.values(rcyl),backgroundColor:cylColors(Object.keys(rcyl)),borderWidth:0,borderRadius:4}],{});
-
-    const lcyl = cylBuckets(data.map(r => parseFloat(r.L_Cyl)));
-    mkChart('lcylC','bar',Object.keys(lcyl),[{data:Object.values(lcyl),backgroundColor:cylColors(Object.keys(lcyl)),borderWidth:0,borderRadius:4}],{});
-  }
-
-  function pp(v) {
+  // ── Every job ──
+  const sCats = rxSphCats_(), cCats = rxCylCats_();
+  const word = (v, cats) => v === null ? '—' : (cats.find(c => c.test(v))?.name || '—');
+  const num  = v => {
     const n = parseFloat(v);
-    if (isNaN(n) || v === '' || v === null || v === undefined) return `<span class="px-zero">—</span>`;
-    if (n === 0)  return `<span class="px-zero">0</span>`;
-    return n > 0 ? `<span class="px-pos">+${n}</span>` : `<span class="px-neg">${n}</span>`;
-  }
+    if (v === '' || v === null || v === undefined || isNaN(n)) return '—';
+    return n === 0 ? '0' : (n > 0 ? `+${n}` : `${n}`);
+  };
+  const tableEl = document.getElementById('resTable');
+  if (!data.length) { tableEl.innerHTML = '<div class="empty">No jobs match these filters</div>'; anAfterRender_(); return; }
 
-  // In historical mode show AR41 machine instead of ORB (ORBMachine not in history)
-  const orbCol = isHistorical ? 'AR41' : 'ORB';
-
-  document.getElementById('resTable').innerHTML = `
-    <table class="res-table">
-      <thead><tr>
-        <th>RX</th><th>${orbCol}</th><th>BrkSrc</th><th>Reason</th>
-        <th>Material</th>
-        ${isHistorical ? '' : '<th>Option</th><th>Curve</th><th>R Sph</th><th>L Sph</th><th>R Cyl</th><th>L Cyl</th><th>Add</th>'}
-        <th>Broken</th><th>AR41→Brk</th><th>Brk→Proc</th>
-      </tr></thead>
-      <tbody>${data.map(r => `
+  tableEl.innerHTML = `
+    <table class="an-table">
+      <thead>
+        <tr class="an-grp"><th colspan="3"></th>${noRx ? '' : '<th colspan="3">Sphere</th><th colspan="3">Cylinder</th><th></th><th colspan="2"></th>'}<th colspan="2"></th></tr>
         <tr>
-          <td>${r.RxNumber || '--'}</td>
-          <td>${isHistorical ? (r.AR41Machine || '--') : (r.ORBMachine || '--')}</td>
-          <td>${r.BrkSourceMachine || '--'}</td>
-          <td><span class="reason-pill ${reasonPillClass(r.BrkReason)}">${r.BrkReason || '--'}</span></td>
-          <td>${r.Material || '--'}</td>
-          ${isHistorical ? '' : `
-          <td>${r.LensOption || '--'}</td><td>${r.BaseCurve || '--'}</td>
-          <td>${pp(r.R_Sph)}</td><td>${pp(r.L_Sph)}</td>
-          <td>${pp(r.R_Cyl)}</td><td>${pp(r.L_Cyl)}</td>
-          <td>${r.R_AddPower || '—'}</td>`}
-          <td>${r.LensesBroken || '1'}</td>
-          <td style="color:var(--peri)">${fmtMin(r.AR41_to_Breakage_Min)}</td>
-          <td style="color:var(--teal)">${fmtMin(r.Breakage_to_Processed_Min)}</td>
+          <th>RX</th><th>Reason</th><th>Material</th>
+          ${noRx ? '' : '<th>Strength</th><th class="num">Right</th><th class="num">Left</th><th>Amount</th><th class="num">Right</th><th class="num">Left</th><th class="num">Add</th><th>Lens option</th><th>Curve</th>'}
+          <th>${isHistorical ? 'Broke at' : 'ORB → broke at'}</th><th class="num">Lenses</th>
+        </tr>
+      </thead>
+      <tbody>${jobs.map(({ r, sph, cyl }) => `
+        <tr data-rx="${ovEsc_(r.RxNumber)}">
+          <td class="an-rx">${ovEsc_(r.RxNumber || '--')}</td>
+          <td><span class="an-pill"><i style="background:${reasonColor(r.BrkReason)}"></i>${ovEsc_(r.BrkReason || '--')}</span></td>
+          <td>${ovEsc_(r.Material || '--')}</td>
+          ${noRx ? '' : `
+          <td><b>${word(sph, sCats)}</b></td><td class="num an-mono">${num(r.R_Sph)}</td><td class="num an-mono">${num(r.L_Sph)}</td>
+          <td><b>${word(cyl, cCats)}</b></td><td class="num an-mono">${num(r.R_Cyl)}</td><td class="num an-mono">${num(r.L_Cyl)}</td>
+          <td class="num an-mono">${num(r.R_AddPower)}</td><td>${ovEsc_(r.LensOption || '—')}</td><td class="an-mono">${ovEsc_(r.BaseCurve || '—')}</td>`}
+          <td>${isHistorical ? ovEsc_(r.BrkSourceMachine || '--') : `${ovEsc_(r.ORBMachine || '--')} → ${ovEsc_(r.BrkSourceMachine || '--')}`}</td>
+          <td class="num an-mono"><b>${parseInt(r.LensesBroken) || 0}</b></td>
         </tr>`).join('')}
       </tbody>
-    </table>`;
+    </table>
+    <div class="an-cap">${data.length} ${data.length === 1 ? 'job' : 'jobs'} · ${totalLens} ${totalLens === 1 ? 'lens' : 'lenses'}</div>`;
+
+  anAfterRender_();
 }
 
 /* ============================================================
@@ -1003,10 +1030,13 @@ function fv(row, ...keys) {
 
 // Calculate minutes between two date strings
 function calcMin(fromStr, toStr) {
-  if (!fromStr || !toStr) return 0;
+  // Missing, unparseable, or out-of-order timestamps return null (no timing),
+  // never 0 — a fake 0 drags every average down. avgArr() skips null.
+  if (!fromStr || !toStr) return null;
   const a = new Date(fromStr), b = new Date(toStr);
-  if (isNaN(a) || isNaN(b)) return 0;
-  return Math.max(0, (b - a) / 60000);
+  if (isNaN(a) || isNaN(b)) return null;
+  const m = (b - a) / 60000;
+  return m >= 0 ? m : null;
 }
 
 function normalizeRow(r) {
@@ -1082,7 +1112,7 @@ async function applyDateFilter() {
   const dateVal = document.getElementById('dateSingle')?.value;  // "YYYY-MM-DD"
   if (!dateVal) return;
 
-  showOverlay();
+  ovBanner_('updating', `Loading ${ovPrettyDate_(dateVal)}…`);   // was showOverlay(): splash is first-load only
   document.getElementById('liveStatus').textContent   = 'Loading...';
   document.getElementById('liveDot').style.animation  = 'none';
   document.getElementById('liveDot').style.background = CLR.peri;
@@ -1117,8 +1147,14 @@ async function applyDateFilter() {
     // Rx charts will show empty (no prescription data in history) but table will work
     _research = _brk;
 
+    // RX Flow follows the header date. History has no Rx detail, so there are
+    // no research rows; source scan time comes from the history row itself.
+    _flowBrk      = [..._brk];
+    _flowResearch = [];
+
     document.getElementById('dateFilterCount').textContent = _brk.length;
     buildOverview();
+    populateFlowFilters(); renderFlow();
     populateResearchFilters(); renderResearch();
     buildAlerts();
     buildWeekOptions();
@@ -1126,13 +1162,13 @@ async function applyDateFilter() {
     document.getElementById('liveStatus').textContent   = 'Historical';
     document.getElementById('liveDot').style.background = CLR.peri;
     document.getElementById('liveDot').style.animation  = 'none';
+    ovBanner_('ok', `Loaded ${ovPrettyDate_(dateVal)}`);
 
   } catch (err) {
     console.error('Date filter fetch error:', err);
     document.getElementById('liveStatus').textContent   = 'Error';
     document.getElementById('liveDot').style.background = '#f87171';
-  } finally {
-    hideOverlay();
+    ovBanner_('fail', `Couldn't load ${ovPrettyDate_(dateVal)} — panels still show the previous view`);
   }
 }
 
@@ -1256,7 +1292,8 @@ async function loadAll() {
     }
   );
 
-  showOverlay();
+  if (isInitialLoad) showOverlay();               // splash on first load only
+  else ovBanner_('updating', 'Updating…');         // refresh: non-blocking banner
   document.getElementById('liveStatus').textContent   = 'Loading...';
   document.getElementById('liveDot').style.background = CLR.peri;
 
@@ -1343,6 +1380,7 @@ async function loadAll() {
       document.getElementById('liveStatus').textContent   = 'Live';
       document.getElementById('liveDot').style.background = '#d4c0a8';
       document.getElementById('liveDot').style.animation  = 'pulse 1.5s infinite';
+      if (!isInitialLoad) ovBanner_('ok', 'New data');
 
       powerPerfEnd_(
         `Power Breakage build/render #${loadId}`,
@@ -1385,6 +1423,7 @@ async function loadAll() {
     document.getElementById('liveStatus').textContent   = 'Error';
     document.getElementById('liveDot').style.background = '#f87171';
     document.getElementById('liveDot').style.animation  = 'none';
+    if (!isInitialLoad) ovBanner_('fail', 'Update failed — still showing the last good data');
 
     powerPerfEnd_(
       `${isInitialLoad ? 'INITIAL ' : ''}Power Breakage load #${loadId}`,
@@ -1403,7 +1442,7 @@ async function loadAll() {
       pingWarm();
     }
   } finally {
-    setTimeout(hideOverlay, 300);
+    if (isInitialLoad) setTimeout(hideOverlay, 300);
   }
 }
 
@@ -1439,602 +1478,501 @@ setInterval(pingWarm, 4 * 60 * 1000);
 loadAll();
 
 /* ============================================================
-   WEEKLY SUMMARY
+   SUMMARY v6 — management brief (one page, sidebar = jump links)
+   Data loading (approved):
+   - Dates are sent to the API as ET calendar days (no UTC shift).
+   - Past days come from history; today (if in range) from the live report.
+   - The previous period is fetched for comparison. When the current
+     period is still in progress, it is compared to the same point
+     in the previous period, never to a full one.
 ============================================================ */
+const SUM = {
+  mode: 'week', weeks: [], weekKey: null, cur: null, prev: null,
+  token: 0, entrancePlayed: false, cache: new Map(), text: ''
+};
+const SUM_CACHE_MS = 10 * 60 * 1000;
 
-let _sumWeeks            = [];
-let _sumCurrentNarrative = '';
-let _sumCurrentStats     = null;
-
-function getMondayOf(date) {
-  const d   = new Date(date);
-  const day = d.getDay();
-  const diff = (day === 0) ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+function sumTodayYmd_() { return etYmd_(new Date()); }
+function sumDow_(ymd) { return new Date(`${ymd}T12:00:00Z`).getUTCDay(); }
+function sumMondayOf_(ymd) { const d = sumDow_(ymd); return addDaysYmd_(ymd, d === 0 ? -6 : 1 - d); }
+function sumFmt_(ymd, opts) { return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...opts }).format(new Date(`${ymd}T12:00:00Z`)); }
+function sumWeekLabel_(from, to) {
+  return `${sumFmt_(from, { month: 'short', day: 'numeric' })} – ${sumFmt_(to, { month: 'short', day: 'numeric' })}, ${sumFmt_(to, { year: 'numeric' })}`;
+}
+function sumVisible_() { return document.getElementById('t-summary')?.classList.contains('active'); }
+function sumRowDate_(r) { return safeIsoDate(r.AR41ScanTime || r.BrkTableScanTime) || ''; }
+function sumRowHour_(r) {
+  const t = r.AR41ScanTime || r.BrkTableScanTime;
+  const d = t ? new Date(t) : null;
+  return d && !isNaN(d) ? d.getHours() : null;
 }
 
-function getSundayOf(monday) {
-  const d = new Date(monday);
-  d.setDate(d.getDate() + 6);
-  d.setHours(23, 59, 59, 999);
-  return d;
+/* ── Period definitions ───────────────────────────────────── */
+function sumPeriods_() {
+  const today = sumTodayYmd_();
+  if (SUM.mode === 'day') {
+    const day = document.getElementById('daySelect')?.value || today;
+    const prevDay = addDaysYmd_(day, -1);
+    return {
+      cur:  { from: day, to: day, label: sumFmt_(day, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) },
+      prev: { from: prevDay, to: prevDay, label: sumFmt_(prevDay, { weekday: 'short', month: 'short', day: 'numeric' }) },
+      inProgress: day === today, today
+    };
+  }
+  const w = SUM.weeks[Number(document.getElementById('weekSelect')?.value) || 0] || SUM.weeks[0];
+  const pf = addDaysYmd_(w.from, -7), pt = addDaysYmd_(w.to, -7);
+  return {
+    cur:  { from: w.from, to: w.to, label: sumWeekLabel_(w.from, w.to) },
+    prev: { from: pf, to: pt, label: sumWeekLabel_(pf, pt) },
+    inProgress: w.from <= today && today <= w.to, today
+  };
 }
 
-function fmtWeekLabel(monday, sunday) {
-  const mo = m => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
-  return `${mo(monday.getMonth())} ${monday.getDate()} – ${mo(sunday.getMonth())} ${sunday.getDate()}, ${sunday.getFullYear()}`;
+/* ── Loading ──────────────────────────────────────────────── */
+async function sumHistory_(from, to) {
+  const key = `${from}|${to}`;
+  const hit = SUM.cache.get(key);
+  if (hit && Date.now() - hit.at < SUM_CACHE_MS) return hit.rows;
+  const raw = await fetchTab('breakageSummary', from, to);   // ET calendar days, inclusive
+  const rows = (Array.isArray(raw) ? raw : []).map(normalizeRow);
+  SUM.cache.set(key, { at: Date.now(), rows });
+  return rows;
 }
 
-function fmtShortDate(d) {
-  return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+async function sumRowsFor_(p, today) {
+  const rows = [];
+  const histTo = p.to < today ? p.to : addDaysYmd_(today, -1);
+  if (p.from <= histTo) rows.push(...await sumHistory_(p.from, histTo));
+  if (p.from <= today && today <= p.to) {
+    // today comes from the live report (same rule the old Summary used)
+    rows.push(..._allBrk.filter(r => sumRowDate_(r) === today));
+  }
+  return rows;
 }
 
-/* ============================================================
-   SUMMARY MODE — Weekly / Daily
-============================================================ */
-let _sumMode = 'week'; // 'week' | 'day'
+async function sumLoad_() {
+  const token = ++SUM.token;
+  const P = sumPeriods_();
+  const main = document.getElementById('sumMain');
+  main?.classList.add('is-loading');
+  ovBanner_('updating', `Loading ${P.cur.label}…`);
+  try {
+    const [cur, prev] = await Promise.all([sumRowsFor_(P.cur, P.today), sumRowsFor_(P.prev, P.today)]);
+    if (token !== SUM.token) return;   // a newer request won
 
+    // Fair comparison while the current period is still running
+    let prevCmp = prev, cmpNote = '';
+    if (P.inProgress && SUM.mode === 'week') {
+      const cutoff = addDaysYmd_(P.today, -7);
+      prevCmp = prev.filter(r => { const d = sumRowDate_(r); return d && d <= cutoff; });
+      cmpNote = 'the same days last week';
+    } else if (P.inProgress && SUM.mode === 'day') {
+      const hr = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }).format(new Date())) % 24;
+      prevCmp = prev.filter(r => { const h = sumRowHour_(r); return h !== null && h <= hr; });
+      cmpNote = 'the same hours yesterday';
+    }
+
+    const prevCur = SUM.cur;
+    SUM.cur  = sumStats_(cur, P, false);
+    SUM.prev = sumStats_(prevCmp, P, true);
+    SUM.prevFull = sumStats_(prev, P, true);
+    SUM.P = P; SUM.cmpNote = cmpNote || (SUM.mode === 'week' ? 'last week' : 'the day before');
+    sumRender_(prevCur);
+    ovBanner_('ok', `Loaded ${P.cur.label}`);
+  } catch (err) {
+    console.error('Summary load error:', err);
+    if (token !== SUM.token) return;
+    ovBanner_('fail', `Couldn't load ${P.cur.label} — showing the previous view`);
+  } finally {
+    if (token === SUM.token) main?.classList.remove('is-loading');
+  }
+}
+
+/* ── Stats ────────────────────────────────────────────────── */
+function sumStats_(rows, P, isPrev) {
+  const lens = r => parseInt(r.LensesBroken) || 0;
+  const agg = keyFn => {
+    const m = {};
+    rows.forEach(r => { const k = keyFn(r) || 'Unknown'; if (!m[k]) m[k] = { jobs: 0, lens: 0 }; m[k].jobs++; m[k].lens += lens(r); });
+    return m;
+  };
+  const timing = f => {
+    const v = rows.map(r => parseFloat(r[f])).filter(Number.isFinite);
+    return { n: v.length, med: flowMedian_(v) };
+  };
+  // day-by-day (week) or hour-by-hour (day); future buckets stay null (no fake zeros)
+  const buckets = [];
+  if (SUM.mode === 'week') {
+    const base = isPrev ? P.prev.from : P.cur.from;
+    for (let i = 0; i < 7; i++) {
+      const d = addDaysYmd_(base, i);
+      const future = !isPrev && d > P.today;
+      buckets.push({ key: d, label: sumFmt_(d, { weekday: 'short' }), v: future ? null : rows.filter(r => sumRowDate_(r) === d).length });
+    }
+  } else {
+    const nowHr = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }).format(new Date())) % 24;
+    for (let h = 0; h < 24; h++) {
+      const future = !isPrev && P.inProgress && h > nowHr;
+      buckets.push({ key: h, label: h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`, v: future ? null : rows.filter(r => sumRowHour_(r) === h).length });
+    }
+  }
+  return {
+    rows, jobs: rows.length, lens: rows.reduce((s, r) => s + lens(r), 0),
+    reasons: agg(r => r.BrkReason), machines: agg(r => r.BrkSourceMachine), materials: agg(r => r.Material),
+    s2: timing('AR41_to_Breakage_Min'), s3: timing('Breakage_to_Processed_Min'),
+    buckets,
+    sheetErr: rows.filter(r => [r.BrkSourceMachine, r.BrkReason, r.Material, r.RxNumber].some(v => OV_SHEET_ERR.test(String(v || '').trim()))).length,
+    undated: rows.filter(r => !sumRowDate_(r)).length,
+  };
+}
+
+const sumSorted_ = (m, by = 'jobs') => Object.entries(m).sort((a, b) => b[1][by] - a[1][by] || a[0].localeCompare(b[0]));
+const sumPct_ = (a, b) => b ? Math.round(a / b * 100) : 0;
+
+// ▲/▼ chip. higherIsWorse: more breakage or longer time = red
+function sumDelta_(cur, prev, { unit = '', time = false } = {}) {
+  if (prev === null || prev === undefined || cur === null || cur === undefined) return '<span class="sum-same">no comparison</span>';
+  const d = cur - prev;
+  if (Math.abs(d) < (time ? 1 : 0.5)) return '<span class="sum-same">same as before</span>';
+  const txt = time ? fmtMin(Math.abs(d)) : `${Math.abs(Math.round(d))}${unit}`;
+  return d > 0
+    ? `<span class="sum-up">▲ ${txt}${time ? ' slower' : ''}</span>`
+    : `<span class="sum-down">▼ ${txt}${time ? ' faster' : ''}</span>`;
+}
+
+/* ── Render ───────────────────────────────────────────────── */
+function sumRender_(prevCur) {
+  const C = SUM.cur, R = SUM.prev, P = SUM.P;
+  const isWeek = SUM.mode === 'week';
+  const per  = isWeek ? (P.inProgress ? 'so far this week' : 'this week') : (P.inProgress ? 'so far today' : `on ${P.cur.label}`);
+  const anim = !ovReduced_() && sumVisible_();
+
+  // sidebar + range text
+  const ml = document.getElementById('sbModeLabel'); if (ml) ml.textContent = isWeek ? 'Weekly' : 'Daily';
+  const dl = document.getElementById('sbDateLabel'); if (dl) dl.textContent = P.cur.label + (P.inProgress ? ' (in progress)' : '');
+  const rg = document.getElementById('sumWeekRange'); if (rg) rg.textContent = `compared with ${P.prev.label}${P.inProgress ? ' · same point in time' : ''}`;
+
+  // ── Hero ──
+  const rs = sumSorted_(C.reasons), ms = sumSorted_(C.machines);
+  const head = document.getElementById('sumHeadline');
+  const sub  = document.getElementById('sumHeadSub');
+  if (!C.jobs) {
+    head.innerHTML = `No breakage recorded ${per}.`;
+    sub.textContent = R.jobs ? `${SUM.cmpNote[0].toUpperCase() + SUM.cmpNote.slice(1)} had ${R.jobs} jobs.` : '';
+  } else {
+    let chg = '';
+    if (R.jobs) {
+      const pct = Math.round((C.jobs - R.jobs) / R.jobs * 100);
+      chg = pct === 0 ? `, the same as ${SUM.cmpNote}` : `, <span class="${pct > 0 ? 'sum-up' : 'sum-down'}">${pct > 0 ? 'up' : 'down'} ${Math.abs(pct)}% from ${SUM.cmpNote}</span>`;
+    } else if (R.rows) {
+      chg = `, with none in ${SUM.cmpNote}`;
+    }
+    head.innerHTML = `${C.jobs} ${C.jobs === 1 ? 'job' : 'jobs'} broke ${per} (${C.lens} ${C.lens === 1 ? 'lens' : 'lenses'})${chg}. ` +
+      `${ovEsc_(rs[0][0])} is ${sumPct_(rs[0][1].jobs, C.jobs)}% of it.`;
+    let s = '';
+    if (ms.length >= 2) s = `${ovEsc_(ms[0][0])} and ${ovEsc_(ms[1][0])} account for ${sumPct_(ms[0][1].jobs + ms[1][1].jobs, C.jobs)}% of jobs — the first places to look.`;
+    else if (ms.length === 1) s = `All of it came from ${ovEsc_(ms[0][0])}.`;
+    if (C.jobs < OV_SMALL_N) s += ` Only ${C.jobs} jobs, so read this as a hint, not a trend.`;
+    sub.innerHTML = s;
+  }
+
+  // ── KPIs ──
+  const setNum = (id, v) => { const el = document.getElementById(id); if (!el) return; const was = Number(el.dataset.v); ovCount_(el, v, anim && Number.isFinite(was) ? was : v); };
+  setNum('sumKJobs', C.jobs);
+  document.getElementById('sumKJobsD').innerHTML = sumDelta_(C.jobs, R.jobs) + ` <span class="sum-vs">vs ${ovEsc_(SUM.cmpNote)}</span>`;
+  setNum('sumKLens', C.lens);
+  document.getElementById('sumKLensD').innerHTML = `${C.jobs ? (C.lens / C.jobs).toFixed(1) : '0'} per job · ` + sumDelta_(C.lens, R.lens);
+  document.getElementById('sumKReason').textContent = rs[0]?.[0] || '--';
+  document.getElementById('sumKReasonD').textContent = rs[0] ? `${rs[0][1].jobs} of ${C.jobs} jobs · ${sumPct_(rs[0][1].jobs, C.jobs)}%` : 'no breakage';
+  document.getElementById('sumKProc').textContent = C.s3.n ? fmtMin(C.s3.med) : '--';
+  document.getElementById('sumKProcD').innerHTML = C.s3.n
+    ? `median of ${C.s3.n} timed jobs · ${sumDelta_(C.s3.med, R.s3.n ? R.s3.med : null, { time: true })}`
+    : 'no job has a processed time';
+
+  // ── What to look at ──
+  document.getElementById('sumLook').innerHTML = sumLookItems_(C, R, P).map((it, i) => `
+    <div class="sum-act"><div class="sum-actn">${i + 1}</div><div>
+      <b>${it.title}</b><p>${it.text}</p><div class="sum-ev">evidence: ${it.ev}</div></div></div>`).join('')
+    || '<div class="sum-empty">Nothing stands out — no breakage to review.</div>';
+
+  // ── Reasons ──
+  sumBars_('sumReasonBars', rs.map(([k, v]) => ({ k, n: v.jobs, pct: sumPct_(v.jobs, C.jobs), color: reasonColor(k), dot: true })), anim);
+  document.getElementById('sumReasonCheck').textContent = rs.length
+    ? `${rs.map(e => e[1].jobs).join(' + ')} = ${C.jobs}${rs.reduce((s, e) => s + e[1].jobs, 0) === C.jobs ? ' ✓' : ' ✗'}` : '';
+
+  // ── Machines (top 4 + others) ──
+  const top = ms.slice(0, 4), rest = ms.slice(4);
+  const mRows = top.map(([k, v]) => ({ k, n: v.jobs, delta: sumDelta_(v.jobs, R.machines[k]?.jobs ?? 0), mono: true, color: CLR.teal }));
+  if (rest.length) {
+    const n = rest.reduce((s, e) => s + e[1].jobs, 0);
+    const pn = Object.entries(R.machines).filter(([k]) => !top.some(t => t[0] === k)).reduce((s, e) => s + e[1].jobs, 0);
+    mRows.push({ k: `Others (${rest.length})`, n, delta: sumDelta_(n, pn), color: 'rgba(212,192,168,.4)' });
+  }
+  sumBars_('sumMachineBars', mRows, anim);
+
+  // ── Materials (lenses) ──
+  const mat = sumSorted_(C.materials, 'lens');
+  sumBars_('sumMaterialBars', mat.map(([k, v]) => ({ k, n: v.lens, pct: sumPct_(v.lens, C.lens), color: CLR.teal })), anim);
+  document.getElementById('sumMatCheck').textContent = mat.length ? `lenses by material · adds to ${mat.reduce((s, e) => s + e[1].lens, 0)}${mat.reduce((s, e) => s + e[1].lens, 0) === C.lens ? ' ✓' : ' ✗'}` : 'lenses by material';
+
+  // ── Timing ──
+  const tbox = (id, st, pst) => {
+    document.getElementById(id).innerHTML = st.n
+      ? `<div class="sum-tn">${fmtMin(st.med)}</div><div class="sum-ts">median · timed on ${st.n} of ${C.jobs}${st.n < OV_SMALL_N ? ' — too few to trust as a trend' : ''}</div><div class="sum-ts">${sumDelta_(st.med, pst.n ? pst.med : null, { time: true })}</div>`
+      : `<div class="sum-tn">--</div><div class="sum-ts">no job has this timing (0 of ${C.jobs})</div>`;
+  };
+  tbox('sumT2', C.s2, R.s2);
+  tbox('sumT3', C.s3, R.s3);
+
+  // ── Chart ──
+  sumChart_(C.buckets, (P.inProgress ? SUM.prevFull : R).buckets, anim && !SUM.entrancePlayed);
+
+  // ── Data notes ──
+  const notes = [];
+  if (C.sheetErr) notes.push(`${C.sheetErr} ${C.sheetErr === 1 ? 'row has' : 'rows have'} a sheet error (#N/A) and ${C.sheetErr === 1 ? 'is' : 'are'} still counted`);
+  if (C.undated) notes.push(`${C.undated} ${C.undated === 1 ? 'job has' : 'jobs have'} no scan date and ${C.undated === 1 ? "isn't" : "aren't"} on the ${isWeek ? 'day-by-day' : 'hour-by-hour'} chart`);
+  notes.push(isWeek ? 'week runs Mon 12:00 AM → Sun 11:59 PM ET' : 'day runs 12:00 AM → 11:59 PM ET');
+  if (P.inProgress) notes.push('period still in progress — compared to the same point last time');
+  notes.push('▲ red = more breakage / slower · ▼ green = less / faster');
+  document.getElementById('sumDataNotes').innerHTML = `<b>Data notes:</b> ${notes.join(' · ')}.`;
+
+  // ── Report text (copy / export) ──
+  SUM.text = sumPlainText_();
+  document.getElementById('sumReportText').textContent = SUM.text;
+  const ex = document.getElementById('sumExportBtn'); if (ex) ex.disabled = false;
+  const cp = document.getElementById('sumCopyBtn');   if (cp) cp.disabled = false;
+
+  if (sumVisible_() && !SUM.entrancePlayed) sumEntrance_();
+}
+
+function sumLookItems_(C, R, P) {
+  const out = [];
+  if (!C.jobs) return out;
+  const small = C.jobs < OV_SMALL_N ? ' · small sample' : '';
+  const prevWord = SUM.cmpNote;
+
+  // 1) top machine
+  const ms = sumSorted_(C.machines);
+  const pms = sumSorted_(R.machines);
+  if (ms.length) {
+    const [m, v] = ms[0];
+    const again = pms[0]?.[0] === m;
+    out.push({
+      title: `${ovEsc_(m)} had the most breakage`,
+      text: again ? 'Highest machine again — it was also the top machine in the comparison period. Start the review here.' : 'Start the review here.',
+      ev: `${v.jobs} of ${C.jobs} jobs (${sumPct_(v.jobs, C.jobs)}%) · ${ovEsc_(prevWord)} ${R.machines[m]?.jobs ?? 0}${small}`
+    });
+  }
+  // 2) reason that rose the most
+  const rise = sumSorted_(C.reasons).map(([k, v]) => ({ k, d: v.jobs - (R.reasons[k]?.jobs ?? 0), v: v.jobs, p: R.reasons[k]?.jobs ?? 0 }))
+    .filter(x => x.d >= 3).sort((a, b) => b.d - a.d)[0];
+  if (rise) out.push({ title: `${ovEsc_(rise.k)} rose the most`, text: `More ${ovEsc_(rise.k)} breakage than ${ovEsc_(prevWord)}.`, ev: `${rise.p} → ${rise.v} jobs (+${rise.d})${small}` });
+
+  // 3) material whose share of lenses grew the most (≥ 3 points), else the top material
+  const mt = sumSorted_(C.materials, 'lens').map(([k, v]) => {
+    const share = sumPct_(v.lens, C.lens), pShare = R.lens ? sumPct_(R.materials[k]?.lens ?? 0, R.lens) : null;
+    return { k, lens: v.lens, share, pShare, d: pShare === null ? null : share - pShare };
+  });
+  const grow = mt.filter(x => x.d !== null && x.d >= 3).sort((a, b) => b.d - a.d)[0];
+  if (grow) out.push({ title: `${ovEsc_(grow.k)} lenses`, text: 'Share of broken lenses rose the most of any material.', ev: `${grow.lens} lenses (${grow.share}%) · ${ovEsc_(prevWord)} ${grow.pShare}%${small}` });
+  else if (mt.length) out.push({ title: `${ovEsc_(mt[0].k)} lenses`, text: 'The most-broken material.', ev: `${mt[0].lens} of ${C.lens} lenses (${mt[0].share}%)${small}` });
+
+  // 4) timing coverage
+  if (C.s3.n < C.jobs * 0.5) out.push({
+    title: 'Breakage-table scans are missing',
+    text: 'Most jobs have no table or processed scan, so handling time is measured on a small share of jobs.',
+    ev: `processed time on ${C.s3.n} of ${C.jobs} jobs (${sumPct_(C.s3.n, C.jobs)}%)`
+  });
+  return out.slice(0, 3);
+}
+
+function sumBars_(elId, rows, anim) {
+  const box = document.getElementById(elId);
+  if (!box) return;
+  if (!rows.length) { box.innerHTML = '<div class="sum-empty">No breakage</div>'; return; }
+  const max = Math.max(1, ...rows.map(r => r.n));
+  const old = new Map([...box.querySelectorAll('.sum-bar')].map(el => [el.dataset.key, el.querySelector('.sum-fill').style.width]));
+  box.innerHTML = rows.map(r => `
+    <div class="sum-bar" data-key="${ovEsc_(r.k)}">
+      <span class="sum-bl${r.mono ? ' mono' : ''}">${r.dot ? `<i style="background:${r.color}"></i>` : ''}${ovEsc_(r.k)}</span>
+      <div class="sum-track"><div class="sum-fill" style="width:${r.n / max * 100}%;background:${r.color}"></div></div>
+      <b>${r.n}</b>
+      <small>${r.delta !== undefined ? r.delta : `${r.pct}%`}</small>
+    </div>`).join('');
+  if (!anim) return;
+  box.querySelectorAll('.sum-bar').forEach(el => {
+    const f = el.querySelector('.sum-fill'), to = f.style.width, from = old.get(el.dataset.key);
+    if (from !== undefined && from !== to) f.animate?.([{ width: from }, { width: to }], { duration: 600, easing: 'ease-out' });
+  });
+}
+
+function sumChart_(cur, prev, draw) {
+  const svg = document.getElementById('sumChart');
+  if (!svg) return;
+  const W = 760, H = 240, L = 40, Rm = 14, T = 16, B = 34;
+  const vals = [...cur, ...prev].map(b => b.v).filter(v => v !== null);
+  const step = Math.max(1, Math.ceil(Math.max(1, ...vals) / 4));
+  const ymax = step * 4;
+  const n = cur.length;
+  const x = i => L + (W - L - Rm) * (n === 1 ? 0.5 : i / (n - 1));
+  const y = v => T + (H - T - B) * (1 - v / ymax);
+  // straight segments between real points only; a null breaks the line
+  const path = arr => {
+    let d = '', pen = false;
+    arr.forEach((b, i) => {
+      if (b.v === null) { pen = false; return; }
+      d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(b.v).toFixed(1)} `; pen = true;
+    });
+    return d.trim();
+  };
+  let grid = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = step * k;
+    grid += `<line x1="${L}" x2="${W - Rm}" y1="${y(v)}" y2="${y(v)}" class="sum-g"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  }
+  const every = n > 12 ? 3 : 1;
+  const labels = cur.map((b, i) => i % every ? '' : `<text x="${x(i)}" y="${H - 10}" text-anchor="middle">${b.label}</text>`).join('');
+  const dots = cur.map((b, i) => b.v === null ? '' : `<circle cx="${x(i)}" cy="${y(b.v)}" r="5" class="sum-pt"><title>${b.label}: ${b.v} jobs</title></circle>`).join('');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `${grid}${labels}
+    <path d="${path(prev)}" class="sum-prev"/>
+    <path d="${path(cur)}" class="sum-cur" id="sumCurLine"/>${dots}`;
+  if (draw) {
+    const line = document.getElementById('sumCurLine');
+    const len = line.getTotalLength?.() || 0;
+    if (len && line.animate) line.animate([{ strokeDasharray: `${len}`, strokeDashoffset: `${len}` }, { strokeDasharray: `${len}`, strokeDashoffset: '0' }], { duration: 1000, easing: 'ease-out' });
+  }
+}
+
+function sumEntrance_() {
+  SUM.entrancePlayed = true;
+  if (ovReduced_()) return;
+  const sec = document.getElementById('sumMain');
+  if (!sec?.animate) return;
+  sec.querySelectorAll('.sum-panel').forEach((p, i) => p.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: i * 60, easing: 'ease-out', fill: 'backwards' }));
+  sec.querySelectorAll('.sum-fill').forEach((f, i) => { const w = f.style.width; f.animate([{ width: '0%' }, { width: w }], { duration: 700, delay: 200 + (i % 8) * 50, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'backwards' }); });
+  ['sumKJobs', 'sumKLens'].forEach(id => { const el = document.getElementById(id); const v = Number(el?.dataset.v); if (Number.isFinite(v)) ovCount_(el, v, 0, 800); });
+  const line = document.getElementById('sumCurLine');
+  const len = line?.getTotalLength?.() || 0;
+  if (len) line.animate([{ strokeDasharray: `${len}`, strokeDashoffset: `${len}` }, { strokeDasharray: `${len}`, strokeDashoffset: '0' }], { duration: 1000, delay: 250, easing: 'ease-out', fill: 'backwards' });
+}
+
+/* ── Plain text (copy for email / export) ─────────────────── */
+function sumPlainText_() {
+  const C = SUM.cur, R = SUM.prev, P = SUM.P;
+  const strip = h => { const t = document.createElement('div'); t.innerHTML = h; return (t.textContent || '').replace(/\s+/g, ' ').trim(); };
+  const lines = [
+    `POWER BREAKAGE — ${SUM.mode === 'week' ? 'WEEKLY' : 'DAILY'} SUMMARY`,
+    `${P.cur.label}${P.inProgress ? ' (in progress)' : ''} · compared with ${SUM.cmpNote}`,
+    '',
+    strip(document.getElementById('sumHeadline').innerHTML),
+    strip(document.getElementById('sumHeadSub').innerHTML),
+    '',
+    `Jobs with breakage: ${C.jobs} (${SUM.cmpNote}: ${R.jobs})`,
+    `Lenses broken:      ${C.lens} (${SUM.cmpNote}: ${R.lens})`,
+    `Top reason:         ${document.getElementById('sumKReason').textContent} — ${document.getElementById('sumKReasonD').textContent}`,
+    `Processing time:    ${C.s3.n ? `${fmtMin(C.s3.med)} median, timed on ${C.s3.n} of ${C.jobs}` : 'no job has a processed time'}`,
+    '',
+    'WHAT TO LOOK AT',
+    ...[...document.querySelectorAll('#sumLook .sum-act')].map((a, i) => `${i + 1}. ${strip(a.querySelector('b').innerHTML)} — ${strip(a.querySelector('p').innerHTML)} (${strip(a.querySelector('.sum-ev').innerHTML)})`),
+    '',
+    'BY REASON (jobs)',
+    ...sumSorted_(C.reasons).map(([k, v]) => `  ${k}: ${v.jobs}`),
+    'TOP MACHINES (jobs)',
+    ...sumSorted_(C.machines).slice(0, 5).map(([k, v]) => `  ${k}: ${v.jobs}`),
+    'TOP MATERIALS (lenses)',
+    ...sumSorted_(C.materials, 'lens').slice(0, 5).map(([k, v]) => `  ${k}: ${v.lens}`),
+    '',
+    strip(document.getElementById('sumDataNotes').innerHTML),
+    `Generated ${fmtEtStamp_(new Date())} ET`,
+  ];
+  return lines.join('\n');
+}
+
+async function sumCopy_() {
+  if (!SUM.text) return;
+  try {
+    await navigator.clipboard.writeText(SUM.text);
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = SUM.text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } finally { ta.remove(); }
+  }
+  ovBanner_('ok', 'Summary copied — paste it into your email');
+}
+
+function exportSummaryTXT() {
+  if (!SUM.text || !SUM.P) return;
+  const blob = new Blob([SUM.text], { type: 'text/plain;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `power_breakage_${SUM.mode === 'week' ? 'weekly' : 'daily'}_${SUM.P.cur.from}.txt`;   // ET date, no UTC shift
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ── Controls (names kept: called from power.html / loadAll) ── */
 function setSumMode(mode) {
-  _sumMode = mode;
-
+  SUM.mode = mode;
   document.getElementById('sumModeWeek').classList.toggle('active', mode === 'week');
   document.getElementById('sumModeDay').classList.toggle('active', mode === 'day');
   document.getElementById('sumWeekGroup').style.display = mode === 'week' ? '' : 'none';
   document.getElementById('sumDayGroup').style.display  = mode === 'day'  ? '' : 'none';
-
-  const modeLabel = document.getElementById('sbModeLabel');
-  if (modeLabel) modeLabel.textContent = mode === 'week' ? 'Weekly' : 'Daily';
-  const dateLabel = document.getElementById('sbDateLabel');
-  if (dateLabel) dateLabel.textContent = '—';
-
-  // Update report title
-  const title = document.getElementById('sumReportTitle');
-  if (title) title.textContent = mode === 'week' ? 'Weekly breakage report' : 'Daily breakage report';
-
-  // Reset report state
-  _sumCurrentNarrative = '';
-  _sumCurrentStats = null;
-  document.getElementById('sumEmpty').style.display     = '';
-  document.getElementById('sumTyping').style.display    = 'none';
-  document.getElementById('sumNarrative').style.display = 'none';
-  document.getElementById('sumNarrative').innerHTML     = '';
-  document.getElementById('sumBreakdownGrid').style.display = 'none';
-  document.getElementById('sumExportBtn').disabled = true;
-  document.getElementById('sumWeekRange').textContent = '—';
-  ['ss-jobs','ss-lens','ss-power','ss-axis','ss-ar41','ss-proc']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '--'; });
-
-  // If switching to day, default to today
+  const lk = document.getElementById('sumLookTitle');
+  if (lk) lk.textContent = mode === 'week' ? 'What should we look at this week?' : 'What should we look at today?';
+  const ct = document.getElementById('sumChartTitle');
+  if (ct) ct.textContent = mode === 'week' ? 'Day by day' : 'Hour by hour';
   if (mode === 'day') {
-    const dayInput = document.getElementById('daySelect');
-    if (dayInput && !dayInput.value) {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-      dayInput.value = today;
-    }
-    onDayChange(/*silent=*/true);
-  } else {
-    onWeekChange(/*silent=*/true);
+    const inp = document.getElementById('daySelect');
+    if (inp) { inp.max = sumTodayYmd_(); if (!inp.value) inp.value = sumTodayYmd_(); }
   }
+  SUM.entrancePlayed = false;
+  sumLoad_();
 }
 
-async function onDayChange(silent) {
-  const dateVal = document.getElementById('daySelect').value;
-  if (!dateVal) return;
+function onDayChange() { sumLoad_(); }
+function onWeekChange() { sumLoad_(); }
 
-  const d = new Date(dateVal + 'T00:00:00');
-  const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const rangeEl = document.getElementById('sumWeekRange');
-  if (rangeEl) rangeEl.textContent = label;
-
-  const genBtn = document.getElementById('sumGenBtn');
-  if (genBtn) genBtn.disabled = true;
-  ['ss-jobs','ss-lens','ss-power','ss-axis','ss-ar41','ss-proc']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '…'; });
-
-  let dBrk = [];
-  const todayStr = new Date().toLocaleDateString('en-CA');
-
-  try {
-    if (dateVal === todayStr) {
-      // Live data for today
-      dBrk = _allBrk.filter(r => {
-        const ds = r.AR41ScanTime || r.BrkTableScanTime;
-        if (!ds) return false;
-        const rd = new Date(ds).toLocaleDateString('en-CA');
-        return rd === todayStr;
-      });
-    } else {
-      const raw = await fetchTab('breakageSummary', dateVal, dateVal);
-      dBrk = (Array.isArray(raw) ? raw : []).map(normalizeRow);
-    }
-  } catch(e) {
-    console.error('Daily summary fetch error:', e);
-    dBrk = [];
-  }
-
-  if (genBtn) genBtn.disabled = false;
-
-  const totalJobs = dBrk.length;
-  const totalLens = dBrk.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
-  const sPower    = dBrk.filter(r => (r.BrkReason || '').toLowerCase().includes('power')).length;
-  const sAxis     = dBrk.filter(r => (r.BrkReason || '').toLowerCase().includes('axis')).length;
-  const avgAR41   = avgArr(dBrk.map(r => r.AR41_to_Breakage_Min));
-  const avgProc   = avgArr(dBrk.map(r => r.Breakage_to_Processed_Min));
-
-  _sumCurrentStats = { week: { label }, wBrk: dBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, isDaily: true, dateLabel: label };
-
-  buildSBPanes({ wBrk: dBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, periodLabel: label });
-
-  if (!silent) {
-    _sumCurrentNarrative = '';
-    document.getElementById('sumEmpty').style.display     = '';
-    document.getElementById('sumTyping').style.display    = 'none';
-    document.getElementById('sumNarrative').style.display = 'none';
-    document.getElementById('sumNarrative').innerHTML     = '';
-    const exportBtn = document.getElementById('sumExportBtn');
-    if (exportBtn) exportBtn.disabled = true;
-  }
-}
-
+// Called after every load (loadAll / applyDateFilter) and when the tab opens.
+// Builds the 12 week options once per ET week, keeps the user's choice,
+// and only fetches while the Summary tab is visible.
 function buildWeekOptions() {
   const sel = document.getElementById('weekSelect');
   if (!sel) return;
-
-  // Generate last 12 weeks (Mon–Sun) going back from current week
-  // This ensures past weeks with BREAKAGE_HISTORY data are always available
-  const today = new Date();
-  const thisMonday = getMondayOf(today);
-
-  _sumWeeks = [];
-  for (let i = 0; i < 12; i++) {
-    const mon = new Date(thisMonday);
-    mon.setDate(mon.getDate() - (i * 7));
-    mon.setHours(0,0,0,0);
-    const sun = getSundayOf(mon);
-    _sumWeeks.push({ label: fmtWeekLabel(mon, sun), from: mon, to: sun });
-  }
-
-  while (sel.options.length) sel.remove(0);
-  _sumWeeks.forEach((w, i) => {
-    const o = document.createElement('option');
-    o.value = i; o.textContent = w.label; sel.appendChild(o);
-  });
-
-  // Default to most recent complete week (index 1 = last full Mon–Sun)
-  // Index 0 is current week (may be partial), index 1 is last completed week
-  const todayDay = today.getDay(); // 0=Sun
-  sel.value = todayDay === 0 ? 0 : 1; // if today IS Sunday, current week just ended
-  onWeekChange(/*silent=*/true);
-}
-
-async function onWeekChange(silent) {
-  const sel  = document.getElementById('weekSelect');
-  const idx  = parseInt(sel.value);
-  const week = _sumWeeks[idx];
-  if (!week) return;
-
-  const rangeEl = document.getElementById('sumWeekRange');
-  if (rangeEl) rangeEl.textContent = `${fmtShortDate(week.from)} → ${fmtShortDate(week.to)}`;
-
-  // Determine if this week is the current live week or a past week
-  const todayStr = new Date().toISOString().slice(0,10);
-  const weekEnd  = week.to.toISOString().slice(0,10);
-  const isPast   = weekEnd < todayStr;
-
-  // Format dates for API
-  const startStr = week.from.toISOString().slice(0,10);
-  const endStr   = week.to.toISOString().slice(0,10);
-
-  let wBrk = [];
-
-  if (isPast) {
-    // Fetch from BREAKAGE_HISTORY for this date range
-    const genBtn = document.getElementById('sumGenBtn');
-    if (genBtn) genBtn.disabled = true;
-
-    // Show loading state in stat cards
-    ['ss-jobs','ss-lens','ss-power','ss-axis','ss-ar41','ss-proc']
-      .forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '…'; });
-
-    try {
-      const raw = await fetchTab('breakageSummary', startStr, endStr);
-      wBrk = (Array.isArray(raw) ? raw : []).map(normalizeRow);
-    } catch(e) {
-      console.error('Summary week fetch error:', e);
-      wBrk = [];
-    }
-    if (genBtn) genBtn.disabled = false;
-  } else {
-    // Current week — filter from live data already loaded
-    wBrk = _allBrk.filter(r => {
-      const ds = r.AR41ScanTime || r.BrkTableScanTime;
-      if (!ds) return false;
-      const d = new Date(ds);
-      return !isNaN(d) && d >= week.from && d <= week.to;
+  const thisMon = sumMondayOf_(sumTodayYmd_());
+  if (SUM.weekKey !== thisMon) {
+    const keep = sel.value ? SUM.weeks[Number(sel.value)]?.from : null;
+    SUM.weekKey = thisMon;
+    SUM.weeks = Array.from({ length: 12 }, (_, i) => {
+      const from = addDaysYmd_(thisMon, -7 * i), to = addDaysYmd_(from, 6);
+      return { from, to, label: sumWeekLabel_(from, to) + (i === 0 ? ' (in progress)' : '') };
     });
+    while (sel.options.length) sel.remove(0);
+    SUM.weeks.forEach((w, i) => { const o = document.createElement('option'); o.value = i; o.textContent = w.label; sel.appendChild(o); });
+    const k = keep ? SUM.weeks.findIndex(w => w.from === keep) : -1;
+    sel.value = k >= 0 ? k : 1;   // default: last complete week
   }
-
-  const totalJobs = wBrk.length;
-  const totalLens = wBrk.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
-  const sPower    = wBrk.filter(r => (r.BrkReason || '').toLowerCase().includes('power')).length;
-  const sAxis     = wBrk.filter(r => (r.BrkReason || '').toLowerCase().includes('axis')).length;
-  const avgAR41   = avgArr(wBrk.map(r => r.AR41_to_Breakage_Min));
-  const avgProc   = avgArr(wBrk.map(r => r.Breakage_to_Processed_Min));
-
-  _sumCurrentStats = { week, wBrk, wRes: [], totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc };
-
-  buildSBPanes({ wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, periodLabel: week.label });
-
-  if (!silent) {
-    _sumCurrentNarrative = '';
-    document.getElementById('sumEmpty').style.display     = '';
-    document.getElementById('sumTyping').style.display    = 'none';
-    document.getElementById('sumNarrative').style.display = 'none';
-    document.getElementById('sumNarrative').innerHTML     = '';
-    const exportBtn = document.getElementById('sumExportBtn');
-    if (exportBtn) exportBtn.disabled = true;
-  }
+  if (sumVisible_()) sumLoad_();
 }
 
-/* ============================================================
-   SIGNAL BOARD — populate panes + nav
-============================================================ */
-function sbBuildBarRows(elId, entries, colorFn) {
-  const el = document.getElementById(elId);
+// Sidebar: jump links + highlight follows scroll
+function sumJump_(id, btn) {
+  const el = document.getElementById(id);
   if (!el) return;
-  const max = entries[0]?.[1] || 1;
-  el.innerHTML = entries.map(([label, val], i) => `
-    <div class="sb-bar-row" style="transition-delay:${i * 55}ms">
-      <div class="sb-bar-lbl" title="${label}">${label}</div>
-      <div class="sb-bar-track">
-        <div class="sb-bar-fill" style="background:${colorFn(i)};width:0%" data-w="${Math.round(val / max * 100)}%"></div>
-      </div>
-      <div class="sb-bar-val">${val}</div>
-    </div>`).join('');
-  requestAnimationFrame(() => {
-    el.querySelectorAll('.sb-bar-row').forEach(r => r.classList.add('sb-in'));
-    el.querySelectorAll('.sb-bar-fill').forEach(b => { b.style.width = b.dataset.w; });
-  });
+  el.scrollIntoView({ behavior: ovReduced_() ? 'auto' : 'smooth', block: 'start' });
+  document.querySelectorAll('.sum-nav').forEach(b => b.classList.toggle('active', b === btn));
 }
 
-function sbAnimateTickers() {
-  document.querySelectorAll('.sb-ticker-val').forEach(el => {
-    el.classList.remove('sb-in');
-    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('sb-in')));
-  });
-}
-
-function buildSBPanes({ wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, periodLabel }) {
-  // Update sidebar date label
-  const dateEl = document.getElementById('sbDateLabel');
-  if (dateEl) dateEl.textContent = periodLabel || '—';
-
-  // Ticker values
-  const tickerMap = {
-    'sbt-jobs':  totalJobs  || '--',
-    'sbt-lens':  totalLens  || '--',
-    'sbt-power': sPower     || '--',
-    'sbt-axis':  sAxis      || '--',
-    'sbt-ar41':  fmtMin(avgAR41),
-    'sbt-proc':  fmtMin(avgProc),
-  };
-  Object.entries(tickerMap).forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
-  });
-  sbAnimateTickers();
-
-  // Reason bars
-  const rsnAgg = {};
-  wBrk.forEach(r => { const k = r.BrkReason || 'Unknown'; rsnAgg[k] = (rsnAgg[k] || 0) + 1; });
-  const rsnEntries = Object.entries(rsnAgg).sort((a, b) => b[1] - a[1]);
-  const rsnColors = [CLR.peach, CLR.peri, CLR.teal, CLR.series[3], CLR.series[4]];
-  sbBuildBarRows('sbReasonBars', rsnEntries, i => rsnColors[i % rsnColors.length]);
-
-  // Machine bars
-  const machAgg = {};
-  wBrk.forEach(r => { const m = r.BrkSourceMachine || 'Unknown'; machAgg[m] = (machAgg[m] || 0) + 1; });
-  const machEntries = Object.entries(machAgg).sort((a, b) => b[1] - a[1]);
-  sbBuildBarRows('sbMachineList', machEntries, i => CLR.series[i % CLR.series.length]);
-
-  // Material bars
-  const matAgg = {};
-  wBrk.forEach(r => { const m = r.Material || 'Unknown'; matAgg[m] = (matAgg[m] || 0) + (parseInt(r.LensesBroken) || 0); });
-  const matEntries = Object.entries(matAgg).sort((a, b) => b[1] - a[1]);
-  sbBuildBarRows('sumMaterialList', matEntries, i => CLR.series[i % CLR.series.length]);
-
-  // Timing bars by reason
-  const timingEl = document.getElementById('sbTimingList');
-  if (timingEl) {
-    const timingEntries = rsnEntries.map(([reason]) => {
-      const rows = wBrk.filter(r => (r.BrkReason || 'Unknown') === reason);
-      const avg = avgArr(rows.map(r => r.AR41_to_Breakage_Min));
-      return [reason, Math.round(avg), fmtMin(avg)];
-    }).filter(e => e[1] > 0).sort((a, b) => b[1] - a[1]);
-    const maxT = timingEntries[0]?.[1] || 1;
-    timingEl.innerHTML = timingEntries.map(([label, val, display], i) => `
-      <div class="sb-bar-row" style="transition-delay:${i * 55}ms">
-        <div class="sb-bar-lbl" title="${label}">${label}</div>
-        <div class="sb-bar-track">
-          <div class="sb-bar-fill" style="background:${rsnColors[i % rsnColors.length]};width:0%" data-w="${Math.round(val / maxT * 100)}%"></div>
-        </div>
-        <div class="sb-bar-val" style="min-width:52px">${display}</div>
-      </div>`).join('');
-    requestAnimationFrame(() => {
-      timingEl.querySelectorAll('.sb-bar-row').forEach(r => r.classList.add('sb-in'));
-      timingEl.querySelectorAll('.sb-bar-fill').forEach(b => { b.style.width = b.dataset.w; });
+(function sumWatch_() {
+  if (!('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      document.querySelectorAll('.sum-nav').forEach(b => b.classList.toggle('active', b.dataset.target === e.target.id));
     });
-  }
-}
-
-function sbNav(pane, btn) {
-  document.querySelectorAll('.sb-nav-item').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.sb-pane').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  const el = document.getElementById('sbp-' + pane);
-  if (!el) return;
-  el.classList.add('active');
-  // Re-trigger bar animations on pane switch
-  requestAnimationFrame(() => {
-    el.querySelectorAll('.sb-bar-row').forEach(r => { r.classList.remove('sb-in'); requestAnimationFrame(() => r.classList.add('sb-in')); });
-    el.querySelectorAll('.sb-bar-fill').forEach(b => { b.style.width = '0%'; setTimeout(() => { b.style.width = b.dataset.w; }, 30); });
-    el.querySelectorAll('.sb-ticker-val').forEach(v => { v.classList.remove('sb-in'); requestAnimationFrame(() => v.classList.add('sb-in')); });
-  });
-}
-
-/* ============================================================
-   SUMMARY PAYLOAD + GENERATE
-============================================================ */
-function buildSummaryPayload(stats) {
-  const { week, wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc } = stats;
-
-  const reasonAgg = {};
-  wBrk.forEach(r => { const k = r.BrkReason || 'Unknown'; reasonAgg[k] = (reasonAgg[k] || 0) + 1; });
-
-  const machAgg = {};
-  wBrk.forEach(r => { const m = r.BrkSourceMachine || 'Unknown'; machAgg[m] = (machAgg[m] || 0) + 1; });
-
-  const matAgg = {};
-  wBrk.forEach(r => { const m = r.Material || 'Unknown'; matAgg[m] = (matAgg[m] || 0) + (parseInt(r.LensesBroken) || 0); });
-
-  const worst = [...wBrk]
-    .map(r => ({ rx: r.RxNumber, machine: r.BrkSourceMachine, reason: r.BrkReason, min: parseFloat(r.AR41_to_Breakage_Min) || 0 }))
-    .sort((a, b) => b.min - a.min)
-    .slice(0, 5);
-
-  return { weekLabel: week.label, totalJobs, totalLens, sPower, sAxis, avgAR41_min: Math.round(avgAR41), avgProc_min: Math.round(avgProc), reasonBreakdown: reasonAgg, machineBreakdown: machAgg, materialBreakdown: matAgg, worstJobs: worst };
-}
-
-function generateSummary() {
-  if (!_sumCurrentStats) return;
-
-  const genBtn = document.getElementById('sumGenBtn');
-  genBtn.disabled = true;
-  document.getElementById('sumEmpty').style.display     = 'none';
-  document.getElementById('sumNarrative').style.display = 'none';
-  document.getElementById('sumTyping').style.display    = 'flex';
-
-  // Small timeout so the typing indicator renders before we do the work
-  setTimeout(() => {
-    try {
-      const html = buildDataReport(_sumCurrentStats);
-      _sumCurrentNarrative = html;
-
-      document.getElementById('sumTyping').style.display    = 'none';
-      const narEl = document.getElementById('sumNarrative');
-      narEl.innerHTML     = html;
-      narEl.style.display = '';
-
-      const exportBtn = document.getElementById('sumExportBtn');
-      if (exportBtn) exportBtn.disabled = false;
-
-      const hint = document.getElementById('sumGenHint');
-      const now  = new Date();
-      if (hint) hint.textContent = `Generated ${now.getMonth()+1}/${now.getDate()} at ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} · Auto-generated from breakage data`;
-
-    } catch(err) {
-      console.error('Summary build error:', err);
-      document.getElementById('sumTyping').style.display    = 'none';
-      document.getElementById('sumNarrative').innerHTML     = '<p style="color:var(--peach)">Failed to build report.</p>';
-      document.getElementById('sumNarrative').style.display = '';
-    } finally {
-      genBtn.disabled = false;
-    }
-  }, 200);
-}
-
-/* ── Pure data-driven report builder — weekly or daily ── */
-function buildDataReport(stats) {
-  const { wBrk, totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, isDaily, dateLabel } = stats;
-  const periodLabel = isDaily ? dateLabel : stats.week.label;
-  const periodWord  = isDaily ? 'day' : 'week';
-  const periodTitle = isDaily ? 'Day at a Glance' : 'Week at a Glance';
-
-  if (totalJobs === 0) {
-    return `<h2>${periodTitle}</h2><p>No breakage events recorded for <strong>${periodLabel}</strong>. Clean ${periodWord} — no action required.</p>`;
-  }
-
-  // ── Aggregations ──────────────────────────────────────────
-  const reasonAgg = {};
-  wBrk.forEach(r => { const k = r.BrkReason || 'Unknown'; reasonAgg[k] = (reasonAgg[k] || 0) + 1; });
-  const reasonList = Object.entries(reasonAgg).sort((a,b) => b[1]-a[1]);
-  const topReason  = reasonList[0];
-
-  const machAgg = {};
-  wBrk.forEach(r => { const m = r.BrkSourceMachine || 'Unknown'; machAgg[m] = (machAgg[m] || 0) + 1; });
-  const machList = Object.entries(machAgg).sort((a,b) => b[1]-a[1]);
-  const topMach  = machList[0];
-
-  const matAgg = {};
-  wBrk.forEach(r => { const m = r.Material || 'Unknown'; matAgg[m] = (matAgg[m] || 0) + (parseInt(r.LensesBroken)||0); });
-  const matList = Object.entries(matAgg).sort((a,b) => b[1]-a[1]);
-  const topMat  = matList[0];
-
-  const worst = [...wBrk]
-    .map(r => ({ rx: r.RxNumber, machine: r.BrkSourceMachine, reason: r.BrkReason, min: parseFloat(r.AR41_to_Breakage_Min)||0 }))
-    .sort((a,b) => b.min - a.min)
-    .slice(0, 5);
-
-  const avgAR41Fmt = fmtMin(avgAR41);
-  const avgProcFmt = fmtMin(avgProc);
-
-  // ── Threshold flags ────────────────────────────────────────
-  const ar41Flag  = avgAR41 > 480;   // > 8 hours is notable
-  const procFlag  = avgProc > 120;   // > 2 hours is notable
-  const highVol   = totalJobs >= 20;
-  const lowVol    = totalJobs <= 3;
-  const powerPct  = totalJobs > 0 ? Math.round(sPower / totalJobs * 100) : 0;
-  const axisPct   = totalJobs > 0 ? Math.round(sAxis  / totalJobs * 100) : 0;
-
-  // ── Section 1: Glance ─────────────────────────────────────
-  let glance = `<h2>${periodTitle}</h2>`;
-  glance += `<p><strong>${periodLabel}</strong> recorded <strong>${totalJobs} breakage job${totalJobs!==1?'s':''}</strong> with a total of <strong>${totalLens} lens${totalLens!==1?'es':''} broken</strong>. `;
-
-  if (lowVol) {
-    glance += `This was a light ${periodWord} with minimal breakage activity. `;
-  } else if (highVol) {
-    glance += `This was a high-volume ${periodWord} that warrants close review. `;
-  } else {
-    glance += `Volume was within normal range. `;
-  }
-
-  if (ar41Flag) {
-    glance += `Average time from AR41 scan to Breakage entry was <strong>${avgAR41Fmt}</strong> — notably long and worth investigating for process delays.`;
-  } else {
-    glance += `Average AR41→Breakage time was <strong>${avgAR41Fmt}</strong> and processing time averaged <strong>${avgProcFmt}</strong>.`;
-  }
-  glance += `</p>`;
-
-  // ── Section 2: Breakage Reasons ───────────────────────────
-  let reasons = `<h2>Breakage Reasons</h2>`;
-  if (reasonList.length === 1) {
-    reasons += `<p>All <strong>${totalJobs} jobs</strong> were attributed to <strong>${topReason[0]}</strong> this ${periodWord}.</p>`;
-  } else {
-    reasons += `<p><strong>${topReason[0]}</strong> was the leading cause with <strong>${topReason[1]} job${topReason[1]!==1?'s':''}</strong> (${Math.round(topReason[1]/totalJobs*100)}% of total). `;
-    if (reasonList.length > 1) {
-      const second = reasonList[1];
-      reasons += `<strong>${second[0]}</strong> accounted for <strong>${second[1]} job${second[1]!==1?'s':''}</strong> (${Math.round(second[1]/totalJobs*100)}%).`;
-    }
-    reasons += `</p>`;
-  }
-
-  reasons += `<ul>`;
-  reasonList.forEach(([reason, count]) => {
-    const pct = Math.round(count/totalJobs*100);
-    reasons += `<li><strong>${reason}</strong> — ${count} job${count!==1?'s':''} · ${count > 1 ? parseInt(wBrk.filter(r=>r.BrkReason===reason).reduce((s,r)=>s+(parseInt(r.LensesBroken)||0),0)) + ' lenses broken' : '1 lens broken'} (${pct}%)</li>`;
-  });
-  reasons += `</ul>`;
-
-  if (sPower === 0) reasons += `<div class="sum-callout">✓ No S-Power events this week — positive result.</div>`;
-  if (sAxis  === 0) reasons += `<div class="sum-callout">✓ No S-Axis events this week — positive result.</div>`;
-
-  // ── Section 3: Machines & Materials ───────────────────────
-  let machines = `<h2>Machines &amp; Materials</h2>`;
-  machines += `<p><strong>${topMach[0]}</strong> had the most breakage events this week with <strong>${topMach[1]} job${topMach[1]!==1?'s':''}</strong>`;
-  if (machList.length > 1) {
-    machines += `, followed by <strong>${machList[1][0]}</strong> (${machList[1][1]} job${machList[1][1]!==1?'s':''})`;
-  }
-  machines += `.</p>`;
-
-  machines += `<p>By material, <strong>${topMat[0]}</strong> accounted for the most broken lenses (<strong>${topMat[1]}</strong>)`;
-  if (matList.length > 1) {
-    machines += `, followed by ${matList.slice(1,3).map(([m,c])=>`<strong>${m}</strong> (${c})`).join(' and ')}`;
-  }
-  machines += `.</p>`;
-
-  if (machList.length > 1) {
-    machines += `<ul>`;
-    machList.forEach(([m, c]) => {
-      machines += `<li><strong>${m}</strong> — ${c} job${c!==1?'s':''}</li>`;
-    });
-    machines += `</ul>`;
-  }
-
-  // ── Section 4: Observations & Recommendations ─────────────
-  let obs = `<h2>Key Observations &amp; Recommendations</h2><ul>`;
-
-  // Volume flag
-  if (highVol) {
-    obs += `<li><strong>High breakage volume</strong> — ${totalJobs} jobs this ${periodWord} is elevated. Review if any process changes coincide with this period.</li>`;
-  } else if (lowVol) {
-    obs += `<li><strong>Low breakage volume</strong> — only ${totalJobs} job${totalJobs!==1?'s':''} this ${periodWord}. No major concerns.</li>`;
-  } else {
-    obs += `<li><strong>Normal volume</strong> — ${totalJobs} jobs is within expected range.</li>`;
-  }
-
-  // AR41 delay flag
-  if (ar41Flag) {
-    obs += `<li><strong>AR41→Breakage time is high</strong> — averaging ${avgAR41Fmt}. Investigate queuing or staffing delays between AR41 and the breakage table.</li>`;
-  } else {
-    obs += `<li><strong>AR41→Breakage timing is acceptable</strong> — averaging ${avgAR41Fmt}.</li>`;
-  }
-
-  // Processing delay flag
-  if (procFlag) {
-    obs += `<li><strong>Breakage→Processed time is elevated</strong> — averaging ${avgProcFmt}. Check if breakage processing is being completed promptly.</li>`;
-  }
-
-  // Top machine flag
-  if (machList.length > 0 && topMach[1] > 1) {
-    obs += `<li><strong>Monitor ${topMach[0]}</strong> — led all machines with ${topMach[1]} breakage events. Consider a check of machine calibration or process parameters.</li>`;
-  }
-
-  // Worst delay jobs
-  if (worst.length > 0 && worst[0].min > 60) {
-    obs += `<li><strong>Longest delay job</strong> — RX <strong>${worst[0].rx}</strong> on ${worst[0].machine||'?'} had an AR41→Breakage time of <strong>${fmtMin(worst[0].min)}</strong>. `;
-    obs += `Review this job for root cause.</li>`;
-  }
-
-  // S-Power dominant
-  if (powerPct >= 70) {
-    obs += `<li><strong>S-Power dominated</strong> at ${powerPct}% of all breakage. Focus troubleshooting on power-related process steps.</li>`;
-  }
-
-  obs += `</ul>`;
-
-  return glance + reasons + machines + obs;
-}
-
-function exportSummaryTXT() {
-  if (!_sumCurrentNarrative || !_sumCurrentStats) return;
-  const { totalJobs, totalLens, sPower, sAxis, avgAR41, avgProc, week, isDaily, dateLabel } = _sumCurrentStats;
-  const periodLabel = isDaily ? dateLabel : week.label;
-  const reportType  = isDaily ? 'DAILY' : 'WEEKLY';
-
-  const tmp     = document.createElement('div');
-  tmp.innerHTML = _sumCurrentNarrative;
-  const plain   = tmp.innerText || tmp.textContent || '';
-
-  const header = [
-    `SURFACE FLOW — ${reportType} BREAKAGE REPORT`,
-    `Period: ${periodLabel}`,
-    `Generated: ${new Date().toLocaleString()}`,
-    ``,
-    `SUMMARY STATISTICS`,
-    `  Jobs:             ${totalJobs}`,
-    `  Lenses broken:    ${totalLens}`,
-    `  S-Power events:   ${sPower}`,
-    `  S-Axis events:    ${sAxis}`,
-    `  Avg AR41 to Brk:  ${fmtMin(avgAR41)}`,
-    `  Avg Brk to Proc:  ${fmtMin(avgProc)}`,
-    ``,
-    `─────────────────────────────────────────`,
-    ``,
-  ].join('\n');
-
-  const blob = new Blob([header + plain], { type: 'text/plain;charset=utf-8;' });
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  const fileDate = isDaily
-    ? document.getElementById('daySelect')?.value || new Date().toISOString().slice(0,10)
-    : (week.from ? week.from.toISOString().slice(0,10) : new Date().toISOString().slice(0,10));
-  a.download = `breakage_${isDaily ? 'daily' : 'weekly'}_${fileDate}.txt`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
+  }, { rootMargin: '-180px 0px -60% 0px' });
+  document.querySelectorAll('#sumMain [data-nav]').forEach(s => io.observe(s));
+})();
 
 document.addEventListener('DOMContentLoaded', () => {
   const domStartedAt = powerPerfStart_('DOMContentLoaded → Power Breakage boot', {});
@@ -2049,3 +1987,751 @@ document.addEventListener('DOMContentLoaded', () => {
 
   powerPerfEnd_('DOMContentLoaded → Power Breakage boot', domStartedAt, {});
 });
+
+
+/* ============================================================
+   HEADER (Coating-style) — UI only
+   Added for the header redesign. Does not change the API URL,
+   fetch order, calculations, filters, or refresh cadence.
+   - ET clock (America/New_York)
+   - Previous / next day stepping around the existing
+     applyDateFilter() and clearDateFilter()
+   - Live pill color + "Updated" chip, driven by watching the
+     existing #liveStatus text (loadAll/applyDateFilter untouched)
+============================================================ */
+// Timezone is hard-coded per data rules: America/New_York
+
+function etYmd_(d) {
+  // "YYYY-MM-DD" in Eastern time (en-CA formats as ISO date)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
+function etTime_(d) {
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
+}
+
+function fmtEtStamp_(d) {
+  const md = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric' }).format(d);
+  return `${md} ${etTime_(d)}`;
+}
+
+function addDaysYmd_(ymd, delta) {
+  // Noon UTC avoids any DST edge when stepping calendar days
+  const dt = new Date(`${ymd}T12:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  return dt.toISOString().slice(0, 10);
+}
+
+function updateEtClock_() {
+  const now = new Date();
+  const dEl = document.getElementById('hdrDate');
+  const tEl = document.getElementById('hdrTime');
+  if (dEl) dEl.textContent = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(now);
+  if (tEl) tEl.textContent = etTime_(now);
+  const inp = document.getElementById('dateSingle');
+  if (inp) inp.max = etYmd_(now);
+}
+
+function stepDate_(delta) {
+  const inp = document.getElementById('dateSingle');
+  if (!inp) return;
+  const today  = etYmd_(new Date());
+  const base   = inp.value || today;
+  const target = addDaysYmd_(base, delta);
+
+  if (target >= today) {
+    // Stepping forward onto today = back to the live report
+    if (inp.value) clearDateFilter();
+    return;
+  }
+  inp.value = target;
+  applyDateFilter();
+}
+
+function syncHeaderState_() {
+  const status = (document.getElementById('liveStatus')?.textContent || '').trim().toLowerCase();
+  const badge  = document.getElementById('liveBadge');
+  const chip   = document.getElementById('lastUpdated');
+  const nav    = document.querySelector('.nav');
+  const inp    = document.getElementById('dateSingle');
+  const next   = document.getElementById('dayNextBtn');
+
+  let state = 'loading';
+  if (status === 'live') state = 'live';
+  else if (status === 'historical') state = 'historical';
+  else if (status === 'error') state = 'error';
+  if (badge) badge.dataset.state = state;
+
+  if (chip) {
+    if (state === 'live' || state === 'historical') {
+      chip._lastOk = etTime_(new Date());
+      chip.textContent = `Updated ${chip._lastOk}`;
+      chip.classList.remove('is-failed');
+    } else if (state === 'error') {
+      chip.textContent = chip._lastOk ? `Update failed · last ${chip._lastOk}` : 'Update failed';
+      chip.classList.add('is-failed');
+    }
+  }
+
+  const isHist = !!(inp && inp.value);
+  if (nav)  nav.classList.toggle('is-historical', isHist);
+  if (next) next.disabled = !isHist;
+}
+
+(function initHeader_() {
+  updateEtClock_();
+  setInterval(updateEtClock_, 1000);
+
+  const statusEl = document.getElementById('liveStatus');
+  if (statusEl) {
+    new MutationObserver(syncHeaderState_).observe(statusEl, { childList: true, characterData: true, subtree: true });
+  }
+  syncHeaderState_();
+})();
+
+/* ============================================================
+   OVERVIEW HELPERS (v6) — rendering + animation, UI only
+   Rules:
+   - Entrance animation plays once, after the loading splash hides.
+   - Refresh (same date): bars move old → new, numbers count old → new,
+     changed values get a short white outline, jobs shows a +/- badge.
+   - Date switch: quick fade-in, no "changed" highlights (different day,
+     not new data).
+   - prefers-reduced-motion: everything is instant.
+============================================================ */
+const OV_SMALL_N = 10;   // fewer than 10 timed jobs (or jobs per machine) = small sample
+const _ov = { rendered: false, ctx: null, entrancePlayed: false, lastJobs: null };
+
+function ovReduced_() {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function ovCtxKey_() {
+  return document.getElementById('dateSingle')?.value || 'live';
+}
+
+function ovRenderMode_() {
+  // 'first'   = very first render (entrance plays later, after the splash)
+  // 'refresh' = same date re-rendered with new data
+  // 'switch'  = different date than last render
+  const key = ovCtxKey_();
+  const mode = !_ov.rendered ? 'first' : (_ov.ctx === key ? 'refresh' : 'switch');
+  _ov.ctx = key;
+  return mode;
+}
+
+function ovAfterRender_() {
+  _ov.rendered = true;
+  ovMaybePlayEntrance_();
+}
+
+function ovPrettyDate_(ymd) {
+  if (!ymd) return '';
+  const d = new Date(`${ymd}T12:00:00Z`);
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(d);
+}
+
+function ovEsc_(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function ovTag_(kind, text) {
+  return `<span class="ov-tag ov-tag-${kind}">${ovEsc_(text)}</span>`;
+}
+
+/* ── Stats ─────────────────────────────────────────────────── */
+function ovTimingStats_(rows, field) {
+  const vals = rows.map(r => parseFloat(r[field])).filter(v => Number.isFinite(v));
+  return { n: vals.length, avg: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
+}
+
+/* ── Numbers ───────────────────────────────────────────────── */
+function ovCount_(el, to, from, ms = 700) {
+  const gen = (el._ovGen = (el._ovGen || 0) + 1);   // a newer update cancels an older count
+  el.dataset.v = to;
+  if (ovReduced_() || from === to || !Number.isFinite(from)) { el.textContent = to; return; }
+  const t0 = performance.now();
+  const step = now => {
+    if (el._ovGen !== gen) return;
+    const p = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(from + (to - from) * e);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function ovFlash_(el) {
+  if (!el) return;
+  el.classList.remove('ov-changed', 'ov-changed-static');
+  void el.offsetWidth;
+  el.classList.add(ovReduced_() ? 'ov-changed-static' : 'ov-changed');
+  clearTimeout(el._ovFlashT);
+  el._ovFlashT = setTimeout(() => el.classList.remove('ov-changed', 'ov-changed-static'), 2500);
+}
+
+function ovSetCount_(id, value, mode) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const prev = Number(el.dataset.v);
+  if (mode === 'refresh') {
+    ovCount_(el, value, Number.isFinite(prev) ? prev : value);
+    if (Number.isFinite(prev) && prev !== value) ovFlash_(el);
+  } else {
+    ovCount_(el, value, value);   // instant; entrance count-up happens separately
+  }
+}
+
+function ovJobsDelta_(jobs, mode) {
+  const el = document.getElementById('ovJobsDelta');
+  if (!el) return;
+  if (mode === 'refresh' && _ov.lastJobs !== null && _ov.lastJobs !== jobs) {
+    const d = jobs - _ov.lastJobs;
+    el.textContent = (d > 0 ? '+' : '') + d;
+    el.classList.add('show');
+    clearTimeout(el._ovT);
+    el._ovT = setTimeout(() => el.classList.remove('show'), 4000);
+  } else if (mode !== 'refresh') {
+    el.classList.remove('show');
+  }
+  _ov.lastJobs = jobs;
+}
+
+/* ── Widths (bars, split, coverage) ────────────────────────── */
+function ovSetWidth_(el, pct, mode) {
+  if (!el) return;
+  const w = `${Math.max(0, Math.min(100, pct))}%`;
+  if (mode === 'refresh' && !ovReduced_()) { void el.offsetWidth; el.style.width = w; return; }   // CSS transition
+  el.style.transition = 'none';
+  el.style.width = w;
+  void el.offsetWidth;
+  el.style.transition = '';
+  el.dataset.w = w;
+}
+
+/* ── Context title ─────────────────────────────────────────── */
+function ovRenderContext_() {
+  const dateVal = document.getElementById('dateSingle')?.value || '';
+  const t = document.getElementById('opsTitle');
+  const s = document.getElementById('opsSubtitle');
+  if (dateVal) {
+    const long = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' })
+      .format(new Date(`${dateVal}T12:00:00Z`));
+    if (t) t.textContent = `Power breakage · ${long}`;
+    if (s) s.textContent = 'Breakage-history record for one day. Prescription (Rx) detail is only available in the live view.';
+  } else {
+    if (t) t.textContent = 'Power breakage · Today (live)';
+    if (s) s.textContent = 'Live report. Includes carryover jobs from earlier ORB dates.';
+  }
+}
+
+/* ── Data quality ──────────────────────────────────────────── */
+const OV_SHEET_ERR = /^#(N\/A|REF!|VALUE!|ERROR!|DIV\/0!|NAME\?|NUM!|NULL!)/i;
+function ovRenderDataQuality_(rows) {
+  const el = document.getElementById('ovDataQuality');
+  if (!el) return;
+  const bad = rows.filter(r => [r.BrkSourceMachine, r.BrkReason, r.Material, r.RxNumber]
+    .some(v => OV_SHEET_ERR.test(String(v || '').trim())));
+  if (!bad.length) { el.hidden = true; el.innerHTML = ''; return; }
+  const sample = String([bad[0].BrkSourceMachine, bad[0].BrkReason, bad[0].Material, bad[0].RxNumber]
+    .find(v => OV_SHEET_ERR.test(String(v || '').trim())) || '').trim();
+  el.hidden = false;
+  el.innerHTML = `<b>${bad.length} of ${rows.length} ${rows.length === 1 ? 'row has' : 'rows have'} a sheet error</b> (${ovEsc_(sample)}) ` +
+    `in machine, reason, material, or RX. ${bad.length === 1 ? 'It is' : 'They are'} still counted in the totals below — fix at the source sheet.`;
+}
+
+/* ── Reason split ──────────────────────────────────────────── */
+function ovRenderReasonSplit_(rsnE, totalJobs, mode) {
+  const bar = document.getElementById('ovReasonSplit');
+  const rowsEl = document.getElementById('ovReasonRows');
+  if (!bar || !rowsEl) return;
+  if (!totalJobs) {
+    bar.innerHTML = '';
+    rowsEl.innerHTML = '<div class="ov-empty">No breakage recorded</div>';
+    return;
+  }
+  // keyed segments so widths can move on refresh
+  const segs = new Map([...bar.children].map(c => [c.dataset.key, c]));
+  const seen = new Set();
+  rsnE.forEach(([reason, v]) => {
+    let seg = segs.get(reason);
+    if (!seg) {
+      seg = document.createElement('div');
+      seg.className = 'ov-seg';
+      seg.dataset.key = reason;
+      seg.style.width = '0%';
+      seg.style.background = reasonColor(reason);
+    }
+    bar.appendChild(seg);
+    seen.add(reason);
+    ovSetWidth_(seg, v.jobs / totalJobs * 100, mode);
+  });
+  segs.forEach((seg, k) => { if (!seen.has(k)) seg.remove(); });
+
+  const prevSig = {};
+  rowsEl.querySelectorAll('.ov-rrow').forEach(r => { prevSig[r.dataset.key] = r.dataset.sig; });
+  rowsEl.innerHTML = rsnE.map(([reason, v]) => `
+    <div class="ov-rrow" data-key="${ovEsc_(reason)}" data-sig="${v.jobs}/${v.lens}">
+      <span><span class="ov-sw" style="background:${reasonColor(reason)}"></span>${ovEsc_(reason)}</span>
+      <span class="ov-mono"><b>${v.jobs}</b> ${v.jobs === 1 ? 'job' : 'jobs'} · ${v.lens} ${v.lens === 1 ? 'lens' : 'lenses'} · ${Math.round(v.jobs / totalJobs * 100)}%</span>
+    </div>`).join('');
+  if (mode === 'refresh') {
+    rowsEl.querySelectorAll('.ov-rrow').forEach(r => {
+      const was = prevSig[r.dataset.key];
+      if (was !== undefined && was !== r.dataset.sig) ovFlash_(r.querySelector('.ov-mono'));
+    });
+  }
+}
+
+/* ── Timing tiles ──────────────────────────────────────────── */
+function ovRenderTiming_(key, numId, stats, totalJobs, rsnE, field, mode) {
+  const numEl  = document.getElementById(numId);
+  const tagsEl = document.getElementById(key === 'ar' ? 'ovArTags' : 'ovBpTags');
+  const covEl  = document.getElementById(key === 'ar' ? 'ovArCov' : 'ovBpCov');
+  const barEl  = document.getElementById(key === 'ar' ? 'ovArCovBar' : 'ovBpCovBar');
+  const byEl   = document.getElementById(key === 'ar' ? 'ovArByReason' : 'ovBpByReason');
+
+  const text = stats.n ? fmtMin(stats.avg) : '--';
+  if (numEl) {
+    const changed = mode === 'refresh' && numEl.textContent !== text && numEl.textContent !== '--';
+    numEl.textContent = text;
+    if (changed) ovFlash_(numEl);
+  }
+  if (tagsEl) tagsEl.innerHTML = '';   // badge removed by request; small sample is stated in the coverage line
+  if (covEl) covEl.innerHTML = totalJobs
+    ? (!stats.n ? `No job has this timing yet (0 of ${totalJobs})`
+       : stats.n < OV_SMALL_N ? `Based on only <b>${stats.n} of ${totalJobs}</b> jobs — too few to trust as a trend`
+       : `Average of <b>${stats.n} of ${totalJobs}</b> jobs that have this timing`)
+    : 'No jobs';
+  ovSetWidth_(barEl, totalJobs ? stats.n / totalJobs * 100 : 0, mode);
+
+  if (byEl) {
+    byEl.innerHTML = rsnE.length > 1 ? rsnE.map(([reason]) => {
+      const st = ovTimingStats_(_brk.filter(r => (r.BrkReason || 'Unknown') === reason), field);
+      return `<span class="ov-by"><span class="ov-sw" style="background:${reasonColor(reason)}"></span>${ovEsc_(reason)} ` +
+             `<b class="ov-mono">${st.n ? fmtMin(st.avg) : '--'}</b> <span class="ov-n">(${st.n} timed)</span></span>`;
+    }).join('') : '';
+  }
+}
+
+/* ── Keyed bar list (reuses rows so widths can move) ───────── */
+function ovRenderBars_(elId, entries, unit, mode, tipFn) {
+  const box = document.getElementById(elId);
+  if (!box) return;
+  if (!entries.length) { box.innerHTML = `<div class="ov-empty">No ${unit} recorded</div>`; return; }
+  box.querySelector('.ov-empty')?.remove();
+
+  const max = Math.max(1, ...entries.map(e => e[1]));
+  const existing = new Map([...box.querySelectorAll('.ov-bar')].map(r => [r.dataset.key, r]));
+  const seen = new Set();
+
+  entries.forEach(([label, val]) => {
+    let row = existing.get(label);
+    const isNew = !row;
+    if (isNew) {
+      row = document.createElement('div');
+      row.className = 'ov-bar';
+      row.dataset.key = label;
+      row.innerHTML = '<span class="ov-bar-lbl"></span><div class="ov-bar-track"><div class="ov-bar-fill"></div></div><span class="ov-bar-val" data-count></span>';
+      row.querySelector('.ov-bar-lbl').textContent = label;
+      row.querySelector('.ov-bar-fill').style.width = '0%';
+    }
+    box.appendChild(row);   // keeps sort order
+    seen.add(label);
+    if (tipFn) row.title = tipFn(label);
+
+    const fill = row.querySelector('.ov-bar-fill');
+    const valEl = row.querySelector('.ov-bar-val');
+    const prev = Number(valEl.dataset.v);
+    if (mode === 'refresh' && isNew && !ovReduced_()) void fill.offsetWidth;   // let a new row grow from 0
+    ovSetWidth_(fill, val / max * 100, mode);
+    if (mode === 'refresh') {
+      ovCount_(valEl, val, Number.isFinite(prev) ? prev : 0);
+      if (!isNew && prev !== val) ovFlash_(valEl);
+    } else {
+      ovCount_(valEl, val, val);
+    }
+  });
+  existing.forEach((row, k) => { if (!seen.has(k)) row.remove(); });
+}
+
+/* ── Date switch fade ──────────────────────────────────────── */
+function ovFadeIn_() {
+  const sec = document.getElementById('t-overview');
+  if (!sec || ovReduced_() || !sec.animate) return;
+  sec.animate([{ opacity: 0.15 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+}
+
+/* ── Entrance (once, after the splash is gone) ─────────────── */
+function ovSplashVisible_() {
+  const o = document.getElementById('loadingOverlay');
+  return !!o && !o.classList.contains('hidden');
+}
+
+function ovMaybePlayEntrance_() {
+  if (_ov.entrancePlayed || !_ov.rendered) return;
+  if (ovSplashVisible_()) return;   // the observer below calls again when it hides
+  _ov.entrancePlayed = true;
+  if (ovReduced_()) return;
+
+  const sec = document.getElementById('t-overview');
+  if (!sec) return;
+  const cards = [...sec.querySelectorAll('.ov-enter')];
+  if (sec.animate) {
+    cards.forEach((c, i) => c.animate(
+      [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 450, delay: i * 70, easing: 'ease-out', fill: 'backwards' }
+    ));
+  }
+  sec.querySelectorAll('.ov-bar-fill, .ov-seg, .ov-covbar > div').forEach((f, i) => {
+    const w = f.style.width;
+    f.style.transition = 'none';
+    f.style.width = '0%';
+    void f.offsetWidth;
+    f.style.transition = '';
+    setTimeout(() => { f.style.width = w; }, 180 + (i % 8) * 60);
+  });
+  sec.querySelectorAll('[data-count]').forEach(el => {
+    const to = Number(el.dataset.v);
+    if (Number.isFinite(to)) { el.textContent = '0'; ovCount_(el, to, 0, 800); }
+  });
+}
+
+(function ovWatchSplash_() {
+  const o = document.getElementById('loadingOverlay');
+  if (!o) return;
+  new MutationObserver(() => { if (!ovSplashVisible_()) ovMaybePlayEntrance_(); })
+    .observe(o, { attributes: true, attributeFilter: ['class'] });
+})();
+
+/* ── Non-blocking update banner ────────────────────────────── */
+function ovBanner_(kind, msg) {
+  const el = document.getElementById('updateBanner');
+  const m  = document.getElementById('updateBannerMsg');
+  if (!el || !m) return;
+  m.textContent = msg;
+  el.className = `update-banner show is-${kind}`;
+  clearTimeout(el._ovT);
+  if (kind === 'ok')   el._ovT = setTimeout(() => el.classList.remove('show'), 3000);
+  if (kind === 'fail') el._ovT = setTimeout(() => el.classList.remove('show'), 8000);
+}
+
+/* ============================================================
+   RX FLOW HELPERS (v6, Option A) — pipeline, shared axis, animation
+   UI only. Stage times come from renderFlow(); missing = null.
+============================================================ */
+const flowState_ = { anchor: null, rendered: false, entrancePlayed: false };
+
+function flowMedian_(vals) {
+  if (!vals.length) return null;
+  const s = [...vals].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function flowNiceMax_(m) {
+  const steps = [60, 120, 180, 360, 720, 1440, 2160, 2880, 4320, 5760, 7200, 10080];
+  return steps.find(s => s >= m) || Math.ceil(m / 1440) * 1440;
+}
+
+function flowTickStep_(max) {
+  return [15, 30, 60, 120, 180, 360, 720, 1440, 2880].find(s => max / s <= 8) || 1440 * Math.ceil(max / 1440 / 8);
+}
+
+function flowAxisHtml_(max) {
+  const step = flowTickStep_(max);
+  const list = document.getElementById('flowList');
+  if (list) list.style.setProperty('--fj-step', `${step / max * 100}%`);
+  let ticks = '';
+  for (let m = 0; m <= max + 0.5; m += step) {
+    ticks += `<div class="fj-tick" style="left:${m / max * 100}%"><span>${m === 0 ? '0' : fmtMin(m)}</span></div>`;
+  }
+  return `
+    <div class="fj-legend">
+      <span><i class="fj-sw seg-1"></i>1 In transit</span>
+      <span><i class="fj-sw seg-2"></i>2 Identified</span>
+      <span><i class="fj-sw seg-3"></i>3 Processing</span>
+      <span>Bar length = real time on one shared clock · dots: ● scanned ○ not scanned</span>
+    </div>
+    <div class="fj-axis"><div></div><div></div><div class="fj-axis-track">${ticks}</div><div></div></div>`;
+}
+
+function flowRenderPipeline_(jobs) {
+  const box = document.getElementById('flowPipeline');
+  const sub = document.getElementById('fpSub');
+  const gap = document.getElementById('flowPipelineGap');
+  if (!box) return;
+  const N = jobs.length;
+  const histDate = document.getElementById('dateSingle')?.value || '';
+  if (sub) sub.textContent = `${N} ${N === 1 ? 'job' : 'jobs'} · ${histDate ? ovPrettyDate_(histDate) : 'live report'}`;
+
+  const nodes = [['ORB / OTB', 'source scan'], ['AR41', 'inspection scan'], ['Breakage table', 'table scan'], ['Processed', 'reorder']];
+  const stages = [
+    { cls: 'seg-1', name: '1 · In transit',  desc: 'Source-machine scan → AR41 scan' },
+    { cls: 'seg-2', name: '2 · Identified',  desc: 'AR41 scan → breakage table scan' },
+    { cls: 'seg-3', name: '3 · Processing',  desc: 'Breakage table → processed / reorder' },
+  ];
+
+  let html = '';
+  stages.forEach((sg, i) => {
+    const vals = jobs.map(j => j.st[i]).filter(v => v !== null);
+    const n = vals.length;
+    const med = flowMedian_(vals);
+    const max = n ? Math.max(...vals) : null;
+    const big = !n ? '--' : (n === 1 ? fmtMin(vals[0]) : fmtMin(med));
+    const line = !n ? 'No job has this timing'
+      : n === 1 ? 'one job only — not a trend'
+      : n < OV_SMALL_N ? `median of only ${n} jobs — not a trend`
+      : `median · longest ${fmtMin(max)}`;
+    const k = !n || !N ? 0 : Math.max(1, Math.round(n / N * 3));   // particles scale with timed jobs
+    const parts = Array.from({ length: k }, (_, p) => `<i style="animation-delay:${(p * 3 / k).toFixed(2)}s"></i>`).join('');
+    html += `<div class="fp-node" title="${nodes[i][1]}">${nodes[i][0]}<small>${nodes[i][1]}</small></div>
+      <div class="fp-link">
+        <div class="fp-line ${sg.cls}${n ? '' : ' empty'}">${parts}</div>
+        <div class="fp-stage" title="${sg.desc}">
+          <div class="fp-name"><i class="fj-sw ${sg.cls}"></i>${sg.name}</div>
+          <div class="fp-big">${big}</div>
+          <div class="fp-line2">${line}</div>
+          <div class="fp-cov"><b>${n} of ${N}</b> jobs timed</div>
+          <div class="fp-covbar"><div class="${sg.cls}" style="width:${N ? n / N * 100 : 0}%"></div></div>
+        </div>
+      </div>`;
+  });
+  html += `<div class="fp-node" title="${nodes[3][1]}">${nodes[3][0]}<small>${nodes[3][1]}</small></div>`;
+  box.innerHTML = html;
+
+  if (gap) {
+    const k = jobs.filter(j => j.st[1] === null && j.st[2] === null).length;
+    gap.hidden = !k;
+    gap.textContent = !k ? '' : histDate
+      ? `${k} of ${N} jobs have no breakage-table or processed time recorded for this day. They show as "Identify + Processing skipped".`
+      : `${k} of ${N} jobs have no breakage-table or processed scan yet. They show as "not scanned yet".`;
+  }
+}
+
+function flowTabVisible_() {
+  return document.getElementById('t-flow')?.classList.contains('active');
+}
+
+function flowPlayEntrance_() {
+  flowState_.entrancePlayed = true;
+  if (ovReduced_()) return;
+  document.querySelectorAll('#flowList .fj-bar').forEach((bar, i) => {
+    if (!bar.animate) return;
+    bar.animate([{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }],
+      { duration: 900, delay: Math.min(i, 20) * 30, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'backwards' });
+  });
+  document.querySelectorAll('#flowList .fj-after').forEach((el, i) => {
+    if (!el.animate) return;
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 600 + Math.min(i, 20) * 30, fill: 'backwards' });
+  });
+}
+
+function flowAnimate_(prevW) {
+  flowState_.rendered = true;
+  if (!flowTabVisible_()) return;                 // entrance waits until the tab is opened
+  if (!flowState_.entrancePlayed) { flowPlayEntrance_(); return; }
+  if (ovReduced_()) return;
+  if (!prevW) {                                    // different day: quick fade, no "growth"
+    const list = document.getElementById('flowList');
+    list?.animate?.([{ opacity: 0.15 }, { opacity: 1 }], { duration: 260, easing: 'ease-out' });
+    return;
+  }
+  document.querySelectorAll('#flowList .fj-row').forEach(row => {
+    const was = prevW[row.dataset.rx], now = Number(row.dataset.w);
+    const bar = row.querySelector('.fj-bar');
+    if (!bar?.animate || !(now > 0)) return;
+    if (was === undefined) {
+      bar.animate([{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }], { duration: 600, easing: 'ease-out' });
+    } else if (Math.abs(was - now) > 0.2) {
+      bar.style.transformOrigin = 'left center';
+      bar.animate([{ transform: `scaleX(${Math.max(0.02, was / now)})` }, { transform: 'scaleX(1)' }], { duration: 600, easing: 'ease-out' });
+    }
+  });
+}
+
+(function flowWatchTab_() {
+  const t = document.getElementById('t-flow');
+  if (!t) return;
+  new MutationObserver(() => {
+    if (flowTabVisible_() && flowState_.rendered && !flowState_.entrancePlayed) flowPlayEntrance_();
+  }).observe(t, { attributes: true, attributeFilter: ['class'] });
+})();
+
+/* ============================================================
+   ANALYSIS HELPERS (v6) — plain-language Rx cards
+   Cutoffs are PROPOSED defaults. Change them here; every card,
+   label, and table word follows.
+============================================================ */
+const RX_CUTOFFS = {
+  strongSph: 4.00,   // |sphere| ≥ this = strong
+  cylMedium: 1.00,   // |cylinder| above this = medium
+  cylHigh:   2.00,   // |cylinder| above this = high
+};
+const _an = { prevCounts: {}, prevChips: new Set(), entrancePlayed: false, rendered: false };
+
+function rxNum_(v) {
+  const n = parseFloat(v);
+  return (v === '' || v === null || v === undefined || isNaN(n)) ? null : n;
+}
+
+// Stronger eye = larger absolute value; null when neither eye has a value
+function rxStrongest_(a, b) {
+  const x = rxNum_(a), y = rxNum_(b);
+  if (x === null) return y;
+  if (y === null) return x;
+  return Math.abs(y) > Math.abs(x) ? y : x;
+}
+
+function rxD_(v) { return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2); }
+
+function rxSphCats_() {
+  const S = RX_CUTOFFS.strongSph;
+  return [
+    { key: 'sm', name: 'Strong minus', range: `${rxD_(-S)} or stronger`,       test: v => v <= -S },
+    { key: 'mm', name: 'Mild minus',   range: `−0.25 to ${rxD_(-(S - 0.25))}`, test: v => v < 0 && v > -S },
+    { key: 'np', name: 'No power',     range: '0.00',                          test: v => v === 0 },
+    { key: 'mp', name: 'Mild plus',    range: `+0.25 to ${rxD_(S - 0.25)}`,    test: v => v > 0 && v < S },
+    { key: 'sp', name: 'Strong plus',  range: `${rxD_(S)} or stronger`,        test: v => v >= S },
+  ];
+}
+
+function rxCylCats_() {
+  const M = RX_CUTOFFS.cylMedium, H = RX_CUTOFFS.cylHigh;
+  return [
+    { key: 'lo', name: 'Low',    range: `0 to ${rxD_(-M)}`,                         test: v => Math.abs(v) <= M },
+    { key: 'md', name: 'Medium', range: `${rxD_(-(M + 0.25))} to ${rxD_(-H)}`,      test: v => Math.abs(v) > M && Math.abs(v) <= H },
+    { key: 'hi', name: 'High',   range: `${rxD_(-(H + 0.25))} or stronger`,         test: v => Math.abs(v) > H },
+  ];
+}
+
+function anRenderHeadline_(jobs, totalLens, noRx) {
+  const h = document.getElementById('anHeadline');
+  const sub = document.getElementById('anHeadSub');
+  if (!h) return;
+  const N = jobs.length;
+  if (!N) { h.textContent = 'No jobs match these filters.'; if (sub) sub.textContent = ''; return; }
+
+  const S = RX_CUTOFFS.strongSph;
+  const sm = jobs.filter(j => j.sph !== null && j.sph <= -S).length;
+  const sp = jobs.filter(j => j.sph !== null && j.sph >= S).length;
+  const strong = sm + sp;
+  const hi = jobs.filter(j => /high\s*index/i.test(j.r.Material || '')).length;
+  const all = N === 1 ? 'The one broken job' : N === 2 ? 'Both broken jobs' : `All ${N} broken jobs`;
+  const small = N < OV_SMALL_N ? ` · only ${N} ${N === 1 ? 'job' : 'jobs'}, so this is a hint to watch, not proof` : '';
+
+  if (noRx) {
+    h.textContent = hi === N ? `${all} ${N === 1 ? 'was a' : 'were'} high-index ${N === 1 ? 'lens' : 'lenses'}.` : `${hi} of ${N} broken jobs were high-index lenses.`;
+    if (sub) sub.textContent = ` · prescription detail is live-only${small}`;
+    return;
+  }
+  if (strong === N && hi === N) h.textContent = `${all} had a strong prescription and a high-index lens.`;
+  else if (strong === N)        h.textContent = `${all} had a strong prescription.`;
+  else h.textContent = `${strong} of ${N} broken jobs had a strong prescription · ${hi} of ${N} were high-index lenses.`;
+  if (sub) sub.textContent = ` · ${sm} strong minus, ${sp} strong plus${small}`;
+}
+
+function anRenderScale_(elId, missId, jobs, field, cats) {
+  const box = document.getElementById(elId);
+  if (!box) return;
+  const withVal = jobs.filter(j => j[field] !== null);
+  const N = withVal.length || 1;
+  box.innerHTML = cats.map(c => {
+    const js = withVal.filter(j => c.test(j[field]));
+    const chips = js.map(j => {
+      const rx = String(j.r.RxNumber || '');
+      const v = j[field];
+      return `<span class="an-chip" data-rx="${ovEsc_(rx)}" title="${ovEsc_(rx)} · ${ovEsc_(j.r.BrkReason || '')}"><i style="background:${reasonColor(j.r.BrkReason)}"></i>${ovEsc_(rx.slice(-4))}<small>${v === 0 ? '0' : (v > 0 ? '+' + v : v)}</small></span>`;
+    }).join('');
+    return `<div class="an-cat${js.length ? '' : ' zero'}" data-key="${field}-${c.key}">
+        <div class="an-cn" data-count>${js.length}</div>
+        <div class="an-cl">${c.name}</div>
+        <div class="an-cr">${c.range}</div>
+        <div class="an-gauge"><div data-h="${js.length / N * 100}" style="height:${js.length / N * 100}%"></div></div>
+        <div class="an-chips">${chips}</div>
+      </div>`;
+  }).join('');
+
+  const miss = document.getElementById(missId);
+  const m = jobs.length - withVal.length;
+  if (miss) {
+    miss.hidden = !m;
+    miss.textContent = m ? `${m} of ${jobs.length} ${jobs.length === 1 ? 'job has' : 'jobs have'} no ${field === 'sph' ? 'sphere' : 'cylinder'} value and ${m === 1 ? "isn't" : "aren't"} on a card.` : '';
+  }
+}
+
+function anRenderBars_(elId, entries, totalJobs, colorFn, dot) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!entries.length) { el.innerHTML = '<div class="empty">No jobs</div>'; return; }
+  const max = Math.max(1, ...entries.map(e => e[1].jobs));
+  el.innerHTML = entries.map(([k, v]) => `
+    <div class="an-bar" data-key="${elId}-${ovEsc_(k)}">
+      <span class="an-bar-lbl">${dot ? `<i style="background:${colorFn(k)}"></i>` : ''}${ovEsc_(k)}</span>
+      <div class="an-bar-track"><div data-w="${v.jobs / max * 100}" style="width:${v.jobs / max * 100}%;background:${colorFn(k)}"></div></div>
+      <b>${v.jobs} ${v.jobs === 1 ? 'job' : 'jobs'}</b>
+      <small>${v.lens} ${v.lens === 1 ? 'lens' : 'lenses'}</small>
+    </div>`).join('');
+}
+
+/* ── Animation ─────────────────────────────────────────────── */
+function anTabVisible_() { return document.getElementById('t-research')?.classList.contains('active'); }
+
+function anPlayEntrance_() {
+  _an.entrancePlayed = true;
+  if (ovReduced_()) return;
+  const sec = document.getElementById('t-research');
+  if (!sec?.animate) return;
+  sec.querySelectorAll('.an-gauge > div, .an-bar-track > div').forEach((el, i) => {
+    const prop = el.parentElement.classList.contains('an-gauge') ? 'height' : 'width';
+    const to = el.style[prop];
+    el.animate([{ [prop]: '0%' }, { [prop]: to }], { duration: 700, delay: 80 + (i % 8) * 50, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'backwards' });
+  });
+  sec.querySelectorAll('.an-chip').forEach((c, i) => {
+    c.animate([{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }],
+      { duration: 300, delay: 500 + Math.min(i, 20) * 45, easing: 'ease-out', fill: 'backwards' });
+  });
+  sec.querySelectorAll('.an-cn').forEach(el => {
+    const to = Number(el.textContent);
+    if (to > 0) { el.textContent = '0'; ovCount_(el, to, 0, 700); }
+  });
+}
+
+function anAfterRender_() {
+  const sec = document.getElementById('t-research');
+  const counts = {}, chips = new Set();
+  sec?.querySelectorAll('.an-cat').forEach(c => { counts[c.dataset.key] = Number(c.querySelector('.an-cn').textContent); });
+  sec?.querySelectorAll('.an-chip').forEach(c => chips.add(c.dataset.rx));
+
+  const first = !_an.rendered;
+  _an.rendered = true;
+
+  if (!anTabVisible_()) { _an.prevCounts = counts; _an.prevChips = chips; return; }
+  if (!_an.entrancePlayed) { anPlayEntrance_(); }
+  else if (!first && !ovReduced_() && sec?.animate) {
+    // re-render: gauges move from old height, new chips pop in, changed counts flash
+    sec.querySelectorAll('.an-cat').forEach(c => {
+      const was = _an.prevCounts[c.dataset.key];
+      const now = Number(c.querySelector('.an-cn').textContent);
+      if (was !== undefined && was !== now) ovFlash_(c.querySelector('.an-cn'));
+    });
+    sec.querySelectorAll('.an-chip').forEach(c => {
+      if (!_an.prevChips.has(c.dataset.rx)) c.animate([{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'ease-out' });
+    });
+  }
+  _an.prevCounts = counts; _an.prevChips = chips;
+}
+
+(function anWatchTab_() {
+  const t = document.getElementById('t-research');
+  if (!t) return;
+  new MutationObserver(() => {
+    if (anTabVisible_() && _an.rendered && !_an.entrancePlayed) anPlayEntrance_();
+  }).observe(t, { attributes: true, attributeFilter: ['class'] });
+
+  // Hover a chip or a table row: light up the same job everywhere on this tab
+  const mark = (rx, on) => {
+    if (!rx) return;
+    t.querySelectorAll(`[data-rx="${CSS.escape(rx)}"]`).forEach(el => el.classList.toggle('an-hl', on));
+  };
+  t.addEventListener('mouseover', e => { const el = e.target.closest('[data-rx]'); if (el) mark(el.dataset.rx, true); });
+  t.addEventListener('mouseout',  e => { const el = e.target.closest('[data-rx]'); if (el) mark(el.dataset.rx, false); });
+})();

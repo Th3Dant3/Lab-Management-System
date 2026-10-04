@@ -472,8 +472,7 @@ function showTab(tabId, button) {
   if (tabId === "weekly") {
     const we = document.getElementById("weekEndDate");
     if (we && !we.value) {
-      const today = new Date();
-      we.value = today.toISOString().slice(0,10);
+      we.value = coatingTodayISO_();
     }
     showSummaryLoader("weekly");
     setTimeout(() => {
@@ -2935,443 +2934,612 @@ function hideSummaryLoader(tab) {
    DAILY SUMMARY
 ===================================================== */
 
+/* =====================================================
+   DAILY SUMMARY — end-of-shift report for the selected date
+   - Leads with the day's main issue (flow or breakage), found by written rules
+   - Coater report card, notable events (each shows its rule), flow groups,
+     breakage by reason, shift hour by hour
+   - Compares with the PREVIOUS DAY (one extra API call, cached; past days are
+     cached 6 h on the API side too)
+   - Previous / next day buttons switch the whole dashboard to that date
+===================================================== */
+const DAILY_RULES = {
+  slowShare      : 15,   // % of jobs over 15 min flow → "flow is slow"
+  coaterShare    : 50,   // % of breakage from one coater → concentration
+  minBrokenForMix: 4,    // don't call concentration on tiny totals
+  worstHourMin   : 3,    // broken lenses in one hour to call it out
+  topTwoReasons  : 75,   // % of breakage from top two reasons
+  delayedCluster : 3,    // delayed jobs in one hour
+  smallSampleJobs: 20,   // coater status needs at least this many jobs
+};
+const dailyPrevInFlight_ = {};
+
+function dailyDateKey_(offsetDays) {
+  // selected date (or today in New York) shifted by N days → "M/D/YYYY"
+  let base;
+  if (currentDate) { const p = String(currentDate).split("/").map(Number); base = new Date(p[2], p[0] - 1, p[1]); }
+  else base = ovNowNY_();
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + offsetDays);
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+function dailyStepDay(delta) {
+  const key = dailyDateKey_(delta);
+  const [m, d, y] = key.split("/").map(Number);
+  const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  if (iso >= coatingTodayISO_()) { resetToToday(); return; }          // today or later = live
+  const el = document.getElementById("historyDate");
+  if (el) { el.value = iso; applyDateFilter(); }
+}
+
+function dailyLoadPrevDay_() {
+  const key = dailyDateKey_(-1);
+  if (weeklyCache[key] !== undefined || dailyPrevInFlight_[key]) return;
+  dailyPrevInFlight_[key] = true;
+  coatingFetchRetry_(`${API_URL}?mode=processed&date=${encodeURIComponent(key)}`, "Daily previous-day")
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { weeklyCache[key] = j; })
+    .catch(() => { weeklyCache[key] = null; })
+    .finally(() => {
+      delete dailyPrevInFlight_[key];
+      const tab = document.getElementById("daily");
+      if (tab && tab.classList.contains("active")) buildDailySummary(dashboardData);
+    });
+}
+
+function dailySameDay_(summary) {
+  const lenses = Number(summary.totalLenses || 0);
+  const a = summary.aging || null;
+  if (!a || !lenses) return null;
+  const s = Number(a.sameDay || 0);
+  return { n: s, prev: Number(a.oneDay || 0), old: Number(a.twoPlus || 0), pct: (s / lenses) * 100 };
+}
+
 function buildDailySummary(data) {
   if (!data) return;
-  const summary       = data.summary       || {};
-  const hourly        = data.hourly        || [];
-  const machineTotals = data.machineTotals || {};
-  const topReasons    = data.topReasons    || {};
+  const esc     = coaterBayEsc_;
+  const summary = data.summary || {};
+  const hourly  = Array.isArray(data.hourly) ? data.hourly : [];
+  const isLive  = currentDate === null;
+  const nowNY   = ovNowNY_();
+  const nowH    = nowNY.getHours() + nowNY.getMinutes() / 60;
 
-  // ── Date badge ──
-  const dateBadge = document.getElementById("dailySummaryDate");
-  if (dateBadge) {
-    dateBadge.textContent = currentDate
-      ? "📅 " + currentDate
-      : "📅 Today · Live";
+  // ── Date + shift ──
+  const key = dailyDateKey_(0);
+  const [mm, dd, yy] = key.split("/").map(Number);
+  const dayObj = new Date(yy, mm - 1, dd);
+  const dow = dayObj.getDay();
+  const shift = (dow === 5 || dow === 6 || dow === 0) ? OV_SHIFT.weekend : OV_SHIFT.weekday;
+  const shiftName = (dow === 5 || dow === 6 || dow === 0) ? "Weekend shift" : "Weekday shift";
+  const dateLabel = dayObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const shiftLen = shift.end - shift.start;
+  const shiftPct = isLive ? Math.max(0, Math.min(100, ((nowH - shift.start) / shiftLen) * 100)) : 100;
+  ovSet_("dailyDateLabel", esc(dateLabel));
+  ovSet_("dailyShiftLabel", `${shiftName} ${esc(shift.label)}`);
+  ovSet_("dailyStatusLabel", isLive
+    ? `Live \u00b7 updated ${nowNY.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+    : "Full day");
+  const nextBtn = document.getElementById("dailyNextBtn");
+  if (nextBtn) nextBtn.disabled = isLive;
+
+  // ── Numbers ──
+  const jobs    = Number(summary.totalJobs || 0);
+  const lenses  = Number(summary.totalLenses || 0);
+  const broken  = Number(summary.totalBreakLenses || 0);
+  const allPct  = parseFloat(summary.breakPercent) || 0;
+  const avgFlow = Number(summary.avgDetaper || 0);
+  const fh      = summary.flowHealth || {};
+  const H = Number(fh.healthy || 0), W = Number(fh.watch || 0), D = Number(fh.delayed || 0), O = Number(fh.overnight || 0);
+  const flowTot = H + W + D + O;
+  const slow    = W + D + O;
+  const slowPct = flowTot ? (slow / flowTot) * 100 : 0;
+  const same    = dailySameDay_(summary);
+
+  // Previous day (for comparison)
+  const prevKey = dailyDateKey_(-1);
+  const prev = weeklyCache[prevKey];
+  if (prev === undefined) dailyLoadPrevDay_();
+  const ps = (prev && prev.summary) || null;
+  const prevName = new Date(yy, mm - 1, dd - 1).toLocaleDateString("en-US", { weekday: "short" });
+  const cmp = (now, then, unit, better) => {
+    if (then === null || then === undefined || isNaN(then)) return prev === undefined ? "loading previous day\u2026" : "no previous-day data";
+    const d = now - then;
+    if (Math.abs(d) < (unit === "%" ? 0.05 : 0.5)) return `same as ${prevName}`;
+    const worse = better === "lower" ? d > 0 : d < 0;
+    const txt = unit === "%" ? `${Math.abs(d).toFixed(Math.abs(d) >= 10 ? 0 : 1)} pts` : `${Math.abs(d).toFixed(unit === "min" ? 1 : 0)}${unit === "min" ? " min" : ""}`;
+    return `<span class="${worse ? "dl-worse" : "dl-better"}">${d > 0 ? "+" : "\u2212"}${txt}</span> vs ${prevName}`;
+  };
+  const prevSame = ps ? dailySameDay_(ps) : null;
+  // Live: compare jobs with the previous day UP TO THE SAME HOUR (a partial day vs a full day is misleading)
+  let prevJobsCmp = ps ? Number(ps.totalJobs || 0) : null;
+  if (ps && isLive && Array.isArray(prev.hourly)) {
+    const cut = Math.floor(nowH);
+    prevJobsCmp = prev.hourly.reduce((s, h) => { const k = ovHour24_(h.hour); return s + (k !== null && Math.floor(k) <= cut ? Number(h.coatingJobs || 0) : 0); }, 0);
   }
+  const prevFH = ps ? (ps.flowHealth || {}) : {};
+  const prevFlowTot = ps ? ["healthy", "watch", "delayed", "overnight"].reduce((s, k) => s + Number(prevFH[k] || 0), 0) : 0;
+  const prevSlowPct = ps && prevFlowTot ? ((Number(prevFH.watch || 0) + Number(prevFH.delayed || 0) + Number(prevFH.overnight || 0)) / prevFlowTot) * 100 : null;
 
-  // ── Scorecard ──
-  const brokenVal = summary.totalBreakLenses || 0;
-  const pctVal    = parseFloat(summary.breakPercent) || 0;
-  const avgHrs    = parseFloat(summary.avgBreakTimeHours) || 0;
-  const allFlowPts = hourly.flatMap(h => (h.flowPoints||[]).filter(p => p.flow > 0 && p.flow <= 360));
-  const avgFlowMins = allFlowPts.length
-    ? Math.round(allFlowPts.reduce((s,p)=>s+p.flow,0)/allFlowPts.length)
-    : null;
+  // ── Coaters (from hourly detail) ──
+  const coat = {};
+  hourly.forEach(h => {
+    Object.entries(h.machines || {}).forEach(([m, s]) => {
+      const c = coat[m] || (coat[m] = { jobs: 0, broken: 0, fSum: 0, fN: 0 });
+      c.jobs += Number(s.jobs || 0);
+      c.broken += Number(s.total || 0);
+    });
+    (h.flowPoints || []).forEach(p => {
+      const f = Number(p.flow || 0);
+      if (f > 0 && coat[p.machine]) { coat[p.machine].fSum += f; coat[p.machine].fN++; }
+    });
+  });
+  const coaters = Object.keys(coat).filter(m => coat[m].jobs > 0 || coat[m].broken > 0)
+    .sort((a, b) => coat[b].broken - coat[a].broken || formatMachineLabel(a).localeCompare(formatMachineLabel(b), undefined, { numeric: true }));
+  const status = c => {
+    if (c.jobs < DAILY_RULES.smallSampleJobs) return { t: "Small sample", col: "#ffffff" };
+    const r = (c.broken / (c.jobs * 2)) * 100;
+    if (r >= COATER_BAY_THRESHOLDS.crit)  return { t: "Critical", col: "#ff6b6b" };
+    if (r >= COATER_BAY_THRESHOLDS.high)  return { t: "High",     col: "#fb923c" };
+    if (r >= COATER_BAY_THRESHOLDS.watch) return { t: "Watch",    col: "#fbbf24" };
+    return { t: "Normal", col: "#4ade80" };
+  };
 
-  function setSc(id, val, cls) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = val;
-    if (cls) el.className = "sc-val " + cls;
+  // ── Reasons ──
+  const reasons = Object.entries(data.topReasons || {})
+    .map(([r, s]) => ({ r, t: Number(s.total || 0), s: Number(s.sameDay || 0), o: Number(s.oneDay || 0) + Number(s.twoPlus || 0) }))
+    .filter(x => x.t > 0).sort((a, b) => b.t - a.t);
+
+  // ── Hours ──
+  const rowsByH = {};
+  hourly.forEach(h => { const k = ovHour24_(h.hour); if (k !== null) rowsByH[Math.floor(k)] = h; });
+  const hourSet = new Set(Object.keys(rowsByH).map(Number));
+  for (let h = Math.floor(shift.start); h < Math.ceil(shift.end); h++) hourSet.add(h);
+  const hourList = [...hourSet].sort((a, b) => a - b);
+
+  // ── Notable events (each with its rule) ──
+  const events = [];
+  if (flowTot && slowPct > DAILY_RULES.slowShare)
+    events.push({ col: "#ff6b6b", w: 3, t: `Flow is slow: ${slowPct.toFixed(0)}% of jobs took over 15 min`, rule: `more than ${DAILY_RULES.slowShare}% of the day's jobs on watch or slower` });
+  if (same && same.pct >= OV_BREAK_THRESHOLDS.watch)
+    events.push({ col: same.pct >= OV_BREAK_THRESHOLDS.bad ? "#ff6b6b" : "#fbbf24", w: 4, t: `Same-day breakage is ${same.pct.toFixed(2)}%`, rule: `${OV_BREAK_THRESHOLDS.watch}% or higher` });
+  const cBroken = coaters.reduce((s, m) => s + coat[m].broken, 0);
+  if (coaters.length && cBroken >= DAILY_RULES.minBrokenForMix) {
+    const top = coaters[0], share = (coat[top].broken / cBroken) * 100;
+    if (share > DAILY_RULES.coaterShare)
+      events.push({ col: "#fb923c", w: 2, t: `${formatMachineLabel(top)} caused ${coat[top].broken} of ${cBroken} broken lenses (${share.toFixed(0)}%)`, rule: `one coater has more than ${DAILY_RULES.coaterShare}% of the day's breakage` });
   }
-  setSc("scJobs",   summary.totalJobs ?? "—", "teal");
-  setSc("scLenses", (summary.totalLenses||0).toLocaleString(), "");
-  setSc("scBroken", brokenVal, brokenVal === 0 ? "green" : brokenVal <= 20 ? "yellow" : "red");
-  setSc("scPct",    pctVal.toFixed(2) + "%", pctVal < 2 ? "green" : pctVal < 4 ? "yellow" : "red");
-  setSc("scPeak",   summary.peakHour ?? "—", "yellow");
-  setSc("scFlow",   avgFlowMins !== null ? avgFlowMins + "m avg" : "—", avgFlowMins === null ? "" : avgFlowMins <= 15 ? "green" : avgFlowMins <= 30 ? "yellow" : "red");
-
-  // ── Flow Health Bar ──
-  const fhEl = document.getElementById("dailyFlowHealth");
-  if (fhEl && summary.flowHealth) {
-    const fh = summary.flowHealth;
-    const total = (fh.healthy||0) + (fh.watch||0) + (fh.delayed||0) + (fh.overnight||0) || 1;
-    const pH = ((fh.healthy||0)/total*100).toFixed(1);
-    const pW = ((fh.watch||0)/total*100).toFixed(1);
-    const pD = ((fh.delayed||0)/total*100).toFixed(1);
-    const pO = ((fh.overnight||0)/total*100).toFixed(1);
-    fhEl.innerHTML = `
-      <div class="fh-bar-wrap">
-        <div class="fh-segment" style="flex:${pH};background:#4ade80;"></div>
-        <div class="fh-segment" style="flex:${pW};background:#fbbf24;"></div>
-        <div class="fh-segment" style="flex:${pD};background:#f87171;"></div>
-        <div class="fh-segment" style="flex:${pO};background:#38bdf8;"></div>
-      </div>
-      <div class="fh-labels">
-        <span class="fh-label"><span class="fh-dot" style="background:#4ade80"></span>Healthy <span class="fh-count" style="color:#4ade80">${fh.healthy||0}</span></span>
-        <span class="fh-label"><span class="fh-dot" style="background:#fbbf24"></span>Watch <span class="fh-count" style="color:#fbbf24">${fh.watch||0}</span></span>
-        <span class="fh-label"><span class="fh-dot" style="background:#f87171"></span>Delayed <span class="fh-count" style="color:#f87171">${fh.delayed||0}</span></span>
-        <span class="fh-label"><span class="fh-dot" style="background:#38bdf8"></span>Overnight <span class="fh-count" style="color:#38bdf8">${fh.overnight||0}</span></span>
-        <span class="fh-label" style="margin-left:auto;color:#ffffff;font-size:13px;">${total} total flow ${total === 1 ? "job" : "jobs"}</span>
-      </div>`;
+  let worst = null;
+  hourList.forEach(h => { const r = rowsByH[h]; const b = r ? Number(r.totalBroken || 0) : 0; if (b >= DAILY_RULES.worstHourMin && (!worst || b > worst.b)) worst = { h, b }; });
+  if (worst) events.push({ col: "#fbbf24", w: 1, t: `${ovHourName_(worst.h)} was the worst hour: ${worst.b} lenses broken`, rule: `hour with the most broken lenses (at least ${DAILY_RULES.worstHourMin})` });
+  hourList.forEach(h => { const r = rowsByH[h]; const d2 = r ? Number(r.flowDelayed || 0) : 0;
+    if (d2 >= DAILY_RULES.delayedCluster) events.push({ col: "#ff6b6b", w: 1.5, t: `${ovHourName_(h)}: ${d2} delayed jobs (over 30 min)`, rule: `${DAILY_RULES.delayedCluster} or more delayed jobs in one hour` }); });
+  if (reasons.length >= 2 && broken >= DAILY_RULES.minBrokenForMix) {
+    const two = reasons[0].t + reasons[1].t, share = (two / broken) * 100;
+    if (share > DAILY_RULES.topTwoReasons)
+      events.push({ col: "#c4b5fd", w: 1, t: `${reasons[0].r} and ${reasons[1].r}: ${two} of ${broken} broken lenses`, rule: `top two reasons cover more than ${DAILY_RULES.topTwoReasons}% of breakage` });
   }
+  events.sort((a, b) => b.w - a.w);
 
-  // ── Top Machines ──
-  const machEl = document.getElementById("dailyMachinesPanel");
-  if (machEl) {
-    const machEntries = Object.entries(machineTotals)
-      .map(([m,s]) => ({ m, broken: s.breakLenses||0, jobs: s.jobs||0 }))
-      .filter(e => e.broken > 0)
-      .sort((a,b) => b.broken - a.broken)
-      .slice(0, 8);
-    const maxBrk = machEntries[0]?.broken || 1;
-    machEl.innerHTML = machEntries.length
-      ? machEntries.map((e,i) => {
-          const col = e.broken >= 10 ? "#f87171" : e.broken >= 4 ? "#fbbf24" : "#4ade80";
-          return `<div class="summary-row">
-            <span class="summary-row-rank">${i+1}</span>
-            <span class="summary-row-name" style="color:${col}">${formatMachineLabel(e.m)}</span>
-            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(e.broken/maxBrk*100).toFixed(1)}%;background:${col};"></div></div>
-            <span class="summary-row-val" style="color:${col}">${e.broken}</span>
-          </div>`;
-        }).join("")
-      : `<div style="padding:16px;color:#ffffff;font-size:13px;">No breakage recorded</div>`;
+  // ── Verdict ──
+  let vClass = "ok", vHtml;
+  const topCoater = coaters.length && coat[coaters[0]].broken > 0 ? formatMachineLabel(coaters[0]) : null;
+  const topReason = reasons.length ? reasons[0].r : null;
+  const brkTail = broken
+    ? `Breakage is ${broken} lenses (${allPct.toFixed(2)}%)${topCoater ? `; <b>${esc(topCoater)}</b> caused ${coat[coaters[0]].broken} of them` : ""}${topReason ? `, mostly ${esc(topReason)}` : ""}.`
+    : "No broken lenses.";
+  if (!jobs) {
+    vClass = "none"; vHtml = isLive ? "No jobs coated yet today." : "No coating jobs recorded for this date.";
+  } else if (same && same.pct >= OV_BREAK_THRESHOLDS.watch) {
+    vClass = same.pct >= OV_BREAK_THRESHOLDS.bad ? "bad" : "warn";
+    vHtml = `<b>Breakage is the problem${isLive ? " today" : ""}:</b> same-day breakage is <b>${same.pct.toFixed(2)}%</b> (${same.n} of ${lenses} lenses). ${brkTail}`;
+  } else if (slowPct > DAILY_RULES.slowShare) {
+    vClass = "warn";
+    vHtml = `<b>Flow is the problem${isLive ? " today" : ""}:</b> jobs average <b>${avgFlow} min</b> detaper to coater, with ${W} on watch and ${D + O} delayed (${slowPct.toFixed(0)}% of all jobs). ${brkTail}`;
+  } else {
+    vHtml = `<b>A normal ${isLive ? "day so far" : "day"}:</b> ${jobs} jobs coated, average flow ${avgFlow} min. ${brkTail}`;
   }
+  const vEl = document.getElementById("dailyVerdict");
+  if (vEl) vEl.className = "dl-verdict is-" + vClass;
+  ovSet_("dailyVerdictKicker", isLive ? "THE DAY SO FAR" : "THE DAY");
+  ovSet_("dailyVerdictText", vHtml);
 
-  // ── Top Reasons ──
-  const resEl = document.getElementById("dailyReasonsPanel");
-  if (resEl) {
-    const resEntries = Object.entries(topReasons)
-      .map(([r,s]) => ({ r, total: s.total||0 }))
-      .filter(e => e.total > 0)
-      .sort((a,b) => b.total - a.total)
-      .slice(0, 8);
-    const maxRes = resEntries[0]?.total || 1;
-    resEl.innerHTML = resEntries.length
-      ? resEntries.map((e,i) => {
-          const col = BREAKAGE_COLOR_MAP[e.r] || GC.blue;
-          return `<div class="summary-row">
-            <span class="summary-row-rank">${i+1}</span>
-            <span class="summary-row-name">${e.r}</span>
-            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(e.total/maxRes*100).toFixed(1)}%;background:${col};"></div></div>
-            <span class="summary-row-val" style="color:${col}">${e.total}</span>
-          </div>`;
-        }).join("")
-      : `<div style="padding:16px;color:#ffffff;font-size:13px;">No breakage recorded</div>`;
-  }
+  // ── KPI cards ──
+  ovSet_("dailyKpis", [
+    `<div class="dl-kpi">Jobs coated<b style="color:#3ddbc4">${jobs}</b><small>${lenses} lenses${isLive ? ` \u00b7 ${shiftPct.toFixed(0)}% of shift done` : ""} \u00b7 ${ps ? cmp(jobs, prevJobsCmp, "", "higher") + (isLive ? " at this time" : "") : cmp(jobs, null)}</small></div>`,
+    `<div class="dl-kpi">Broken lenses<b style="color:${broken ? "#ff6b6b" : "#4ade80"}">${broken}</b><small>${allPct.toFixed(2)}% of ${lenses} lenses</small></div>`,
+    same
+      ? `<div class="dl-kpi">Same-day breakage<b style="color:${same.pct < OV_BREAK_THRESHOLDS.watch ? "#4ade80" : same.pct < OV_BREAK_THRESHOLDS.bad ? "#fbbf24" : "#ff6b6b"}">${same.pct.toFixed(2)}%</b><small>${same.n} same day \u00b7 ${same.prev + same.old} earlier \u00b7 ${cmp(same.pct, prevSame ? prevSame.pct : null, "%", "lower")}</small></div>`
+      : `<div class="dl-kpi">Same-day breakage<b>--</b><small>split not available</small></div>`,
+    `<div class="dl-kpi">Average flow time<b style="color:${avgFlow <= 15 ? "#4ade80" : avgFlow <= 30 ? "#fbbf24" : "#ff6b6b"}">${avgFlow} min</b><small>${cmp(avgFlow, ps ? Number(ps.avgDetaper || 0) : null, "min", "lower")}</small></div>`,
+    `<div class="dl-kpi">Slow jobs (over 15 min)<b style="color:${slowPct > DAILY_RULES.slowShare ? "#ff6b6b" : "#ffffff"}">${slow}</b><small>${slowPct.toFixed(0)}% of jobs \u00b7 ${cmp(slowPct, prevSlowPct, "%", "lower").replace(" pts", " pts")}</small></div>`,
+  ].join(""));
 
-  // ── Hourly Timeline ──
-  const tlEl = document.getElementById("dailyTimeline");
-  if (tlEl) {
-    const sorted = [...hourly].sort((a,b) => new Date("1/1/2000 "+a.hour) - new Date("1/1/2000 "+b.hour));
-    const maxJobs = Math.max(...sorted.map(h => h.coatingJobs||0), 1);
-    tlEl.innerHTML = sorted.map(h => {
-      const brk   = h.totalBroken || 0;
-      const jobs  = h.coatingJobs || 0;
-      const cls   = jobs === 0 ? "tl-empty" : brk === 0 ? "tl-ok" : brk <= 3 ? "tl-warn" : "tl-danger";
-      const brkTxt = brk > 0 ? `<div class="tl-brk">🔴 ${brk} broken</div>` : `<div class="tl-brk" style="color:rgb(74,222,128)">✓ clean</div>`;
-      return `<div class="tl-cell ${cls}">
-        <div class="tl-hour">${h.hour}</div>
-        <div class="tl-jobs">${jobs}</div>
-        <div style="font-size:9px;color:#ffffff;margin-bottom:2px;">jobs</div>
-        ${brkTxt}
-      </div>`;
-    }).join("") || `<div style="color:#ffffff;padding:16px;">No hourly data</div>`;
-  }
+  // ── Coater report card ──
+  ovSet_("dailyCoaters", coaters.length ? `
+    <table class="dl-table"><thead><tr><th>Coater</th><th>Jobs</th><th>Broken</th><th>Rate</th><th>Avg flow</th><th>Status</th></tr></thead><tbody>
+    ${coaters.map(m => {
+      const c = coat[m], st = status(c), rate = c.jobs ? (c.broken / (c.jobs * 2)) * 100 : null;
+      return `<tr><td class="dl-m">${esc(formatMachineLabel(m))}</td><td>${c.jobs}</td>
+        <td style="font-weight:800;color:${c.broken ? st.col : "#ffffff"}">${c.broken}</td>
+        <td>${rate === null ? "--" : rate.toFixed(2) + "%"}</td>
+        <td>${c.fN ? (c.fSum / c.fN).toFixed(1) + " min" : "--"}</td>
+        <td><span class="dl-pill" style="color:${st.col}">${st.t}</span></td></tr>`;
+    }).join("")}</tbody></table>
+    <p class="dl-foot">Rate = broken lenses \u00f7 (jobs \u00d7 2), all breakage found this day. Status uses the Machine Analysis limits (${COATER_BAY_THRESHOLDS.watch}% / ${COATER_BAY_THRESHOLDS.high}% / ${COATER_BAY_THRESHOLDS.crit}%); under ${DAILY_RULES.smallSampleJobs} jobs = small sample.</p>`
+    : `<p class="dl-empty">No coater data for this date.</p>`);
 
-  // ── Narrative ──
-  const narEl = document.getElementById("dailyNarrative");
-  if (narEl) {
-    const totalJobs    = summary.totalJobs || 0;
-    const totalLenses  = summary.totalLenses || 0;
-    const flowHealth   = summary.flowHealth || {};
-    const healthyPct   = totalJobs > 0 ? ((flowHealth.healthy||0)/totalJobs*100).toFixed(0) : 0;
-    const delayedCount = flowHealth.delayed || 0;
-    const overnightCount = flowHealth.overnight || 0;
+  // ── Events ──
+  ovSet_("dailyEvents", events.length
+    ? events.map(e => `<div class="dl-ev" style="--c:${e.col}"><i></i><div><b>${esc(e.t)}</b><div>Rule: ${esc(e.rule)}</div></div></div>`).join("")
+    : `<p class="dl-empty">Nothing unusual found by the rules.</p>`);
 
-    // Find peak hour
-    let peakHour = "—", peakBrk = 0;
-    hourly.forEach(h => { if ((h.totalBroken||0) > peakBrk) { peakBrk = h.totalBroken||0; peakHour = h.hour; } });
+  // ── Flow groups ──
+  const fb = data.flowBreakage || null;
+  const grp = [["Healthy", H, "#4ade80", "healthy"], ["Watch", W, "#fbbf24", "watch"], ["Delayed", D, "#ff6b6b", "delayed"], ["Overnight", O, "#60a5fa", "overnight"]];
+  ovSet_("dailyFlow", flowTot ? `
+    <div class="dl-split">${grp.filter(g => g[1] > 0).map(g => `<div style="flex:${g[1]};background:${g[2]}">${g[1] / flowTot >= 0.06 ? g[1] : ""}</div>`).join("")}</div>
+    <div class="dl-lg">${grp.map(g => `<span style="--c:${g[2]}">${g[0]} <b>${g[1]}</b> (${(g[1] / flowTot * 100).toFixed(0)}%)${fb && fb[g[3]] && fb[g[3]].lenses ? ` \u00b7 breaks ${Number(fb[g[3]].rate || 0).toFixed(2)}%` : ""}</span>`).join("")}</div>`
+    : `<p class="dl-empty">No flow data.</p>`);
 
-    // Find busiest hour
-    let busiestHour = "—", busiestJobs = 0;
-    hourly.forEach(h => { if ((h.coatingJobs||0) > busiestJobs) { busiestJobs = h.coatingJobs||0; busiestHour = h.hour; } });
+  // ── Reasons ──
+  const rMax = Math.max(1, ...reasons.map(x => x.t));
+  ovSet_("dailyReasons", reasons.length ? reasons.slice(0, 6).map(x => {
+    const col = BREAKAGE_COLOR_MAP[x.r] || "#60a5fa";
+    return `<div class="dl-rr"><span>${esc(x.r)}</span><div class="dl-t"><div style="width:${(x.t / rMax * 100).toFixed(0)}%;background:${col}"></div></div><b>${x.t}</b>
+      <small><span class="age-same">${x.s} same day</span>${x.o ? ` \u00b7 <span class="age-prev">${x.o} earlier</span>` : ""}</small></div>`;
+  }).join("") : `<p class="dl-empty">No broken lenses.</p>`);
 
-    // Top machine
-    let topMach = null, topMachBrk = 0;
-    Object.entries(machineTotals).forEach(([m,s]) => { if ((s.breakLenses||0) > topMachBrk) { topMachBrk = s.breakLenses||0; topMach = m; } });
+  // ── Shift hour by hour ──
+  const maxJ = Math.max(1, ...hourList.map(h => rowsByH[h] ? Number(rowsByH[h].coatingJobs || 0) : 0));
+  ovSet_("dailyHours", hourList.map(h => {
+    const r = rowsByH[h], future = isLive && h > Math.floor(nowH), now = isLive && h === Math.floor(nowH);
+    if (!r || future) return `<div class="dl-hr${future ? " is-fut" : ""}"><div class="dl-hh">${ovHourName_(h)}</div><div class="dl-bar"></div><div class="dl-hj">${future ? "\u2014" : "0"}</div><div class="dl-hb">&nbsp;</div></div>`;
+    const j2 = Number(r.coatingJobs || 0), b2 = Number(r.totalBroken || 0);
+    const bc = b2 >= 5 ? "bad" : b2 > 0 ? "warn" : "ok";
+    return `<div class="dl-hr${now ? " is-now" : ""}" title="${ovHourName_(h)}: ${j2} jobs, ${b2} broken"><div class="dl-hh">${ovHourName_(h)}</div>
+      <div class="dl-bar"><div class="${now ? "is-part" : ""}" style="height:${(j2 / maxJ * 100).toFixed(0)}%"></div></div>
+      <div class="dl-hj">${j2} <span>jobs</span></div><div class="dl-hb ${bc}">${b2 ? b2 + " broken" : "\u2713 0 broken"}</div></div>`;
+  }).join(""));
 
-    const statusWord = pctVal === 0 ? `<span class="nar-good">zero breakage</span>`
-      : pctVal < 2 ? `<span class="nar-good">healthy breakage rate of ${pctVal.toFixed(2)}%</span>`
-      : pctVal < 4 ? `<span class="nar-warn">elevated breakage rate of ${pctVal.toFixed(2)}%</span>`
-      : `<span class="nar-danger">high breakage rate of ${pctVal.toFixed(2)}%</span>`;
-
-    narEl.innerHTML = `
-      <strong>Summary:</strong> ${totalJobs.toLocaleString()} coating jobs processed across ${totalLenses.toLocaleString()} lenses with ${statusWord}.
-      ${brokenVal > 0 ? `<strong>${brokenVal} lenses were broken</strong>, peaking at <strong>${peakHour}</strong> (${peakBrk} lenses).` : ""}
-      The busiest hour was <strong>${busiestHour}</strong> with <strong>${busiestJobs} jobs</strong>.
-      ${topMach && topMachBrk > 0 ? `Top breakage machine was <strong style="color:#38bdf8">${formatMachineLabel(topMach)}</strong> with ${topMachBrk} lenses.` : ""}
-      Flow health: <span class="nar-good">${flowHealth.healthy||0} healthy</span> ·
-      <span class="nar-warn">${flowHealth.watch||0} watch</span> ·
-      ${delayedCount > 0 ? `<span class="nar-danger">${delayedCount} delayed</span>` : `<span class="nar-good">0 delayed</span>`}
-      ${overnightCount > 0 ? ` · <span style="color:#38bdf8">${overnightCount} overnight carryover</span>.` : "."}
-      ${avgFlowMins !== null ? `Average detaper-to-coater flow time was <strong>${avgFlowMins} minutes</strong>.` : ""}`;
+  // ── Reconciliation ──
+  const hJobs = hourly.reduce((s, h) => s + Number(h.coatingJobs || 0), 0);
+  const hBrk  = hourly.reduce((s, h) => s + Number(h.totalBroken || 0), 0);
+  const notes = [];
+  if (hJobs !== jobs) notes.push(`hourly jobs add up to ${hJobs}, total says ${jobs}`);
+  if (hBrk !== broken) notes.push(`hourly breakage adds up to ${hBrk}, total says ${broken}`);
+  if (flowTot && flowTot !== jobs) notes.push(`flow groups add up to ${flowTot}, jobs are ${jobs}`);
+  const chk = document.getElementById("dailyCheck");
+  if (chk) {
+    chk.className = "dl-check" + (notes.length ? " is-warn" : "");
+    chk.textContent = notes.length ? "Check data: " + notes.join("; ") + "." : `Check passed: hours, coaters, and flow groups all add up (${jobs} jobs, ${broken} broken lenses).`;
   }
 }
+
 
 /* =====================================================
    WEEKLY SUMMARY
 ===================================================== */
 
-let weeklyTrendChart = null;
-const weeklyCache    = {};  // "M/D/YYYY" → data
+/* =====================================================
+   WEEKLY REVIEW — for managers and Quality
+   Reads top to bottom in three levels:
+     1. The week in 30 seconds (what happened + where to look first)
+     2. What changed (6 mini trend tiles + 7 day cards)
+     3. For Quality: reasons (with daily lines), coaters by RATE, day × hour heatmap
+   - Uses the 7 days ending on the "Week ending" date (same as before)
+   - Today is "in progress": it never counts as best/worst and stays out of
+     the trend tiles until the shift ends
+   - No extra API calls beyond the 7 days this tab already loaded
+===================================================== */
+let weeklyTrendChart = null;          // kept: other code may still reference it
+const weeklyCache    = {};            // "M/D/YYYY" -> processed payload
+const WEEK_RULES = {
+  risingStreak  : 3,    // days in a row with a higher rate than the day before
+  flowRisePct   : 50,   // % rise in average flow (first -> last complete day)
+  reasonShare   : 40,   // a reason this share of the week's breakage gets called out
+  shareGrowPts  : 10,   // share growth (pts) to say "and its share grew"
+  hotHour       : 10,   // broken lenses in one hour to call it out
+  coaterRateHigh: 3,    // % coater rate to call out
+  smallSample   : 20,   // coater jobs below this = small sample
+};
+
+function weeklyIsoToApi_(iso) { const [y, m, d] = iso.split("-").map(Number); return `${m}/${d}/${y}`; }
+function weeklyApiToIso_(api) { const [m, d, y] = api.split("/").map(Number); return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
+
+function weeklyStep(deltaDays) {
+  const el = document.getElementById("weekEndDate");
+  if (!el) return;
+  const today = coatingTodayISO_();
+  let iso = el.value || today;
+  if (deltaDays === 0) iso = today;
+  else if (deltaDays === null) iso = (el.value && el.value <= today) ? el.value : today;   // picked in the date box
+  else {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d + deltaDays);
+    iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    if (iso > today) iso = today;
+  }
+  el.value = iso;
+  showSummaryLoader("weekly");
+  buildWeeklySummary().finally(() => hideSummaryLoader("weekly"));
+}
+
+function weeklyOpenDay_(api) {
+  const iso = weeklyApiToIso_(api);
+  if (iso >= coatingTodayISO_()) resetToToday();
+  else { const el = document.getElementById("historyDate"); if (el) { el.value = iso; applyDateFilter(); } }
+  const btn = document.querySelector(`.tab[onclick*="'daily'"]`);
+  showTab("daily", btn);
+}
+
+function weeklySpark_(vals, color, opts = {}) {
+  // vals: numbers for complete days, null for days without data / in progress
+  const W = opts.w || 300, H = opts.h || 92, labels = opts.labels !== false;
+  const X0 = 12, X1 = W - 12, T = 10, B = H - (labels ? 22 : 6);
+  const real = vals.filter(v => v !== null);
+  const X = i => X0 + (X1 - X0) * i / Math.max(1, vals.length - 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" class="wk-spark" aria-hidden="true">`;
+  if (real.length) {
+    let lo = Math.min(...real), hi = Math.max(...real);
+    if (hi === lo) { hi = lo + 1; lo = Math.max(0, lo - 1); }
+    const Y = v => B - (v - lo) / (hi - lo) * (B - T);
+    const runs = []; let cur = [];
+    vals.forEach((v, i) => { if (v === null) { if (cur.length) runs.push(cur); cur = []; } else cur.push(i); });
+    if (cur.length) runs.push(cur);
+    runs.forEach(run => {
+      const pts = run.map(i => `${X(i).toFixed(0)},${Y(vals[i]).toFixed(0)}`).join(" ");
+      if (run.length > 1) {
+        s += `<polygon points="${X(run[0]).toFixed(0)},${B} ${pts} ${X(run[run.length - 1]).toFixed(0)},${B}" fill="${color}" fill-opacity=".1"/>`;
+        s += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="4" stroke-linejoin="round"/>`;
+      }
+      run.forEach((i, k) => s += `<circle cx="${X(i).toFixed(0)}" cy="${Y(vals[i]).toFixed(0)}" r="${(k === 0 || k === run.length - 1) ? 5 : 3.5}" fill="${color}"/>`);
+    });
+  }
+  (opts.pending || []).forEach(i => s += `<rect x="${(X(i) - 6).toFixed(0)}" y="${T}" width="12" height="${B - T}" rx="6" fill="none" stroke="rgba(255,255,255,.3)" stroke-dasharray="3 3"/>`);
+  if (labels) (opts.letters || []).forEach((l, i) => s += `<text x="${X(i).toFixed(0)}" y="${H - 5}" fill="#fff" font-size="12" text-anchor="middle">${l}</text>`);
+  return s + "</svg>";
+}
 
 async function buildWeeklySummary() {
   const weEl = document.getElementById("weekEndDate");
-  if (!weEl || !weEl.value) return;
+  if (!weEl) return;
+  if (!weEl.value) weEl.value = coatingTodayISO_();
+  const esc = coaterBayEsc_;
+  const todayIso = coatingTodayISO_();
+  const todayApi = weeklyIsoToApi_(todayIso);
 
-  const endDate  = new Date(weEl.value + "T00:00:00");
-  const rangeEl  = document.getElementById("weekRangeLabel");
-
-  // Build array of 7 days ending on selected date
+  // 7 days ending on the selected date
+  const [ey, em, ed] = weEl.value.split("-").map(Number);
   const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(endDate);
-    d.setDate(d.getDate() - i);
-    days.push(d);
-  }
+  for (let i = 6; i >= 0; i--) days.push(new Date(ey, em - 1, ed - i));
+  const apiDates = days.map(d => `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
+  const fmtShort = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  ovSet_("weekRangeLabel", `${fmtShort(days[0])} \u2013 ${days[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`);
+  const nextBtn = document.getElementById("weekNextBtn");
+  if (nextBtn) nextBtn.disabled = weEl.value >= todayIso;
 
-  const startLabel = days[0].toLocaleDateString("en-US", { month:"short", day:"numeric" });
-  const endLabel   = days[6].toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
-  if (rangeEl) rangeEl.textContent = startLabel + " – " + endLabel;
+  ovSet_("weekVerdictText", "Loading the week\u2026");
 
-  // Convert to API date strings
-  const apiDates = days.map(d => `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`);
-  const todayApi = (() => { const n = new Date(); return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`; })();
-
-  // Show loading state
-  document.getElementById("weeklyDayGrid").innerHTML    = `<div style="color:#ffffff;font-size:13px;padding:12px;">Loading week data...</div>`;
-  document.getElementById("weeklyMachinesPanel").innerHTML = "";
-  document.getElementById("weeklyReasonsPanel").innerHTML  = "";
-
-  // Fetch missing days
-  await Promise.all(apiDates.map(async apiDate => {
-    if (weeklyCache[apiDate]) return;
-    if (apiDate === todayApi && dashboardData) { weeklyCache[apiDate] = dashboardData; return; }
+  // Fetch missing days (today = the live data already on the page)
+  await Promise.all(apiDates.map(async api => {
+    if (api === todayApi && currentDate === null && dashboardData) { weeklyCache[api] = dashboardData; return; }
+    if (weeklyCache[api] !== undefined && api !== todayApi) return;
+    if (weeklyIsoToApi_(todayIso) && weeklyApiToIso_(api) > todayIso) { weeklyCache[api] = null; return; }
     try {
-      const res = await fetch(`${API_URL}?mode=processed&date=${encodeURIComponent(apiDate)}`);
-      weeklyCache[apiDate] = await res.json();
-    } catch(e) { weeklyCache[apiDate] = null; }
+      const r = await coatingFetchRetry_(`${API_URL}?mode=processed&date=${encodeURIComponent(api)}`, `Weekly ${api}`);
+      weeklyCache[api] = r.ok ? await r.json() : null;
+    } catch (e) { weeklyCache[api] = null; }
   }));
 
-  // Aggregate weekly totals
-  let wJobs = 0, wLenses = 0, wBroken = 0, wFlowSum = 0, wFlowCount = 0;
-  let bestDay = null, bestPct = Infinity, worstDay = null, worstPct = -1;
-  const machWeekly = {};
-  const resWeekly  = {};
-  let daysWithData = 0;
-  const dailyBreakage = [];
-
-  apiDates.forEach((apiDate, idx) => {
-    const d    = days[idx];
-    const data = weeklyCache[apiDate];
-    if (!data?.summary) { dailyBreakage.push(null); return; }
-    daysWithData++;
-    const s = data.summary;
-    wJobs   += s.totalJobs   || 0;
-    wLenses += s.totalLenses || 0;
-    wBroken += s.totalBreakLenses || 0;
-
-    // Collect flow for weekly avg
-    (data.hourly || []).forEach(h => {
-      (h.flowPoints||[]).forEach(p => {
-        if (p.flow > 0 && p.flow <= 360) { wFlowSum += p.flow; wFlowCount++; }
-      });
-    });
-
-    const pct = parseFloat(s.breakPercent) || 0;
-    dailyBreakage.push({ date: d, apiDate, pct, broken: s.totalBreakLenses||0, jobs: s.totalJobs||0, lenses: s.totalLenses||0, summary: s });
-    if (pct < bestPct)  { bestPct  = pct;  bestDay  = idx; }
-    if (pct > worstPct) { worstPct = pct;  worstDay = idx; }
-
-    // Accumulate machine totals
-    Object.entries(data.machineTotals || {}).forEach(([m,ms]) => {
-      if (!machWeekly[m]) machWeekly[m] = { broken: 0, jobs: 0 };
-      machWeekly[m].broken += ms.breakLenses || 0;
-      machWeekly[m].jobs   += ms.jobs || 0;
-    });
-
-    // Accumulate reason totals
-    Object.entries(data.topReasons || {}).forEach(([r,rs]) => {
-      if (!resWeekly[r]) resWeekly[r] = 0;
-      resWeekly[r] += rs.total || 0;
-    });
+  // ── Per-day numbers ──
+  const D = days.map((dt, i) => {
+    const api = apiDates[i], data = weeklyCache[api];
+    const s = (data && data.summary) || null;
+    const live = api === todayApi;
+    const jobs = s ? Number(s.totalJobs || 0) : 0;
+    const lenses = s ? Number(s.totalLenses || jobs * 2) : 0;
+    const broken = s ? Number(s.totalBreakLenses || 0) : 0;
+    const fh = (s && s.flowHealth) || {};
+    const fTot = ["healthy", "watch", "delayed", "overnight"].reduce((t, k) => t + Number(fh[k] || 0), 0);
+    const slow = Number(fh.watch || 0) + Number(fh.delayed || 0) + Number(fh.overnight || 0);
+    const same = s && s.aging && lenses ? (Number(s.aging.sameDay || 0) / lenses) * 100 : null;
+    return {
+      dt, api, data, live, has: !!(s && jobs > 0),
+      complete: !!(s && jobs > 0) && !live,
+      dayName: dt.toLocaleDateString("en-US", { weekday: "short" }),
+      letter: dt.toLocaleDateString("en-US", { weekday: "narrow" }),
+      label: fmtShort(dt),
+      jobs, lenses, broken,
+      rate: lenses ? (broken / lenses) * 100 : null,
+      same, flow: s ? Number(s.avgDetaper || 0) : null,
+      slowPct: fTot ? (slow / fTot) * 100 : null,
+      reasons: (data && data.topReasons) || {},
+      hourly: (data && Array.isArray(data.hourly)) ? data.hourly : [],
+      mt: (data && data.machineTotals) || {},
+    };
   });
+  const comp = D.filter(d => d.complete);
+  const withData = D.filter(d => d.has);
+  const wJobs = withData.reduce((t, d) => t + d.jobs, 0);
+  const wLenses = withData.reduce((t, d) => t + d.lenses, 0);
+  const wBroken = withData.reduce((t, d) => t + d.broken, 0);
+  const pendingIdx = D.map((d, i) => d.live ? i : -1).filter(i => i >= 0);
 
-  const wAvgPct  = wLenses > 0 ? ((wBroken / wLenses) * 100).toFixed(2) : "0.00";
-  const wAvgFlow = wFlowCount > 0 ? Math.round(wFlowSum / wFlowCount) : null;
+  // Reasons across the week
+  const rTot = {};
+  withData.forEach(d => Object.entries(d.reasons).forEach(([r, x]) => { rTot[r] = (rTot[r] || 0) + Number((x && x.total) || 0); }));
+  const reasons = Object.keys(rTot).filter(r => rTot[r] > 0).sort((a, b) => rTot[b] - rTot[a]);
+  const topReason = reasons[0] || null;
+  const shareOf = (d, r) => d.broken ? (Number((d.reasons[r] && d.reasons[r].total) || 0) / d.broken) * 100 : null;
 
-  // ── Weekly scorecard ──
-  function setWc(id, val, cls) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = val;
-    if (cls) el.className = "sc-val " + cls;
+  // ── Verdict ──
+  const first = comp[0], last = comp[comp.length - 1];
+  let streak = 0, best = 0, streakStart = null, streakEnd = null, runStart = null;
+  for (let i = 1; i < comp.length; i++) {
+    if (comp[i].rate > comp[i - 1].rate) { if (!streak) runStart = comp[i - 1]; streak++; if (streak > best) { best = streak; streakStart = runStart; streakEnd = comp[i]; } }
+    else streak = 0;
   }
-  setWc("wcDays",   daysWithData, "teal");
-  setWc("wcJobs",   wJobs.toLocaleString(), "");
-  setWc("wcBroken", wBroken, wBroken === 0 ? "green" : wBroken <= 50 ? "yellow" : "red");
-  setWc("wcPct",    wAvgPct + "%", parseFloat(wAvgPct) < 2 ? "green" : parseFloat(wAvgPct) < 4 ? "yellow" : "red");
-  setWc("wcFlow",   wAvgFlow !== null ? wAvgFlow + "m" : "—", wAvgFlow===null?"":wAvgFlow<=15?"green":wAvgFlow<=30?"yellow":"red");
-  if (bestDay !== null && dailyBreakage[bestDay]) {
-    const bd = dailyBreakage[bestDay];
-    setWc("wcBest", bd.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + "\n" + bd.pct.toFixed(2) + "%", "green");
+  const flowRise = first && last && first.flow ? ((last.flow - first.flow) / first.flow) * 100 : 0;
+  const topShare = topReason && wBroken ? (rTot[topReason] / wBroken) * 100 : 0;
+  let vClass = "ok", vText;
+  const bestDay = comp.length ? comp.reduce((a, b) => (b.rate < a.rate ? b : a)) : null;
+  const worstDay = comp.length ? comp.reduce((a, b) => (b.rate > a.rate ? b : a)) : null;
+  if (!withData.length) { vClass = "none"; vText = "No coating data for this week."; }
+  else if (best >= WEEK_RULES.risingStreak) {
+    vClass = "bad";
+    const mult = streakStart.rate > 0 ? streakEnd.rate / streakStart.rate : null;
+    vText = `<b>Breakage rose ${best} days in a row, ${streakStart.dayName} to ${streakEnd.dayName}</b> (${streakStart.rate.toFixed(2)}% \u2192 ${streakEnd.rate.toFixed(2)}%${mult && mult >= 1.5 ? `, about ${mult.toFixed(0)}\u00d7` : ""})`;
+    if (flowRise >= WEEK_RULES.flowRisePct) vText += `, while flow time rose from ${first.flow} to ${last.flow} min`;
+    vText += ".";
+    if (topShare >= WEEK_RULES.reasonShare) vText += ` ${esc(topReason)} is ${topShare.toFixed(0)}% of all breakage.`;
+  } else if (worstDay && worstDay.rate >= OV_BREAK_THRESHOLDS.bad) {
+    vClass = "warn";
+    vText = `<b>${worstDay.dayName} ${worstDay.label} was the problem day</b> at ${worstDay.rate.toFixed(2)}% breakage; the week overall was ${(wBroken / wLenses * 100).toFixed(2)}%.`;
+  } else {
+    vText = `<b>A steady week:</b> ${wJobs.toLocaleString()} jobs, ${(wLenses ? wBroken / wLenses * 100 : 0).toFixed(2)}% breakage${bestDay ? `, best day ${bestDay.dayName} (${bestDay.rate.toFixed(2)}%)` : ""}.`;
   }
-  if (worstDay !== null && dailyBreakage[worstDay]) {
-    const wd2 = dailyBreakage[worstDay];
-    setWc("wcWorst", wd2.date.toLocaleDateString("en-US",{month:"short",day:"numeric"}) + "\n" + wd2.pct.toFixed(2) + "%", "red");
+  const vEl = document.getElementById("weekVerdict");
+  if (vEl) vEl.className = "wk-verdict is-" + vClass;
+  ovSet_("weekVerdictText", vText);
+
+  // ── Coaters (week) ──
+  const coat = {};
+  withData.forEach(d => Object.entries(d.mt).forEach(([m, x]) => {
+    const c = coat[m] || (coat[m] = { jobs: 0, broken: 0, worst: null });
+    const b = Number((x && x.breakLenses) || 0);
+    c.jobs += Number((x && x.jobs) || 0); c.broken += b;
+    if (b > 0 && (!c.worst || b > c.worst.b)) c.worst = { b, day: d.dayName };
+  }));
+  const coaters = Object.keys(coat).filter(m => coat[m].jobs > 0 || coat[m].broken > 0).map(m => ({
+    m, ...coat[m], rate: coat[m].jobs ? (coat[m].broken / (coat[m].jobs * 2)) * 100 : null,
+  })).sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1));
+
+  // ── Heatmap (day × hour) ──
+  const hourSet = new Set();
+  withData.forEach(d => d.hourly.forEach(h => { const k = ovHour24_(h.hour); if (k !== null) hourSet.add(Math.floor(k)); }));
+  for (let h = 7; h <= 17; h++) hourSet.add(h);
+  const hours = [...hourSet].sort((a, b) => a - b);
+  const cellVal = (d, h) => { const r = d.hourly.find(x => { const k = ovHour24_(x.hour); return k !== null && Math.floor(k) === h; }); return r ? Number(r.totalBroken || 0) : 0; };
+  const cellTop = (d, h) => {
+    const r = d.hourly.find(x => { const k = ovHour24_(x.hour); return k !== null && Math.floor(k) === h; });
+    if (!r) return null; let top = null;
+    Object.entries(r.machines || {}).forEach(([m, s]) => { const t = Number(s.total || 0); if (t > 0 && (!top || t > top.t)) top = { m, t }; });
+    return top;
+  };
+  let hot = null;
+  withData.forEach(d => hours.forEach(h => { const v = cellVal(d, h); if (v >= WEEK_RULES.hotHour && (!hot || v > hot.v)) hot = { d, h, v }; }));
+
+  // ── Where to look first (max 3) ──
+  const look = [];
+  if (topReason && topShare >= WEEK_RULES.reasonShare) {
+    const s0 = first ? shareOf(first, topReason) : null, s1 = last ? shareOf(last, topReason) : null;
+    const grew = s0 !== null && s1 !== null && s1 - s0 >= WEEK_RULES.shareGrowPts;
+    look.push(`<b>${esc(topReason)}</b>: ${rTot[topReason]} of ${wBroken} broken lenses${grew ? ", and its share grew during the week" : ""}.`);
   }
-
-  // ── Day-by-day grid ──
-  const gridEl = document.getElementById("weeklyDayGrid");
-  if (gridEl) {
-    const maxBrk = Math.max(...dailyBreakage.filter(Boolean).map(d => d.broken), 1);
-    const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    gridEl.innerHTML = dailyBreakage.map((d, i) => {
-      if (!d) {
-        return `<div class="wd-card wd-nodata">
-          <div class="wd-dow">${DOW[days[i].getDay()]}</div>
-          <div class="wd-date">${days[i].toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
-          <div style="font-size:13px;color:#ffffff;margin-top:8px;">No data</div>
-        </div>`;
-      }
-      const isBest  = i === bestDay;
-      const isWorst = i === worstDay && d.broken > 0;
-      const pctCol  = d.pct < 2 ? "#4ade80" : d.pct < 4 ? "#fbbf24" : "#f87171";
-      const fillPct = (d.broken / maxBrk * 100).toFixed(1);
-      return `<div class="wd-card${isBest?" wd-best":isWorst?" wd-worst":""}">
-        ${isBest  ? `<div class="wd-badge best">Best</div>`  : ""}
-        ${isWorst ? `<div class="wd-badge worst">Worst</div>` : ""}
-        <div class="wd-dow">${DOW[d.date.getDay()]}</div>
-        <div class="wd-date">${d.date.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
-        <div class="wd-stat-row" style="margin-top:8px;">
-          <div><div class="wd-stat-label">Jobs</div><div class="wd-stat-val">${d.jobs}</div></div>
-          <div><div class="wd-stat-label">Broken</div><div class="wd-stat-val" style="color:${d.broken>0?pctCol:"#4ade80"}">${d.broken}</div></div>
-          <div><div class="wd-stat-label">Brkg%</div><div class="wd-stat-val" style="color:${pctCol}">${d.pct.toFixed(2)}%</div></div>
-        </div>
-        <div class="wd-pct-bar"><div class="wd-pct-fill" style="width:${fillPct}%;background:${pctCol};"></div></div>
-      </div>`;
-    }).join("");
+  if (hot) {
+    const top = cellTop(hot.d, hot.h);
+    look.push(`<b>${hot.d.dayName} ${ovHourName_(hot.h)}</b>: ${hot.v} lenses broken in one hour${top ? `, mostly ${esc(formatMachineLabel(top.m))}` : ""}.`);
   }
+  if (first && last && (flowRise >= WEEK_RULES.flowRisePct || (last.slowPct || 0) > DAILY_RULES.slowShare))
+    look.push(`<b>Flow</b>: average ${first.flow} \u2192 ${last.flow} min; slow jobs ${(first.slowPct || 0).toFixed(0)}% \u2192 ${(last.slowPct || 0).toFixed(0)}%.`);
+  const hiCoater = coaters.find(c => c.jobs >= WEEK_RULES.smallSample && c.rate !== null && c.rate >= WEEK_RULES.coaterRateHigh);
+  if (hiCoater) look.push(`<b>${esc(formatMachineLabel(hiCoater.m))}</b>: ${hiCoater.rate.toFixed(2)}% breakage rate this week (${hiCoater.broken} lenses).`);
+  ovSet_("weekLook", look.length ? `<ol>${look.slice(0, 3).map(x => `<li>${x}</li>`).join("")}</ol>`
+    : `<p class="wk-empty">Nothing stands out by the rules this week.</p>`);
 
-  // ── Weekly machines leaderboard ──
-  const wMachEl = document.getElementById("weeklyMachinesPanel");
-  if (wMachEl) {
-    const entries = Object.entries(machWeekly)
-      .map(([m,s]) => ({ m, broken: s.broken }))
-      .filter(e => e.broken > 0)
-      .sort((a,b) => b.broken - a.broken)
-      .slice(0,8);
-    const maxB = entries[0]?.broken || 1;
-    wMachEl.innerHTML = entries.length
-      ? entries.map((e,i) => {
-          const col = e.broken >= 20 ? "#f87171" : e.broken >= 8 ? "#fbbf24" : "#4ade80";
-          return `<div class="summary-row">
-            <span class="summary-row-rank">${i+1}</span>
-            <span class="summary-row-name" style="color:${col}">${formatMachineLabel(e.m)}</span>
-            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(e.broken/maxB*100).toFixed(1)}%;background:${col};"></div></div>
-            <span class="summary-row-val" style="color:${col}">${e.broken}</span>
-          </div>`;
-        }).join("")
-      : `<div style="padding:16px;color:#ffffff;font-size:13px;">No breakage this week</div>`;
-  }
+  // ── Trend tiles (complete days only; today shown as a dotted slot) ──
+  const series = (fn) => D.map(d => d.complete ? fn(d) : null);
+  const letters = D.map(d => d.letter);
+  const change = (vals, fmt, upIsBad) => {
+    const real = vals.filter(v => v !== null);
+    if (real.length < 2) return { txt: "not enough days yet", cls: "" };
+    const a = real[0], b = real[real.length - 1];
+    const up = b > a, same = Math.abs(b - a) < 1e-9;
+    return { txt: `${same ? "" : up ? "\u25b2 " : "\u25bc "}${fmt(a)} \u2192 ${fmt(b)}`, cls: same ? "" : ((up === upIsBad) ? "wk-bad" : "wk-good") };
+  };
+  const pct = v => v.toFixed(2) + "%", pct0 = v => v.toFixed(0) + "%", min = v => Math.round(v) + " min", num = v => Math.round(v).toLocaleString();
+  const lastLabel = last ? last.dayName : "";
+  const tiles = [
+    { n: "Breakage rate", v: series(d => d.rate), c: "#ff6b6b", f: pct, bad: true },
+    { n: "Same-day breakage", v: series(d => d.same), c: "#ff6b6b", f: pct, bad: true },
+    { n: "Average flow time", v: series(d => d.flow), c: "#fbbf24", f: min, bad: true },
+    { n: "Slow jobs (over 15 min)", v: series(d => d.slowPct), c: "#fbbf24", f: pct0, bad: true },
+    { n: "Jobs coated", v: series(d => d.jobs), c: "#3ddbc4", f: num, bad: false },
+    { n: topReason ? `${topReason} share` : "Top reason share", v: series(d => topReason ? shareOf(d, topReason) : null), c: "#c4b5fd", f: pct0, bad: true },
+  ];
+  ovSet_("weekTiles", tiles.map(t => {
+    const real = t.v.filter(v => v !== null), ch = change(t.v, t.f, t.bad);
+    return `<div class="wk-tile"><div class="wk-th">${esc(t.n)}</div>
+      <div class="wk-tv" style="color:${t.c}">${real.length ? t.f(real[real.length - 1]) : "--"} <span>${esc(lastLabel)}</span></div>
+      <div class="wk-chg ${ch.cls}">${ch.txt}</div>
+      ${weeklySpark_(t.v, t.c, { letters, pending: pendingIdx })}</div>`;
+  }).join(""));
 
-  // ── Weekly reasons leaderboard ──
-  const wResEl = document.getElementById("weeklyReasonsPanel");
-  if (wResEl) {
-    const entries = Object.entries(resWeekly)
-      .filter(([,v]) => v > 0)
-      .sort(([,a],[,b]) => b - a)
-      .slice(0,8);
-    const maxR = entries[0]?.[1] || 1;
-    wResEl.innerHTML = entries.length
-      ? entries.map(([r,v],i) => {
-          const col = BREAKAGE_COLOR_MAP[r] || GC.blue;
-          return `<div class="summary-row">
-            <span class="summary-row-rank">${i+1}</span>
-            <span class="summary-row-name">${r}</span>
-            <div class="summary-row-bar-wrap"><div class="summary-row-bar" style="width:${(v/maxR*100).toFixed(1)}%;background:${col};"></div></div>
-            <span class="summary-row-val" style="color:${col}">${v}</span>
-          </div>`;
-        }).join("")
-      : `<div style="padding:16px;color:#ffffff;font-size:13px;">No breakage this week</div>`;
-  }
+  // ── Day cards ──
+  const rc = r => r < OV_BREAK_THRESHOLDS.watch ? "#4ade80" : r < OV_BREAK_THRESHOLDS.bad ? "#fbbf24" : "#ff6b6b";
+  ovSet_("weekDays", D.map((d, i) => {
+    if (!d.has) return `<div class="wk-dc is-empty"><div class="wk-dh"><b>${d.dayName}</b> ${d.label}</div><div class="wk-dr">--</div><div class="wk-dm">no data</div></div>`;
+    const tag = d.live ? `<span class="wk-t live">IN PROGRESS</span>`
+      : (comp.length > 1 && d === bestDay ? `<span class="wk-t best">BEST</span>` : (comp.length > 1 && d === worstDay ? `<span class="wk-t worst">WORST</span>` : ""));
+    return `<button type="button" class="wk-dc" style="--c:${rc(d.rate)}" onclick="weeklyOpenDay_('${d.api}')" title="Open ${d.dayName} in the Daily Summary">
+      <div class="wk-dh"><b>${d.dayName}</b> ${d.label} ${tag}</div><div class="wk-dr">${d.rate.toFixed(2)}%</div>
+      <div class="wk-dm">${d.jobs.toLocaleString()} jobs \u00b7 ${d.broken} broken</div></button>`;
+  }).join(""));
 
-  // ── Weekly sparkline trend chart ──
-  const tCanvas = document.getElementById("weeklyTrendChart");
-  if (tCanvas) {
-    if (weeklyTrendChart) { weeklyTrendChart.destroy(); weeklyTrendChart = null; }
-    const labels  = days.map(d => d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}));
-    const brkData = dailyBreakage.map(d => d ? d.broken : null);
-    const pctData = dailyBreakage.map(d => d ? parseFloat(d.pct) : null);
-    const jobData = dailyBreakage.map(d => d ? d.jobs : null);
-    const ctx2    = tCanvas.getContext("2d");
-    const chartH  = tCanvas.clientHeight || 200;
+  // ── Reasons with daily lines ──
+  const shown = reasons.slice(0, 3);
+  const other = reasons.slice(3);
+  const reasonRows = shown.map(r => ({ r, t: rTot[r], col: BREAKAGE_COLOR_MAP[r] || "#60a5fa", v: D.map(d => d.has ? Number((d.reasons[r] && d.reasons[r].total) || 0) : null) }));
+  if (other.length) reasonRows.push({ r: `Other (${other.length} reason${other.length > 1 ? "s" : ""})`, t: other.reduce((s, r) => s + rTot[r], 0), col: "#e5e7eb",
+    v: D.map(d => d.has ? other.reduce((s, r) => s + Number((d.reasons[r] && d.reasons[r].total) || 0), 0) : null) });
+  ovSet_("weekReasons", reasonRows.length ? reasonRows.map(x => `
+    <div class="wk-rr"><span>${esc(x.r)}</span><b>${x.t}</b><em>${(x.t / wBroken * 100).toFixed(0)}%</em>
+    <div class="wk-mini">${weeklySpark_(x.v, x.col, { w: 220, h: 40, labels: false, pending: pendingIdx })}</div></div>`).join("")
+    : `<p class="wk-empty">No broken lenses this week.</p>`);
 
-    weeklyTrendChart = new Chart(ctx2, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [
-          {
-            label           : "Lenses Broken",
-            type            : "bar",
-            data            : brkData,
-            backgroundColor : brkData.map(v => v === null ? "transparent" : v === 0 ? "rgba(74,222,128,0.5)" : v <= 5 ? "rgba(251,191,36,0.6)" : "rgba(248,113,113,0.65)"),
-            borderColor     : brkData.map(v => v === null ? "transparent" : v === 0 ? "#4ade80" : v <= 5 ? "#fbbf24" : "#f87171"),
-            borderWidth     : 1,
-            borderRadius    : { topLeft: 5, topRight: 5 },
-            yAxisID         : "yBrk",
-            order           : 2,
-          },
-          {
-            label           : "Coating Jobs",
-            type            : "line",
-            data            : jobData,
-            borderColor     : "rgba(251,191,36,0.45)",
-            backgroundColor : "transparent",
-            borderWidth     : 1.5,
-            borderDash      : [4,4],
-            tension         : 0.35,
-            pointRadius     : 3,
-            pointBackgroundColor: "#fbbf24",
-            fill            : false,
-            yAxisID         : "yJobs",
-            order           : 1,
-          },
-        ],
-      },
-      options: {
-        responsive          : true,
-        maintainAspectRatio : false,
-        animation           : { duration: 600, easing: "easeOutQuart" },
-        interaction         : { mode: "index", intersect: false },
-        plugins: {
-          legend : GLASS_LEGEND,
-          tooltip: {
-            ...GLASS_TOOLTIP,
-            callbacks: {
-              title : items => `  ${items[0].label}`,
-              label : ctx  => {
-                if (ctx.dataset.label === "Coating Jobs") return `  Jobs: ${ctx.raw ?? "—"}`;
-                const v = ctx.raw;
-                if (v === null) return null;
-                return `  Broken: ${v}`;
-              },
-            },
-          },
-        },
-        scales: {
-          x: { ...axisStyle(), ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 12 }, maxRotation: 0 }, grid: GLASS_GRID },
-          yBrk: {
-            type: "linear", position: "left", beginAtZero: true,
-            ticks: { color: "#f87171", font: { family: CHART_FONT, size: 12 }, stepSize: 1 },
-            grid: { ...GLASS_GRID, color: "rgba(248,113,113,0.05)" },
-            title: { display: true, text: "Broken", color: "#f87171", font: { family: CHART_FONT, size: 12, weight:"700" } },
-          },
-          yJobs: {
-            type: "linear", position: "right", beginAtZero: true,
-            ticks: { color: "#fbbf24", font: { family: CHART_FONT, size: 12 } },
-            grid: { drawOnChartArea: false },
-            title: { display: true, text: "Jobs", color: "#fbbf24", font: { family: CHART_FONT, size: 12, weight:"700" } },
-          },
-        },
-      },
-      plugins: [GLOW_PLUGIN],
-    });
+  // ── Coaters by rate ──
+  ovSet_("weekCoaters", coaters.length ? `<table class="dl-table"><thead><tr><th>Coater</th><th>Jobs</th><th>Broken</th><th>Rate</th><th>Worst day</th></tr></thead><tbody>
+    ${coaters.map(c => {
+      const small = c.jobs < WEEK_RULES.smallSample;
+      const col = c.rate === null ? "#ffffff" : c.rate >= COATER_BAY_THRESHOLDS.high ? "#ff6b6b" : c.rate >= COATER_BAY_THRESHOLDS.watch ? "#fbbf24" : "#4ade80";
+      return `<tr><td class="dl-m">${esc(formatMachineLabel(c.m))}</td><td>${c.jobs.toLocaleString()}</td>
+        <td style="font-weight:800;color:${col}">${c.broken}</td>
+        <td>${c.rate === null ? "--" : c.rate.toFixed(2) + "%"}${small ? " <small>(small sample)</small>" : ""}</td>
+        <td>${c.worst ? `${c.worst.day} \u00b7 ${c.worst.b}` : "--"}</td></tr>`;
+    }).join("")}</tbody></table>` : `<p class="wk-empty">No coater data.</p>`);
+
+  // ── Heatmap ──
+  const hMax = Math.max(1, ...withData.flatMap(d => hours.map(h => cellVal(d, h))));
+  const nowHr = ovNowNY_().getHours();
+  ovSet_("weekHeat", `<table class="wk-heat"><thead><tr><th></th>${hours.map(h => `<th>${ovShortHour_(h)}</th>`).join("")}<th>Total</th><th>Rate</th></tr></thead><tbody>
+    ${D.map(d => {
+      const rowHead = `<th class="wk-rh"><b>${d.dayName}</b> ${d.label}${d.live ? ' <em>live</em>' : ""}</th>`;
+      if (!d.has) return `<tr>${rowHead}${hours.map(() => `<td class="wk-c is-fut"></td>`).join("")}<td class="wk-tot">--</td><td class="wk-tot">--</td></tr>`;
+      return `<tr>${rowHead}${hours.map(h => {
+        if (d.live && h > nowHr) return `<td class="wk-c is-fut"></td>`;
+        const v = cellVal(d, h);
+        if (!v) return `<td class="wk-c is-zero">0</td>`;
+        const a = 0.12 + 0.88 * (v / hMax);
+        return `<td class="wk-c" style="background:rgba(255,107,107,${a.toFixed(2)});${a > 0.55 ? "color:#061210;" : ""}" title="${d.dayName} ${ovHourName_(h)}: ${v} broken">${v}</td>`;
+      }).join("")}<td class="wk-tot">${d.broken}</td><td class="wk-tot" style="color:${rc(d.rate)}">${d.rate.toFixed(2)}%</td></tr>`;
+    }).join("")}</tbody></table>`);
+
+  // ── Data check ──
+  const heatTot = withData.reduce((t, d) => t + d.hourly.reduce((s, h) => s + Number(h.totalBroken || 0), 0), 0);
+  const coatTot = coaters.reduce((t, c) => t + c.broken, 0);
+  const notes = [];
+  if (heatTot !== wBroken) notes.push(`hourly breakage adds up to ${heatTot}, day totals say ${wBroken}`);
+  if (coatTot !== wBroken) notes.push(`coater breakage adds up to ${coatTot}, day totals say ${wBroken}`);
+  const missing = D.filter(d => !d.has && !d.live && weeklyApiToIso_(d.api) <= todayIso).length;
+  if (missing) notes.push(`${missing} day${missing > 1 ? "s" : ""} with no data`);
+  const chk = document.getElementById("weekCheck");
+  if (chk) {
+    chk.className = "dl-check" + (notes.length ? " is-warn" : "");
+    chk.textContent = notes.length ? "Check data: " + notes.join("; ") + "."
+      : `Check passed: ${wJobs.toLocaleString()} jobs and ${wBroken} broken lenses add up across days, hours, and coaters.`;
   }
 }
+
 /* =====================================================
    REBUILD ALL CHARTS
 ===================================================== */

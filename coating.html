@@ -476,43 +476,56 @@
       <div class="sl-spinner"></div>
       <div class="sl-text">Building Daily Summary...</div>
     </div>
-    <div class="summary-header-row">
-      <div class="section-label">Daily Summary</div>
-      <div class="summary-date-badge" id="dailySummaryDate">—</div>
-    </div>
-
-    <!-- Scorecard row -->
-    <div class="summary-scorecard" id="dailyScorecard">
-      <div class="sc-card sc-jobs"><div class="sc-icon">⚙</div><div class="sc-label">Coating Jobs</div><div class="sc-val teal" id="scJobs">—</div></div>
-      <div class="sc-card sc-lenses"><div class="sc-icon">🔬</div><div class="sc-label">Total Lenses</div><div class="sc-val" id="scLenses">—</div></div>
-      <div class="sc-card sc-broken"><div class="sc-icon">💔</div><div class="sc-label">Lenses Broken</div><div class="sc-val" id="scBroken">—</div></div>
-      <div class="sc-card sc-pct"><div class="sc-icon">📊</div><div class="sc-label">Breakage Rate</div><div class="sc-val" id="scPct">—</div></div>
-      <div class="sc-card sc-peak"><div class="sc-icon">⏰</div><div class="sc-label">Peak Hour</div><div class="sc-val yellow" id="scPeak">—</div></div>
-      <div class="sc-card sc-flow"><div class="sc-icon">🌊</div><div class="sc-label">Avg Flow Time</div><div class="sc-val" id="scFlow">—</div></div>
-    </div>
-
-    <!-- Flow health row -->
-    <div class="summary-section-title">Flow Health Distribution</div>
-    <div class="summary-flow-health" id="dailyFlowHealth"></div>
-
-    <!-- Top machines + reasons side by side -->
-    <div class="summary-split">
-      <div class="summary-panel">
-        <div class="summary-panel-title">Top Machines by Breakage</div>
-        <div id="dailyMachinesPanel" class="summary-panel-body"></div>
-      </div>
-      <div class="summary-panel">
-        <div class="summary-panel-title">Top Breakage Reasons</div>
-        <div id="dailyReasonsPanel" class="summary-panel-body"></div>
+    <div class="dl-top">
+      <h2 class="dl-title">Daily Summary</h2>
+      <div class="dl-meta"><span id="dailyDateLabel">--</span> · <b id="dailyShiftLabel">--</b> · <span id="dailyStatusLabel">--</span></div>
+      <div class="dl-nav">
+        <button type="button" class="dl-btn" onclick="dailyStepDay(-1)" aria-label="Previous day">◀ Previous day</button>
+        <button type="button" class="dl-btn" id="dailyNextBtn" onclick="dailyStepDay(1)" aria-label="Next day">Next day ▶</button>
+        <button type="button" class="dl-btn" onclick="resetToToday()">Today</button>
+        <button type="button" class="dl-btn dl-btn-pdf" onclick="exportPDF()">⬇ Export day report (PDF)</button>
       </div>
     </div>
 
-    <!-- Hourly performance timeline -->
-    <div class="summary-section-title">Hourly Performance Timeline</div>
-    <div id="dailyTimeline" class="summary-timeline"></div>
+    <div class="dl-verdict" id="dailyVerdict">
+      <div class="dl-kicker" id="dailyVerdictKicker">THE DAY SO FAR</div>
+      <p id="dailyVerdictText">--</p>
+    </div>
 
-    <!-- Narrative -->
-    <div class="summary-narrative" id="dailyNarrative"></div>
+    <div class="dl-kpis" id="dailyKpis"></div>
+
+    <div class="dl-grid2">
+      <section class="dl-card">
+        <h3>Coater report card</h3>
+        <p class="dl-sub">Jobs, breakage, and flow per coater for this day.</p>
+        <div id="dailyCoaters"></div>
+      </section>
+      <section class="dl-card">
+        <h3>Notable events</h3>
+        <p class="dl-sub">Found in this day's data. The rule for each is shown under it.</p>
+        <div id="dailyEvents"></div>
+      </section>
+    </div>
+
+    <div class="dl-grid2 dl-even">
+      <section class="dl-card">
+        <h3>Flow groups</h3>
+        <p class="dl-sub">Jobs by detaper-to-coater flow time, with each group's same-day breakage rate when available.</p>
+        <div id="dailyFlow"></div>
+      </section>
+      <section class="dl-card">
+        <h3>Breakage by reason</h3>
+        <p class="dl-sub">Broken lenses found this day, split by machine-scan day.</p>
+        <div id="dailyReasons"></div>
+      </section>
+    </div>
+
+    <section class="dl-card">
+      <h3>Shift hour by hour</h3>
+      <p class="dl-sub">Jobs coated and broken lenses each hour. Current hour striped; coming hours dimmed.</p>
+      <div class="dl-hours" id="dailyHours"></div>
+    </section>
+    <p class="dl-check" id="dailyCheck" role="status"></p>
   </div>
 
   <!-- ══ WEEKLY SUMMARY ══ -->
@@ -521,46 +534,47 @@
       <div class="sl-spinner"></div>
       <div class="sl-text">Fetching week data...</div>
     </div>
-    <div class="summary-header-row">
-      <div class="section-label">Weekly Summary</div>
-      <div class="summary-week-picker">
-        <label class="filter-label" style="font-size:12px;">Week ending</label>
-        <input type="date" id="weekEndDate" class="date-input" />
-        <button class="btn-apply" onclick="showSummaryLoader('weekly');buildWeeklySummary().finally(()=>hideSummaryLoader('weekly'))">Load Week</button>
-        <span class="summary-week-hint" id="weekRangeLabel">—</span>
+    <div class="dl-top">
+      <h2 class="dl-title">Weekly Review</h2>
+      <div class="dl-meta"><span id="weekRangeLabel">--</span> · <b>for managers and Quality</b></div>
+      <div class="dl-nav">
+        <button type="button" class="dl-btn" onclick="weeklyStep(-7)">◀ Previous week</button>
+        <button type="button" class="dl-btn" id="weekNextBtn" onclick="weeklyStep(7)">Next week ▶</button>
+        <button type="button" class="dl-btn" onclick="weeklyStep(0)">This week</button>
+        <label class="wk-end"><span>Week ending</span><input type="date" id="weekEndDate" class="date-input" onchange="weeklyStep(null)" /></label>
+        <button type="button" class="dl-btn" onclick="exportPDF()">⬇ Export (PDF)</button>
       </div>
     </div>
 
-    <!-- Weekly totals -->
-    <div class="summary-scorecard" id="weeklyScorecard">
-      <div class="sc-card"><div class="sc-icon">📅</div><div class="sc-label">Days w/ Data</div><div class="sc-val teal" id="wcDays">—</div></div>
-      <div class="sc-card"><div class="sc-icon">⚙</div><div class="sc-label">Total Jobs</div><div class="sc-val" id="wcJobs">—</div></div>
-      <div class="sc-card"><div class="sc-icon">💔</div><div class="sc-label">Total Broken</div><div class="sc-val" id="wcBroken">—</div></div>
-      <div class="sc-card"><div class="sc-icon">📊</div><div class="sc-label">Avg Brkg %</div><div class="sc-val" id="wcPct">—</div></div>
-      <div class="sc-card"><div class="sc-icon">🌊</div><div class="sc-label">Avg Flow Time</div><div class="sc-val" id="wcFlow">—</div></div>
-      <div class="sc-card"><div class="sc-icon">🏆</div><div class="sc-label">Best Day</div><div class="sc-val green" id="wcBest">—</div></div>
-      <div class="sc-card"><div class="sc-icon">⚠</div><div class="sc-label">Worst Day</div><div class="sc-val red" id="wcWorst">—</div></div>
+    <div class="wk-sec">1 · THE WEEK IN 30 SECONDS</div>
+    <div class="wk-lead">
+      <div class="wk-verdict" id="weekVerdict"><div class="dl-kicker">WHAT HAPPENED</div><p id="weekVerdictText">--</p></div>
+      <div class="wk-look"><div class="dl-kicker">WHERE TO LOOK FIRST</div><div id="weekLook"></div></div>
     </div>
 
-    <!-- Day-by-day breakdown -->
-    <div class="summary-section-title">Day-by-Day Breakdown</div>
-    <div id="weeklyDayGrid" class="weekly-day-grid"></div>
+    <div class="wk-sec">2 · WHAT CHANGED (DAYS STILL IN PROGRESS STAY DOTTED UNTIL THE SHIFT ENDS)</div>
+    <div class="wk-tiles" id="weekTiles"></div>
+    <div class="wk-days" id="weekDays"></div>
 
-    <!-- Weekly machine leaderboard -->
-    <div class="summary-split">
-      <div class="summary-panel">
-        <div class="summary-panel-title">Machine Leaderboard (Week)</div>
-        <div id="weeklyMachinesPanel" class="summary-panel-body"></div>
-      </div>
-      <div class="summary-panel">
-        <div class="summary-panel-title">Top Reasons This Week</div>
-        <div id="weeklyReasonsPanel" class="summary-panel-body"></div>
-      </div>
+    <div class="wk-sec">3 · FOR QUALITY: WHAT, WHICH COATER, WHEN</div>
+    <div class="dl-grid2 dl-even">
+      <section class="dl-card">
+        <h3>Breakage by reason</h3>
+        <p class="dl-sub">Broken lenses this week. The mini line shows that reason each day.</p>
+        <div id="weekReasons"></div>
+      </section>
+      <section class="dl-card">
+        <h3>Coaters by breakage rate</h3>
+        <p class="dl-sub">Rate = broken lenses ÷ (jobs × 2). Ranked by rate, not count.</p>
+        <div id="weekCoaters"></div>
+      </section>
     </div>
-
-    <!-- Weekly trend sparkline -->
-    <div class="summary-section-title">Daily Breakage Trend</div>
-    <div class="chart-card" style="height:220px;"><canvas id="weeklyTrendChart"></canvas></div>
+    <section class="dl-card">
+      <h3>When it broke: day × hour</h3>
+      <p class="dl-sub">Brighter red = more broken lenses. One bright cell = a one-time event; a bright column = a bad hour every day. Click a day card above to open that day.</p>
+      <div class="wk-heat-wrap" id="weekHeat"></div>
+    </section>
+    <p class="dl-check" id="weekCheck" role="status"></p>
   </div>
 
 </div>
