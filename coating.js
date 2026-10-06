@@ -1524,6 +1524,8 @@ function buildFlowChart(data) {
   //   Same style as Overall (straight lines, flow particles), thicker lines.
   //   0 is a REAL value here: the coater coated no jobs that hour (down, starved, or not started).
   if (currentFlowMode === "machine") {
+    { const st = document.getElementById("flowStory"); if (st) { st.innerHTML = ""; st.style.display = "none"; } }
+    { const on = document.getElementById("flowOvernightNote"); if (on) on.innerHTML = ""; }
     const isLive = currentDate === null;
     const nowHr  = ovNowNY_().getHours();
     const partialIdx = isLive ? filtered.map(h => { const k = ovHour24_(h.hour); return k === null ? null : Math.floor(k); }).indexOf(nowHr) : -1;
@@ -1615,91 +1617,72 @@ function buildFlowChart(data) {
     return;
   }
 
-  // ── OVERALL MODE — five lines: avg flow per group + broken jobs (no bars) ──
-  //   Each point = average flow time of the jobs in that group that hour.
-  //   Lines break where an hour had no jobs in that group (spanGaps: false, no fake zeros).
-  //   Labels = how many jobs the point is based on. Values above the axis are pinned to
-  //   the top with their real value in the label.
+  // ── OVERALL — story first, then the chart ──
+  //   Lines: Healthy / Watch / Delayed (average flow time of the jobs in that group each hour)
+  //   + Broken jobs. Lines BREAK where a group had no jobs (no lanes, no fake zeros).
+  //   Overnight (over 6 h) is a different scale (hours), so it is a note above the chart.
+  //   The story cards only talk about lines that are switched on.
   const isLive = currentDate === null;
   const nowHr  = ovNowNY_().getHours();
   const hKeys  = filtered.map(h => { const k = ovHour24_(h.hour); return k === null ? null : Math.floor(k); });
   const partialIdx = isLive ? hKeys.indexOf(nowHr) : -1;
 
   const groups = [
-    { key: "healthy",   label: "Healthy \u00b7 15 min or less", color: "#4ade80", tint: "#c8f7da", test: f => f > 0  && f <= 15,  countKey: "flowHealthy"   },
-    { key: "watch",     label: "Watch \u00b7 16 to 30 min",     color: "#fbbf24", tint: "#fde9a8", test: f => f > 15 && f <= 30,  countKey: "flowWatch"     },
-    { key: "delayed",   label: "Delayed \u00b7 31 min to 6 h",  color: "#ff6b6b", tint: "#ffc2c2", test: f => f > 30 && f <= 360, countKey: "flowDelayed"   },
-    { key: "overnight", label: "Overnight \u00b7 over 6 h",     color: "#60a5fa", tint: "#c7e0ff", test: f => f > 360,             countKey: "flowOvernight" },
+    { key: "healthy", label: "Healthy \u00b7 15 min or less", short: "Healthy", color: "#4ade80", tint: "#c8f7da", test: f => f > 0  && f <= 15,  countKey: "flowHealthy" },
+    { key: "watch",   label: "Watch \u00b7 16 to 30 min",     short: "Watch",   color: "#fbbf24", tint: "#fde9a8", test: f => f > 15 && f <= 30,  countKey: "flowWatch"   },
+    { key: "delayed", label: "Delayed \u00b7 over 30 min",    short: "Delayed", color: "#ff6b6b", tint: "#ffc2c2", test: f => f > 30 && f <= 360, countKey: "flowDelayed" },
   ];
-
   const series = groups.map(g => {
     const real = [], counts = [];
     filtered.forEach(h => {
       const pts = (h.flowPoints || []).filter(p => g.test(Number(p.flow)));
       real.push(pts.length ? pts.reduce((s, p) => s + Number(p.flow), 0) / pts.length : null);
-      counts.push(Number(h[g.countKey] || pts.length || 0));
+      counts.push(pts.length ? Number(h[g.countKey] || pts.length) : 0);
     });
     return { ...g, real, counts };
   });
   const brokenReal   = filtered.map(h => (Number(h.flowBrokenCount || 0) > 0) ? Number(h.avgFlowBroken || 0) : null);
   const brokenCounts = filtered.map(h => Number(h.flowBrokenCount || 0));
 
-  // Axis: 50 min, or 60 if something sits between 45 and 60. Anything higher is pinned to the top.
-  const allVals = series.filter(s => s.key !== "overnight").flatMap(s => s.real).concat(brokenReal).filter(v => v !== null);
-  const yMax = allVals.some(v => v > 45) ? 60 : 50;
-  const pin  = v => v === null ? null : Math.min(v, yMax);
-
-  const fmtMin = v => v >= 60 ? `${(v / 60).toFixed(1)} h` : `${Math.round(v)} min`;
-
-  // Hours with ZERO jobs in a group run along a thin, faint lane at the bottom so every
-  // line keeps flowing all day. Each group has its own lane height so they don't overlap.
-  // The lane is drawn thinner and dimmer on purpose: it means "no jobs", not "0 minutes".
-  const LANE = { healthy: 0.4, watch: 0.9, delayed: 1.4, overnight: 1.9, broken: 2.4 };
-  const laneData = (real, key) => real.map(v => v === null ? LANE[key] : pin(v));
-  const segStyle = (color, dashReal) => ({
-    borderColor: c => (c.p0.skip || c.p1.skip) ? undefined
-      : ((isLaneIdx(c, 0) || isLaneIdx(c, 1)) ? color + "73" : color),
-    borderWidth: c => (isLaneIdx(c, 0) || isLaneIdx(c, 1)) ? 2.5 : 4.5,
-    borderDash: c => {
-      if (isLaneIdx(c, 0) || isLaneIdx(c, 1)) return [];
-      return [];               // solid lines everywhere; the moving flow dots show direction
-    },
-  });
-  // Chart.js segment context gives datasetIndex + p0/p1 data indexes
-  function isLaneIdx(c, end) {
-    const ds = c.chart && c.chart.data.datasets[c.datasetIndex];
-    if (!ds || !ds._real) return false;
-    const v = ds._real[end === 0 ? c.p0DataIndex : c.p1DataIndex];
-    return v === null || v === undefined;
+  // Overnight note (not on the chart)
+  const onPts = filtered.map(h => (h.flowPoints || []).filter(p => Number(p.flow) > 360));
+  const onTotal = onPts.reduce((s, a) => s + a.length, 0);
+  const onNote = document.getElementById("flowOvernightNote");
+  if (onNote) {
+    if (!onTotal) onNote.innerHTML = `Overnight (over 6 h): <b>none</b>`;
+    else {
+      const avgH = onPts.flat().reduce((s, p) => s + Number(p.flow), 0) / onTotal / 60;
+      const where = onPts.map((a, i) => a.length ? `${a.length} at ${ovHourName_(hKeys[i])}` : null).filter(Boolean).join(", ");
+      onNote.innerHTML = `Overnight (over 6 h): <b>${onTotal} ${onTotal === 1 ? "job" : "jobs"}</b> \u00b7 ${where} \u00b7 avg ${avgH.toFixed(1)} h`;
+    }
   }
 
-  const datasets = series.map(s => ({
-    label: s.label, data: laneData(s.real, s.key), _real: s.real, _counts: s.counts, _kind: s.key, _tint: s.tint,
-    borderColor: s.color, backgroundColor: s.color, borderWidth: 4.5, tension: 0, spanGaps: false, fill: false,
-    pointRadius: s.real.map(v => v === null ? 0 : 6.5), pointHoverRadius: s.real.map(v => v === null ? 0 : 9),
-    pointBackgroundColor: s.real.map((v, i) => i === partialIdx ? "#061210" : s.color),
-    pointBorderColor: s.color, pointBorderWidth: 2.5,
-    segment: segStyle(s.color, undefined),
-    hidden: flowHidden_.has(s.key),
-  }));
-  datasets.push({
-    label: "Broken jobs", data: laneData(brokenReal, "broken"), _real: brokenReal, _counts: brokenCounts, _kind: "broken", _tint: "#ece6ff",
-    borderColor: "#c4b5fd", backgroundColor: "#c4b5fd", borderWidth: 4.5, tension: 0, spanGaps: false, fill: false,
-    pointRadius: brokenReal.map(v => v === null ? 0 : 6.5), pointHoverRadius: brokenReal.map(v => v === null ? 0 : 9),
-    pointBackgroundColor: brokenReal.map((v, i) => i === partialIdx ? "#061210" : "#c4b5fd"),
-    pointBorderColor: "#c4b5fd", pointBorderWidth: 2.5,
-    segment: segStyle("#c4b5fd", []),
-    hidden: flowHidden_.has("broken"),
-  });
+  // Axis: 50 min, or 60 when something sits between 45 and 60. Higher values are pinned with ▲.
+  const allVals = series.flatMap(s => s.real).concat(brokenReal).filter(v => v !== null);
+  const yMax = allVals.some(v => v > 45 && v <= 60) ? 60 : 50;
+  const pin  = v => v === null ? null : Math.min(v, yMax);
+  const fmtMin = v => v >= 60 ? `${(v / 60).toFixed(1)} h` : `${Math.round(v)} min`;
 
-  const bandPlugin = flowBandPlugin_(yMax);
+  const mkDs = (key, label, color, tint, real, counts) => ({
+    label, data: real.map(pin), _real: real, _counts: counts, _kind: key, _tint: tint,
+    borderColor: color, backgroundColor: color, borderWidth: 4.5, tension: 0, spanGaps: false, fill: false,
+    pointRadius: real.map(v => v === null ? 0 : 7), pointHoverRadius: real.map(v => v === null ? 0 : 11),
+    pointHitRadius: real.map(v => v === null ? 0 : 16),
+    pointBackgroundColor: real.map((v, i) => i === partialIdx ? "#061210" : color),
+    pointBorderColor: color, pointBorderWidth: 3,
+    hidden: flowHidden_.has(key),
+  });
+  const datasets = series.map(s => mkDs(s.key, s.label, s.color, s.tint, s.real, s.counts));
+  datasets.push(mkDs("broken", "Broken jobs", "#c4b5fd", "#ece6ff", brokenReal, brokenCounts));
+
+  // Labels: white text on a dark chip with a border in the line's color
   const labelPlugin = {
     id: "flowPointLabels",
     afterDatasetsDraw(chart) {
-      const c = chart.ctx;
-      c.save(); c.font = `700 12px ${CHART_FONT}`; c.textAlign = "center"; c.textBaseline = "middle";
+      const c = chart.ctx, a = chart.chartArea;
+      c.save(); c.font = `700 15px ${CHART_FONT}`; c.textAlign = "center"; c.textBaseline = "middle";
       chart.data.datasets.forEach((ds, di) => {
-        if (ds._kind === "healthy") return;                     // healthy has most jobs; label would clutter
+        if (ds._kind === "healthy") return;                       // most jobs are healthy; labels there add clutter
         const meta = chart.getDatasetMeta(di);
         if (meta.hidden) return;
         meta.data.forEach((pt, i) => {
@@ -1707,9 +1690,16 @@ function buildFlowChart(data) {
           if (real === null || real === undefined) return;
           const n = ds._counts[i];
           let txt = ds._kind === "broken" ? `${n} broken` : `${n} ${n === 1 ? "job" : "jobs"}`;
-          if (real > yMax) txt += ` \u00b7 ${fmtMin(real)}`;
-          const dy = ds._kind === "broken" ? 18 : -15;
-          c.fillStyle = ds.borderColor; c.fillText(txt, pt.x, pt.y + dy);
+          if (real > yMax) txt += ` \u00b7 \u25b2 ${fmtMin(real)}`;
+          const w = c.measureText(txt).width + 20, h = 26;
+          let y = ds._kind === "broken" ? pt.y + 26 : pt.y - 26;
+          if (real > yMax) y = pt.y + 28;                          // pinned at the top: put the chip under the point
+          y = Math.max(a.top + h / 2, Math.min(a.bottom - h / 2, y));
+          const x = Math.max(a.left + w / 2, Math.min(a.right - w / 2, pt.x));
+          c.fillStyle = "rgba(6,18,16,0.94)"; c.strokeStyle = ds.borderColor; c.lineWidth = 1.6;
+          c.beginPath(); if (c.roundRect) c.roundRect(x - w / 2, y - h / 2, w, h, 7); else c.rect(x - w / 2, y - h / 2, w, h);
+          c.fill(); c.stroke();
+          c.fillStyle = "#ffffff"; c.fillText(txt, x, y + 0.5);
         });
       });
       c.restore();
@@ -1717,9 +1707,7 @@ function buildFlowChart(data) {
     afterRender(chart) { flowPlaceJobsRow_(chart, filtered); },
   };
 
-  // Flow dots: light dots in each line's own tint travel left to right along every segment
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const flowDotPlugin = flowDotPlugin_(reduceMotion);
   const firstRender = !window._flowEntranceDone;
   window._flowEntranceDone = true;
 
@@ -1728,53 +1716,113 @@ function buildFlowChart(data) {
     data: { labels: hours.map(h => ovHourName_(Math.floor(ovHour24_(h) ?? 0))), datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      // Entrance only on the first load: points rise hour by hour, left to right. Refreshes don't replay it.
+      // Hover one point = only that point (was: every line at that hour)
+      interaction: { mode: "nearest", intersect: true },
       animation: firstRender && !reduceMotion
         ? { duration: 600, easing: "easeOutQuart", delay: c => (c.type === "data" && c.mode === "default") ? c.dataIndex * 90 : 0 }
         : false,
-      layout: { padding: { top: 22, right: 34 } },
+      layout: { padding: { top: 24, right: 34 } },
       plugins: {
         legend: { display: false },
         tooltip: {
           ...GLASS_TOOLTIP,
+          titleFont: { family: CHART_FONT, size: 17, weight: "700" },
+          bodyFont : { family: CHART_FONT, size: 16, weight: "600" },
+          footerFont: { family: CHART_FONT, size: 14, weight: "600" },
+          padding: 14, boxWidth: 13, boxHeight: 13, boxPadding: 6,
           filter: item => item.dataset._real[item.dataIndex] !== null && item.dataset._real[item.dataIndex] !== undefined,
           callbacks: {
-            title: items => items.length ? `  ${items[0].label}` : "",
+            title: items => items.length ? `${items[0].dataset.label} \u00b7 ${items[0].label}` : "",
             label: c => {
               const real = c.dataset._real[c.dataIndex], n = c.dataset._counts[c.dataIndex];
-              return `  ${c.dataset.label}: ${fmtMin(real)} avg (${n} ${c.dataset._kind === "broken" ? "broken" : (n === 1 ? "job" : "jobs")})`;
+              const what = c.dataset._kind === "broken" ? `${n} broken ${n === 1 ? "job" : "jobs"}` : `${n} ${n === 1 ? "job" : "jobs"}`;
+              return ` ${what} \u00b7 ${fmtMin(real)} average flow`;
             },
-            afterBody: items => (items.length && items[0].dataIndex === partialIdx) ? ["  Hour still in progress"] : [],
+            footer: items => (items.length && items[0].dataIndex === partialIdx) ? "Hour still in progress" : "",
           },
         },
       },
       scales: {
         x: { grid: { display: false }, border: { display: false },
-             ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 13, weight: "600" } } },
+             ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 15, weight: "700" } } },
         y: { min: 0, max: yMax, border: { display: false },
-             ticks: { stepSize: 10, color: "#ffffff", font: { family: CHART_FONT, size: 13, weight: "700" }, callback: v => v + "m" },
+             ticks: { stepSize: 10, color: "#ffffff", font: { family: CHART_FONT, size: 15, weight: "700" }, callback: v => v + "m" },
              grid: { color: "rgba(255,255,255,0.07)" },
-             title: { display: true, text: "Average flow time", color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "700" } } },
+             title: { display: true, text: "Average flow time", color: "#ffffff", font: { family: CHART_FONT, size: 15, weight: "700" } } },
       },
     },
-    plugins: [bandPlugin, labelPlugin, flowDotPlugin],
+    plugins: [flowBandPlugin_(yMax), labelPlugin, flowDotPlugin_(reduceMotion)],
   });
   flowStartDotLoop_(reduceMotion);
 
-  // Legend (HTML) + comparison + breakage-rate cards
+  // ── Story cards (one per line; only lines that are switched on are shown) ──
+  const hourOf = i => ovHourName_(hKeys[i]);
+  const lastIdx = filtered.length - 1;
+  const soFar = i => (i === partialIdx ? " so far" : "");
+  const period = isLive ? "today" : "this day";
+  const cards = {};
+  {
+    const w = series[1], tot = w.counts.reduce((a, b) => a + b, 0);
+    if (!tot) cards.watch = { c: "#fbbf24", k: "WATCH", t: `No jobs went over 15 min ${period}.` };
+    else {
+      let pk = 0; w.counts.forEach((n, i) => { if (n > w.counts[pk]) pk = i; });
+      let t = `Flow slowed at <b>${hourOf(pk)}</b>: <b>${w.counts[pk]} jobs</b> went over 15 min`;
+      if (lastIdx > pk) {
+        const ln = w.counts[lastIdx];
+        t += ln < w.counts[pk] ? `, and it is easing (${ln} at ${hourOf(lastIdx)}${soFar(lastIdx)}).` : `, and it is still high (${ln} at ${hourOf(lastIdx)}${soFar(lastIdx)}).`;
+      } else t += ` \u2014 the highest hour so far.`;
+      cards.watch = { c: "#fbbf24", k: "WATCH \u00b7 16 TO 30 MIN", t: t + ` ${tot} watch jobs ${period}.` };
+    }
+  }
+  {
+    const d = series[2], idx = d.counts.map((n, i) => n > 0 ? i : -1).filter(i => i >= 0);
+    const tot = idx.reduce((s, i) => s + d.counts[i], 0);
+    if (!tot) cards.delayed = { c: "#ff6b6b", k: "DELAYED \u00b7 OVER 30 MIN", t: `No delayed jobs ${period}.` };
+    else {
+      const avg = idx.reduce((s, i) => s + d.real[i] * d.counts[i], 0) / tot;
+      const span = idx.length === 1 ? `at ${hourOf(idx[0])}` : `between ${hourOf(idx[0])} and ${hourOf(idx[idx.length - 1])}`;
+      let t = `<b>${tot} ${tot === 1 ? "job" : "jobs"}</b> took about <b>${fmtMin(avg)}</b> ${span}.`;
+      if (isLive && partialIdx >= 0 && d.counts[partialIdx] === 0) t += ` None so far at ${hourOf(partialIdx)}.`;
+      cards.delayed = { c: "#ff6b6b", k: "DELAYED \u00b7 OVER 30 MIN", t };
+    }
+  }
+  {
+    const hS = series[0], idx = hS.real.map((v, i) => v !== null ? i : -1).filter(i => i >= 0);
+    if (!idx.length) cards.healthy = { c: "#4ade80", k: "HEALTHY \u00b7 15 MIN OR LESS", t: `No healthy jobs ${period}.` };
+    else {
+      const tot = idx.reduce((s, i) => s + hS.counts[i], 0) || idx.length;
+      const avg = idx.reduce((s, i) => s + hS.real[i] * (hS.counts[i] || 1), 0) / tot;
+      const tail = idx.slice(-3).map(i => hS.real[i]);
+      const steady = tail.length >= 2 && Math.max(...tail) - Math.min(...tail) <= 2;
+      cards.healthy = { c: "#4ade80", k: "HEALTHY \u00b7 15 MIN OR LESS",
+        t: `Most jobs flow in about <b>${Math.round(avg)} min</b>${steady ? `, steady since ${hourOf(idx.slice(-3)[0])}` : ""}.` };
+    }
+  }
+  {
+    const idx = brokenReal.map((v, i) => v !== null ? i : -1).filter(i => i >= 0);
+    const tot = idx.reduce((s, i) => s + brokenCounts[i], 0);
+    if (!tot) cards.broken = { c: "#c4b5fd", k: "BROKEN JOBS", t: `No broken jobs with flow data ${period}.` };
+    else {
+      const avg = idx.reduce((s, i) => s + brokenReal[i] * brokenCounts[i], 0) / tot;
+      const all = Number((data.summary && data.summary.avgDetaper) || 0);
+      const cmpTxt = all ? (avg > all + 0.5 ? `, slower than all jobs (${Math.round(all)} min)` : avg < all - 0.5 ? `, faster than all jobs (${Math.round(all)} min)` : `, about the same as all jobs`) : "";
+      cards.broken = { c: "#c4b5fd", k: "BROKEN JOBS", t: `<b>${tot} broken ${tot === 1 ? "job" : "jobs"}</b> averaged <b>${fmtMin(avg)}</b> of flow${cmpTxt}.` };
+    }
+  }
+  window._flowStoryCards = cards;
+  flowRenderStory_();
+
+  // ── Legend (click to hide / show; the story follows) ──
   const leg = document.getElementById("flowLegend");
   if (leg) {
-    const btn = (key, idx, color, text, extraCls = "") => {
+    const btn = (key, idx, color, text) => {
       const off = flowHidden_.has(key);
-      return `<button type="button" class="tl-key tl-toggle${extraCls}${off ? " is-off" : ""}" style="--c:${color}"
+      return `<button type="button" class="tl-key tl-toggle${off ? " is-off" : ""}" style="--c:${color}"
         data-key="${key}" data-idx="${idx}" aria-pressed="${!off}" title="Click to ${off ? "show" : "hide"}">${text}</button>`;
     };
-    leg.innerHTML = series.map((s, i) => {
-      const none = s.real.every(v => v === null);
-      return btn(s.key, i, s.color, s.label + (none ? " (none)" : ""));
-    }).join("") + btn("broken", series.length, "#c4b5fd", "Broken jobs") +
-      `<span class="tl-note">Click a name to hide or show it \u00b7 Faint lines along the bottom = no jobs in that group that hour</span>`;
+    leg.innerHTML = series.map((s, i) => btn(s.key, i, s.color, s.label)).join("") +
+      btn("broken", series.length, "#c4b5fd", "Broken jobs") +
+      `<span class="tl-note">Click a name to hide or show it. Lines break where a group had no jobs.</span>`;
     if (!leg._wired) {
       leg._wired = true;
       leg.addEventListener("click", e => {
@@ -1788,11 +1836,26 @@ function buildFlowChart(data) {
         b.classList.toggle("is-off", nowHidden);
         b.setAttribute("aria-pressed", String(!nowHidden));
         b.title = `Click to ${nowHidden ? "show" : "hide"}`;
+        if (currentFlowMode === "average") flowRenderStory_();
       });
     }
   }
   buildFlowCompareCards_(data);
 }
+
+/* Story cards above the flow chart: only for lines that are switched on */
+function flowRenderStory_() {
+  const el = document.getElementById("flowStory");
+  if (!el) return;
+  if (currentFlowMode !== "average") { el.innerHTML = ""; el.style.display = "none"; return; }
+  el.style.display = "";
+  const cards = window._flowStoryCards || {};
+  const order = ["watch", "delayed", "healthy", "broken"].filter(k => cards[k] && !flowHidden_.has(k));
+  el.innerHTML = order.length
+    ? order.map(k => `<div class="fs-card" style="--c:${cards[k].c}"><b class="fs-k">${cards[k].k}</b><span class="fs-t">${cards[k].t}</span></div>`).join("")
+    : `<div class="fs-card fs-none"><span class="fs-t">Turn a line on to see its story.</span></div>`;
+}
+
 
 /* Shared by Overall and By Machine: 15 / 30 min zones and guide lines */
 function flowBandPlugin_(yMax) {
@@ -1806,8 +1869,8 @@ function flowBandPlugin_(yMax) {
       band(0, top(15), "rgba(74,222,128,0.05)");
       if (yMax > 15) band(15, top(30), "rgba(251,191,36,0.06)");
       if (yMax > 30) band(30, yMax, "rgba(255,107,107,0.05)");
-      c.setLineDash([6, 5]); c.lineWidth = 1.2; c.font = `700 12px ${CHART_FONT}`; c.textAlign = "right";
-      [[15, "#4ade80", "15 min"], [30, "#fbbf24", "30 min"]].filter(([v]) => v < yMax).forEach(([v, col, t]) => {
+      c.setLineDash([6, 5]); c.lineWidth = 1.4; c.font = `700 14px ${CHART_FONT}`; c.textAlign = "right";
+      [[15, "#4ade80", "15 min \u00b7 watch starts"], [30, "#ff6b6b", "30 min \u00b7 delayed starts"]].filter(([v]) => v < yMax).forEach(([v, col, t]) => {
         const py = y.getPixelForValue(v);
         c.strokeStyle = col; c.globalAlpha = 0.6; c.beginPath(); c.moveTo(a.left, py); c.lineTo(a.right, py); c.stroke();
         c.globalAlpha = 1; c.fillStyle = col; c.fillText(t, a.right - 6, py - 6);
@@ -2152,80 +2215,147 @@ function closeModal() {
    REASON CHART — GLASSMORPHISM HORIZONTAL BARS
 ===================================================== */
 
-function buildReasonChart(data) {
-  if (!data || !data.topReasons) return;
-  const canvas = document.getElementById("reasonChart");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  if (reasonChart) reasonChart.destroy();
+/* =====================================================
+   TOP REASONS — one row per reason (for managers and Quality)
+   Each row: how many · machine scan day · which coater · when · vs yesterday
+   Verdict per reason (rules in REASON_RULES):
+     spread on 3+ coaters + slow jobs broke much more today -> "likely a flow time issue"
+     spread on 3+ coaters, no flow evidence                -> "not one machine"
+     70%+ on one coater (3+ lenses) -> "likely a machine issue"
+     under 3 lenses                 -> "too few to call"
+   "vs yesterday" in live mode compares with yesterday UP TO THE SAME HOUR.
+===================================================== */
+const REASON_RULES = { minLenses: 3, spreadCoaters: 3, concentratedShare: 70,
+  flowRateRatio: 2,     // watch/delayed jobs broke at least 2x the healthy rate today...
+  flowMinBroken: 2 };   // ...based on at least 2 broken lenses in those groups
 
-  const entries = Object.entries(data.topReasons)
-    .map(([reason, stats]) => ({ reason, total: stats.total || 0 }))
-    .filter(e => e.total > 0)
-    .sort((a, b) => b.total - a.total);
-  if (!entries.length) return;
-
-  const maxVal     = entries[0].total;
-  const grandTotal = entries.reduce((s, e) => s + e.total, 0);
-  const fallback   = [GC.red, GC.orange, GC.yellow, GC.teal, GC.purple, GC.blue];
-  const colors     = entries.map((e, i) => BREAKAGE_COLOR_MAP[e.reason] || fallback[i % fallback.length]);
-  const valueLabels = entries.map(e => `${e.total}  ·  ${((e.total / grandTotal) * 100).toFixed(1)}%`);
-
-  // Solid vivid colors — no fading
-  const bgs = colors.map(c => c + "ee");
-
-  reasonChart = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels  : entries.map(e => e.reason),
-      datasets: [{
-        label           : "Breakage Count",
-        data            : entries.map(e => e.total),
-        _valueLabels    : valueLabels,
-        backgroundColor : bgs,
-        borderColor     : colors.map(c => c + "cc"),
-        borderWidth     : 0,
-        borderRadius    : 6,
-        borderSkipped   : false,
-        barPercentage      : 0.65,
-        categoryPercentage : 0.88,
-      }],
-    },
-    options: {
-      indexAxis          : "y",
-      responsive         : true,
-      maintainAspectRatio: false,
-      animation          : { duration: 500, easing: "easeOutQuart" },
-      layout             : { padding: { right: 150, top: 6, bottom: 6 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          ...GLASS_TOOLTIP,
-          callbacks: {
-            title    : items => `  ${entries[items[0].dataIndex]?.reason}`,
-            label    : ctx  => { const e = entries[ctx.dataIndex]; return [`  Count: ${e.total}`, `  Share: ${((e.total/grandTotal)*100).toFixed(1)}%`]; },
-            afterLabel: ctx => ctx.dataIndex === 0 ? `  ⚠  Top contributor` : "",
-          },
-        },
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          max        : Math.ceil(maxVal * 1.06),
-          ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 13, weight: "600" }, stepSize: Math.max(1, Math.ceil(maxVal / 8)) },
-          grid  : GLASS_GRID,
-          border: { display: false },
-        },
-        y: {
-          ticks : { color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "600" }, padding: 12 },
-          grid  : { display: false },
-          border: { display: false },
-        },
-      },
-    },
-    plugins: [GLOW_PLUGIN, VALUE_LABEL_PLUGIN],
+function reasonsByHourAndCoater_(data, cutHour) {
+  // -> { reason: { total, coaters:{m:n}, hours:{h:n} } } from the hourly detail
+  const out = {};
+  ((data && data.hourly) || []).forEach(h => {
+    const k = ovHour24_(h.hour); if (k === null) return;
+    const hr = Math.floor(k);
+    if (cutHour !== undefined && hr > cutHour) return;
+    Object.entries(h.machines || {}).forEach(([m, s]) => {
+      Object.entries((s && s.reasons) || {}).forEach(([r, rs]) => {
+        const n = Number((rs && rs.total) || 0); if (!n || !r) return;
+        const o = out[r] || (out[r] = { total: 0, coaters: {}, hours: {} });
+        o.total += n; o.coaters[m] = (o.coaters[m] || 0) + n; o.hours[hr] = (o.hours[hr] || 0) + n;
+      });
+    });
   });
+  return out;
 }
+
+function buildReasonChart(data) {
+  const host = document.getElementById("reasonsBoard");
+  if (!host || !data) return;
+  const esc = coaterBayEsc_;
+  const isLive = currentDate === null;
+  const nowHr = ovNowNY_().getHours();
+  const top = data.topReasons || {};
+  const detail = reasonsByHourAndCoater_(data);
+
+  const rows = Object.entries(top)
+    .map(([r, s]) => ({ r, t: Number((s && s.total) || 0), s: Number((s && s.sameDay) || 0),
+                        e: Number((s && s.oneDay) || 0) + Number((s && s.twoPlus) || 0), d: detail[r] || { coaters: {}, hours: {} } }))
+    .filter(x => x.t > 0 && x.r)
+    .sort((a, b) => b.t - a.t);
+  const total = rows.reduce((s, x) => s + x.t, 0);
+
+  // Previous day (shared with the Daily Summary; one cached call)
+  const prevKey = dailyDateKey_(-1);
+  const prev = weeklyCache[prevKey];
+  if (prev === undefined) dailyLoadPrevDay_();
+  const prevByR = prev ? reasonsByHourAndCoater_(prev, isLive ? nowHr : undefined) : null;
+  const prevTop = prev && !isLive ? (prev.topReasons || {}) : null;
+  const prevName = (() => { const [m, d, y] = prevKey.split("/").map(Number); return new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short" }); })();
+
+  // Hours shown in the strips
+  const hourSet = new Set();
+  rows.forEach(x => Object.keys(x.d.hours).forEach(h => hourSet.add(Number(h))));
+  ((data.hourly) || []).forEach(h => { const k = ovHour24_(h.hour); if (k !== null && Number(h.coatingJobs || 0) > 0) hourSet.add(Math.floor(k)); });
+  const hours = [...hourSet].sort((a, b) => a - b);
+
+  // Flow evidence for today: did slow jobs (watch / delayed) break much more than healthy ones?
+  const fb = data.flowBreakage || null;
+  let flowSignal = null;
+  if (fb && fb.healthy) {
+    const hr = Number(fb.healthy.rate || 0);
+    ["delayed", "watch"].forEach(g => {
+      const x = fb[g]; if (!x || flowSignal) return;
+      const r = Number(x.rate || 0), n = Number(x.brokenLenses || 0);
+      if (n >= REASON_RULES.flowMinBroken && r >= Math.max(hr, 0.01) * REASON_RULES.flowRateRatio)
+        flowSignal = { g, r, hr };
+    });
+  }
+  // Verdict per reason
+  const verdict = x => {
+    const cs = Object.entries(x.d.coaters).sort((a, b) => b[1] - a[1]);
+    if (x.t < REASON_RULES.minLenses) return { cls: "few", txt: "Too few to call" };
+    if (cs.length >= REASON_RULES.spreadCoaters)
+      return flowSignal
+        ? { cls: "flow", txt: `Spread on ${cs.length} coaters \u00b7 likely a flow time issue` }
+        : { cls: "spread", txt: `Spread on ${cs.length} coaters \u00b7 not one machine` };
+    if (cs.length && (cs[0][1] / x.t) * 100 >= REASON_RULES.concentratedShare)
+      return { cls: "mach", txt: `Concentrated on ${formatMachineLabel(cs[0][0])} \u00b7 likely a machine issue`, coater: formatMachineLabel(cs[0][0]) };
+    return { cls: "mix", txt: `On ${cs.length} coaters \u00b7 no clear pattern yet` };
+  };
+
+  // Summary sentence (top 2 reasons that have a verdict)
+  const say = [];
+  rows.slice(0, 3).forEach(x => {
+    const v = verdict(x), col = BREAKAGE_COLOR_MAP[x.r] || "#60a5fa";
+    const nC = Object.keys(x.d.coaters).length;
+    if (v.cls === "flow") say.push(`<b style="color:${col}">${esc(x.r)}: ${x.t} lenses on ${nC} coaters</b>, likely a flow time issue: ${flowSignal.g} jobs broke at ${flowSignal.r.toFixed(2)}% vs ${flowSignal.hr.toFixed(2)}% for healthy jobs today.`);
+    else if (v.cls === "spread") say.push(`<b style="color:${col}">${esc(x.r)}: ${x.t} lenses on ${nC} coaters</b>, not one machine.`);
+    else if (v.cls === "mach") {
+      const n = x.d.coaters[Object.keys(x.d.coaters).find(m => formatMachineLabel(m) === v.coater)] || 0;
+      say.push(`<b style="color:${col}">${esc(x.r)}: ${n === x.t ? "all " + x.t : n + " of " + x.t} on ${esc(v.coater)}</b>, likely a machine issue, check that coater.`);
+    }
+  });
+  const sayHtml = !total ? `No broken lenses ${isLive ? "today" : "on this day"}.`
+    : (say.length ? say.slice(0, 2).join(" ") : `${total} broken lenses; no reason has a clear pattern yet.`);
+
+  const rowHtml = rows.map(x => {
+    const col = BREAKAGE_COLOR_MAP[x.r] || "#60a5fa";
+    const v = verdict(x), small = v.cls === "few";
+    const coaters = Object.entries(x.d.coaters).sort((a, b) => b[1] - a[1]);
+    const chips = coaters.length ? coaters.map(([m, n]) => `<span class="rs-chip">${esc(formatMachineLabel(m))} \u00d7${n}</span>`).join("") : `<span class="rs-dim">no coater data</span>`;
+    const strip = hours.map(h => {
+      const n = x.d.hours[h] || 0, fut = isLive && h > nowHr;
+      return `<span class="rs-h${fut ? " is-fut" : ""}"><span class="rs-hb" style="${n ? `background:${col};color:#061210` : ""}">${n || ""}</span><span class="rs-hl">${ovShortHour_(h)}</span></span>`;
+    }).join("");
+    const known = x.s + x.e, unk = Math.max(0, x.t - known);
+    const ageBar = `<div class="rs-age"><div style="flex:${x.s};background:#ff6b6b"></div><div style="flex:${x.e};background:#fbbf24"></div>${unk ? `<div style="flex:${unk};background:#e5e7eb"></div>` : ""}</div>
+      <small>${x.s} today \u00b7 ${x.e} earlier${unk ? ` \u00b7 ${unk} unknown` : ""}</small>`;
+    let trend;
+    if (prev === undefined) trend = `<span class="rs-dim">loading\u2026</span>`;
+    else if (!prev) trend = `<span class="rs-dim">no data for ${prevName}</span>`;
+    else {
+      const then = prevTop ? Number((prevTop[x.r] && prevTop[x.r].total) || 0) : ((prevByR[x.r] && prevByR[x.r].total) || 0);
+      const d = x.t - then;
+      trend = d === 0 ? `<span class="rs-tr">= same</span>` : `<span class="rs-tr" style="color:${d > 0 ? "#ff6b6b" : "#4ade80"}">${d > 0 ? "\u25b2 +" : "\u25bc "}${Math.abs(d)}</span>`;
+      trend += `<span class="rs-trs">vs ${prevName}${isLive ? " at this time" : ""} (${then})</span>`;
+    }
+    return `<div class="rs-row${small ? " is-small" : ""}">
+      <div class="rs-nm"><i style="background:${col}"></i><b>${esc(x.r)}</b><span class="rs-v rs-v-${v.cls}">${esc(v.txt)}</span></div>
+      <div class="rs-ct"><b>${x.t}</b><span>${total ? (x.t / total * 100).toFixed(0) : 0}%</span></div>
+      <div>${ageBar}</div>
+      <div class="rs-chips">${chips}</div>
+      <div class="rs-strip">${strip}</div>
+      <div class="rs-trend">${trend}</div></div>`;
+  }).join("");
+
+  host.innerHTML = `
+    <div class="rs-say">${sayHtml}</div>
+    <div class="rs-card">
+      <div class="rs-row rs-head"><span>Reason</span><span>Lenses</span><span>Machine scan day</span><span>Which coater</span><span>When</span><span>Trend</span></div>
+      ${rowHtml || `<p class="rs-dim" style="padding:14px 0">No broken lenses.</p>`}
+    </div>
+    <p class="dl-check">${total} broken lenses \u00b7 rules: ${REASON_RULES.concentratedShare}%+ on one coater = likely a machine issue \u00b7 ${REASON_RULES.spreadCoaters}+ coaters and slow jobs breaking ${REASON_RULES.flowRateRatio}\u00d7 more than healthy ones today = likely a flow time issue \u00b7 ${REASON_RULES.spreadCoaters}+ coaters without that = not one machine \u00b7 under ${REASON_RULES.minLenses} lenses = too few to call.</p>`;
+}
+
 
 /* =====================================================
    MACHINE CHART — GLASSMORPHISM SEVERITY BARS
@@ -2984,6 +3114,8 @@ function dailyLoadPrevDay_() {
       delete dailyPrevInFlight_[key];
       const tab = document.getElementById("daily");
       if (tab && tab.classList.contains("active")) buildDailySummary(dashboardData);
+      const rt = document.getElementById("reasons");
+      if (rt && rt.classList.contains("active")) buildReasonChart(dashboardData);
     });
 }
 
@@ -3760,23 +3892,17 @@ async function compareRun() {
 
   tableEl.innerHTML = `<div class="compare-loading"><div class="compare-spinner"></div>Loading ${filledSlots.length} date${filledSlots.length > 1 ? "s" : ""}...</div>`;
 
-  const todayApiDate = (() => {
-    const n = new Date();
-    return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`;
-  })();
+  const todayApiDate = weeklyIsoToApi_(coatingTodayISO_());   // New York date
 
   const apiDates = filledSlots.map(inputToApiDate);
 
   // Fetch each date (use cache to avoid re-fetching)
   await Promise.all(apiDates.map(async (apiDate) => {
+    // Today always uses the live data on the page (it used to be cached once and go stale)
+    if (apiDate === todayApiDate && currentDate === null && dashboardData) { compareDataCache[apiDate] = dashboardData; return; }
     if (!apiDate || compareDataCache[apiDate]) return;
-    // Check if it's today and we already have live data
-    if (apiDate === todayApiDate && dashboardData) {
-      compareDataCache[apiDate] = dashboardData;
-      return;
-    }
     try {
-      const res  = await fetch(`${API_URL}?mode=processed&date=${encodeURIComponent(apiDate)}`);
+      const res  = await coatingFetchRetry_(`${API_URL}?mode=processed&date=${encodeURIComponent(apiDate)}`, `Compare ${apiDate}`);
       compareDataCache[apiDate] = await res.json();
     } catch(e) {
       compareDataCache[apiDate] = null;
@@ -3797,132 +3923,191 @@ async function compareRun() {
 }
 
 function buildCompareChart(validDates, todayApiDate) {
+  /* RUNNING TOTAL ("are we doing better or worse than that day, so far?")
+     Each line adds up the metric through the day. Steep = bad hour, flat = clean hours.
+     Today's line stops at the current hour; the story compares days AT THE SAME HOUR.
+     Metrics: broken lenses, running breakage % (broken ÷ lenses so far), slow jobs, jobs coated. */
   const canvas = document.getElementById("compareTrendChart");
   if (!canvas) return;
   if (compareTrendChart) { compareTrendChart.destroy(); compareTrendChart = null; }
-
-  // Use passed dates or all cached dates
   const dates = validDates || Object.keys(compareDataCache).filter(d => compareDataCache[d]?.summary);
   if (!dates.length) return;
+  const today = todayApiDate || weeklyIsoToApi_(coatingTodayISO_());
+  const nowHr = ovNowNY_().getHours();
+  const metric = ["broken", "pct", "slow", "jobs"].includes(compareMetric) ? compareMetric : "broken";
 
-  const today = todayApiDate || (() => {
-    const n = new Date(); return `${n.getMonth()+1}/${n.getDate()}/${n.getFullYear()}`;
-  })();
+  // Hour axis: every hour any selected day has data
+  const hourSet = new Set();
+  dates.forEach(d => (compareDataCache[d]?.hourly || []).forEach(h => { const k = ovHour24_(h.hour); if (k !== null) hourSet.add(Math.floor(k)); }));
+  const hours = [...hourSet].sort((a, b) => a - b);
 
-  // Collect all unique hours across all dates, sorted
-  const allHoursSet = new Set();
-  dates.forEach(d => {
-    (compareDataCache[d]?.hourly || []).forEach(h => allHoursSet.add(h.hour));
+  const perHour = (row) => {
+    if (!row) return { b: 0, j: 0, s: 0 };
+    return {
+      b: Number(row.totalBroken || 0),
+      j: Number(row.coatingJobs || 0),
+      s: Number(row.flowWatch || 0) + Number(row.flowDelayed || 0) + Number(row.flowOvernight || 0),
+    };
+  };
+  const series = dates.map((d, i) => {
+    const byH = {};
+    (compareDataCache[d]?.hourly || []).forEach(h => { const k = ovHour24_(h.hour); if (k !== null) byH[Math.floor(k)] = h; });
+    const live = d === today;
+    let cb = 0, cj = 0, cs = 0;
+    const raw = [], vals = hours.map(h => {
+      if (live && h > nowHr) { raw.push(null); return null; }
+      const x = perHour(byH[h]); cb += x.b; cj += x.j; cs += x.s;
+      raw.push(x);
+      if (metric === "broken") return cb;
+      if (metric === "jobs")   return cj;
+      if (metric === "slow")   return cs;
+      return cj > 0 ? Number(((cb / (cj * 2)) * 100).toFixed(2)) : null;
+    });
+    return { d, live, color: COMPARE_PALETTE[i % COMPARE_PALETTE.length], vals, raw,
+             label: apiDateToLabel(d) + (live ? " \u2605" : "") };
   });
-  const allHours = [...allHoursSet].sort((a,b) => new Date("1/1/2000 " + a) - new Date("1/1/2000 " + b));
 
-  // Metric extractor per hour
-  function getHourMetric(hourObj) {
-    if (!hourObj) return null;
-    if (compareMetric === "broken") return hourObj.totalBroken || 0;
-    if (compareMetric === "jobs")   return hourObj.coatingJobs || 0;
-    if (compareMetric === "flow")   return hourObj.avgFlowAll  || null;
-    if (compareMetric === "pct") {
-      const jobs = hourObj.coatingJobs || 0;
-      const brk  = hourObj.totalBroken || 0;
-      return jobs > 0 ? parseFloat(((brk / (jobs*2))*100).toFixed(2)) : 0;
+  // Same-hour cutoff: the current hour when today is selected, otherwise the end of the day
+  const liveS = series.find(s => s.live);
+  const cutIdx = liveS ? hours.indexOf(nowHr) : hours.length - 1;
+  const valAt = (s, idx) => { for (let i = Math.min(idx, s.vals.length - 1); i >= 0; i--) if (s.vals[i] !== null) return s.vals[i]; return null; };
+  const unit = metric === "pct" ? "%" : "";
+  const fmt = v => v === null ? "--" : (metric === "pct" ? v.toFixed(2) + "%" : Math.round(v).toLocaleString());
+  const noun = { broken: "broken lenses", pct: "breakage", slow: "slow jobs", jobs: "jobs coated" }[metric];
+  const higherIsWorse = metric !== "jobs";
+
+  // ── Story ──
+  const story = document.getElementById("compareStory");
+  if (story) {
+    let html = "";
+    const cutLabel = cutIdx >= 0 ? ovHourName_(hours[cutIdx]) : "";
+    if (series.length >= 2 && cutIdx >= 0) {
+      const focus = liveS || series[series.length - 1];
+      const others = series.filter(s => s !== focus);
+      const fv = valAt(focus, cutIdx);
+      if (others.length === 1) {
+        const o = others[0], ov = valAt(o, cutIdx), diff = (fv ?? 0) - (ov ?? 0);
+        const better = higherIsWorse ? diff < 0 : diff > 0;
+        const word = Math.abs(diff) < (metric === "pct" ? 0.05 : 0.5) ? "about the same" : `${metric === "pct" ? Math.abs(diff).toFixed(2) + " pts" : Math.round(Math.abs(diff))} ${diff < 0 ? (metric === "pct" ? "lower" : "fewer") : (metric === "pct" ? "higher" : "more")}`;
+        const fName = focus.label.replace(" \u2605", ""), when = liveS ? `at ${cutLabel}` : "for the full day";
+        html = metric === "pct"
+          ? `<b style="color:${better ? "#4ade80" : "#ff6b6b"}">${fName}'s breakage so far is ${word} than ${o.label} ${when}</b> (${fmt(fv)} vs ${fmt(ov)}).`
+          : `<b style="color:${better ? "#4ade80" : "#ff6b6b"}">${fName} has ${word} ${noun} than ${o.label} ${when}</b> (${fmt(fv)} vs ${fmt(ov)}).`;
+        // Where the gap opened: the hour with the biggest single-hour difference
+        if (metric !== "pct") {
+          let best = null;
+          for (let i = 0; i <= cutIdx; i++) {
+            const a = focus.raw[i], b2 = o.raw[i]; if (!a || !b2) continue;
+            const key = metric === "broken" ? "b" : metric === "jobs" ? "j" : "s";
+            const g = a[key] - b2[key];
+            if (!best || Math.abs(g) > Math.abs(best.g)) best = { i, g, a: a[key], b: b2[key] };
+          }
+          if (best && Math.abs(best.g) >= Math.max(2, Math.abs(diff) * 0.3)) {
+            const who = best.g < 0 ? o.label : focus.label.replace(" \u2605", "");
+            const hi2 = Math.max(best.a, best.b), lo2 = Math.min(best.a, best.b);
+            html += ` Most of that gap opened at <b>${ovHourName_(hours[best.i])}</b>: ${who} had ${hi2} that hour vs ${lo2}.`;
+          }
+        }
+      } else {
+        const vals = others.map(o => valAt(o, cutIdx)).filter(v => v !== null);
+        const lo = Math.min(...vals), hi = Math.max(...vals);
+        const rank = [fv, ...vals].sort((a, b) => higherIsWorse ? a - b : b - a).indexOf(fv) + 1;
+        html = `<b>${focus.label.replace(" \u2605", "")}: ${fmt(fv)} ${metric === "pct" ? "breakage" : noun}${liveS ? ` by ${cutLabel}` : ""}</b>, ranked #${rank} of ${others.length + 1} (best first). The other days had ${fmt(lo)} to ${fmt(hi)} ${liveS ? "at the same time" : "for the full day"}.`;
+      }
+    } else if (series.length === 1) {
+      html = `Add another date to compare against ${series[0].label}.`;
     }
-    return null;
+    story.innerHTML = html;
+    story.style.display = html ? "" : "none";
   }
 
-  const metricLabels = {
-    broken: "Lenses Broken",
-    pct   : "Breakage %",
-    flow  : "Avg Flow Time (min)",
-    jobs  : "Coating Jobs",
+  // ── Chart ──
+  const endLabelPlugin = {
+    id: "cmpEndLabels",
+    afterDatasetsDraw(chart) {
+      const c = chart.ctx, a = chart.chartArea;
+      c.save(); c.font = `800 15px ${CHART_FONT}`; c.textBaseline = "middle";
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di); if (meta.hidden) return;
+        let li = -1; ds.data.forEach((v, i) => { if (v !== null && v !== undefined) li = i; });
+        if (li < 0) return;
+        const p = meta.data[li], txt = `${ds.label} \u00b7 ${fmt(ds.data[li])}${ds._live ? " so far" : ""}`;
+        const w = c.measureText(txt).width;
+        const right = p.x + 12 + w > a.right;
+        c.fillStyle = "rgba(6,18,16,0.92)";
+        c.fillRect(right ? p.x - w - 18 : p.x + 8, p.y - 13 - (right ? 16 : 0), w + 10, 24);
+        c.fillStyle = ds.borderColor; c.textAlign = "left";
+        c.fillText(txt, right ? p.x - w - 13 : p.x + 13, p.y - (right ? 16 : 0));
+      });
+      // gap marker at the same-hour cutoff (two dates, one of them live)
+      if (liveS && series.length === 2 && cutIdx >= 0) {
+        const o = series.find(s => !s.live);
+        const xS = chart.scales.x, yS = chart.scales.y;
+        const v1 = valAt(liveS, cutIdx), v2 = valAt(o, cutIdx);
+        if (v1 !== null && v2 !== null && Math.abs(v1 - v2) > 0) {
+          const x = xS.getPixelForValue(cutIdx), y1 = yS.getPixelForValue(v1), y2 = yS.getPixelForValue(v2);
+          c.setLineDash([5, 4]); c.strokeStyle = "#ffffff"; c.lineWidth = 2;
+          c.beginPath(); c.moveTo(x, y1); c.lineTo(x, y2); c.stroke(); c.setLineDash([]);
+          const d = v1 - v2;
+          const txt = `${metric === "pct" ? Math.abs(d).toFixed(2) + " pts" : Math.round(Math.abs(d))} ${d < 0 ? (metric === "pct" ? "lower" : "fewer") : (metric === "pct" ? "higher" : "more")} at ${ovHourName_(hours[cutIdx])}`;
+          c.font = `800 16px ${CHART_FONT}`;
+          const w = c.measureText(txt).width + 22, ym = (y1 + y2) / 2;
+          const good = higherIsWorse ? d < 0 : d > 0;
+          c.fillStyle = "rgba(6,18,16,0.95)"; c.strokeStyle = good ? "#4ade80" : "#ff6b6b"; c.lineWidth = 1.6;
+          const bx = Math.min(x + 12, a.right - w);
+          c.beginPath(); if (c.roundRect) c.roundRect(bx, ym - 16, w, 32, 8); else c.rect(bx, ym - 16, w, 32); c.fill(); c.stroke();
+          c.fillStyle = "#ffffff"; c.textAlign = "left"; c.fillText(txt, bx + 11, ym + 1);
+        }
+      }
+      c.restore();
+    },
   };
+  const titles = { broken: "Broken lenses, running total", pct: "Breakage so far (%)", slow: "Slow jobs (over 15 min), running total", jobs: "Jobs coated, running total" };
 
-  const ctx = canvas.getContext("2d");
-  const datasets = dates.map((apiDate, i) => {
-    const color   = COMPARE_PALETTE[i % COMPARE_PALETTE.length];
-    const hourly  = compareDataCache[apiDate]?.hourly || [];
-    const hourMap = {};
-    hourly.forEach(h => { hourMap[h.hour] = h; });
-
-    const isToday = apiDate === today;
-    return {
-      label          : apiDateToLabel(apiDate) + (isToday ? " ★" : ""),
-      data           : allHours.map(h => getHourMetric(hourMap[h])),
-      borderColor    : color,
-      backgroundColor: color + "18",
-      borderWidth    : isToday ? 2.5 : 1.8,
-      borderDash     : isToday ? [] : [],
-      tension        : 0.42,
-      fill           : false,
-      pointRadius    : 3,
-      pointHoverRadius: 7,
-      pointBackgroundColor: color,
-      pointBorderColor: "rgba(8,10,15,0.7)",
-      pointBorderWidth: 1.5,
-      spanGaps       : true,
-    };
-  });
-
-  compareTrendChart = new Chart(ctx, {
+  compareTrendChart = new Chart(canvas.getContext("2d"), {
     type: "line",
-    data: { labels: allHours, datasets },
+    data: {
+      labels: hours.map(h => ovHourName_(h)),
+      datasets: series.map(s => ({
+        label: s.label, data: s.vals, _live: s.live,
+        borderColor: s.color, backgroundColor: s.color + "14", fill: "origin",
+        borderWidth: 5, tension: 0, spanGaps: false,
+        pointRadius: s.vals.map((v, i) => v === null ? 0 : 4), pointHoverRadius: 8,
+        pointBackgroundColor: s.color, pointBorderColor: "#061210", pointBorderWidth: 1.5,
+      })),
+    },
     options: {
-      responsive         : true,
-      maintainAspectRatio: false,
-      animation          : { duration: 400, easing: "easeOutQuart" },
-      interaction        : { mode: "index", intersect: false },
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 450, easing: "easeOutQuart" },
+      interaction: { mode: "index", intersect: false },
+      layout: { padding: { top: 28, right: 24 } },
       plugins: {
         legend: {
-          display : true,
-          position: "top",
-          labels: {
-            color        : "#ffffff",
-            font         : { family: CHART_FONT, size: 14, weight: "600" },
-            usePointStyle: true,
-            pointStyle   : "circle",
-            padding      : 24,
-          },
-          onClick(e, item, legend) {
-            const meta = legend.chart.getDatasetMeta(item.datasetIndex);
-            meta.hidden = !meta.hidden;
-            legend.chart.update();
-          },
+          display: true, position: "top",
+          labels: { color: "#ffffff", font: { family: CHART_FONT, size: 15, weight: "700" }, usePointStyle: true, pointStyle: "circle", padding: 24 },
         },
         tooltip: {
           ...GLASS_TOOLTIP,
+          titleFont: { family: CHART_FONT, size: 16, weight: "700" },
+          bodyFont: { family: CHART_FONT, size: 15, weight: "600" },
+          filter: it => it.raw !== null && it.raw !== undefined,
           callbacks: {
-            title : items => `  ${items[0].label}`,
-            label : ctx => {
-              const v = ctx.raw;
-              if (v === null || v === undefined) return null;
-              const suffix = compareMetric === "flow" ? "m" : compareMetric === "pct" ? "%" : "";
-              return `  ${ctx.dataset.label}: ${v}${suffix}`;
-            },
+            title: items => items.length ? `By ${items[0].label}` : "",
+            label: c => ` ${c.dataset.label}: ${fmt(c.raw)} ${metric === "pct" ? "breakage" : noun}`,
           },
         },
       },
       scales: {
-        x: {
-          ticks : { color: "#ffffff", font: { family: CHART_MONO, size: 12 }, maxRotation: 0 },
-          grid  : { color: "rgba(255,255,255,0.04)" },
-          border: { display: false },
-        },
-        y: {
-          beginAtZero: true,
-          ticks: {
-            color   : "#ffffff",
-            font    : { family: CHART_MONO, size: 12 },
-            callback: v => compareMetric === "pct" ? v + "%" : compareMetric === "flow" ? v + "m" : v,
-          },
-          grid  : { color: "rgba(255,255,255,0.04)" },
-          border: { display: false },
-          title: { display: true, text: metricLabels[compareMetric], color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "700" },
-          },
-        },
+        x: { ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "700" }, maxRotation: 0 }, grid: { display: false }, border: { display: false } },
+        y: { beginAtZero: true, border: { display: false }, grid: { color: "rgba(255,255,255,0.07)" },
+             ticks: { color: "#ffffff", font: { family: CHART_FONT, size: 14, weight: "700" }, callback: v => metric === "pct" ? v + "%" : v },
+             title: { display: true, text: titles[metric], color: "#ffffff", font: { family: CHART_FONT, size: 15, weight: "700" } } },
       },
     },
+    plugins: [endLabelPlugin],
   });
 }
+
 
 function buildCompareTable(validDates, todayApiDate, tableEl) {
   const metrics = [

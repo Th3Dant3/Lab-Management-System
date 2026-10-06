@@ -352,8 +352,10 @@
       <button id="machineFlowBtn"    class="mode-btn"        onclick="switchFlowMode('machine')">By Machine</button>
     </div>
     <div class="flow-card" id="flowCard">
+      <div class="flow-story" id="flowStory" aria-live="polite"></div>
       <div class="flow-card-top">
         <div class="trend-legend" id="flowLegend"></div>
+        <div class="flow-overnight" id="flowOvernightNote"></div>
         <button type="button" class="flow-full-btn" id="flowFullBtn" onclick="toggleFlowFullscreen()">Full screen</button>
       </div>
       <div class="flow-canvas-wrap"><canvas id="flowChart"></canvas></div>
@@ -377,7 +379,7 @@
   <!-- ══ REASONS ══ -->
   <div id="reasons" class="tab-content">
     <div class="section-label">Top Breakage Reasons</div>
-    <div class="chart-card" style="height:520px;"><canvas id="reasonChart"></canvas></div>
+    <div id="reasonsBoard"></div>
   </div>
 
   <!-- ══ MACHINES ══ -->
@@ -447,11 +449,11 @@
       </div>
       <div class="compare-picker-actions">
         <div class="compare-metric-toggles">
-          <span class="compare-toggle-label">Chart metric:</span>
-          <button class="compare-metric-btn active" id="cMetricBroken" onclick="setCompareMetric('broken',this)">Breakage Count</button>
-          <button class="compare-metric-btn" id="cMetricPct"  onclick="setCompareMetric('pct',this)">Breakage %</button>
-          <button class="compare-metric-btn" id="cMetricFlow" onclick="setCompareMetric('flow',this)">Avg Flow Time</button>
-          <button class="compare-metric-btn" id="cMetricJobs" onclick="setCompareMetric('jobs',this)">Coating Jobs</button>
+          <span class="compare-toggle-label">Running total of:</span>
+          <button class="compare-metric-btn active" id="cMetricBroken" onclick="setCompareMetric('broken',this)">Broken lenses</button>
+          <button class="compare-metric-btn" id="cMetricPct"  onclick="setCompareMetric('pct',this)">Breakage % so far</button>
+          <button class="compare-metric-btn" id="cMetricFlow" onclick="setCompareMetric('slow',this)">Slow jobs</button>
+          <button class="compare-metric-btn" id="cMetricJobs" onclick="setCompareMetric('jobs',this)">Jobs coated</button>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="compare-run-btn" onclick="compareRun()">Compare</button>
@@ -460,9 +462,11 @@
       </div>
     </div>
 
-    <div class="chart-card" style="height:420px;">
+    <div class="cmp-story" id="compareStory" style="display:none"></div>
+    <div class="chart-card cmp-chart" style="height:460px;">
       <canvas id="compareTrendChart"></canvas>
     </div>
+    <p class="cmp-note">Each line adds up through the day: a steep jump = a bad hour, flat = clean hours. Today's line stops at the current hour, and the story compares every day at that same hour.</p>
 
     <div id="compareTable" class="compare-table-wrap">
       <div class="compare-empty">Select dates above and click Compare.</div>
@@ -595,7 +599,7 @@
   const subRole  = (sessionStorage.getItem("lms_subrole") || "").trim().toUpperCase();
   const username = (sessionStorage.getItem("lms_user")    || "").trim().toUpperCase();
 
-  const ALLOWED_ROLES     = ["ADMIN", "MANAGER", "SR DIRECTOR", "SR MANAGER"];
+  const ALLOWED_ROLES     = ["ADMIN", "MANAGER", "SR DIRECTOR", "SR MANAGER" , "SUPERVISOR"];
   const ALLOWED_USERNAMES = []; // add usernames here e.g. "JSMITH", "CBAYLIS"
 
   const hasAccess =
@@ -611,4 +615,4 @@
 })();
 </script>
 </body>
-</html>
+</html>   
