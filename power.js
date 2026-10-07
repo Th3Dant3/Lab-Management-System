@@ -80,46 +80,97 @@ let _allBrk=[], _allReason=[], _allResearch=[], _allAnom=[];
 let _flowBrk=[], _flowResearch=[];
 
 /* ============================================================
+   API GET (v6) — shared by fetchLiveBundle() and fetchTab()
+   - fresh t= on every attempt (Apps Script redirects to a one-time
+     googleusercontent "echo" link; reusing a URL can 404)
+   - per-attempt timeout, so a stuck request can't hang the page
+   - detects Google's HTML error pages instead of "Unexpected token <"
+   - one retry for timeouts, 404/429/5xx and HTML error pages
+============================================================ */
+const POWER_API_TIMEOUT_MS = 45000;
+const POWER_API_RETRIES    = 1;
+
+class PowerApiError extends Error {
+  constructor(message, { status = null, retryable = false, kind = 'api' } = {}) {
+    super(message); this.name = 'PowerApiError'; this.status = status; this.retryable = retryable; this.kind = kind;
+  }
+}
+
+async function powerApiGet_(baseUrl, label) {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= POWER_API_RETRIES; attempt++) {
+    const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), POWER_API_TIMEOUT_MS);
+    const t0 = powerPerfNow_();
+    try {
+      const response = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+      const headersMs = powerPerfNow_() - t0;
+      powerPerfLog_(`API ${label} response headers: ${headersMs.toFixed(1)} ms`, { httpStatus: response.status, ok: response.ok, attempt: attempt + 1 });
+      const text = await response.text();
+      const first = text.trimStart()[0];
+      if (!response.ok || (first !== '{' && first !== '[')) {
+        const html = first === '<';
+        throw new PowerApiError(
+          html ? `Google returned an error page (HTTP ${response.status}) — the Apps Script likely timed out or failed`
+               : `HTTP ${response.status}`,
+          { status: response.status, retryable: response.status === 404 || response.status === 429 || response.status >= 500 || html, kind: html ? 'html' : 'http' });
+      }
+      const d = JSON.parse(text);
+      return { d, headersMs, chars: text.length, attempts: attempt + 1 };
+    } catch (err) {
+      const e = err.name === 'AbortError'
+        ? new PowerApiError(`No answer after ${Math.round(POWER_API_TIMEOUT_MS / 1000)} s`, { retryable: true, kind: 'timeout' })
+        : err instanceof PowerApiError ? err
+        : new PowerApiError(err.message || 'Network error', { retryable: true, kind: 'network' });
+      lastErr = e;
+      console.warn(`[Power] API ${label} attempt ${attempt + 1} failed after ${(powerPerfNow_() - t0).toFixed(0)} ms:`, e.message);
+      if (!e.retryable || attempt >= POWER_API_RETRIES) break;
+      if (typeof ovBanner_ === 'function') ovBanner_('updating', 'Server was slow — trying again…');
+      await new Promise(r => setTimeout(r, 2000));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastErr;
+}
+
+/* ── Last good live data (used only when the live request fails) ── */
+const PB_SNAPSHOT_KEY = 'powerBreakage:liveBundle:v1';
+const PB_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function pbSaveSnapshot_(data, chars) {
+  try {
+    if (chars > 2_000_000) return;                       // stay well under the browser's storage limit
+    localStorage.setItem(PB_SNAPSHOT_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+  } catch (e) { console.warn('[Power] Could not save live snapshot:', e.message); }
+}
+
+function pbLoadSnapshot_() {
+  try {
+    const raw = localStorage.getItem(PB_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw);
+    if (!snap?.data || Date.now() - snap.savedAt > PB_SNAPSHOT_MAX_AGE_MS) return null;
+    return snap;
+  } catch (e) { return null; }
+}
+
+/* ============================================================
    FETCH HELPER
    Passes optional startDate / endDate (YYYY-MM-DD strings) to
    Apps Script. When supplied, script reads BREAKAGE_HISTORY
    instead of live sheets.
 ============================================================ */
 async function fetchLiveBundle() {
-  const totalStartedAt = powerPerfStart_(
-    'API liveBundle',
-    {}
-  );
-
-  const headersStartedAt = powerPerfNow_();
-  const response = await fetch(`${API}?tab=liveBundle`);
-  const headersMs = powerPerfNow_() - headersStartedAt;
-
-  powerPerfLog_(
-    `API liveBundle response headers: ${headersMs.toFixed(1)} ms`,
-    {
-      httpStatus: response.status,
-      ok: response.ok
-    }
-  );
-
-  const bodyStartedAt = powerPerfNow_();
-  const responseText = await response.text();
-  const bodyMs = powerPerfNow_() - bodyStartedAt;
-
-  powerPerfLog_(
-    `API liveBundle body read: ${bodyMs.toFixed(1)} ms`,
-    { responseChars: responseText.length }
-  );
-
+  const totalStartedAt = powerPerfStart_('API liveBundle', {});
   const parseStartedAt = powerPerfNow_();
-  const d = JSON.parse(responseText);
-  const parseMs = powerPerfNow_() - parseStartedAt;
-
+  const { d, headersMs, chars, attempts } = await powerApiGet_(`${API}?tab=liveBundle`, 'liveBundle');
+  const parseMs = powerPerfNow_() - parseStartedAt - headersMs;
   const data = d?.data || {};
 
   powerPerfLog_(
-    `API liveBundle JSON parse: ${parseMs.toFixed(1)} ms`,
+    `API liveBundle JSON parse`,
     {
       status: d?.status,
       breakageRows: Array.isArray(data.breakageSummary) ? data.breakageSummary.length : null,
@@ -129,16 +180,18 @@ async function fetchLiveBundle() {
     }
   );
 
-  if (d.status !== 'ok') throw new Error(d.message);
+  if (d.status !== 'ok') throw new PowerApiError(d.message || 'API returned an error');
+
+  pbSaveSnapshot_(data, chars);
 
   powerPerfEnd_(
     'API liveBundle',
     totalStartedAt,
     {
       responseHeadersMs: Number(headersMs.toFixed(1)),
-      bodyReadMs: Number(bodyMs.toFixed(1)),
-      jsonParseMs: Number(parseMs.toFixed(1)),
-      responseChars: responseText.length
+      bodyAndParseMs: Number(Math.max(0, parseMs).toFixed(1)),
+      responseChars: chars,
+      attempts
     }
   );
 
@@ -150,57 +203,23 @@ async function fetchTab(tab, startDate, endDate) {
   if (startDate) url += `&startDate=${encodeURIComponent(startDate)}`;
   if (endDate)   url += `&endDate=${encodeURIComponent(endDate)}`;
 
-  const totalStartedAt = powerPerfStart_(
-    `API ${tab}`,
-    {
-      startDate: startDate || null,
-      endDate: endDate || null
-    }
-  );
-
-  const headersStartedAt = powerPerfNow_();
-  const response = await fetch(url);
-  const headersMs = powerPerfNow_() - headersStartedAt;
+  const totalStartedAt = powerPerfStart_(`API ${tab}`, { startDate: startDate || null, endDate: endDate || null });
+  const { d, headersMs, chars, attempts } = await powerApiGet_(url, tab);
 
   powerPerfLog_(
-    `API ${tab} response headers: ${headersMs.toFixed(1)} ms`,
-    {
-      httpStatus: response.status,
-      ok: response.ok
-    }
+    `API ${tab} JSON parse`,
+    { status: d?.status, rowCount: Array.isArray(d?.data) ? d.data.length : null }
   );
 
-  const bodyStartedAt = powerPerfNow_();
-  const responseText = await response.text();
-  const bodyMs = powerPerfNow_() - bodyStartedAt;
-
-  powerPerfLog_(
-    `API ${tab} body read: ${bodyMs.toFixed(1)} ms`,
-    { responseChars: responseText.length }
-  );
-
-  const parseStartedAt = powerPerfNow_();
-  const d = JSON.parse(responseText);
-  const parseMs = powerPerfNow_() - parseStartedAt;
-
-  powerPerfLog_(
-    `API ${tab} JSON parse: ${parseMs.toFixed(1)} ms`,
-    {
-      status: d?.status,
-      rowCount: Array.isArray(d?.data) ? d.data.length : null
-    }
-  );
-
-  if (d.status !== 'ok') throw new Error(d.message);
+  if (d.status !== 'ok') throw new PowerApiError(d.message || 'API returned an error');
 
   powerPerfEnd_(
     `API ${tab}`,
     totalStartedAt,
     {
       responseHeadersMs: Number(headersMs.toFixed(1)),
-      bodyReadMs: Number(bodyMs.toFixed(1)),
-      jsonParseMs: Number(parseMs.toFixed(1)),
-      responseChars: responseText.length,
+      responseChars: chars,
+      attempts,
       rowCount: Array.isArray(d.data) ? d.data.length : null
     }
   );
@@ -782,7 +801,7 @@ function renderResearch() {
     return n === 0 ? '0' : (n > 0 ? `+${n}` : `${n}`);
   };
   const tableEl = document.getElementById('resTable');
-  if (!data.length) { tableEl.innerHTML = '<div class="empty">No jobs match these filters</div>'; anAfterRender_(); return; }
+  if (!data.length) { tableEl.innerHTML = '<div class="empty">No jobs match these filters</div>'; anAfterRender_(); maRenderIfVisible_(); return; }
 
   tableEl.innerHTML = `
     <table class="an-table">
@@ -811,6 +830,7 @@ function renderResearch() {
     <div class="an-cap">${data.length} ${data.length === 1 ? 'job' : 'jobs'} · ${totalLens} ${totalLens === 1 ? 'lens' : 'lenses'}</div>`;
 
   anAfterRender_();
+  maRenderIfVisible_();   // Machine view shares the Analysis filters
 }
 
 /* ============================================================
@@ -1309,7 +1329,15 @@ async function loadAll() {
     setLoadStep('ls-research', 'active');
     setLoadStep('ls-anom', 'active');
 
-    const liveBundle = await fetchLiveBundle();
+    let liveBundle, usedSnapshot = null;
+    try {
+      liveBundle = await fetchLiveBundle();
+    } catch (err) {
+      usedSnapshot = pbLoadSnapshot_();          // last good live data on this computer
+      if (!usedSnapshot) throw err;
+      console.warn('[Power] Live request failed; showing saved copy:', err.message);
+      liveBundle = usedSnapshot.data;
+    }
 
     const brk      = Array.isArray(liveBundle.breakageSummary) ? liveBundle.breakageSummary : [];
     const reason   = Array.isArray(liveBundle.reasonSummary)   ? liveBundle.reasonSummary   : [];
@@ -1377,10 +1405,15 @@ async function loadAll() {
       buildAlerts();
       buildWeekOptions();
 
+      if (usedSnapshot) {
+        document.getElementById('liveStatus').textContent = 'Saved copy';
+        ovBanner_('fail', `Live data didn't load — showing the saved copy from ${fmtEtStamp_(new Date(usedSnapshot.savedAt))}. Press Refresh to try again.`);
+      } else {
       document.getElementById('liveStatus').textContent   = 'Live';
       document.getElementById('liveDot').style.background = '#d4c0a8';
       document.getElementById('liveDot').style.animation  = 'pulse 1.5s infinite';
       if (!isInitialLoad) ovBanner_('ok', 'New data');
+      }
 
       powerPerfEnd_(
         `Power Breakage build/render #${loadId}`,
@@ -2060,6 +2093,7 @@ function syncHeaderState_() {
   if (status === 'live') state = 'live';
   else if (status === 'historical') state = 'historical';
   else if (status === 'error') state = 'error';
+  else if (status === 'saved copy') state = 'saved';
   if (badge) badge.dataset.state = state;
 
   if (chip) {
@@ -2067,6 +2101,9 @@ function syncHeaderState_() {
       chip._lastOk = etTime_(new Date());
       chip.textContent = `Updated ${chip._lastOk}`;
       chip.classList.remove('is-failed');
+    } else if (state === 'saved') {
+      chip.textContent = chip._lastOk ? `Live failed · last ${chip._lastOk}` : 'Showing saved copy';
+      chip.classList.add('is-failed');
     } else if (state === 'error') {
       chip.textContent = chip._lastOk ? `Update failed · last ${chip._lastOk}` : 'Update failed';
       chip.classList.add('is-failed');
@@ -2735,3 +2772,442 @@ function anAfterRender_() {
   t.addEventListener('mouseover', e => { const el = e.target.closest('[data-rx]'); if (el) mark(el.dataset.rx, true); });
   t.addEventListener('mouseout',  e => { const el = e.target.closest('[data-rx]'); if (el) mark(el.dataset.rx, false); });
 })();
+
+/* ============================================================
+   MACHINE ANALYSIS (v6) — Analysis tab, "Machines" view
+   Sources (read-only):
+   - Breakage rows: _brk (live report, or history for the header date)
+   - Jobs run per ORB generator: Production API ?action=operatorActivity
+     (Surface hourly output, TODAY ONLY). No debug=true, so the API's
+     own cache is used; fetched at most every 5 min, only while visible.
+   Rate = SAME-DAY broken lenses ÷ (jobs run today × 2).
+   ORB Total counts jobs (confirmed), so × 2 = lenses.
+   Earlier-day lenses are shown beside the rate, never inside it.
+============================================================ */
+const MA_PRODUCTION_API = 'https://script.google.com/macros/s/AKfycbztnf4_kTfKzcDDnsgMhPQgB0V_m5jsMmDngGQtaiPlnYKgTYN-pQp3OrAnpTEz6Spzeg/exec';
+const MA_OUTPUT_TTL_MS  = 5 * 60 * 1000;
+const MA_THRESH  = { watch: 1, high: 3, crit: 6 };   // % — same tiers as the Coating bay
+const MA_SMALL_JOBS = 30;
+// Fixed generator roster: these cards always show, in this order, so a machine that
+// starts later in the day never shifts the others. Add new generators here.
+const MA_ORB_ROSTER = ['ORB 1B', 'ORB 2B', 'ORB 3B', 'ORB 4B', 'ORB 5B', 'ORB 6B'];
+const MA_OTB_ROSTER = ['OTB 1B', 'OTB 2B', 'OTB 3B', 'OTB 4B'];   // Blocking Line B auto blockers
+const MA_STATIONS = { 'Generating Line B': 'ORB', 'Blocking Line B': 'OTB' };   // Surface FlowStation → machine type                           // fewer jobs run = small sample (proposed)
+const MA_RULES   = { concentratedShare: 70, minLenses: 3, spreadMachines: 3 };
+const MA_HOURS   = ['6:00 AM','7:00 AM','8:00 AM','9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM'];
+const MA_AGE = { s: '#ff6b6b', o: '#fbbf24', p: '#ff5ccf', u: '#ffffff' };
+const _ma = { view: 'rx', output: null, outputAt: 0, outputErr: '', loading: false, cardsPlayed: false };
+
+function maId_(v) { return String(v || '').toUpperCase().replace(/[\s\-_]/g, ''); }        // "ORB6-B" = "ORB 6B"
+function maLabel_(v) { const m = /^(ORB|OTB)\s*-?\s*(\d+)\s*-?\s*([A-Z])?$/i.exec(String(v || '').trim()); return m ? `${m[1].toUpperCase()} ${m[2]}${(m[3] || '').toUpperCase()}` : String(v || 'Unknown').trim() || 'Unknown'; }
+function maType_(label) { const u = label.toUpperCase(); return u.startsWith('ORB') ? 'ORB' : u.startsWith('OTB') ? 'OTB' : 'OTHER'; }
+function maHourLabel_(h) { const hh = h % 12 === 0 ? 12 : h % 12; return `${hh}:00 ${h < 12 ? 'AM' : 'PM'}`; }
+function maShortHour_(lbl) { return lbl.replace(':00 ', '').replace('AM', 'A').replace('PM', 'P'); }
+
+function maSetView_(view) {
+  _ma.view = view;
+  document.getElementById('anViewRx').hidden = view !== 'rx';
+  document.getElementById('anViewMachines').hidden = view !== 'machines';
+  document.getElementById('anViewBtnRx').classList.toggle('active', view === 'rx');
+  document.getElementById('anViewBtnMach').classList.toggle('active', view === 'machines');
+  document.getElementById('anViewBtnRx').setAttribute('aria-pressed', String(view === 'rx'));
+  document.getElementById('anViewBtnMach').setAttribute('aria-pressed', String(view === 'machines'));
+  if (view === 'machines') { maRender_(); maLoadOutput_(); }
+  else if (typeof anPlayEntrance_ === 'function' && !_an.entrancePlayed) anPlayEntrance_();
+}
+
+function maRenderIfVisible_() {
+  if (_ma.view === 'machines' && document.getElementById('t-research')?.classList.contains('active')) { maRender_(); maLoadOutput_(); }
+}
+
+/* ── Output (Surface operatorActivity) ─────────────────────── */
+async function maLoadOutput_(force) {
+  const live = !(document.getElementById('dateSingle')?.value);
+  if (!live || _ma.loading) return;
+  if (!force && _ma.output && Date.now() - _ma.outputAt < MA_OUTPUT_TTL_MS) return;
+  _ma.loading = true;
+  // Apps Script answers with a redirect to a one-time googleusercontent "echo" link that can
+  // 404 when the script is busy. Fresh timestamp every attempt, try both action names
+  // (same aliases SurfaceWIP uses), short pause between attempts.
+  const attempts = ['operatorActivity', 'operator_activity', 'operatorActivity'];
+  let lastErr = null;
+  try {
+    for (let i = 0; i < attempts.length; i++) {
+      try {
+        const res = await fetch(`${MA_PRODUCTION_API}?action=${attempts[i]}&area=Surface&t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (String(json?.status || '').toLowerCase() !== 'success') throw new Error(json?.message || 'API error');
+        _ma.output = maParseOutput_(json);
+        _ma.outputAt = Date.now();
+        _ma.outputErr = '';
+        return;
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[Power] Machine output attempt ${i + 1}/${attempts.length} failed:`, err);
+        if (i < attempts.length - 1) await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+      }
+    }
+    _ma.outputErr = lastErr?.message || 'unavailable';   // keep the last good output, if any
+  } finally {
+    _ma.loading = false;
+    if (_ma.view === 'machines') maRender_();
+  }
+}
+
+function maParseOutput_(json) {
+  const get = (r, a, b) => (r?.[a] ?? r?.[b]);
+  const rows = Array.isArray(json?.operatorActivity) ? json.operatorActivity : [];
+  const machines = {};
+  const noName = { ORB: 0, OTB: 0 }, outside = { ORB: 0, OTB: 0 };
+  let reportDate = '';
+  rows.forEach(r => {
+    const station = String(get(r, 'FlowStation', 'flowStation') || '').trim();
+    const type = MA_STATIONS[station];
+    if (!type) return;
+    const name = String(get(r, 'Operator', 'operator') || '').trim();
+    const total = Number(get(r, 'Total', 'total')) || 0;
+    const hours = get(r, 'Hours', 'hours') || {};
+    const hourlyTotal = MA_HOURS.reduce((s, h) => s + (Number(hours[h]) || 0), 0);
+    reportDate = reportDate || String(get(r, 'ReportDate', 'reportDate') || '');
+    if (!new RegExp(type, 'i').test(name)) { noName[type] += total; return; }   // e.g. "System / No Operator Captured"
+    const id = maId_(name);
+    if (!machines[id]) machines[id] = { label: maLabel_(name), type, jobs: 0, hours: {}, outside: 0 };
+    machines[id].jobs += total;
+    MA_HOURS.forEach(h => { machines[id].hours[h] = (machines[id].hours[h] || 0) + (Number(hours[h]) || 0); });
+    machines[id].outside += Math.max(0, total - hourlyTotal);
+    outside[type] += Math.max(0, total - hourlyTotal);
+  });
+  return { machines, noName, outside, reportDate };
+}
+
+/* ── Breakage aggregation ──────────────────────────────────── */
+function maAge_(srcYmd, anchor) {
+  if (!srcYmd) return 'u';
+  const days = Math.round((new Date(`${anchor}T12:00:00Z`) - new Date(`${srcYmd}T12:00:00Z`)) / 86400000);
+  if (days <= 0) return 's';
+  return days === 1 ? 'o' : 'p';
+}
+
+function maCollect_() {
+  const fR = document.getElementById('resReason')?.value || '';
+  const fM = document.getElementById('resMaterial')?.value || '';
+  const anchor = document.getElementById('dateSingle')?.value || isoLocalDate();
+  const blank = () => ({ s: 0, o: 0, p: 0, u: 0 });
+  const add = (b, a, n) => { b[a] += n; };
+  const M = {}, reasons = {};
+  let rows = [..._brk];
+  if (fR) rows = rows.filter(r => r.BrkReason === fR);
+  if (fM) rows = rows.filter(r => r.Material === fM);
+  const resMap = {};
+  if (!(document.getElementById('dateSingle')?.value)) (_research || []).forEach(x => { resMap[String(x.RxNumber)] = x; });
+  rows.forEach(r => {
+    const label = maLabel_(r.BrkSourceMachine || 'Unknown');
+    const id = maId_(label);
+    const lenses = parseInt(r.LensesBroken) || 0;
+    const src = getSourceScanTime(r, resMap[String(r.RxNumber)]);
+    const age = maAge_(safeIsoDate(src), anchor);
+    const d = src ? new Date(src) : null;
+    const hour = d && !isNaN(d) ? maHourLabel_(d.getHours()) : 'No time';
+    const reason = r.BrkReason || 'Unknown';
+    if (!M[id]) M[id] = { id, label, type: maType_(label), jobs: 0, all: blank(), reasons: {}, hours: {} };
+    const m = M[id];
+    m.jobs += 1;
+    add(m.all, age, lenses);
+    if (!m.reasons[reason]) m.reasons[reason] = blank();
+    add(m.reasons[reason], age, lenses);
+    if (!m.hours[hour]) m.hours[hour] = blank();
+    add(m.hours[hour], age, lenses);
+    reasons[reason] = (reasons[reason] || 0) + lenses;
+  });
+  return { M, reasons, rows, anchor, live: !(document.getElementById('dateSingle')?.value), filtered: !!(fR || fM) };
+}
+
+const maSum_ = b => b.s + b.o + b.p + b.u;
+
+function maStatus_(run, sameLenses, pct) {
+  if (run === null) return { cls: 'unk', label: 'Rate unknown' };
+  if (run === 0 && sameLenses === 0) return { cls: 'idle', label: 'Idle' };
+  if (run === 0) return { cls: 'nojob', label: 'Check data' };
+  if (run < MA_SMALL_JOBS) return { cls: 'small', label: 'Small sample' };
+  if (pct >= MA_THRESH.crit)  return { cls: 'crit',  label: 'Critical' };
+  if (pct >= MA_THRESH.high)  return { cls: 'high',  label: 'High' };
+  if (pct >= MA_THRESH.watch) return { cls: 'watch', label: 'Watch' };
+  return { cls: 'ok', label: 'Normal' };
+}
+
+/* ── Render ────────────────────────────────────────────────── */
+function maRender_() {
+  const root = document.getElementById('anViewMachines');
+  if (!root || root.hidden) return;
+  const D = maCollect_();
+  const out = D.live ? _ma.output : null;
+
+  // machines in fixed order: every ORB that ran today + every machine with breakage
+  const ids = new Set(Object.keys(D.M));
+  [...MA_ORB_ROSTER, ...MA_OTB_ROSTER].forEach(l => ids.add(maId_(l)));
+  if (out) Object.keys(out.machines).forEach(id => ids.add(id));
+  const list = [...ids].map(id => {
+    const rosterLabel = [...MA_ORB_ROSTER, ...MA_OTB_ROSTER].find(l => maId_(l) === id);
+    const m = D.M[id] || { id, label: out?.machines[id]?.label || rosterLabel || id, type: maType_(out?.machines[id]?.label || rosterLabel || id), jobs: 0, all: { s: 0, o: 0, p: 0, u: 0 }, reasons: {}, hours: {} };
+    const o = out?.machines[id];
+    const run = ((m.type === 'ORB' || m.type === 'OTB') && out) ? (o ? o.jobs : 0) : null;
+    const lensRun = run !== null ? run * 2 : null;
+    const pct = lensRun ? m.all.s / lensRun * 100 : null;
+    return { ...m, run, lensRun, pct, st: maStatus_(run, m.all.s, pct), out: o };
+  }).sort((a, b) => a.type.localeCompare(b.type) || a.label.localeCompare(b.label, undefined, { numeric: true }));
+
+  maRenderSource_(D, out);
+  maRenderBay_('maBayORB', list.filter(m => m.type === 'ORB'));
+  maRenderBay_('maBayOTB', list.filter(m => m.type === 'OTB'));
+  const other = list.filter(m => m.type === 'OTHER');
+  document.getElementById('maBayOtherWrap').hidden = !other.length;
+  maRenderBay_('maBayOther', other);
+  maRenderRates_(list.filter(m => m.pct !== null));
+  maRenderVerdicts_(D, list);
+  maRenderReasonGrid_(D, list);
+  maRenderHourGrid_(D, list);
+  maRenderCheck_(D, list, out);
+  maHoverLink_();
+}
+
+function maRenderSource_(D, out) {
+  const el = document.getElementById('maSource');
+  let msg;
+  if (!D.live) msg = `Viewing ${ovPrettyDate_(D.anchor)}: machine output (jobs run) is today-only, so cards show broken lenses without a rate.`;
+  else if (out && _ma.outputErr) msg = `Latest Surface update failed (${ovEsc_(_ma.outputErr)}) · showing jobs run from ${etTime_(new Date(_ma.outputAt))}, so today's rates may be behind.`;
+  else if (out) msg = `Jobs run from Surface hourly output · ${Object.values(out.machines).filter(m => m.type === 'ORB').length} generators, ${Object.values(out.machines).filter(m => m.type === 'OTB').length} blockers · checked ${etTime_(new Date(_ma.outputAt))} · refreshes every 5 min while open.`;
+  else if (_ma.outputErr) msg = `Surface output unavailable (${ovEsc_(_ma.outputErr)}). Breakage counts below are still correct; rates are hidden until output loads.`;
+  else msg = 'Loading Surface output…';
+  el.innerHTML = msg + (D.filtered ? ' · Reason/material filters apply here; the ORB filter applies to the Rx view only.' : '');
+  el.classList.toggle('is-warn', !!_ma.outputErr && D.live);
+}
+
+function maArt_(cls, spinning) {
+  /* Generic ORB lens generator (not a brand replica): enclosed cabinet with a glass door,
+     spindle holding a blocked lens, cutter, coolant nozzle, side control screen,
+     status light tower, and a tray conveyor. Status color = var(--c) from the card. */
+  return `<svg viewBox="0 0 200 150" class="ma-art${spinning ? ' is-spin' : ''}" aria-hidden="true">
+    <ellipse cx="104" cy="140" rx="84" ry="7" class="ma-art-base"/>
+    <!-- tray conveyor (left) -->
+    <rect x="8" y="100" width="52" height="7" rx="2" class="ma-art-belt"/>
+    <rect x="12" y="88" width="18" height="12" rx="2" class="ma-art-tray"/><circle cx="17" cy="93" r="2.6" class="ma-art-blank"/><circle cx="25" cy="93" r="2.6" class="ma-art-blank"/>
+    <rect x="34" y="88" width="18" height="12" rx="2" class="ma-art-tray"/><circle cx="39" cy="93" r="2.6" class="ma-art-blank"/><circle cx="47" cy="93" r="2.6" class="ma-art-blank"/>
+    <rect x="14" y="107" width="4" height="26" class="ma-art-leg"/><rect x="50" y="107" width="4" height="26" class="ma-art-leg"/>
+    <!-- status light tower -->
+    <rect x="141" y="16" width="3" height="8" class="ma-art-leg"/>
+    <rect x="137" y="2" width="11" height="5" rx="1.5" class="ma-art-stack is-lit"/>
+    <rect x="137" y="7.5" width="11" height="4" rx="1" class="ma-art-stack"/>
+    <rect x="137" y="12" width="11" height="4" rx="1" class="ma-art-stack"/>
+    <!-- cabinet -->
+    <rect x="58" y="22" width="104" height="96" rx="8" class="ma-art-cab"/>
+    <rect x="58" y="22" width="104" height="12" rx="6" class="ma-art-cap"/>
+    <rect x="58" y="118" width="104" height="16" rx="3" class="ma-art-plinth"/>
+    <!-- side vents -->
+    <g class="ma-art-vent"><path d="M140 46h14M140 51h14M140 56h14M140 61h14M140 66h14"/></g>
+    <rect x="130" y="58" width="3" height="16" rx="1.5" class="ma-art-leg"/>
+    <!-- glass door + cutting chamber -->
+    <rect x="66" y="40" width="60" height="58" rx="6" class="ma-art-win"/>
+    <rect x="66" y="40" width="60" height="58" rx="6" class="ma-art-glow"/>
+    <rect x="91" y="40" width="10" height="16" class="ma-art-steel"/>
+    <rect x="88" y="55" width="16" height="5" rx="1" class="ma-art-dark"/>
+    <ellipse cx="96" cy="64" rx="15" ry="4.5" class="ma-art-lens"/>
+    <g class="ma-art-cut"><rect x="108" y="66" width="16" height="7" rx="1.5" class="ma-art-dark"/><path d="M108 66 l-4 3.5 4 3.5z" class="ma-art-tip"/></g>
+    <rect x="116" y="40" width="4" height="9" class="ma-art-steel"/>
+    <path d="M118 49 L107 62" class="ma-art-cool"/>
+    <rect x="70" y="102" width="34" height="5" rx="2" class="ma-art-plate"/>
+    <!-- control screen on arm -->
+    <path d="M162 46 h12" class="ma-art-arm"/>
+    <rect x="170" y="32" width="26" height="22" rx="3" class="ma-art-screen"/>
+    <rect x="174" y="37" width="18" height="3" rx="1" class="ma-art-bar"/>
+    <rect x="174" y="42" width="12" height="3" rx="1" class="ma-art-bar"/>
+    <rect x="174" y="47" width="15" height="3" rx="1" class="ma-art-bar"/>
+  </svg>`;
+}
+
+function maArtBlocker_(spinning) {
+  /* Generic alloy auto blocker (not a brand replica). A gantry gripper picks a lens
+     from the tray, sets it on the block in the blocking station, and alloy is poured
+     from the heated pot to fix the block to the lens. Status color = var(--c). */
+  return `<svg viewBox="0 0 200 150" class="ma-art ma-art-otb${spinning ? ' is-spin' : ''}" aria-hidden="true">
+    <ellipse cx="104" cy="140" rx="86" ry="7" class="ma-art-base"/>
+    <!-- bench -->
+    <rect x="22" y="92" width="160" height="26" rx="5" class="ma-art-cab"/>
+    <rect x="22" y="118" width="160" height="16" rx="3" class="ma-art-plinth"/>
+    <g class="ma-art-vent"><path d="M150 100h22M150 106h22"/></g>
+    <rect x="34" y="104" width="34" height="5" rx="2" class="ma-art-plate"/>
+    <!-- gantry -->
+    <rect x="26" y="26" width="6" height="66" class="ma-art-steel"/>
+    <rect x="132" y="26" width="6" height="66" class="ma-art-steel"/>
+    <rect x="22" y="22" width="120" height="8" rx="3" class="ma-art-cap"/>
+    <!-- status light on the gantry -->
+    <rect x="66" y="16" width="3" height="6" class="ma-art-leg"/>
+    <rect x="62" y="5" width="11" height="4.5" rx="1.5" class="ma-art-stack is-lit"/>
+    <rect x="62" y="10" width="11" height="3.5" rx="1" class="ma-art-stack"/>
+    <rect x="62" y="14" width="11" height="3" rx="1" class="ma-art-stack"/>
+    <!-- input tray with lenses -->
+    <rect x="38" y="82" width="34" height="10" rx="2" class="ma-art-tray"/>
+    <ellipse cx="48" cy="83" rx="7" ry="2.4" class="ma-art-blank ma-art-pick"/>
+    <ellipse cx="62" cy="83" rx="7" ry="2.4" class="ma-art-blank"/>
+    <!-- blocking station: holder ring, metal block, placed lens -->
+    <rect x="98" y="84" width="28" height="8" rx="2" class="ma-art-ring"/>
+    <rect x="106" y="77" width="12" height="7" rx="1.5" class="ma-art-blockmetal"/>
+    <ellipse cx="112" cy="76" rx="9" ry="2.6" class="ma-art-blank ma-art-placed"/>
+    <rect x="107" y="77.5" width="10" height="3" rx="1" class="ma-art-fill"/>
+    <!-- heated alloy pot + nozzle -->
+    <rect x="150" y="44" width="26" height="40" rx="4" class="ma-art-pot"/>
+    <rect x="150" y="44" width="26" height="8" rx="4" class="ma-art-cap"/>
+    <path d="M155 64h16M155 70h16" class="ma-art-heat"/>
+    <path d="M150 60 H128 V66" class="ma-art-pipe"/>
+    <rect x="124" y="66" width="8" height="5" rx="1" class="ma-art-dark"/>
+    <path d="M128 71 L116 77" class="ma-art-alloy"/>
+    <!-- gripper on the gantry (moves tray → block) -->
+    <g class="ma-art-carriage">
+      <rect x="40" y="26" width="16" height="10" rx="2" class="ma-art-dark"/>
+      <g class="ma-art-lift">
+        <rect x="46" y="36" width="4" height="30" class="ma-art-steel"/>
+        <path d="M41 66 h14 M42 66 l-2 6 l3 3 M54 66 l2 6 l-3 3" class="ma-art-fingers"/>
+        <ellipse cx="48" cy="75" rx="8" ry="2.8" class="ma-art-blank ma-art-held"/>
+      </g>
+    </g>
+  </svg>`;
+}
+
+function maRenderBay_(elId, list) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!list.length) { el.innerHTML = '<div class="ma-empty">No machines with output or breakage.</div>'; return; }
+  const nowHr = maHourLabel_(Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }).format(new Date())) % 24);
+  el.innerHTML = list.map(m => {
+    const total = maSum_(m.all), earlier = m.all.o + m.all.p, unknown = m.all.u;
+    const hero = m.pct !== null
+      ? `<div class="ma-pct">${m.pct.toFixed(2)}<small>%</small></div>`
+      : m.run === 0 && m.all.s > 0 ? `<div class="ma-pct is-text">No jobs run recorded</div>`
+      : m.run === null ? `<div class="ma-pct is-text">${total} ${total === 1 ? 'lens' : 'lenses'} broke</div>`
+      : m.run === null ? '' : `<div class="ma-pct is-text">No jobs run yet</div>`;
+    const spin = !!(m.out && (Number(m.out.hours[nowHr]) || 0) > 0);
+    return `<article class="ma-card st-${m.st.cls}" data-ma="${ovEsc_(m.id)}" aria-label="${ovEsc_(m.label)}: ${m.st.label}">
+      <div class="ma-top"><span class="ma-name">${ovEsc_(m.label)}</span><span class="ma-st">${m.st.label}</span></div>
+      ${m.type === 'OTB' ? maArtBlocker_(spin) : maArt_(m.st.cls, spin)}
+      ${hero}
+      ${m.st.cls === 'small' ? `<div class="ma-ss">only ${m.run} jobs run</div>` : ''}
+      <div class="ma-meta">
+        <span>${m.run !== null ? `<b>${m.run}</b> ${m.run === 1 ? 'job' : 'jobs'} run` : `<b>${m.jobs}</b> ${m.jobs === 1 ? 'job' : 'jobs'} broke`}</span>
+        <span>${m.lensRun ? `<b>${m.all.s}</b> of ${m.lensRun} lenses` : m.lensRun === 0 ? 'no output yet' : 'jobs run: not available'}</span>
+      </div>
+      ${earlier ? `<div class="ma-earlier">+${earlier} ${earlier === 1 ? 'lens' : 'lenses'} from earlier days · not in rate</div>` : ''}
+      ${unknown ? `<div class="ma-earlier">+${unknown} ${unknown === 1 ? 'lens' : 'lenses'} with no machine scan date · not in rate</div>` : ''}
+    </article>`;
+  }).join('');
+  if (!_ma.cardsPlayed && !ovReduced_()) {
+    _ma.cardsPlayed = true;
+    el.querySelectorAll('.ma-card').forEach((c, i) => c.animate?.([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 420, delay: i * 60, easing: 'ease-out', fill: 'backwards' }));
+  }
+}
+
+function maRenderRates_(list) {
+  const el = document.getElementById('maRates');
+  const wrap = document.getElementById('maRatesWrap');
+  wrap.hidden = !list.length;
+  if (!list.length) return;
+  const sorted = [...list].sort((a, b) => b.pct - a.pct);
+  const max = Math.max(MA_THRESH.crit + 2, ...sorted.map(m => m.st.cls === 'small' ? 0 : m.pct));
+  el.innerHTML = sorted.map(m => `
+    <div class="ma-rate st-${m.st.cls}" data-ma="${ovEsc_(m.id)}">
+      <span class="ma-rl">${ovEsc_(m.label)}</span>
+      <div class="ma-rt"><div style="width:${Math.min(100, m.pct / max * 100)}%"></div></div>
+      <b>${m.pct.toFixed(2)}%</b>
+      <small>${m.all.s} of ${m.lensRun} lenses${m.st.cls === 'small' ? ' · small sample' : ''}</small>
+    </div>`).join('');
+}
+
+function maRenderVerdicts_(D, list) {
+  const el = document.getElementById('maVerdicts');
+  const items = Object.entries(D.reasons).sort((a, b) => b[1] - a[1]).map(([reason, total]) => {
+    const per = list.map(m => ({ m, n: maSum_(m.reasons[reason] || { s: 0, o: 0, p: 0, u: 0 }) })).filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+    const top = per[0];
+    const share = top ? Math.round(top.n / total * 100) : 0;
+    if (total < MA_RULES.minLenses) return `<div class="ma-vd v-few"><b>${ovEsc_(reason)}: ${total} ${total === 1 ? 'lens' : 'lenses'}</b>, too few to call.</div>`;
+    if (share >= MA_RULES.concentratedShare && top.n >= MA_RULES.minLenses)
+      return `<div class="ma-vd v-mach"><b>${ovEsc_(reason)}: ${top.n === total ? 'all ' + total : top.n + ' of ' + total} on ${ovEsc_(top.m.label)}</b>, likely a machine issue — check that machine.</div>`;
+    if (per.length >= MA_RULES.spreadMachines)
+      return `<div class="ma-vd v-spread"><b>${ovEsc_(reason)}: ${total} lenses on ${per.length} machines</b>, not one machine. Top share is ${ovEsc_(top.m.label)} with ${top.n} (${share}%).</div>`;
+    return `<div class="ma-vd v-spread"><b>${ovEsc_(reason)}: ${total} lenses</b>, split between ${per.map(x => `${ovEsc_(x.m.label)} (${x.n})`).join(' and ')} — no single machine passes ${MA_RULES.concentratedShare}%.</div>`;
+  });
+  el.innerHTML = items.join('') || '<div class="ma-empty">No broken lenses for these filters.</div>';
+}
+
+function maCell_(b, tag = 'td') {
+  const t = maSum_(b);
+  if (!t) return `<${tag} class="ma-z">0</${tag}>`;
+  const parts = [['s', b.s], ['o', b.o], ['p', b.p], ['u', b.u]].filter(x => x[1]);
+  const shade = Math.min(.32, .06 + t * .035);
+  return `<${tag} style="background:rgba(255,255,255,${shade})" title="${[['same day', b.s], ['previous day', b.o], ['2+ days', b.p], ['age unknown', b.u]].filter(x => x[1]).map(x => `${x[1]} ${x[0]}`).join(' · ')}">` +
+    parts.map(([a, n]) => `<span style="color:${MA_AGE[a]}">${n}</span>`).join('<i class="ma-plus">+</i>') + `</${tag}>`;
+}
+function maTotalCell_(b) {
+  const parts = [['s', b.s], ['o', b.o], ['p', b.p], ['u', b.u]].filter(x => x[1]);
+  return `<td class="ma-tot"><b>${maSum_(b)}</b>${parts.length > 1 || (parts.length === 1 && parts[0][0] !== 's') ? ' ' + parts.map(([a, n]) => `<span style="color:${MA_AGE[a]}">${n}</span>`).join('+') : ''}</td>`;
+}
+function maRowLabel_(m) {
+  return `<td class="ma-mn">${ovEsc_(m.label)}${m.st.cls === 'small' ? '<span class="ma-sstag">small sample</span>' : ''}</td>`;
+}
+
+function maRenderReasonGrid_(D, list) {
+  const el = document.getElementById('maReasonGrid');
+  const rs = Object.entries(D.reasons).sort((a, b) => b[1] - a[1]).map(e => e[0]);
+  const rows = list.filter(m => maSum_(m.all) > 0);
+  if (!rows.length) { el.innerHTML = '<div class="ma-empty">No broken lenses.</div>'; return; }
+  el.innerHTML = `<table class="ma-grid"><thead><tr><th>Machine</th>${rs.map(r => `<th><i style="background:${reasonColor(r)}"></i>${ovEsc_(r)}</th>`).join('')}<th>Total</th></tr></thead><tbody>
+    ${rows.map(m => `<tr data-ma="${ovEsc_(m.id)}">${maRowLabel_(m)}${rs.map(r => maCell_(m.reasons[r] || { s: 0, o: 0, p: 0, u: 0 })).join('')}${maTotalCell_(m.all)}</tr>`).join('')}
+  </tbody></table>`;
+}
+
+function maRenderHourGrid_(D, list) {
+  const el = document.getElementById('maHourGrid');
+  const rows = list.filter(m => maSum_(m.all) > 0);
+  if (!rows.length) { el.innerHTML = '<div class="ma-empty">No broken lenses.</div>'; return; }
+  const extra = new Set();
+  rows.forEach(m => Object.keys(m.hours).forEach(h => { if (!MA_HOURS.includes(h)) extra.add(h); }));
+  const toNum = h => { const x = /^(\d+):00 (AM|PM)$/.exec(h); if (!x) return 99; return (Number(x[1]) % 12) + (x[2] === 'PM' ? 12 : 0); };
+  const before = [...extra].filter(h => h !== 'No time' && toNum(h) < 6).sort((a, b) => toNum(a) - toNum(b));
+  const after  = [...extra].filter(h => h !== 'No time' && toNum(h) > 20).sort((a, b) => toNum(a) - toNum(b));
+  const cols = [...before, ...MA_HOURS, ...after, ...(extra.has('No time') ? ['No time'] : [])];   // every hour shown, no skipped columns
+  el.innerHTML = `<table class="ma-grid ma-hgrid"><thead><tr><th>Machine</th>${cols.map(h => `<th>${h === 'No time' ? 'No time' : maShortHour_(h)}</th>`).join('')}<th>Total</th></tr></thead><tbody>
+    ${rows.map(m => `<tr data-ma="${ovEsc_(m.id)}">${maRowLabel_(m)}${cols.map(h => maCell_(m.hours[h] || { s: 0, o: 0, p: 0, u: 0 })).join('')}${maTotalCell_(m.all)}</tr>`).join('')}
+  </tbody></table>`;
+}
+
+function maRenderCheck_(D, list, out) {
+  const el = document.getElementById('maCheck');
+  const totalLenses = D.rows.reduce((s, r) => s + (parseInt(r.LensesBroken) || 0), 0);
+  const bad = list.filter(m => {
+    const hrs = Object.values(m.hours).reduce((s, b) => s + maSum_(b), 0);
+    const rsn = Object.values(m.reasons).reduce((s, b) => s + maSum_(b), 0);
+    return hrs !== maSum_(m.all) || rsn !== maSum_(m.all);
+  });
+  const machTotal = list.reduce((s, m) => s + maSum_(m.all), 0);
+  const notes = [];
+  ['ORB', 'OTB'].forEach(t => {
+    const what = t === 'ORB' ? 'generator' : 'blocker';
+    if (out?.outside?.[t]) notes.push(`${out.outside[t]} ${what} jobs fall outside the 6 AM–8 PM output window and aren't in the hourly bars`);
+    if (out?.noName?.[t])  notes.push(`${out.noName[t]} ${what} jobs had no machine name (${t === 'OTB' ? 'Manual Blocker / ' : ''}"System / No Operator Captured") and aren't on any card`);
+  });
+  const ok = !bad.length && machTotal === totalLenses;
+  el.className = `ma-check ${ok ? 'is-ok' : 'is-bad'}`;
+  el.innerHTML = ok
+    ? `<b>Check passed:</b> hourly detail, reason detail and machine totals all show ${totalLenses} broken ${totalLenses === 1 ? 'lens' : 'lenses'}.${notes.length ? ' Note: ' + notes.join(' · ') + '.' : ''}`
+    : `<b>Check failed:</b> machine totals show ${machTotal} lenses vs ${totalLenses} in the breakage rows${bad.length ? ` · mismatch on ${bad.map(m => ovEsc_(m.label)).join(', ')}` : ''}.${notes.length ? ' ' + notes.join(' · ') + '.' : ''}`;
+}
+
+function maHoverLink_() {
+  const root = document.getElementById('anViewMachines');
+  if (root._maHover) return;
+  root._maHover = true;
+  const mark = (id, on) => root.querySelectorAll(`[data-ma="${CSS.escape(id)}"]`).forEach(el => el.classList.toggle('ma-hl', on));
+  root.addEventListener('mouseover', e => { const el = e.target.closest('[data-ma]'); if (el) mark(el.dataset.ma, true); });
+  root.addEventListener('mouseout',  e => { const el = e.target.closest('[data-ma]'); if (el) mark(el.dataset.ma, false); });
+}
+
+// refresh output while the view stays open
+setInterval(() => { if (_ma.view === 'machines' && document.getElementById('t-research')?.classList.contains('active')) maLoadOutput_(); }, 60 * 1000);

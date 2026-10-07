@@ -302,6 +302,13 @@
       </div>
     </div>
 
+    <!-- View switch: Prescriptions (Rx) | Machines -->
+    <div class="ma-switch" role="group" aria-label="Analysis view">
+      <button class="ma-sw active" id="anViewBtnRx" aria-pressed="true" onclick="maSetView_('rx')">Prescriptions</button>
+      <button class="ma-sw" id="anViewBtnMach" aria-pressed="false" onclick="maSetView_('machines')">Machines</button>
+    </div>
+
+    <div id="anViewRx">
     <!-- Analysis v6 — plain-language Rx view -->
     <div class="panel an-head">
       <h2 id="anHeadline">--</h2>
@@ -339,6 +346,71 @@
       <div class="an-q">Every job</div>
       <div class="an-qs">Strength words use the same cutoffs as the cards above · hover a row or chip to find the job</div>
       <div id="resTable"><div class="empty">Loading...</div></div>
+    </div>
+
+    </div>
+
+    <!-- Machine Analysis -->
+    <div id="anViewMachines" hidden>
+      <div class="ma-source" id="maSource">--</div>
+
+      <div class="panel ma-panel">
+        <div class="ma-head">
+          <div>
+            <div class="ma-q">Generator</div>            
+          </div>
+          <div class="ma-leg">
+            <span><i class="st-ok"></i>Under 1%</span><span><i class="st-watch"></i>1 to 3%</span><span><i class="st-high"></i>3 to 6%</span>
+            <span><i class="st-crit"></i>6% and up</span><span><i class="st-small"></i>Small sample (&lt;30 jobs)</span>
+          </div>
+        </div>
+        <div class="ma-bay" id="maBayORB"></div>
+      </div>
+
+      <div class="panel ma-panel">
+        <div class="ma-q">Auto Blocker</div>        
+        <div class="ma-bay" id="maBayOTB"></div>
+      </div>
+
+      <div class="panel ma-panel" id="maBayOtherWrap" hidden>
+        <div class="ma-q">Other breakage sources</div>
+        <div class="ma-qs">Sources that aren't an ORB generator or OTB blocker. No jobs-run data, so no rate.</div>
+        <div class="ma-bay" id="maBayOther"></div>
+      </div>
+
+      <div class="ma-g2">
+        <div class="panel ma-panel" id="maRatesWrap" hidden>
+          <div class="ma-q">Breakage rate by machine</div>
+          <div class="ma-qs">worst first · one scale</div>
+          <div id="maRates"></div>
+        </div>
+        <div class="panel ma-panel">
+          <div class="ma-q">What stands out</div>
+          <div class="ma-qs">70%+ of a reason on one machine (3+ lenses) = likely a machine issue · on 3+ machines = not one machine · under 3 lenses = too few to call</div>
+          <div id="maVerdicts"></div>
+        </div>
+      </div>
+
+      <div class="ma-age">
+        <span><i style="background:#ff6b6b"></i>Same day</span><span><i style="background:#fbbf24"></i>Previous day</span>
+        <span><i style="background:#ff5ccf"></i>2+ days</span><span><i style="background:#ffffff"></i>Age unknown</span>
+        <span class="ma-age-note">Age = days between the machine scan and the day viewed</span>
+      </div>
+
+      <div class="ma-g2 ma-g2-grids">
+        <div class="panel ma-panel">
+          <div class="ma-q">Why each machine broke lenses</div>
+          <div class="ma-qs">Broken lenses by machine and reason. Brighter cells = more lenses.</div>
+          <div class="ma-scroll" id="maReasonGrid"></div>
+        </div>
+        <div class="panel ma-panel">
+          <div class="ma-q">When each machine broke lenses</div>
+          <div class="ma-qs">By the hour the job ran on the machine. Every hour is shown. Previous-day lenses sit in that day's hour.</div>
+          <div class="ma-scroll" id="maHourGrid"></div>
+        </div>
+      </div>
+
+      <div class="ma-check" id="maCheck"></div>
     </div>
 
   </section>
