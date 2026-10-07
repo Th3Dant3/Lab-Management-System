@@ -1843,3 +1843,34 @@ select:focus { border-color: var(--peach); }
   .ma-art-otb.is-spin .ma-art-placed, .ma-art-otb.is-spin .ma-art-pick, .ma-art-otb.is-spin .ma-art-alloy, .ma-art-otb.is-spin .ma-art-fill { animation: none; }
   .ma-art-otb.is-spin .ma-art-carriage { transform: translateX(64px); }
 }
+/* ============================================================
+   UPDATE NOTIFICATIONS (option C) — peach = new, never red
+   ============================================================ */
+.news-chip {
+  height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; flex-shrink: 0;
+  background: rgba(210,140,100,.10); border: 1px solid var(--peach); border-radius: 8px;
+  color: var(--peach); font: 600 14px var(--font-mono); cursor: pointer; white-space: nowrap;
+}
+.news-chip[hidden] { display: none; }
+.news-chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--peach); }
+.news-chip span { color: #ffffff; }
+.news-chip:hover { background: rgba(210,140,100,.18); }
+.news-chip:focus-visible { outline: 2px solid var(--peach); outline-offset: 2px; }
+.updated-chip.is-stale { border-color: #fbbf24; color: #fbbf24; }
+.tab-btn { position: relative; }
+.tab-btn:has(.pb-badge) { padding-right: 28px; }
+.pb-badge {
+  position: absolute; top: 2px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
+  background: var(--peach); color: #000000; font: 700 12px var(--font-mono);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pb-new { box-shadow: 0 0 0 2px var(--peach), 0 0 22px -4px var(--peach) !important; animation: pbPulse 1.2s ease-in-out 2; }
+tr.pb-new td { background: rgba(210,140,100,.10) !important; }
+.ma-card.pb-new { position: relative; }
+.pb-newtag {
+  position: absolute; top: -10px; right: 12px; background: var(--peach); color: #000000;
+  font: 700 12px var(--font-sans); border-radius: 4px; padding: 2px 8px;
+}
+.pb-delta { display: inline-block; margin-left: 6px; border: 1px solid #ffffff; border-radius: 4px; padding: 0 5px; font: 700 12px var(--font-mono); color: #ffffff; }
+@keyframes pbPulse { 50% { box-shadow: 0 0 0 4px var(--peach), 0 0 30px 0 var(--peach); } }
+@media (prefers-reduced-motion: reduce) { .pb-new { animation: none; } }
