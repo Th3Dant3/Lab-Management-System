@@ -19,13 +19,14 @@ const LOADER_MAP = {
   "BHONICKER":     "loader_BHONICKER.html",
   "NPOSTON":       "loader_NPOSTON.html",
   "CSEARFOSS":     "loader_CSEARFOSS.html",
-   "DWATTERS":      "loader_DWATTERS.html",
-  "CDAY":          "loader_TEAMLEAD.html",
-  "JJOHNSON":      "loader_TEAMLEAD.html",
+  "DWATTERS":      "loader_DWATTERS.html",
+  "CDAY":          "loader_TEAMLEAD.html",  
   "CPATRICK":      "loader_TEAMLEAD.html",
   "CWOOD":         "loader_TEAMLEAD.html",
+  "LRODRIGUEZ":     "loader_TEAMLEAD.html",
   "CFORBES":       "loader_TEAMLEAD.html",
   "JADAIR":        "loader_TEAMLEAD.html",
+  "LDIXON":        "loader_TEAMLEAD.html",
   "JMOLING":        "loader_TEAMLEAD.html",  
 }
 
