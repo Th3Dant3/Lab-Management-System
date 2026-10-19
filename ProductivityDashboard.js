@@ -820,6 +820,7 @@ function loadFiscalWeekData(week) {
     STATE.breakageEditSnapshot = normalizeBreakageRows(cached.breakageEditSnapshot || []);
     STATE.breakageAdjustments = normalizeBreakageRows(cached.breakageAdjustments || []);
     applyProductivityAdjustmentsToData();
+  applyTrainingTargetsToViewV4();
     updateMeta();
     renderNavBar();
     renderEverything();
@@ -873,6 +874,7 @@ function loadFiscalWeekData(week) {
       };
 
       applyProductivityAdjustmentsToData();
+  applyTrainingTargetsToViewV4();
       updateMeta();
       renderNavBar();
       renderEverything();
@@ -1030,6 +1032,7 @@ function handleData(data, fromCache = false) {
   );
 
   applyProductivityAdjustmentsToData();
+  applyTrainingTargetsToViewV4();
 
   updateMeta();
   renderNavBar();
@@ -8580,3 +8583,328 @@ function printAssociateSigningScorecard() {
 
   console.info('[Productivity Hub] Associate color print button loaded.');
 })();
+
+
+/* =====================================================================
+ PRODUCTIVITY HUB 2.0 — HYBRID SUPERVISOR VIEW (NON-DESTRUCTIVE)
+ Uses existing STATE, weekly filters, snapshot calculations, API loaders,
+ permissions, and breakage scorecard plumbing. No training source exists yet.
+ This layer adds only view functions and overrides page routing.
+ ===================================================================== */
+function hubV2Snapshot() {
+  const rows = getInsightRows();
+  const people = buildAssociateSummariesFromRows(rows);
+  const totals = getInsightTotals(rows, people);
+  const stations = summarizeInsightRows(rows, r => r.StationGroup || r.AccessPoint || 'Unmapped');
+  const dates = summarizeInsightRows(rows, r => formatDateKey(r.WorkDate)).sort((a,b)=>String(a.label).localeCompare(String(b.label)));
+  return { rows, people, totals, stations, dates };
+}
+function hubV2Pct(n) { return Number.isFinite(n) && n > 0 ? formatPercent(n) : 'N/A'; }
+function hubV2Status(s) {return s==='GREEN'?'good':s==='AMBER'?'watch':s==='RED'?'warning':'neutral';}
+function hubV2ReviewCandidates(people){
+  return people.filter(p => p.status==='RED'||p.status==='AMBER'||p.status==='NO_TARGET'||p.status==='NO TARGET')
+    .sort((a,b) => (a.status==='RED'?0:a.status==='AMBER'?1:2)-(b.status==='RED'?0:b.status==='AMBER'?1:2) || a.productivityPercent-b.productivityPercent);
+}
+function hubV2SelectAssociate(name){
+  STATE.selectedAssociate=name;
+  STATE.activePage='profile';
+  setActiveSideNav('scorecards');
+  renderEverything();
+}
+function hubV2DepartmentCards() {
+  const currentDept = String(STATE.activeDept || 'FINISH').toUpperCase();
+  const departments = [{key:'FINISH',name:'Finish'},{key:'SURFACE',name:'Surface'},{key:'AR',name:'AR'},{key:'INVENTORY',name:'Picking'}];
+  return departments.map(d=>{
+    const rows = getWeekRowsForDashboardDepartment(d.key);
+    const summaries=buildAssociateSummariesFromRows(rows);
+    const hours=summaries.reduce((n,s)=>n+Number(s.totalHours||0),0);
+    const produced=summaries.reduce((n,s)=>n+Number(s.workProduced||0),0);
+    const jobs=summaries.reduce((n,s)=>n+Number(s.totalJobs||0),0);
+    const pct=hours>0?produced/hours:0;
+    return `<button class="v2-dept ${currentDept===d.key?'selected':''}" type="button" onclick="hubV2SetDept('${d.key}')">
+      <span>${d.name}</span><strong>${hours>0?hubV2Pct(pct):'N/A'}</strong>
+      <div class="v2-meter"><i style="width:${Math.max(0,Math.min(100,pct*100))}%"></i></div>
+      <small>${formatNumber(jobs)} jobs · ${summaries.length} associates</small></button>`;
+  }).join('');
+}
+function hubV2SetDept(dept){
+  STATE.activeDept=dept; STATE.activeStationGroup='ALL'; STATE.selectedAssociate='';
+  const side=document.getElementById('sideDeptSelect'); if(side)side.value=dept;
+  document.querySelectorAll('.hub-dept-tab').forEach(t=>t.classList.toggle('active',t.dataset.dept===dept));
+  renderNavBar();renderEverything();
+}
+function renderHybridHubV2(){
+ const page=document.getElementById('pageContent');if(!page)return;
+ const {people,totals,stations,dates}=hubV2Snapshot();
+ const review=hubV2ReviewCandidates(people);
+ const currentDept=getDeptLabel(STATE.activeDept);
+ page.innerHTML=`<section class="v2-page">
+   <header class="v2-heading"><div><span class="v2-kicker">SUPERVISOR COMMAND CENTER</span><h2>Hybrid Overview</h2><p>${escapeHtml(currentDept)} · ${escapeHtml(STATE.activeShift)} · ${escapeHtml(STATE.selectedFiscalWeek||STATE.meta.fiscalWeek||'')}</p></div>
+   <div class="v2-actions"><button onclick="setActivePage('verification')">Review Exceptions (${review.length})</button><button onclick="reloadData()">↻ Refresh</button></div></header>
+   <div class="v2-kpis">
+    <div><span>ASSOCIATES</span><strong>${formatNumber(totals.associates)}</strong></div>
+    <div><span>JOBS</span><strong>${formatNumber(totals.jobs)}</strong></div>
+    <div><span>PRODUCTIVITY</span><strong>${hubV2Pct(totals.productivityPercent)}</strong></div>
+    <div><span>IN TRAINING</span><strong>—</strong><small>Awaiting training data</small></div>
+    <div><span>BREAKAGE RATE</span><strong>—</strong><small>Separate source not loaded</small></div>
+    <div><span>REVIEW CANDIDATES</span><strong>${review.length}</strong><small>Not verified errors</small></div>
+   </div>
+   <div class="v2-layout"><section class="v2-left">
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Department Performance</h3><small>Current fiscal week · selected shift</small></div><div class="v2-depts">${hubV2DepartmentCards()}</div></article>
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Daily Productivity</h3><button type="button" onclick="setActivePage('trends')">Open Trends →</button></div>
+      <div class="v2-day-chart">${dates.length?dates.map(d=>`<div class="v2-day"><span>${escapeHtml(formatDatePretty(d.label))}</span><div class="v2-track"><i style="width:${Math.min(100,Math.max(0,d.productivityPercent*100))}%"></i></div><b>${hubV2Pct(d.productivityPercent)}</b></div>`).join(''):'<p>No daily snapshot data for this filter.</p>'}</div></article>
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Supervisor Verification Queue</h3><button onclick="setActivePage('verification')">View All →</button></div>${hubV2QueueTable(review.slice(0,7))}</article>
+   </section><aside class="v2-right">
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Associate Status</h3><button onclick="setActivePage('scorecards')">Scorecards →</button></div><div class="v2-status-grid">
+     <div class="good"><strong>${totals.green}</strong><span>On Target</span></div><div class="watch"><strong>${totals.amber}</strong><span>Watch</span></div>
+     <div class="warning"><strong>${totals.red}</strong><span>Warning</span></div><div><strong>${totals.noTarget}</strong><span>No Target</span></div></div></article>
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Training Metrics</h3><button onclick="setActivePage('training')">Training →</button></div><div class="v2-notice">Training source and qualification rules have not been provided. No counts are assumed.</div></article>
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Breakage Snapshot</h3><button onclick="openSeparateBreakageHub()">Open Breakage Hub →</button></div><div class="v2-notice">Breakage remains in its dedicated system. We will integrate a verified summary after mapping its API.</div></article>
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Data Confidence</h3></div><div class="v2-notice">Snapshot available: ${formatNumber(dates.length)} work date(s). This is not a data accuracy score. Validate source timestamps and reconciliations before claiming confidence.</div></article>
+    <article class="v2-panel"><div class="v2-panel-head"><h3>Quick Actions</h3></div><div class="v2-quick"><button onclick="setActivePage('scorecards')">Associate Scorecards</button><button onclick="setActivePage('daily')">Daily Summary</button><button onclick="setActivePage('verification')">Review Candidates</button><button onclick="setActivePage('trends')">Weekly Trends</button></div></article>
+   </aside></div></section>`;
+}
+function hubV2QueueTable(rows){
+ if(!rows.length)return '<div class="v2-notice">No associates currently flagged by productivity thresholds.</div>';
+ return `<div class="v2-table-scroll"><table class="v2-table"><thead><tr><th>Associate</th><th>Station / Area</th><th>Productivity</th><th>Review reason</th><th>Action</th></tr></thead><tbody>${rows.map(r=>{
+ const area=(r.areas||[]).map(a=>a.StationGroup||a.stationGroup||a.label||'').filter(Boolean)[0]||r.departments||'—';
+ const issue=r.status==='RED'?'Below 90%':r.status==='AMBER'?'90–99%':'Missing target';
+ return `<tr><td>${escapeHtml(getAssociateDisplayName(r))}</td><td>${escapeHtml(String(area))}</td><td><span class="v2-pill ${hubV2Status(r.status)}">${hubV2Pct(r.productivityPercent)}</span></td><td>${issue}</td><td><button type="button" onclick="hubV2SelectAssociate('${escapeJs(r.associate)}')">Inspect</button></td></tr>`;
+ }).join('')}</tbody></table></div>`;
+}
+function renderVerificationHubV2(){
+ const page=document.getElementById('pageContent');if(!page)return;
+ const {people}=hubV2Snapshot(); const review=hubV2ReviewCandidates(people);
+ page.innerHTML=`<section class="v2-page"><header class="v2-heading"><div><span class="v2-kicker">SUPERVISOR TOOLS</span><h2>Verification Center</h2><p>Suggested checks from official snapshot productivity; no edits are made here.</p></div></header>
+ <div class="v2-kpis"><div><span>ASSOCIATES FLAGGED</span><strong>${review.length}</strong></div><div><span>BELOW 90%</span><strong>${review.filter(x=>x.status==='RED').length}</strong></div><div><span>90–99%</span><strong>${review.filter(x=>x.status==='AMBER').length}</strong></div><div><span>NO TARGET</span><strong>${review.filter(x=>x.status==='NO_TARGET'||x.status==='NO TARGET').length}</strong></div></div>
+ <article class="v2-panel"><div class="v2-panel-head"><h3>Review Candidates</h3></div>${hubV2QueueTable(review)}<p class="v2-help">An exception is a request to inspect the underlying scorecard, not proof that the data is wrong. The official adjustment and signature workflow remains unchanged.</p></article></section>`;
+}
+function renderTrainingHubV2(){
+ const page=document.getElementById('pageContent');if(!page)return;
+ page.innerHTML=`<section class="v2-page"><header class="v2-heading"><div><span class="v2-kicker">FUTURE MODULE</span><h2>Training Metrics</h2><p>Awaiting your certified vs training benchmarks and source data.</p></div></header>
+ <div class="v2-training-grid"><article class="v2-panel"><h3>Training Assignments</h3><p>Upcoming: associate, trainer, station, start date, qualification level.</p></article><article class="v2-panel"><h3>Progress Against Training Target</h3><p>Upcoming: observed JPH, training benchmark, daily trend, coaching checkpoints.</p></article><article class="v2-panel"><h3>Certification Readiness</h3><p>Upcoming: validated checkpoints, assessment dates, supervisor approval.</p></article></div>
+ <div class="v2-notice">No training percentages, associate counts, or certifications are fabricated. This tab will be connected after the training rules are provided.</div></section>`;
+}
+/* Override the final routing function; existing pages remain operational. */
+function renderEverything(){
+ renderTopSummary(); renderAssociateDropdown();
+ if(STATE.activePage==='dashboard'){renderHybridHubV2();return;}
+ if(STATE.activePage==='verification'){renderVerificationHubV2();return;}
+ if(STATE.activePage==='training'){renderTrainingHubV2();return;}
+ if(STATE.activePage==='scorecards'){renderScorecardsPage();return;}
+ if(STATE.activePage==='profile'){renderProfile();return;}
+ if(STATE.activePage==='daily'){renderDailySummaryHub();return;}
+ if(STATE.activePage==='trends'){renderTrendsHub();return;}
+ if(STATE.activePage==='archive'){renderArchivePage();return;}
+ if(STATE.activePage==='targets'){renderTargetsHub();return;}
+ renderPlaceholderPage(STATE.activePage);
+}
+
+
+/* PRODUCTIVITY HUB 2.0 - TRAINING CARDS (FINISH / AR only) */
+const TRAINING_TARGETS_V2 = {
+ FINISH:{'UNBOX FINISH':[75,150,150,150,150,150,150,150,150,150],'MEI EDGING':Array(10).fill(300),'MOUNTING':[3,6,9,12,15,18,22,25,25,25],'HANDSTONE BIGS / EDGE POLISH':[3,5,8,10,13,15,18,18,18,18],'BREAKAGE':[7,14,21,22,22,22,22,22,22,22],'FINAL INSPECTION':[15,30,45,60,75,75,75,75,75,75],'DRILLS':[2,3,4,5,6,6,6,6,6,6]},
+ AR:{'DE-RING':[50,120,120,120,120,120,120,120,120,120],'AR IN':[60,120,120,120,120,120,120,120,120,120,120],'AR BASKETING':[21,42,64,64,64,64,64,64,64,64],'AR OVENS':Array(10).fill(960),'AR CHAMBERS':[10,20,30,40,40,40,40,40,40,40],'AR OUT':[50,100,100,100,100,100,100,100,100,100,100]}
+};
+STATE.trainingRoster=[];
+STATE.trainingLoaded=false;
+STATE.trainingHistory=[];
+STATE.trainingQualifications=[];
+function trainingActiveFor_(operator) {return STATE.trainingRoster.filter(r=>String(r.OperatorName||'').trim().toUpperCase()===String(operator||'').trim().toUpperCase()&&String(r.Status||'').toUpperCase()==='ACTIVE');}
+/* TRAINING PRODUCTIVITY V4 — presentation-only target override.
+   Keep the official Google Sheets snapshots and certified targets untouched.
+   We intentionally run AFTER hour adjustments and AFTER the training roster arrives.
+   The existing recalcClientProductivityRow, getWorkProducedHours,
+   getWeightedTarget and getStatusFromPercent provide all math. */
+function trainingNormalizeLabelV4_(text) {
+  return String(text || '').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+}
+function trainingStationForRowV4_(row) {
+  const department = trainingNormalizeLabelV4_(row.FinalDepartment);
+  const label = trainingNormalizeLabelV4_([row.StationGroup,row.AccessPoint].filter(Boolean).join(' '));
+  if (department === 'FINISH') {
+    if (/\bUNBOX\b/.test(label)) return 'UNBOX FINISH';
+    if (/\bMEI\b/.test(label) && /\b(EDGING|EDGER|LINE|FIT|MEI)\b/.test(label)) return 'MEI EDGING';
+    if (/\bHANDSTONE\b|\bEDGE POLISH\b/.test(label)) return 'HANDSTONE BIGS / EDGE POLISH';
+    if (/\bDRILL(S|ING)?\b/.test(label)) return 'DRILLS';
+    if (/\bMOUNTING\b/.test(label)) return 'MOUNTING';
+    if (/\bBREAKAGE\b/.test(label)) return 'BREAKAGE';
+    if (/\bFINAL\b.*\bINSPECTION\b|\bFINAL\b/.test(label)) return 'FINAL INSPECTION';
+  }
+  if (department === 'AR') {
+    if (/\bDE\s?RING\b/.test(label)) return 'DE-RING';
+    if (/\bBASKET(ING)?\b|\bT\s?40\b/.test(label)) return 'AR BASKETING';
+    if (/\bOVEN(S)?\b/.test(label)) return 'AR OVENS';
+    if (/\bCHAMBER(S)?\b|\bSECTOR(ING)?\b/.test(label)) return 'AR CHAMBERS';
+    if (/\bAR\s?OUT\b/.test(label)) return 'AR OUT';
+    if (/\bAR\s?IN\b/.test(label)) return 'AR IN';
+  }
+  return '';
+}
+function trainingTargetForRowV4_(row) {
+  if (!STATE.trainingLoaded) return null;
+  const name = trainingNormalizeLabelV4_(row.OperatorName);
+  const dept = trainingNormalizeLabelV4_(row.FinalDepartment);
+  const station = trainingStationForRowV4_(row);
+  const rowDate = formatDateKey(row.WorkDate);
+  if (!station || !rowDate || !['FINISH','AR'].includes(dept)) return null;
+  // When dated history exists, use only dated records. Historical results never
+  // inherit a future training week, completion or current roster assignment.
+  const history = Array.isArray(STATE.trainingHistory) ? STATE.trainingHistory : [];
+  const candidates = history.length ? history : (STATE.trainingRoster || []);
+  const matches = candidates.filter(a =>
+    trainingNormalizeLabelV4_(a.OperatorName) === name &&
+    trainingNormalizeLabelV4_(a.Department) === dept &&
+    trainingNormalizeLabelV4_(a.Station) === trainingNormalizeLabelV4_(station) &&
+    String(a.Status || '').toUpperCase() === 'ACTIVE' &&
+    !!formatDateKey(a.StartDate) && rowDate >= formatDateKey(a.StartDate) &&
+    (!formatDateKey(a.EndDate) || rowDate <= formatDateKey(a.EndDate)) &&
+    !(STATE.trainingQualifications||[]).some(q => trainingNormalizeLabelV4_(q.OperatorName)===name &&
+      trainingNormalizeLabelV4_(q.Department)===dept && trainingNormalizeLabelV4_(q.Station)===trainingNormalizeLabelV4_(station) &&
+      String(q.EffectiveDate||'').slice(0,10)<=rowDate && String(q.EffectiveDate||'').slice(0,10)>=String(a.StartDate||'').slice(0,10))
+  );
+  // A single date must have one unambiguous training target.
+  if (matches.length !== 1) return null;
+  const record=matches[0];
+  const baseWeek=Number(record.TrainingWeek);
+  const dayOffset=Math.floor((Date.parse(rowDate+'T00:00:00Z')-Date.parse(String(record.StartDate).slice(0,10)+'T00:00:00Z'))/86400000);
+  const auto=/^(TRUE|YES|1)$/i.test(String(record.AutoAdvance||''));
+  const week=auto?Math.min(10,baseWeek+Math.floor(dayOffset/7)):baseWeek;
+  const values = TRAINING_TARGETS_V2[dept] && TRAINING_TARGETS_V2[dept][station];
+  if (!values || !Number.isInteger(week) || week < 1 || week > 10) return null;
+  const target = Number(values[week - 1]);
+  return Number.isFinite(target) && target > 0 ? {target, station, week} : null;
+}
+function applyTrainingTargetsToViewV4() {
+  if (!Array.isArray(STATE.dailySnapshot)) return;
+  STATE.dailySnapshot = STATE.dailySnapshot.map(sourceRow => {
+    const row = {...sourceRow};
+    // Keep original certified target on client objects across reassignments.
+    if (!Object.prototype.hasOwnProperty.call(row,'_certifiedTargetV4')) {
+      row._certifiedTargetV4 = Number(row.TargetAvgPerHour || 0);
+    }
+    row.TargetAvgPerHour = row._certifiedTargetV4;
+    delete row.TrainingTargetV4;
+    delete row.TrainingWeekV4;
+    delete row.TrainingStationV4;
+    const assignment = trainingTargetForRowV4_(row);
+    if (assignment) {
+      row.TargetAvgPerHour = assignment.target;
+      row.TrainingTargetV4 = assignment.target;
+      row.TrainingWeekV4 = assignment.week;
+      row.TrainingStationV4 = assignment.station;
+    }
+    return recalcClientProductivityRow(row);
+  });
+}
+async function refreshTrainingRosterV2(render=true){
+ try {const d=await productivityJsonpRequest({action:'trainingRoster'}); STATE.trainingRoster=Array.isArray(d.rows)?d.rows:[];STATE.trainingHistory=Array.isArray(d.history)?d.history:[];STATE.trainingQualifications=Array.isArray(d.qualifications)?d.qualifications:[];STATE.trainingLoaded=true;applyTrainingTargetsToViewV4();if(render)renderEverything();}
+ catch(e){console.warn('[Training] Roster could not load',e.message); STATE.trainingLoaded=false;}
+}
+function trainingScorecardBadge_(operator){const a=trainingActiveFor_(operator);return a.length?`<span class="training-pill-v2">🎓 Training · ${a.map(r=>escapeHtml(r.Station)+' W'+escapeHtml(r.TrainingWeek)).join(', ')}</span>`:'';}
+const originalRenderScorecardsTrainingV2=renderScorecardsPage;
+renderScorecardsPage=function(){ originalRenderScorecardsTrainingV2(); const grid=document.querySelector('.scoreboard-grid-expanded');if(!grid)return;grid.querySelectorAll('.score-kpi').forEach(card=>{
+  const handler=card.getAttribute('onclick')||''; const m=handler.match(/selectAssociateFromScoreboard\('((?:\\.|[^'])*)'\)/);if(!m)return;
+  const name=m[1].replace(/\\'/g,"'").replace(/\\\\/g,'\\');const badge=trainingScorecardBadge_(name);if(badge)card.insertAdjacentHTML('beforeend',badge);
+ });};
+const originalRenderProfileTrainingV2=renderProfile;
+renderProfile=function(){originalRenderProfileTrainingV2();const selected=STATE.selectedAssociate;if(!selected)return; const root=document.querySelector('#pageContent');if(!root)return;
+ const eligible=['FINISH','AR'].includes(String(STATE.activeDept||'').toUpperCase());
+ if(!eligible)return;
+ const active=trainingActiveFor_(selected);const editable=canManageTrainingV2();
+ const panel=document.createElement('section');panel.className='training-control-v2'; panel.innerHTML=`<div class="training-head-v2"><div><h3>🎓 Training Assignment</h3><p>${active.length?active.map(r=>escapeHtml(r.Station)+' · Week '+escapeHtml(r.TrainingWeek)).join(' / '):'No active training assignment'}</p></div>${editable?'<button class="small-action" type="button" id="openTrainingV2">'+(active.length?'Manage Training':'Mark as Training')+'</button>':'<span class="training-pill-v2">LMS / management / supervisor access required</span>'}</div>`;
+ root.prepend(panel);const btn=panel.querySelector('#openTrainingV2');if(btn)btn.addEventListener('click',()=>openTrainingModalV2(selected));};
+/* Training authorization is separate from session-hour adjustment permission.
+   This controls visibility only: the API must authorize every write. */
+function canManageTrainingV2() {
+  const user = getCurrentProductivityUser();
+  if (!user) return false;
+  const features = user.features || {};
+  const role = String(user.role || '').trim().toUpperCase();
+  const subRole = String(user.subRole || '').trim().toUpperCase();
+  const approvedRole = /(?:DIRECTOR|MANAGER|SUPERVISOR|LMS)/.test(role + ' ' + subRole);
+  return approvedRole && (user.canView === true || user.canAdmin === true);
+}
+function openTrainingModalV2(operator){
+ if(!canManageTrainingV2()){alert('Training management requires an LMS, Director, Manager, or Supervisor login.');return;}
+ const active=trainingActiveFor_(operator);const prior=active[0];const initialDept=prior?prior.Department:(STATE.activeDept==='AR'?'AR':'FINISH');
+ const wrap=document.createElement('div');wrap.className='training-modal-backdrop-v2';wrap.id='trainingModalV2';
+ wrap.innerHTML=`<div class="training-dialog-v2" role="dialog" aria-modal="true" aria-labelledby="trainingDialogTitleV2"><div class="training-head-v2"><h3 id="trainingDialogTitleV2">Training · ${escapeHtml(operator)}</h3><button type="button" id="closeTrainingV2">✕</button></div><p>Training applies to one assigned station only. Certified targets remain unchanged.</p><label>Department<select id="trainingDeptV2"><option value="FINISH">Finish</option><option value="AR">AR</option></select></label><label>Station<select id="trainingStationV2"></select></label><label>Effective Start Date<input type="date" id="trainingStartV2" required></label><label>Effective End Date<input type="date" id="trainingEndV2" required></label><label><input type="checkbox" id="trainingAutoV6" checked> Automatically advance training week every 7 days</label><label>Training Week<select id="trainingWeekV2">${Array.from({length:10},(_,i)=>`<option value="${i+1}">Week ${i+1}</option>`).join('')}</select></label><div class="training-target-v2" id="trainingTargetV2"></div><label>Qualification effective date<input type="date" id="trainingQualificationDateV6"></label><label>Supervisor Notes<input type="text" id="trainingNotesV2" maxlength="300" placeholder="Optional notes" /></label><p class="training-error-v2" id="trainingErrorV2"></p><div class="training-modal-actions-v2"><button type="button" class="ghost-action" id="cancelTrainingV2">Cancel</button>${prior?'<button type="button" class="ghost-action" id="certifyTrainingV6">Certified</button><button type="button" class="ghost-action" id="tqTrainingV6">TQ</button>':''}<button type="button" class="small-action" id="saveTrainingV2">Save Assignment</button></div></div>`;
+ document.body.append(wrap);const dept=wrap.querySelector('#trainingDeptV2'), station=wrap.querySelector('#trainingStationV2'),week=wrap.querySelector('#trainingWeekV2');dept.value=initialDept;
+ const startInput=wrap.querySelector('#trainingStartV2');
+ const endInput=wrap.querySelector('#trainingEndV2');
+ const autoInput=wrap.querySelector('#trainingAutoV6');
+ const qualificationInput=wrap.querySelector('#trainingQualificationDateV6');
+ startInput.value=String(STATE.selectedWeekStartDate||STATE.meta.weekStartDate||'').slice(0,10);
+ endInput.value=String(STATE.selectedWeekEndDate||STATE.meta.weekEndDate||'').slice(0,10);
+ if (!startInput.value) startInput.value=new Date().toISOString().slice(0,10);
+ if (!endInput.value) endInput.value=startInput.value;
+ qualificationInput.value=startInput.value;
+ const extendAutoEnd=()=>{if(!autoInput.checked)return; const date=new Date(startInput.value+'T00:00:00Z');if(Number.isNaN(date.getTime()))return;date.setUTCDate(date.getUTCDate()+(11-Number(week.value))*7-1);endInput.value=date.toISOString().slice(0,10);};
+ autoInput.addEventListener('change',extendAutoEnd);startInput.addEventListener('change',()=>{qualificationInput.value=startInput.value;extendAutoEnd();});week.addEventListener('change',extendAutoEnd);
+ const historyMatches=(STATE.trainingHistory||[]).filter(a=>trainingNormalizeLabelV4_(a.OperatorName)===trainingNormalizeLabelV4_(operator)&&trainingNormalizeLabelV4_(a.Department)===trainingNormalizeLabelV4_(initialDept));
+ const periodMatch=historyMatches.find(a=>String(a.StartDate||'').slice(0,10)===startInput.value && String(a.EndDate||'').slice(0,10)===endInput.value);
+ if (periodMatch) week.value=periodMatch.TrainingWeek;
+ if(periodMatch) autoInput.checked=/^(TRUE|YES|1)$/i.test(String(periodMatch.AutoAdvance||''));
+
+ const updateStations=()=>{station.innerHTML=Object.keys(TRAINING_TARGETS_V2[dept.value]).map(s=>`<option value="${s}">${s}</option>`).join('');if(prior&&prior.Department===dept.value)station.value=prior.Station;updateTarget();};
+ const updateTarget=()=>{const value=TRAINING_TARGETS_V2[dept.value][station.value]?.[Number(week.value)-1];wrap.querySelector('#trainingTargetV2').textContent=value===undefined?'Select a valid station':`Week ${week.value} training target: ${value} JPH`};
+ dept.addEventListener('change',updateStations);station.addEventListener('change',updateTarget);week.addEventListener('change',updateTarget);if(prior&&!periodMatch)week.value=prior.TrainingWeek;updateStations();if(!periodMatch)extendAutoEnd();
+ const close=()=>wrap.remove();wrap.querySelector('#closeTrainingV2').onclick=close;wrap.querySelector('#cancelTrainingV2').onclick=close;
+ const save=async(status)=>{const error=wrap.querySelector('#trainingErrorV2');error.textContent='Saving…';const targetButton=wrap.querySelector('#saveTrainingV2');targetButton.disabled=true;
+ try{if(status==='COMPLETED'&&prior){dept.value=prior.Department;updateStations();station.value=prior.Station;week.value=prior.TrainingWeek;}
+ if(!startInput.value||!endInput.value||startInput.value>endInput.value)throw new Error('Select a valid training start and end date.');
+ const r=await productivityJsonpRequest({action:'saveTrainingAssignment',username:getCurrentProductivityUsername(),operator,department:dept.value,station:station.value,week:week.value,status,startDate:startInput.value,endDate:endInput.value,autoAdvance:autoInput.checked?'TRUE':'FALSE',notes:wrap.querySelector('#trainingNotesV2').value});if(!r.ok)throw new Error(r.message||'Could not save');await refreshTrainingRosterV2(false);close();renderEverything();}
+ catch(e){error.textContent=e.message;targetButton.disabled=false;}};
+ wrap.querySelector('#saveTrainingV2').onclick=()=>save('ACTIVE');
+ const certify=async(qualification)=>{const error=wrap.querySelector('#trainingErrorV2');error.textContent='Saving qualification…';
+  try {if(!prior)throw new Error('Save the training assignment before qualification.');
+   if(!qualificationInput.value)throw new Error('Select the qualification effective date.');
+   const r=await productivityJsonpRequest({action:'setTrainingQualification',username:getCurrentProductivityUsername(),operator,
+     department:prior.Department,station:prior.Station,qualification,effectiveDate:qualificationInput.value,
+     notes:wrap.querySelector('#trainingNotesV2').value});
+   if(!r.ok)throw new Error(r.message||'Could not save qualification');
+   await refreshTrainingRosterV2(false);close();renderEverything();
+  }catch(e){error.textContent=e.message;}};
+ const certified=wrap.querySelector('#certifyTrainingV6');if(certified)certified.onclick=()=>certify('CERTIFIED');
+ const tq=wrap.querySelector('#tqTrainingV6');if(tq)tq.onclick=()=>certify('TQ');
+}
+// Training loading is separate and non-blocking. Core scorecards remain usable if training API is not deployed.
+document.addEventListener('DOMContentLoaded',()=>{refreshTrainingRosterV2(false).then(()=>{if(STATE.trainingLoaded)renderEverything()});});
+
+
+/* =============================================================
+   SCORECARDS V3 — grid + slide-out detail. View layer only.
+   The existing snapshot calculations and training API are reused.
+   ============================================================= */
+const SCORE_V3={filter:'ALL',query:'',sort:'PRODUCTIVITY',open:'',tab:'overview'};
+function scoreV3Initials(name){return String(getAssociateDisplayName(name)||name).split(/[\s,]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?';}
+function scoreV3Status(s){const p=Number(s.productivityPercent);return !(s.workProduced>0)||!Number.isFinite(p)?'gray':p>=1?'green':p>=.9?'amber':'red';}
+function scoreV3Group(s){if((s.rows||[]).some(r=>!!r.TrainingTargetV4))return 'TRAINING';const st=scoreV3Status(s);return st==='gray'?'NO TARGET':st==='green'?'GREEN':st==='amber'?'AMBER':'RED';}
+function scoreV3Rows(){const all=buildAssociateSummaries();const type=String(STATE.scorecardEmployeeType||'FTE').toUpperCase();return all.filter(s=>getAssociateEmployeeType(s)===type);}
+function scoreV3Filtered(){let rows=scoreV3Rows(); if(SCORE_V3.filter!=='ALL')rows=rows.filter(s=>scoreV3Group(s)===SCORE_V3.filter);if(SCORE_V3.query)rows=rows.filter(s=>[getAssociateDisplayName(s),s.associate,s.departments,...(s.areas||[]).map(a=>a.StationGroup||a.AccessPoint||'')].join(' ').toLowerCase().includes(SCORE_V3.query.toLowerCase()));return rows.sort((a,b)=>SCORE_V3.sort==='NAME'?getAssociateDisplayName(a).localeCompare(getAssociateDisplayName(b)):SCORE_V3.sort==='JOBS'?b.totalJobs-a.totalJobs:SCORE_V3.sort==='HOURS'?b.totalHours-a.totalHours:b.productivityPercent-a.productivityPercent);}
+function scoreV3SetFilter(f){SCORE_V3.filter=f;renderScorecardsPage();}
+function scoreV3Search(value){SCORE_V3.query=value;renderScorecardsPage();const q=document.querySelector('#scoreV3Search');if(q){q.focus();q.setSelectionRange(value.length,value.length);}}
+function scoreV3SetSort(v){SCORE_V3.sort=v;renderScorecardsPage();}
+function scoreV3Select(name){SCORE_V3.open=name;SCORE_V3.tab='overview';scoreV3UpdatePanel();}
+function scoreV3Close(){SCORE_V3.open='';scoreV3UpdatePanel();}
+function scoreV3Tab(v){SCORE_V3.tab=v;scoreV3UpdatePanel();}
+function scoreV3StatusCount(rows,f){return rows.filter(r=>scoreV3Group(r)===f).length;}
+function scoreV3SafePct(s){return s.workProduced>0?formatPercent(s.productivityPercent):'N/A';}
+function scoreV3MiniBars(s){const keys=['H06','H07','H08','H09','H10','H11','H12','H13','H14','H15','H16','H17','H18','H19','H20'];const values=keys.map(k=>(s.rows||[]).reduce((a,r)=>a+Number(r[k]||0),0));const top=Math.max(1,...values);return `<div class="score-v3-spark" aria-hidden="true">${values.map(v=>`<i style="height:${Math.max(8,Math.round(v/top*100))}%"></i>`).join('')}</div>`;}
+renderScorecardsPage=function(){const root=document.querySelector('#pageContent');if(!root)return;const all=scoreV3Rows();const visible=scoreV3Filtered();const full=buildAssociateSummaries();const counts={FTE:0,TEMP:0,MACHINE:0};full.forEach(s=>{const t=getAssociateEmployeeType(s);if(t in counts)counts[t]++;});const allJobs=all.reduce((n,s)=>n+s.totalJobs,0);const hours=all.reduce((n,s)=>n+s.totalHours,0);const produced=all.reduce((n,s)=>n+s.workProduced,0);const avg=hours&&produced?formatPercent(produced/hours):'N/A';
+root.innerHTML=`<section class="score-v3-page"><div class="score-v3-title"><div><span class="v2-kicker">PRODUCTIVITY HUB 2.0</span><h2>ASSOCIATE SCORECARDS</h2><p>${escapeHtml(String(STATE.activeDept||''))} · ${escapeHtml(String(STATE.activeShift||''))} · ${escapeHtml(String(STATE.selectedFiscalWeek||STATE.meta.fiscalWeek||''))}</p></div><div class="score-v3-topstats"><div><strong>${formatNumber(all.length)}</strong><small>Associates</small></div><div><strong>${formatNumber(allJobs)}</strong><small>Jobs</small></div><div><strong>${avg}</strong><small>Weighted Productivity</small></div></div></div>
+<div class="score-v3-types">${[['FTE','Full Time'],['TEMP','Temps'],['MACHINE','Machine']].map(([t,l])=>`<button type="button" class="score-v3-type ${STATE.scorecardEmployeeType===t?'on':''}" onclick="setScorecardEmployeeType('${t}')"><span>${l}</span><strong>${counts[t]}</strong></button>`).join('')}</div>
+<div class="score-v3-toolbar"><div class="score-v3-pills">${[['ALL','All'],['GREEN','On Target'],['AMBER','Watch'],['RED','Warning'],['NO TARGET','No Target'],['TRAINING','Training']].map(([k,l])=>`<button type="button" class="score-v3-pill ${SCORE_V3.filter===k?'active':''} ${k.toLowerCase().replace(' ','-')}" onclick="scoreV3SetFilter('${k}')">${l} <b>${k==='ALL'?all.length:scoreV3StatusCount(all,k)}</b></button>`).join('')}</div><div class="score-v3-tools"><input id="scoreV3Search" aria-label="Search associates" placeholder="Search associates or stations" value="${escapeHtml(SCORE_V3.query)}" oninput="scoreV3Search(this.value)"><select aria-label="Sort scorecards" onchange="scoreV3SetSort(this.value)">${[['PRODUCTIVITY','Productivity'],['NAME','Name'],['JOBS','Jobs'],['HOURS','Hours']].map(([v,l])=>`<option value="${v}" ${SCORE_V3.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
+<div class="score-v3-layout"><div class="score-v3-grid ${SCORE_V3.open?'panel-open':''}">${visible.length?visible.map(s=>{const group=scoreV3Group(s),status=scoreV3Status(s),train=(s.rows||[]).some(r=>!!r.TrainingTargetV4),area=(s.areas||[]).map(a=>a.StationGroup||a.AccessPoint||'').filter(Boolean)[0]||s.departments||'—';return `<button type="button" class="score-v3-card ${train?'training':status} ${SCORE_V3.open===s.associate?'selected':''}" data-operator="${escapeHtml(s.associate)}"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><span class="score-v3-card-title"><b>${escapeHtml(getAssociateDisplayName(s))}</b><small>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</small><em>${train?'🎓 TRAINING':status==='green'?'● ON TARGET':status==='amber'?'● WATCH':status==='red'?'● WARNING':'● NO TARGET'}</em></span><span class="score-v3-value">${scoreV3SafePct(s)}</span>${scoreV3MiniBars(s)}<span class="score-v3-detail"><span>◷ ${formatDecimal(s.totalHours)} hrs</span><span>▣ ${formatNumber(s.totalJobs)} jobs</span><span>◈ ${formatDecimal(s.workProduced)} produced</span></span><span class="score-v3-tags"><small>${escapeHtml(area)}</small>${train?`<small>Week ${escapeHtml((s.rows||[]).find(r=>r.TrainingWeekV4)?.TrainingWeekV4||'—')}</small>`:''}</span></button>`;}).join(''):'<p class="score-v3-empty">No matching associates. Try changing filters.</p>'}</div><aside id="scoreV3Panel" class="score-v3-panel" aria-label="Associate details"></aside></div></section>`;
+root.querySelectorAll('.score-v3-card').forEach(card=>card.addEventListener('click',()=>scoreV3Select(card.dataset.operator)));scoreV3UpdatePanel();};
+function scoreV3UpdatePanel(){const panel=document.querySelector('#scoreV3Panel');if(!panel)return;const page=document.querySelector('.score-v3-grid');if(page)page.classList.toggle('panel-open',!!SCORE_V3.open);if(!SCORE_V3.open){panel.classList.remove('open');panel.innerHTML='';return;}const s=scoreV3Rows().find(x=>x.associate===SCORE_V3.open);if(!s){SCORE_V3.open='';panel.classList.remove('open');return;}const datesInView=(s.rows||[]).map(r=>formatDateKey(r.WorkDate)).filter(Boolean);
+const assignments=(STATE.trainingHistory||[]).filter(a=>trainingNormalizeLabelV4_(a.OperatorName)===trainingNormalizeLabelV4_(s.associate)&&datesInView.some(d=>d>=String(a.StartDate||'').slice(0,10)&&d<=String(a.EndDate||'').slice(0,10)));
+const trained=(s.rows||[]).some(r=>!!r.TrainingTargetV4);const tabs=[['overview','Overview'],['training','Training'],['daily','Daily History'],['stations','Station Breakdown']];let body='';
+if(SCORE_V3.tab==='overview'){body=`<div class="score-v3-facts"><div><small>Certified Productivity</small><strong>${scoreV3SafePct(s)}</strong></div><div><small>Actual Avg JPH</small><strong>${formatDecimal(s.avgJph)}</strong></div><div><small>Session Hours</small><strong>${formatDecimal(s.totalHours)}</strong></div><div><small>Total Jobs</small><strong>${formatNumber(s.totalJobs)}</strong></div></div><section class="score-v3-panel-section"><h4>Assigned areas</h4>${(s.areas||[]).map(a=>`<div class="score-v3-listrow"><span>${escapeHtml(a.StationGroup||a.AccessPoint||a.stationGroup||'Area')}</span><span>${formatNumber(a.totalJobs||a.TotalJobScan||0)} jobs</span></div>`).join('')||'<p>No station breakdown.</p>'}</section>`;}
+if(SCORE_V3.tab==='training'){body=`<section class="score-v3-panel-section"><h4>Training assignments · Finish / AR</h4>${assignments.length?assignments.map(a=>{const dept=String(a.Department||'').toUpperCase(),week=Number(a.TrainingWeek),target=TRAINING_TARGETS_V2[dept]?.[a.Station]?.[week-1];return `<div class="score-v3-trainingrow"><strong>${escapeHtml(a.Station)}</strong><span>${escapeHtml(a.Department)} · Week ${week} of 10</span><b>${target===undefined?'Target unavailable':target+' training JPH'}</b><span>${escapeHtml(a.StartDate||'')} to ${escapeHtml(a.EndDate||'')}</span></div>`;}).join(''):'<p>No active training assignments.</p>'}<p>Training targets and certified targets are tracked separately. The displayed productivity uses the assigned training target for matching station work; certified targets in the source remain unchanged.</p>${(['FINISH','AR','PROD_ALL'].includes(String(STATE.activeDept).toUpperCase())&&canManageTrainingV2())?`<button class="score-v3-primary" type="button" id="scoreV3ManageTraining">${trained?'Manage Training':'Mark as Training'}</button>`:'<p>Training updates require LMS, Director, Manager, or Supervisor access.</p>'}</section>`;}
+if(SCORE_V3.tab==='daily'){const dates=new Map();(s.rows||[]).forEach(r=>{const d=String(r.WorkDate||'Unknown').slice(0,10);if(!dates.has(d))dates.set(d,{jobs:0,hours:0});const item=dates.get(d);item.jobs+=Number(r.TotalJobScan||0);item.hours+=Number(r.SessionTimeHours||0)});body=`<section class="score-v3-panel-section"><h4>Daily output · selected fiscal week</h4>${[...dates.entries()].sort((a,b)=>b[0].localeCompare(a[0])).map(([d,r])=>`<div class="score-v3-listrow"><span>${escapeHtml(d)}</span><span>${formatNumber(r.jobs)} jobs · ${formatDecimal(r.hours)} hrs</span></div>`).join('')||'<p>No daily records.</p>'}<p>These are recorded scans and hours, not training-adjusted percentages.</p></section>`;}
+if(SCORE_V3.tab==='stations'){body=`<section class="score-v3-panel-section"><h4>Source station rows</h4><div class="score-v3-stations"><table><thead><tr><th>Station</th><th>Jobs</th><th>Hours</th><th>Target JPH</th></tr></thead><tbody>${(s.rows||[]).map(r=>`<tr><td>${escapeHtml(r.StationGroup||r.AccessPoint||'—')}</td><td>${formatNumber(r.TotalJobScan||0)}</td><td>${formatDecimal(r.SessionTimeHours||0)}</td><td>${formatDecimal(r.TargetAvgPerHour||0)}</td></tr>`).join('')}</tbody></table></div><p>Source snapshot detail is read-only. Use the existing full profile for adjustments.</p></section>`;}
+panel.classList.add('open');panel.innerHTML=`<div class="score-v3-panel-head"><button type="button" id="scoreV3Close" aria-label="Close associate panel">✕</button><div class="score-v3-panel-ident"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><div><h3>${escapeHtml(getAssociateDisplayName(s))}</h3><p>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</p></div></div>${trained?'<span class="training-pill-v2">🎓 TRAINING</span>':''}</div><nav class="score-v3-tabs">${tabs.map(([k,l])=>`<button type="button" class="${SCORE_V3.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('')}</nav><div class="score-v3-panel-body">${body}</div><div class="score-v3-panel-footer"><button type="button" id="scoreV3OpenFull">Open Full Scorecard ↗</button><button type="button" id="scoreV3Review">Review Associate ↗</button></div>`;
+panel.querySelector('#scoreV3Close').onclick=scoreV3Close;panel.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>scoreV3Tab(b.dataset.tab));const manage=panel.querySelector('#scoreV3ManageTraining');if(manage)manage.onclick=()=>openTrainingModalV2(s.associate);panel.querySelector('#scoreV3OpenFull').onclick=()=>selectAssociateFromScoreboard(s.associate);const review=panel.querySelector('#scoreV3Review');if(review)review.onclick=()=>{SCORE_V3.tab='stations';scoreV3UpdatePanel();};
+}
