@@ -1397,7 +1397,8 @@ function applyVisibilityRules() {
   Object.entries(deptNavMap).forEach(([deptKey, tabId]) => {
     const navBtn  = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
     const section = document.getElementById(tabId);
-    const hasAccess = departments[deptKey] === true;
+    const hasAccess = departments[deptKey] === true ||
+      (deptKey === "Training" && departments.PPC_Document_Control === true && features.PPC_Document_Control_ViewHub === true);
 
     if (!hasAccess) {
       if (navBtn)  navBtn.style.display = "none";
@@ -1446,7 +1447,8 @@ const featureCardMap = {
   "Inventory_IncomingJobs":        "#incoming-card",
   "Inventory_PickingWIP":          "#pickwip-card",
 
-  "Training_TrainingPortal":       "#facility-breakage-card"
+  "Training_TrainingPortal":       "#facility-breakage-card",
+  "PPC_Document_Control_ViewHub":   "#ppc-document-control-card"
 };
 
   // Hide all feature cards first
@@ -1456,7 +1458,10 @@ const featureCardMap = {
 
   // Show only permitted cards
   Object.entries(featureCardMap).forEach(([featureKey, sel]) => {
-    if (features[featureKey] === true) {
+    const allowed = featureKey === "PPC_Document_Control_ViewHub"
+      ? departments.PPC_Document_Control === true && features[featureKey] === true
+      : features[featureKey] === true;
+    if (allowed) {
       document.querySelectorAll(sel).forEach(el => el.style.display = "flex");
     }
   });
@@ -1538,6 +1543,29 @@ function logout() {
 function setText(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
+}
+
+const PPC_WORKSPACE_APP_URL = "https://script.google.com/a/macros/zennioptical.com/s/AKfycbybKUJ9OP708EbnplRJVrGPy9aenOEz07ZOWUEPJ8PrVCQprd6X2dFTffOxxpkXsqIiFg/exec";
+
+function openPpcDocumentControl() {
+  // UI permission only. PPC Apps Script independently verifies Workspace identity and PPC_USERS.
+  let deps = {}, feats = {};
+  try {
+    deps = JSON.parse(sessionStorage.getItem("lms_departments") || "null") || {};
+    feats = JSON.parse(sessionStorage.getItem("lms_features") || "null") || {};
+    if (!Object.keys(deps).length && !Object.keys(feats).length) {
+      const vis = JSON.parse(sessionStorage.getItem("lms_visibility") || "{}");
+      deps = vis.departments || {};
+      feats = vis.features || {};
+    }
+  } catch (e) { console.warn("Invalid LMS visibility session", e); }
+  if (sessionStorage.getItem("lms_logged_in") !== "true" ||
+      deps.PPC_Document_Control !== true || feats.PPC_Document_Control_ViewHub !== true) {
+    alert("PPC access is not enabled for your LMS account.");
+    return;
+  }
+  // External Workspace-app URL; opens in a separate tab under Google's own auth enforcement.
+  window.open(PPC_WORKSPACE_APP_URL, "_blank", "noopener,noreferrer");
 }
 
 function openPage(page) {
