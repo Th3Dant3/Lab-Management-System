@@ -5,6 +5,9 @@
    your role. Every value that comes from the sheet is inserted with textContent, never as HTML. */
 const LMS_URL = "https://th3dant3.github.io/Lab-Management-System/index.html";
 const PPC_SECURE_URL = "https://script.google.com/a/macros/zennioptical.com/s/AKfycbybKUJ9OP708EbnplRJVrGPy9aenOEz07ZOWUEPJ8PrVCQprd6X2dFTffOxxpkXsqIiFg/exec";
+const EMBED = true;                 // true: the dashboard opens INSIDE this page (the address bar stays on github.io). false: it opens in its own tab, as before.
+const EMBED_TIMEOUT_MS = 15000;     // if nothing reports back by then, show how to open it in a new tab
+const PARENT_ORIGIN = "https://th3dant3.github.io";   // the only website allowed to frame the secure app
 const SELF_SRC = (document.currentScript && document.currentScript.src) || "";
 const ASSET_BASE = SELF_SRC.replace(/[^\/]*$/, "");
 const ASSET_NAME = (SELF_SRC.split("/").pop().split("?")[0] || "PPC.js").replace(/\.js$/i, "");   // PPC: the layout lives in PPC.html next to this file
@@ -368,12 +371,27 @@ function launcherMode() {
   const problem = lmsProblem();
   if (problem) { st.textContent = problem; st.classList.add('err'); return; }
   open.disabled = false; st.textContent = 'LMS navigation permission confirmed. Google Workspace will separately verify PPC_USERS access.';
-  open.addEventListener('click', () => { if (!open.disabled) window.location.assign(PPC_SECURE_URL); });
+  open.addEventListener('click', () => { if (open.disabled) return; if (EMBED) showEmbed(); else window.location.assign(PPC_SECURE_URL); });
+}
+const GOOGLE_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*(google\.com|googleusercontent\.com)$/;
+function showEmbed() {
+  $('#launcher').hidden = true;
+  const hint = h('span', { class: 'embedhint', text: 'Loading the secure PPC application...' });
+  const frame = h('iframe', { id: 'ppcFrame', title: 'PPC command center', src: PPC_SECURE_URL, referrerpolicy: 'no-referrer' });
+  const bar = h('div', { class: 'embedbar' }, [h('b', { text: 'PPC command center' }), hint, h('span', { class: 'grow' }), h('a', { href: PPC_SECURE_URL, target: '_blank', rel: 'noopener' }, 'Open in a new tab'), h('a', { href: 'index.html' }, 'Return to LMS Command Center')]);
+  document.body.append(h('div', { id: 'embedWrap', class: 'embedwrap' }, [bar, frame]));
+  const timer = setTimeout(() => { hint.textContent = 'This is taking a while. If nothing appears, your browser may be blocking Google sign-in inside this page. Use "Open in a new tab".'; hint.classList.add('warn'); }, EMBED_TIMEOUT_MS);
+  window.addEventListener('message', e => { if (GOOGLE_ORIGIN.test(e.origin) && e.data && e.data.ppc === 'ready') { clearTimeout(timer); hint.textContent = ''; } });
+}
+/* The secure app can be framed by Google (its own wrapper) and by your LMS site, and by nobody else. If any other site frames it, it refuses to draw anything. */
+function framedByStranger() {
+  try { const ao = window.location.ancestorOrigins; if (!ao) return false; for (let i = 0; i < ao.length; i++) { if (ao[i] !== PARENT_ORIGIN && !GOOGLE_ORIGIN.test(ao[i])) return true; } return false; } catch (e) { return false; }
 }
 
 /* ---------- start ---------- */
 async function boot() {
   if (!(window.google && google.script && google.script.run)) { launcherMode(); return; }   // not inside Google's secure app: act as the launcher
+  if (framedByStranger()) { document.body.textContent = 'This page can only be shown inside the Zenni LMS.'; return; }
   const bootNote = document.getElementById('boot'); if (bootNote) bootNote.remove();
   try {
     const res = await fetch(ASSET_BASE + ASSET_NAME + '.html', { credentials: 'omit' });
@@ -385,5 +403,6 @@ async function boot() {
   $$('a[data-lms]').forEach(a => { a.href = LMS_URL; a.target = '_top'; });
   $('#retry').addEventListener('click', loadApp);
   await loadApp();
+  try { window.top.postMessage({ ppc: 'ready' }, '*'); } catch (e) { /* nothing to tell */ }   // carries no data; the launcher only listens to Google origins
 }
 boot();
