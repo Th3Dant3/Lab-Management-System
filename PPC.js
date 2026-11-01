@@ -79,6 +79,56 @@ function table(heads, rows, empty) {
 function td(content, cls) { return h('td', { class: cls }, content); }
 function openRows() { return D.register.filter(r => r.status !== 'Published'); }
 function maxAge() { const a = openRows().concat(D.needsNumber).map(r => daysSince(r.submitted)).filter(x => x !== null); return a.length ? Math.max.apply(null, a) : 0; }
+const EDIT_STAGES = ['Request Submitted', 'Proposal Review', 'Testing', 'WI Draft', 'Approval / Routing', 'Published'];
+/* Edit one numbered PPC. Only status, stage, due date, blocker and the two notes can change here, and the server enforces that.
+   "In Routing" and "Published" are offered only if the PPC is already there, because they have their own rules and buttons. */
+function openEdit(r) {
+  if (!D.can.edit) return;
+  const invalid = !STATUS_COLS.some(c => c.status === r.status);
+  const stSel = h('select', { id: 'edStatus' }, [invalid ? h('option', { value: '', text: 'Choose a status' }) : null].concat(STATUS_COLS.map(c => h('option', { value: c.status, text: c.title, disabled: c.status === 'Published' || (c.status === 'In Routing' && r.status !== 'In Routing') }))));
+  stSel.value = invalid ? '' : r.status;
+  const stages = EDIT_STAGES.slice(); if (stages.indexOf(r.stage || '') < 0) stages.unshift(r.stage || '');
+  const sgSel = h('select', { id: 'edStage' }, stages.map(s => h('option', { value: s, text: s || 'Not set', disabled: s === 'Published' && r.stage !== 'Published' })));
+  sgSel.value = r.stage || '';
+  const due = h('input', { id: 'edDue', type: 'date', value: r.due || '' });
+  const blocker = h('input', { id: 'edBlocker', type: 'text', maxlength: '600', value: r.blocker || '' });
+  const pub = h('textarea', { id: 'edPublic', maxlength: '1500' }); pub.value = r.publicNotes || '';
+  const internal = h('textarea', { id: 'edInternal', maxlength: '1500' }); internal.value = r.internalNotes || '';
+  const msg = h('p', { class: 'editmsg', role: 'status' });
+  const setMsg = (t, err) => { msg.textContent = t; msg.classList.toggle('err', !!err); };
+  stSel.addEventListener('change', () => {
+    const s = stSel.value; let d = ({ 'Not Started': 'Request Submitted', 'Ready for Signature': 'Approval / Routing', 'In Routing': 'Approval / Routing' })[s];
+    if (s === 'Rough Draft in Progress') d = ['Proposal Review', 'Testing', 'WI Draft'].indexOf(sgSel.value) >= 0 ? sgSel.value : 'WI Draft';
+    if (d) sgSel.value = d;
+  });
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const save = btn('Save changes', { primary: true, onclick: async () => {
+    const ch = {};
+    if (invalid && !stSel.value) { setMsg('Choose a status for this PPC.', true); return; }
+    if (stSel.value && stSel.value !== r.status) ch.status = stSel.value;
+    if (sgSel.value !== (r.stage || '')) ch.stage = sgSel.value;
+    if (due.value !== (r.due || '')) ch.due = due.value;
+    if (blocker.value !== (r.blocker || '')) ch.blocker = blocker.value;
+    if (pub.value !== (r.publicNotes || '')) ch.publicNotes = pub.value;
+    if (internal.value !== (r.internalNotes || '')) ch.internalNotes = internal.value;
+    if (!Object.keys(ch).length) { setMsg('Nothing was changed.', true); return; }
+    save.disabled = true; setMsg('Saving...');
+    try {
+      await api('updatePpc', { number: r.number, changes: ch, expect: { status: r.status, stage: r.stage } });
+      FLASH = 'Saved ' + r.number + (ch.status ? '. Status is now ' + ch.status + '.' : '.'); close(); await refresh();
+    } catch (e) { setMsg(e.code === 'WRITES_OFF' ? 'Saving from this page is switched off for now. Nothing was saved.' : e.message, true); save.disabled = false; }
+  } });
+  const field = (label, el, note) => h('label', null, [label, el, note ? h('small', { text: note }) : null]);
+  const ov = h('div', { class: 'wz-overlay editov', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Edit ' + r.number }, h('div', { class: 'editbox' }, [
+    h('h2', { text: r.number }), h('p', { class: 'sub', text: (r.title || 'Title not recorded') + (r.wi ? ' (' + r.wi + ')' : '') }),
+    field('Status', stSel, 'In routing and Published are set by their own buttons, which are not switched on yet.'), field('Stage', sgSel),
+    field('Due date', due), field('Blocker or next action', blocker),
+    field('Public update (requesters see this, and it is emailed when the PPC is routed or published)', pub), field('Internal notes (staff only)', internal),
+    msg, h('div', { class: 'actions' }, [save, btn('Cancel', { quiet: true, onclick: close })])]));
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', onKey); document.body.append(ov); stSel.focus();
+}
 const NOT_BUILT = 'Not switched on yet. This button needs a backend step that is built after sign-in is confirmed.';
 
 /* ---------- staff views ---------- */
@@ -102,12 +152,13 @@ function vOverview() {
       const d = daysSince(r.submitted), kids = [h('p', { class: 'num', text: r.number }), h('p', { class: 'ttl', text: r.title || 'Title not recorded' }), h('p', { class: 'who', text: (r.requestor || 'Requester not recorded') + (r.wi ? ', ' + r.wi : '') })];
       if (r.status === 'In Routing' && r.routing) kids.push(h('p', { class: 'sub', text: 'In routing since ' + fmtDate(r.routing) + ' (' + daysSince(r.routing) + ' days)' })); else if (r.stage) kids.push(h('p', { class: 'sub', text: r.stage }));
       if (d !== null) { kids.push(ageBar(d, maxD)); kids.push(h('p', { class: 'days', text: d + ' days open' })); }
+      if (D.can.edit) kids.push(h('button', { type: 'button', class: 'tokedit', onclick: () => openEdit(r) }, 'Edit'));
       return h('li', { class: 'tok ' + c.cls }, kids);
     })) : h('p', { class: 'none', text: c.status === 'Not Started' ? 'No PPC is waiting to start.' : 'No PPC is waiting for management signatures.' })]);
   });
   return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: 'PPC command center' }),
     h('p', { class: 'lead' }, [h('strong', { text: pl(open.length + need.length, 'request') + (open.length + need.length === 1 ? ' is' : ' are') + ' open. ' }), open.length + ' ' + (open.length === 1 ? 'has' : 'have') + ' a PPC number and ' + need.length + ' ' + (need.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (maxD ? ' The oldest open request has been waiting ' + maxD + ' days.' : '')]),
-    odd.length ? h('div', { class: 'banner' }, 'Fix in the sheet: ' + pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => r.number + ' says "' + r.status + '"').join('; ') + '). ' + (odd.length === 1 ? 'It is' : 'They are') + ' not shown on the board.') : null,
+    odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => r.number + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + r.number, { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
     att, h('section', null, [h('h2', { text: 'Where the numbered PPCs are' }), h('p', { class: 'hint', text: 'Days open count from the submitted date in the sheet.' }), h('div', { class: 'flow' }, cols)])]);
 }
 function vMissing() {
@@ -140,7 +191,7 @@ function mailBox() {
 }
 function vRouting() {
   const routing = openRows().filter(r => r.status === 'In Routing'); if (!mailSel && routing.length) mailSel = routing[0].number;
-  const rows = routing.map(r => { const d = daysSince(r.routing); return h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td([r.requestor || '', h('br'), h('span', { class: 'mut', text: r.requestorEmail || 'no email on file' })]), td(r.routing ? [fmtDate(r.routing), h('br'), h('span', { class: 'mut', text: d + ' days' })] : 'No routing date'), td([btn('Preview email', { quiet: true, onclick: () => { mailSel = r.number; renderMail(); } }), ' ', btn('Mark published', { disabled: true, title: NOT_BUILT })], 'act')]); });
+  const rows = routing.map(r => { const d = daysSince(r.routing); return h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td([r.requestor || '', h('br'), h('span', { class: 'mut', text: r.requestorEmail || 'no email on file' })]), td(r.routing ? [fmtDate(r.routing), h('br'), h('span', { class: 'mut', text: d + ' days' })] : 'No routing date'), td([btn('Preview email', { quiet: true, onclick: () => { mailSel = r.number; renderMail(); } }), ' ', D.can.edit ? btn('Edit', { quiet: true, onclick: () => openEdit(r) }) : null, ' ', btn('Mark published', { disabled: true, title: NOT_BUILT })], 'act')]); });
   const seg = (ev, label) => h('button', { type: 'button', class: 'seg' + (mailEv === ev ? ' on' : ''), 'aria-pressed': String(mailEv === ev), onclick: () => { mailEv = ev; renderMail(); } }, label);
   return h('div', { class: 'view', id: 'v-routing', hidden: true }, [h('h1', { text: 'Routing and emails' }),
     h('p', { class: 'lead' }, [h('strong', { text: pl(routing.length, 'PPC') + (routing.length === 1 ? ' is' : ' are') + ' in routing.' }), ' Marking a PPC routed or published emails the requester.']),
@@ -202,8 +253,11 @@ function show(id) {
   $$('#nav a').forEach(a => { if (a.dataset.view === id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   try { history.replaceState(null, '', '#' + id); } catch (e) { /* the page lives in a sandboxed frame; the address bar is not ours */ } window.scrollTo(0, 0);
 }
+let FLASH = '';
 function banner(el) {
-  el.hidden = D.writes; if (!D.writes) el.textContent = 'Read-only for now. You can look around and fill in the forms, but nothing is saved from this page yet.';
+  el.classList.toggle('ok', !!FLASH);
+  if (FLASH) { el.hidden = false; el.textContent = FLASH; FLASH = ''; return; }
+  el.hidden = D.writes; if (!D.writes) el.textContent = 'Read-only for now. You can look around and fill in the forms, but nothing is saved from this page yet, including edits.';
 }
 function renderStaff() {
   $('#nav').replaceChildren(...VIEWS.map(v => h('a', { href: '#' + v[0], 'data-view': v[0], onclick: e => { e.preventDefault(); show(v[0]); } }, [v[1], v[0] === 'missing' && D.needsNumber.length ? h('span', { class: 'b', text: String(D.needsNumber.length) }) : null])));
