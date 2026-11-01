@@ -1,1 +1,83 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PPC Document Control | Zenni LMS</title><link rel="stylesheet" href="PPC.css"></head><body><div id="gate" class="gate">Verifying LMS session…</div><div id="app" hidden><header class="top"><div class="brand"><span class="mark">Z</span><div><b>ZENNI USA</b><small>LAB MANAGEMENT / DOCUMENT CONTROL</small></div></div><div class="actions"><span id="user"></span><a href="index.html">Return to LMS</a></div></header><div class="layout"><aside class="sidebar"><strong>PPC COMMAND CENTER</strong><button class="nav active" data-page="dashboard">▦ Dashboard</button><button class="nav" data-page="requests">▤ PPC Requests</button><button class="nav" data-page="testing">◷ PPC Tests</button><button class="nav" data-page="approvals">☑ Approvals</button><div class="bottom">GITHUB-NATIVE TEST V22</div></aside><main><div class="head"><div><small>OPERATIONS / DOCUMENT CONTROL</small><h1 id="title">Dashboard Overview</h1></div><button id="refresh">↻ Refresh live data</button></div><div id="notice" class="notice" role="status">Connecting to Workspace-protected PPC API…</div><div id="diagnostic" class="diagnostic" hidden><h3>Connection diagnosis</h3><p id="diagText"></p><a id="existing" target="_blank" rel="noopener noreferrer">Open existing secure PPC app</a></div><section id="dashboard"><div class="metrics" id="metrics"></div><div class="twocol"><article class="panel"><h3>Request status</h3><div id="statuses"></div></article><article class="panel"><h3>Deadline health</h3><div id="deadlines"></div></article></div><article class="panel"><h3>Priority queue</h3><div id="priority"></div></article></section><section id="requests" hidden><article class="panel"><div class="filters"><input id="search" placeholder="Search PPC, title, WI or requestor"><select id="status"><option value="">All statuses</option><option>Not Started</option><option>Rough Draft in Progress</option><option>Ready for Signature</option><option>In Routing</option><option>Published</option></select></div><div id="requestsTable"></div></article></section><section id="testing" hidden><article class="panel"><h3>Requests with test end dates</h3><div id="testTable"></div></article></section><section id="approvals" hidden><article class="panel"><h3>Approvals / routing overview</h3><div id="approvalTable"></div></article></section></main></div></div><script defer src="PPC.js"></script></body></html>
+<section id="gate" class="gate"><div class="gatecard">
+<div class="gbrand"><b>Zenni USA</b><span>Lab management, document control</span></div>
+<h1>PPC command center</h1>
+<div id="gateStatus" class="gstatus" role="status">Loading your PPC requests...</div>
+<button type="button" class="btn" id="retry" hidden>Try again</button>
+<p class="gfoot"><a href="#" data-lms>Return to LMS Command Center</a></p>
+</div></section>
+
+<div id="shellStaff" class="app" hidden>
+<aside class="rail"><div class="brand"><b>Document control</b><span>Staff console</span></div><nav id="nav" aria-label="Staff sections"></nav>
+<div class="stamp"><span id="who"></span><a href="#" data-lms>Return to LMS</a></div></aside>
+<main><div class="top" id="topbar"></div><div class="banner" id="banner" role="status" hidden></div><div id="views"></div></main></div>
+
+<div id="shellReq" class="portal" hidden>
+<header class="pbar"><div><b>Document control requests</b><span id="rwho"></span></div><div class="pright"><span id="rtop"></span><a href="#" data-lms>Return to LMS</a></div></header>
+<div class="banner" id="rbanner" role="status" hidden></div><div id="rview"></div></div>
+
+
+<div id="printArea" aria-hidden="true"></div>
+<div class="wz-overlay" id="rqOverlay" hidden><div class="wz" role="dialog" aria-modal="true" aria-labelledby="rqHead" data-step="1">
+<div class="wz-bar"><h2 id="rqHead">New PPC Request · SOP-06-01</h2><div><button class="wz-white" type="button" data-print>Print / PDF</button><button class="wz-x" type="button" aria-label="Close" data-close>×</button></div></div>
+<div class="wz-tabs"><button type="button" data-go="1">1 · PPC Setup</button><button type="button" data-go="2">2 · Fill Request Form</button><button type="button" data-go="3">3 · Review &amp; Submit</button></div>
+<div class="wz-body">
+<section class="wz-card" data-panel="1"><div class="wz-ch"><b>1 · PPC Setup</b><span>Department · WI · Number</span></div><div class="wz-f">
+<label>Requesting Department<select id="rqDept"><option value="">Choose department</option><option value="SUR">Surface — SUR</option><option value="FIN">Finish — FIN</option><option value="AR">AR — AR</option><option value="INV">Inventory — INV</option><option value="DST">Distribution — DST</option><option value="CS">Customer Service — CS</option><option value="GEN">Lab Wide — GEN</option><option value="MTC">Maintenance — MTC</option></select></label>
+<label>PPC Action<select id="rqAction"><option value="NEW">Create NEW PPC</option><option value="EXISTING">Use EXISTING PPC</option></select></label>
+<label id="rqExistWrap" hidden>Existing PPC<select id="rqExist"></select></label>
+<label>Document / WI number(s)<textarea id="rqWi" rows="2"></textarea><small id="rqWiHelp"></small></label>
+<p class="wz-hint">Leave the WI box blank if the document is new. The WI number comes from GLG, so this page never guesses one.</p>
+<label id="rqMethodWrap">PPC number assignment<select id="rqMethod"><option value="AUTO">Automatic (recommended)</option><option value="MANUAL">Manual</option></select></label>
+<label id="rqManualWrap" hidden>Manual PPC number<input id="rqManual" placeholder="2026-SUR-246-014"><small>Duplicate PPC numbers will be rejected.</small></label>
+<div class="wz-prev"><span>Number / selected PPC</span><strong id="rqPrev">Choose a department</strong></div>
+</div></section>
+<section class="wz-card" data-panel="2"><div class="wz-ch"><b>2 · Proposal of Process Change — SOP-06-01</b><span class="wz-draft">DRAFT</span></div>
+<form class="paper" id="rqForm">
+<header class="dochead"><div class="dl"><strong>ZENNI</strong><small>Eyewear for Everyone</small></div><div class="dm"><div><b>Title:</b> Proposal of Process Change</div><div><span><b>Doc. #:</b> SOP-06-01</span><span><b>Ver.:</b> 2</span><span>Page 1 of 2</span></div></div></header>
+<div class="bar">Change Request Information</div>
+<div class="pg g3"><label>Initiator:<input name="requestor" id="rqInit"></label><label>Manager:<input name="manager" id="rqMgr"></label><label>Date:<input name="requestDate" type="date" id="rqDate"></label></div>
+<div class="pg g2"><div class="pl"><b>Priority:</b><label><input type="radio" name="prio" value="Low" checked> Low</label><label><input type="radio" name="prio" value="Medium"> Medium</label><label><input type="radio" name="prio" value="High"> High</label></div><label>Target Date:<input type="date" name="due" id="rqDue"></label></div>
+<div class="pg g2"><label>Project / WI Number(s): <input id="rqWiPrint" readonly></label><label>PPC No. (Doc Control Use Only)<input id="rqPpcPrint" readonly></label></div>
+<div class="pg g1"><label>Change Title:<input name="title" id="rqChTitle"></label></div>
+<div class="bar">Change Request Details</div>
+<label class="pb">Description: <em>What is the current process? What do you want to change about this process?</em><textarea id="rqDesc"></textarea></label>
+<label class="pb">Justification: <em>Why does this process need to change?</em><textarea id="rqJust"></textarea></label>
+<div class="bar">Impact Assessment</div><p class="pi">A thorough assessment of expected upstream and downstream impacts in the following areas should be completed and documented before moving forward. These areas should be monitored during the testing phase.</p>
+<div class="pimp"><label>Quality/Risk:<textarea id="rqImpQ"></textarea></label><label>Cost:<textarea id="rqImpC"></textarea></label><label>Schedule:<textarea id="rqImpS"></textarea></label><label>Resources:<textarea id="rqImpR"></textarea></label><label>Other:<textarea id="rqImpO"></textarea></label></div>
+<div class="pex"><label>Email Address *<input type="email" id="rqEmail"></label><label>Main POC:<input id="rqPoc"></label><label>Process Type:<select id="rqType"><option>Existing Process Revision</option><option>New Process</option></select></label><label>Effort:<select id="rqEffort"><option>Small</option><option>Medium</option><option>Large</option></select></label></div>
+<footer class="pfoot">Zenni Optical Form. Users must verify the revision of this document before use.</footer></form></section>
+<section class="wz-card" data-panel="3"><div class="wz-ch"><b>3 · Review &amp; Submit</b><span>Check before sending</span></div><dl class="wz-rev" id="rqRev"></dl><p class="wz-miss" id="rqMiss" role="status"></p><div class="wz-mock" id="rqDone" hidden></div></section>
+</div>
+<div class="wz-nav"><button type="button" class="wz-out" data-back>← Back</button><span data-label>Step 1 of 3</span><button type="button" class="wz-blue" data-next>Next: Fill Request Form →</button></div>
+</div></div>
+<div class="wz-overlay" id="tsOverlay" hidden><div class="wz" role="dialog" aria-modal="true" aria-labelledby="tsHead" data-step="1">
+<div class="wz-bar"><h2 id="tsHead">Proposal of Process Change Testing — SOP-06-02</h2><div><button class="wz-white" type="button" data-print>Print / PDF</button><button class="wz-x" type="button" aria-label="Close" data-close>×</button></div></div>
+<div class="wz-tabs"><button type="button" data-go="1">1 · Test Setup</button><button type="button" data-go="2">2 · Fill Test Form</button><button type="button" data-go="3">3 · Review &amp; Submit</button></div>
+<div class="wz-body">
+<section class="wz-card" data-panel="1"><div class="wz-ch"><b>1 · PPC Test Setup</b><span>Choose PPC · Schedule · Owner</span></div><div class="wz-f">
+<label>Department<select id="tsDept"><option value="">Choose department</option><option value="SUR">Surface — SUR</option><option value="FIN">Finish — FIN</option><option value="AR">AR — AR</option><option value="INV">Inventory — INV</option><option value="DST">Distribution — DST</option><option value="CS">Customer Service — CS</option><option value="GEN">Lab Wide — GEN</option><option value="MTC">Maintenance — MTC</option></select></label>
+<label>Existing PPC<select id="tsPpc"><option value="">Choose a department first</option></select></label>
+<div class="wz-info" id="tsDetails">Select a PPC to view its title, WI and current status.</div>
+<label class="w50">Test Action<select id="tsAction"><option value="NEW">Create NEW PPC Test</option><option value="EXISTING" disabled>Select EXISTING PPC Test (none recorded yet)</option></select></label>
+<p class="wz-hint" id="tsHint">Minimum testing period: 14 calendar days. Select a start date to see the earliest end date.</p>
+<div class="wz-two"><label>Test Start Date<input type="date" id="tsStart"></label><label>Test End Date<input type="date" id="tsEnd"></label></div>
+<label>Test Main POC<input id="tsPoc" placeholder="Person responsible for testing"></label>
+<p class="wz-hint" id="tsNote"></p>
+</div></section>
+<section class="wz-card" data-panel="2"><div class="wz-ch"><b>2 · Proposal of Process Change Testing — SOP-06-02</b><span class="wz-draft">DRAFT</span></div>
+<form class="paper" id="tsForm">
+<header class="dochead"><div class="dl"><strong>ZENNI</strong><small>Eyewear for Everyone</small></div><div class="dm"><div><b>Title:</b> Proposal of Process Change Testing</div><div><span><b>Doc. #:</b> SOP-06-02</span><span><b>Ver.:</b> 0</span><span>Page 1 of 2</span></div></div></header>
+<div class="bar l">Test for Change</div><div class="bar">Test Details</div>
+<label class="pb">Test Reason:<textarea id="tsReason"></textarea></label>
+<div class="pg g2"><label>Main POC for Test:<input id="tsPocPrint"></label><label>PPC No. (Doc Control Use Only)<input id="tsPpcPrint" readonly></label></div>
+<div class="pg g1"><label>Test Timeline (Dates):<span class="row2"><input type="date" id="tsStart2"><input type="date" id="tsEnd2"></span></label></div>
+<div class="psig"><b>Applicable Management Signatures:</b><div class="sl"><label>Signature / Title<input id="tsSig1"></label><label>Date<input type="date"></label><label>Signature / Title<input id="tsSig2"></label><label>Date<input type="date"></label><label>Signature / Title<input id="tsSig3"></label><label>Date<input type="date"></label></div><p>Typed names are reference information, not verified electronic signatures.</p></div>
+<div class="bar">Test Parameters &amp; Results</div><p class="pi">If more than one test is required, create additional test records linked to the same PPC. Record all test results and supporting evidence before management approval.</p>
+<div class="ptn"><b>Test Number:</b><label><input type="radio" name="tn" value="1" checked> 1</label><label><input type="radio" name="tn" value="2"> 2</label><label><input type="radio" name="tn" value="3"> 3</label><label><input type="radio" name="tn" value="4"> 4</label><label><input type="radio" name="tn" value="5"> 5</label></div>
+<label class="ptl"><span>Define the Test:</span><textarea id="tsDefine"></textarea></label><label class="ptl"><span>Test Variants (Variant Date/Description):</span><textarea id="tsVar"></textarea></label><label class="ptl"><span>Test Timeline (Hours/Dates):</span><textarea id="tsTl"></textarea></label><label class="ptl"><span>Test Resources Needed:</span><textarea id="tsRes"></textarea></label><label class="ptl"><span>Expected Test Results (Must be a measurable result):</span><textarea id="tsExpected"></textarea></label>
+<div class="pex"><label>Test Owner Email *<input type="email" id="tsEmail"></label><label>Actual Test Results:<textarea id="tsActual"></textarea></label><label>Evidence Link:<input type="url" id="tsEvid"></label><label>Test Result:<select id="tsResult"><option>Pending</option><option>Passed</option><option>Failed</option><option>Needs Retest</option></select></label></div>
+<footer class="pfoot">Zenni Optical Form. Users must verify the revision of this document before use.</footer></form></section>
+<section class="wz-card" data-panel="3"><div class="wz-ch"><b>3 · Review PPC Test</b><span>Verify before submitting</span></div><dl class="wz-rev" id="tsRev"></dl><p class="wz-miss" id="tsMiss" role="status"></p><div class="wz-mock" id="tsDone" hidden></div></section>
+</div>
+<div class="wz-nav"><button type="button" class="wz-out" data-back>← Back</button><span data-label>Step 1 of 3</span><button type="button" class="wz-blue" data-next>Next: Fill Test Form →</button></div>
+</div></div>

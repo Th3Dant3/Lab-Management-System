@@ -758,63 +758,116 @@ window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
     </div>
   </section>
 
-  <!-- TRAINING / QUALITY TAB -->
-  <section id="training" class="tab-content">
-    <div class="module-head">
-      <div class="module-label">Training &amp; Quality</div>
-    </div>
-    <div class="cards-grid">
+ 
+<!-- TRAINING / QUALITY TAB -->
+<section id="training" class="tab-content">
+  <div class="module-head">
+    <div class="module-label">Training &amp; Quality</div>
+  </div>
 
-      <div id="facility-breakage-card" class="card card--training" data-gated>
-        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#f59e0b"></canvas>
-        <div class="card-accent card-accent--amber"></div>
-        <div class="card-inner">
-          <div class="card-top">
-            <div class="card-title-row">
-              <h3 class="card-title">Facility Breakage</h3>
-              <span class="badge badge--training">Training / Quality</span>
-            </div>
-            <p class="card-desc">Facility wide breakage tracking, trend analysis, and quality reporting</p>
+  <div class="cards-grid">
+
+    <!-- FACILITY BREAKAGE -->
+    <div id="facility-breakage-card"
+         class="card card--training"
+         data-gated>
+
+      <canvas class="card-bg-canvas"
+              data-anim="flow-lines"
+              data-color="#f59e0b"></canvas>
+
+      <div class="card-accent card-accent--amber"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Facility Breakage</h3>
+            <span class="badge badge--training">
+              Training / Quality
+            </span>
           </div>
-          <div class="card-tags">
-            <span class="tag">Finish</span>
-            <span class="tag">Surface</span>
-            <span class="tag">AR</span>
-            <span class="tag">Inventory</span>
-            <span class="tag">Trends</span>
-          </div>
-          <button class="card-btn card-btn--amber" onclick="openPage('FacilityBreakage.html')">
-            Open Dashboard
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </button>
+          <p class="card-desc">
+            Facility wide breakage tracking, trend analysis,
+            and quality reporting
+          </p>
         </div>
-      </div>
 
-      <!-- PPC Document Control — visible only with LMS permission -->
-      <div id="ppc-document-control-card" class="card card--training" data-gated style="display:none">
-        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#36e0e8"></canvas>
-        <div class="card-accent card-accent--amber"></div>
-        <div class="card-inner">
-          <div class="card-top">
-            <div class="card-title-row">
-              <h3 class="card-title">PPC Document Control</h3>
-              <span class="badge badge--training">Training / Quality</span>
-            </div>
-            <p class="card-desc">Process change requests, PPC testing, signatures, publication and document deadlines.</p>
-          </div>
-          <div class="card-tags">
-            <span class="tag">PPC Requests</span><span class="tag">Tests</span>
-            <span class="tag">Approvals</span><span class="tag">Documents</span>
-          </div>
-          <button class="card-btn card-btn--amber" type="button" onclick="openPpcDocumentControl()">
-            Open PPC Hub
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </button>
+        <div class="card-tags">
+          <span class="tag">Finish</span>
+          <span class="tag">Surface</span>
+          <span class="tag">AR</span>
+          <span class="tag">Inventory</span>
+          <span class="tag">Trends</span>
         </div>
-      </div>
 
+        <button class="card-btn card-btn--amber"
+                type="button"
+                onclick="openPage('FacilityBreakage.html')">
+          Open Dashboard
+          <svg width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor"
+               stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
     </div>
-  </section>
+
+    <!-- PPC DOCUMENT CONTROL — GITHUB NAVIGATION -->
+    <div id="ppc-document-control-card"
+         class="card card--training"
+         data-gated
+         data-lms-feature="PPC_Document_Control_ViewHub"
+         style="display:none">
+
+      <canvas class="card-bg-canvas"
+              data-anim="flow-lines"
+              data-color="#36e0e8"></canvas>
+
+      <div class="card-accent card-accent--amber"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">PPC Document Control</h3>
+            <span class="badge badge--training">
+              Training / Quality
+            </span>
+          </div>
+          <p class="card-desc">
+            Process change requests, PPC testing, signatures,
+            publication and document deadlines.
+          </p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">PPC Requests</span>
+          <span class="tag">Tests</span>
+          <span class="tag">Approvals</span>
+          <span class="tag">Documents</span>
+        </div>
+
+        <!-- Direct link to GitHub PPC page -->
+        <a href="./PPC.html"
+           class="card-btn card-btn--amber"
+           style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;">
+          Open PPC Hub
+
+          <svg width="14" height="14"
+               viewBox="0 0 24 24"
+               fill="none"
+               stroke="currentColor"
+               stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
 
 </main>
 

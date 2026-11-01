@@ -1367,6 +1367,26 @@ function renderDashboard(data) {
    VISIBILITY RULES — reads from sessionStorage
    set at login by login.js
 ===================================================== */
+// PPC navigation permission helpers. These check UX visibility only; PPC Apps Script
+// must independently authorize record access using the Google Workspace identity.
+function ppcFlagEnabled_(value) {
+  return value === true || value === 1 ||
+    (typeof value === "string" && ["true", "1", "yes"].includes(value.trim().toLowerCase()));
+}
+function ppcSessionVisibility_() {
+  const read = key => { try { return JSON.parse(sessionStorage.getItem(key) || "null") || {}; } catch (_) { return {}; } };
+  const vis = read("lms_visibility");
+  const departments = { ...(vis.departments || {}), ...read("lms_departments") };
+  const features = { ...(vis.features || {}), ...read("lms_features") };
+  return { departments, features };
+}
+function ppcCanOpen_() {
+  if (sessionStorage.getItem("lms_logged_in") !== "true") return false;
+  const { departments, features } = ppcSessionVisibility_();
+  return ppcFlagEnabled_(departments.PPC_Document_Control) &&
+    ppcFlagEnabled_(features.PPC_Document_Control_ViewHub);
+}
+
 function applyVisibilityRules() {
 
   // Try new separate keys first, fall back to lms_visibility for compatibility
@@ -1398,7 +1418,7 @@ function applyVisibilityRules() {
     const navBtn  = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
     const section = document.getElementById(tabId);
     const hasAccess = departments[deptKey] === true ||
-      (deptKey === "Training" && departments.PPC_Document_Control === true && features.PPC_Document_Control_ViewHub === true);
+      (deptKey === "Training" && ppcCanOpen_());
 
     if (!hasAccess) {
       if (navBtn)  navBtn.style.display = "none";
@@ -1459,7 +1479,7 @@ const featureCardMap = {
   // Show only permitted cards
   Object.entries(featureCardMap).forEach(([featureKey, sel]) => {
     const allowed = featureKey === "PPC_Document_Control_ViewHub"
-      ? departments.PPC_Document_Control === true && features[featureKey] === true
+      ? ppcCanOpen_()
       : features[featureKey] === true;
     if (allowed) {
       document.querySelectorAll(sel).forEach(el => el.style.display = "flex");
@@ -1545,27 +1565,18 @@ function setText(id, value) {
   if (el) el.textContent = value;
 }
 
-const PPC_WORKSPACE_APP_URL = "https://script.google.com/a/macros/zennioptical.com/s/AKfycbybKUJ9OP708EbnplRJVrGPy9aenOEz07ZOWUEPJ8PrVCQprd6X2dFTffOxxpkXsqIiFg/exec";
-
+/* PPC Document Control — open the GitHub page in the same tab. */
 function openPpcDocumentControl() {
-  // UI permission only. PPC Apps Script independently verifies Workspace identity and PPC_USERS.
-  let deps = {}, feats = {};
-  try {
-    deps = JSON.parse(sessionStorage.getItem("lms_departments") || "null") || {};
-    feats = JSON.parse(sessionStorage.getItem("lms_features") || "null") || {};
-    if (!Object.keys(deps).length && !Object.keys(feats).length) {
-      const vis = JSON.parse(sessionStorage.getItem("lms_visibility") || "{}");
-      deps = vis.departments || {};
-      feats = vis.features || {};
-    }
-  } catch (e) { console.warn("Invalid LMS visibility session", e); }
-  if (sessionStorage.getItem("lms_logged_in") !== "true" ||
-      deps.PPC_Document_Control !== true || feats.PPC_Document_Control_ViewHub !== true) {
-    alert("PPC access is not enabled for your LMS account.");
+  if (sessionStorage.getItem("lms_logged_in") !== "true") {
+    window.location.assign("login.html");
     return;
   }
-  // External Workspace-app URL; opens in a separate tab under Google's own auth enforcement.
-  window.open(PPC_WORKSPACE_APP_URL, "_blank", "noopener,noreferrer");
+  if (!ppcCanOpen_()) {
+    alert("PPC Document Control is not enabled for this LMS session. Please sign out and sign back in if permissions were just updated.");
+    return;
+  }
+  // Same-tab navigation preserves this tab's LMS sessionStorage.
+  window.location.assign("PPC.html");
 }
 
 function openPage(page) {
