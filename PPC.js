@@ -1,11 +1,13 @@
 "use strict";
-/* PPC-APP.js: the PPC page. Google serves a tiny shell that loads this file from GitHub, so everything about how the page
-   looks and behaves lives here. The server trusts nothing on this page: every action is re-checked against PPC_USERS and
+/* PPC.js: one file, two jobs. (1) Opened from the LMS at github.io, PPC.html is your launcher: it checks the LMS session and opens
+   the secure app. (2) Loaded by Google's tiny shell inside the secure app, it is the whole dashboard. Everything about how the
+   page looks and behaves lives here in GitHub. The server trusts nothing on this page: every action is re-checked against PPC_USERS and
    your role. Every value that comes from the sheet is inserted with textContent, never as HTML. */
 const LMS_URL = "https://th3dant3.github.io/Lab-Management-System/index.html";
+const PPC_SECURE_URL = "https://script.google.com/a/macros/zennioptical.com/s/AKfycbybKUJ9OP708EbnplRJVrGPy9aenOEz07ZOWUEPJ8PrVCQprd6X2dFTffOxxpkXsqIiFg/exec";
 const SELF_SRC = (document.currentScript && document.currentScript.src) || "";
 const ASSET_BASE = SELF_SRC.replace(/[^\/]*$/, "");
-const ASSET_NAME = (SELF_SRC.split("/").pop().split("?")[0] || "PPC-APP.js").replace(/\.js$/i, "");   // PPC-APP: the layout file is PPC-APP.html next to this file
+const ASSET_NAME = (SELF_SRC.split("/").pop().split("?")[0] || "PPC.js").replace(/\.js$/i, "");   // PPC: the layout lives in PPC.html next to this file
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 function h(tag, props, kids) {
@@ -350,14 +352,36 @@ function initWizards() {
   });
 }
 
+/* ---------- launcher (what PPC.html does when you open it from the LMS) ---------- */
+function flag(v) { return v === true || v === 1 || (typeof v === 'string' && ['true', 'yes', '1'].includes(v.toLowerCase().trim())); }
+function readSS(k) { try { return JSON.parse(sessionStorage.getItem(k) || 'null') || {}; } catch (e) { return {}; } }
+function lmsProblem() {
+  if (sessionStorage.getItem('lms_logged_in') !== 'true') return 'No active LMS login in this tab. Return to LMS login, then open PPC from the dashboard.';
+  const vis = readSS('lms_visibility');
+  const dept = Object.assign({}, vis.departments || {}, readSS('lms_departments'));
+  const feat = Object.assign({}, vis.features || {}, readSS('lms_features'));
+  if (!flag(dept.PPC_Document_Control) || !flag(feat.PPC_Document_Control_ViewHub)) return "PPC isn't enabled in this LMS session. Check the existing LMS permissions and sign back in.";
+  return '';
+}
+function launcherMode() {
+  const st = $('#launchStatus'), open = $('#open'); if (!st || !open) return;
+  const problem = lmsProblem();
+  if (problem) { st.textContent = problem; st.classList.add('err'); return; }
+  open.disabled = false; st.textContent = 'LMS navigation permission confirmed. Google Workspace will separately verify PPC_USERS access.';
+  open.addEventListener('click', () => { if (!open.disabled) window.location.assign(PPC_SECURE_URL); });
+}
+
 /* ---------- start ---------- */
 async function boot() {
+  if (!(window.google && google.script && google.script.run)) { launcherMode(); return; }   // not inside Google's secure app: act as the launcher
   const bootNote = document.getElementById('boot'); if (bootNote) bootNote.remove();
   try {
     const res = await fetch(ASSET_BASE + ASSET_NAME + '.html', { credentials: 'omit' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    document.body.insertAdjacentHTML('beforeend', await res.text());     // our own file from our own repo
-  } catch (e) { document.body.textContent = 'The page could not load its layout file (' + ASSET_NAME + '.html). Check that it is uploaded next to ' + ASSET_NAME + '.js on GitHub, with the same capital letters.'; return; }
+    const tpl = new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('template#app-layout');
+    if (!tpl) throw new Error('layout template missing');
+    document.body.insertAdjacentHTML('beforeend', tpl.innerHTML);     // our own file from our own repo
+  } catch (e) { document.body.textContent = 'The page could not load its layout (' + ASSET_NAME + '.html). Check that PPC.html, PPC.css and PPC.js on GitHub are all the new versions.'; return; }
   $$('a[data-lms]').forEach(a => { a.href = LMS_URL; a.target = '_top'; });
   $('#retry').addEventListener('click', loadApp);
   await loadApp();

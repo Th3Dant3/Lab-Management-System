@@ -1,3 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zenni USA, PPC Document Control</title><link rel="stylesheet" href="PPC.css"></head>
+<body>
+<main id="launcher" class="gate"><div class="gatecard">
+<div class="gbrand"><b>Zenni USA</b><span>Lab management, document control</span></div>
+<h1>PPC command center</h1>
+<p>Open the Workspace-secured PPC dashboard to view authorized requests, testing, approvals and documents. Your Google Workspace identity and <code>PPC_USERS</code> access are checked by the PPC application.</p>
+<div id="launchStatus" class="gstatus" role="status">Checking your LMS session...</div>
+<div class="actions"><button type="button" class="btn primary" id="open" disabled>Open secure PPC application</button><a href="index.html">Return to LMS Command Center</a></div>
+<p class="gfoot">The secure dashboard opens at Google's Apps Script address. This page does not display PPC records.</p>
+</div></main>
+<template id="app-layout">
 <section id="gate" class="gate"><div class="gatecard">
 <div class="gbrand"><b>Zenni USA</b><span>Lab management, document control</span></div>
 <h1>PPC command center</h1>
@@ -81,3 +94,7 @@
 </div>
 <div class="wz-nav"><button type="button" class="wz-out" data-back>← Back</button><span data-label>Step 1 of 3</span><button type="button" class="wz-blue" data-next>Next: Fill Test Form →</button></div>
 </div></div>
+
+</template>
+<script src="PPC.js"></script>
+</body></html>
