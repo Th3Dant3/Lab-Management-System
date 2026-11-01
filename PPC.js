@@ -1,9 +1,11 @@
 "use strict";
-/* ppc-app.js: the PPC page. Google serves a tiny shell that loads this file from GitHub, so everything about how the page
+/* PPC-APP.js: the PPC page. Google serves a tiny shell that loads this file from GitHub, so everything about how the page
    looks and behaves lives here. The server trusts nothing on this page: every action is re-checked against PPC_USERS and
    your role. Every value that comes from the sheet is inserted with textContent, never as HTML. */
 const LMS_URL = "https://th3dant3.github.io/Lab-Management-System/index.html";
-const ASSET_BASE = ((document.currentScript && document.currentScript.src) || "").replace(/[^\/]*$/, "");
+const SELF_SRC = (document.currentScript && document.currentScript.src) || "";
+const ASSET_BASE = SELF_SRC.replace(/[^\/]*$/, "");
+const ASSET_NAME = (SELF_SRC.split("/").pop().split("?")[0] || "PPC-APP.js").replace(/\.js$/i, "");   // PPC-APP: the layout file is PPC-APP.html next to this file
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 function h(tag, props, kids) {
@@ -352,10 +354,10 @@ function initWizards() {
 async function boot() {
   const bootNote = document.getElementById('boot'); if (bootNote) bootNote.remove();
   try {
-    const res = await fetch(ASSET_BASE + 'ppc-app.html', { credentials: 'omit' });
+    const res = await fetch(ASSET_BASE + ASSET_NAME + '.html', { credentials: 'omit' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     document.body.insertAdjacentHTML('beforeend', await res.text());     // our own file from our own repo
-  } catch (e) { document.body.textContent = 'The page could not load its layout file (ppc-app.html). Check that it is uploaded next to ppc-app.js on GitHub.'; return; }
+  } catch (e) { document.body.textContent = 'The page could not load its layout file (' + ASSET_NAME + '.html). Check that it is uploaded next to ' + ASSET_NAME + '.js on GitHub, with the same capital letters.'; return; }
   $$('a[data-lms]').forEach(a => { a.href = LMS_URL; a.target = '_top'; });
   $('#retry').addEventListener('click', loadApp);
   await loadApp();
