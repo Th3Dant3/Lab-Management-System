@@ -78,6 +78,17 @@ function isPending(r) { return /^PENDING-/.test((r && r.number) || ''); }
 function clockStart(r) { return r.progressStart || r.submitted || ''; }
 function clockDays(r) { return r.status === 'In Progress' ? daysSince(clockStart(r)) : null; }
 function clockBand(d) { return d === null ? '' : d <= CLOCK_GREEN_MAX ? 'green' : d <= CLOCK_YELLOW_MAX ? 'yellow' : 'overdue'; }
+const BAND_RANK = { green: 0, yellow: 1, overdue: 2, '': 3 };
+/* Cards are ordered green, then yellow, then overdue, and within a colour the fewest days first.
+   Rows with no running clock (not started, completed, published) come last, newest first. */
+function byBand(a, b) {
+  const da = clockDays(a), db = clockDays(b), r = BAND_RANK[clockBand(da)] - BAND_RANK[clockBand(db)];
+  if (r) return r;
+  if (da !== null && db !== null) return da - db;
+  return (b.submitted || '').localeCompare(a.submitted || '');
+}
+const collapsed = {};                                  // which board columns are closed, remembered while the page is open
+const deptOpen = {};                                   // which department groups are open on the Published page
 function clockBar(d) { const s = h('span'); s.style.width = Math.min(100, Math.max(2, Math.round(d / 30 * 100))) + '%'; return h('div', { class: 'age ' + clockBand(d), role: 'img', 'aria-label': d + ' days in progress, ' + clockBand(d) }, s); }
 function ageBar(days, maxD) { const s = h('span'); s.style.width = (maxD ? Math.max(2, Math.round(days / maxD * 100)) : 0) + '%'; return h('div', { class: 'age', role: 'img', 'aria-label': days + ' days open' }, s); }
 function btn(label, o) { o = o || {}; return h('button', { type: 'button', class: 'btn' + (o.quiet ? ' quiet' : '') + (o.primary ? ' primary' : ''), disabled: o.disabled, title: o.title, onclick: o.onclick, 'data-open': o.open, 'data-ppc': o.ppc }, label); }
@@ -143,7 +154,7 @@ function openEdit(r) {
 const NOT_BUILT = 'Not switched on yet. This button needs a backend step that is built after sign-in is confirmed.';
 
 /* ---------- staff views ---------- */
-const VIEWS = [['overview', 'Dashboard'], ['missing', 'Missing PPC, need update'], ['tests', 'Tests and reminders'], ['routing', 'Routing and emails'], ['updates', 'Update requests'], ['years', 'Year records']];
+const VIEWS = [['overview', 'Dashboard'], ['published', 'Published documents'], ['missing', 'Missing PPC, need update'], ['tests', 'Tests and reminders'], ['routing', 'Routing and emails'], ['updates', 'Update requests'], ['years', 'Year records']];
 let currentView = 'overview', currentYear = null, mailSel = null, mailEv = 'routed';
 function token(r, cls) {
   const kids = [h('p', { class: 'num', text: isPending(r) ? 'PPC number pending' : r.number }), h('p', { class: 'ttl', text: r.title || 'Title not recorded' }), h('p', { class: 'who', text: (r.requestor || 'Requester not recorded') + (r.wi ? ', ' + r.wi : '') })];
@@ -172,17 +183,26 @@ function vOverview() {
   if (sign.length) items.push([h('span', null, [h('b', { text: pl(sign.length, 'PPC') + ' ' + (sign.length === 1 ? 'is' : 'are') + ' ready for signature: ' }), sign.map(r => r.number).join(', ') + '.']), null, null, 'blue']);
   const odd = D.register.filter(r => !STATUS_COLS.some(c => c.status === r.status));
   const att = h('section', null, [h('h2', { text: 'Needs attention' }), items.length ? h('ul', { class: 'attn' }, items.map(i => h('li', null, [h('div', null, [h('span', { class: 'dot ' + i[3] }), i[0]]), i[1] ? h('a', { class: 'btn', href: '#' + i[2], onclick: e => { e.preventDefault(); show(i[2]); } }, i[1]) : null]))) : h('p', { class: 'empty', text: 'Nothing needs attention right now.' })]);
-  const cols = STATUS_COLS.map(c => {
-    const rows = D.register.filter(r => r.status === c.status), count = c.status === 'Published' ? pubTotal : rows.length;
-    const head = h('header', null, [h('h3', { text: c.title }), h('span', { class: 'c', text: String(count) })]);
-    if (c.status === 'Published') return h('div', { class: 'col done' }, [head, pubRows.length ? h('ul', null, pubRows.slice(0, 8).map(r => token(r, 'done'))) : null, h('div', { class: 'arch' }, h('p', { text: D.published.length + ' older completed requests live in the archive, not on this board.' }))]);
+  const colFor = c => {
+    const rows = (c.status === 'Published' ? pubRows : D.register.filter(r => r.status === c.status)).slice().sort(byBand);
+    const count = c.status === 'Published' ? pubTotal : rows.length;
+    const shut = !!collapsed[c.status];
+    const head = h('button', { type: 'button', class: 'colhead', 'aria-expanded': String(!shut), title: (shut ? 'Open' : 'Close') + ' the ' + c.title + ' column',
+      onclick: () => { collapsed[c.status] = !shut; rebuild('overview'); } },
+      [h('span', { class: 'caret', 'aria-hidden': 'true', text: shut ? '+' : '\u2212' }), h('h3', { text: c.title }), h('span', { class: 'c', text: String(count) })]);
+    if (shut) return h('div', { class: 'col ' + c.cls + ' collapsed' }, [head, h('p', { class: 'none', text: count === 1 ? '1 hidden' : count + ' hidden' })]);
+    if (c.status === 'Published') return h('div', { class: 'col done' }, [head, rows.length ? h('ul', null, rows.slice(0, 8).map(r => token(r, 'done'))) : null,
+      h('div', { class: 'arch' }, [h('p', { text: D.published.length + ' older completed requests are not on this board.' }), h('a', { class: 'btn', href: '#published', onclick: e => { e.preventDefault(); show('published'); } }, 'See all published documents')])]);
     return h('div', { class: 'col ' + c.cls }, [head, rows.length ? h('ul', null, rows.map(r => token(r, c.cls))) : h('p', { class: 'none', text: ({ 'Not Started': 'No PPC is waiting to start.', 'Ready for Signature': 'No PPC is waiting for management signatures.', 'Completed': 'No PPC is marked Completed.' })[c.status] || 'Nothing here.' })]);
-  });
+  };
+  const cols = STATUS_COLS.map(colFor);
+  const flow = h('div', { class: 'flow' }, cols);
+  flow.style.gridTemplateColumns = STATUS_COLS.map(c => collapsed[c.status] ? 'minmax(118px,0.34fr)' : 'minmax(0,1fr)').join(' ');   // a closed column keeps enough room for its heading to read properly
   const legend = h('ul', { class: 'clocklegend' }, [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more is Overdue']].map(p => h('li', null, [h('span', { class: 'sw ' + p[0] }), p[1]])));
   return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: 'PPC command center' }),
     h('p', { class: 'lead' }, [h('strong', { text: pl(openTotal, 'request') + (openTotal === 1 ? ' is' : ' are') + ' open. ' }), numbered.length + ' ' + (numbered.length === 1 ? 'has' : 'have') + ' a PPC number and ' + pend.length + ' ' + (pend.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (overdue.length ? ' ' + overdue.length + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue.' : '') + (maxD ? ' The longest in progress has been going ' + maxD + ' days.' : '')]),
     odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => (isPending(r) ? 'pending ' + (r.wi || '') : r.number) + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + (isPending(r) ? (r.wi || 'pending request') : r.number), { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
-    att, h('section', null, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress.' }), legend, h('div', { class: 'flow' }, cols)])]);
+    att, h('section', null, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. Cards run green first, then yellow, then overdue. Click a column heading to close it.' }), legend, flow])]);
 }
 function vMissing() {
   const need = pendingRows();
@@ -222,6 +242,40 @@ function vRouting() {
     h('section', null, [h('h2', { text: 'Email the requester will receive' }), h('div', { class: 'tabs2', role: 'group', 'aria-label': 'Email event' }, [seg('routed', 'Completed'), seg('published', 'Published')]), mailBox()])]);
 }
 function renderMail() { const v = $('#v-routing'); if (!v) return; const old = v.children[3]; const fresh = vRouting(); v.replaceWith(fresh); fresh.hidden = currentView !== 'routing'; }
+let pubFilter = '';
+function deptLabel(code) { const c = String(code || '').trim(); if (!c) return 'No department recorded'; const hit = (D.departments || []).filter(d => d.code === c)[0]; return hit ? hit.label + ' (' + c + ')' : c; }
+function vPublished() {
+  const all = D.published.concat(D.register.filter(r => r.status === 'Published'));
+  const q = pubFilter.trim().toLowerCase();
+  const match = r => !q || [r.number, r.title, r.wi, r.requestor, r.specialist].some(v => String(v || '').toLowerCase().indexOf(q) >= 0);
+  const rows = all.filter(match);
+  const groups = {}; rows.forEach(r => { const k = deptLabel(r.department); (groups[k] = groups[k] || []).push(r); });
+  const names = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length || a.localeCompare(b));
+  const dated = rows.filter(r => r.published).length;
+  const box = h('input', { type: 'search', id: 'pubSearch', placeholder: 'Search PPC number, title, WI, requester or specialist', value: pubFilter });
+  box.addEventListener('input', () => { pubFilter = box.value; rebuild('published'); const el = $('#pubSearch'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
+  const sections = names.map(name => {
+    const list = groups[name].slice().sort((a, b) => (b.published || '').localeCompare(a.published || '') || (b.submitted || '').localeCompare(a.submitted || ''));
+    const open = q ? true : !!deptOpen[name];
+    const head = h('button', { type: 'button', class: 'dephead', 'aria-expanded': String(open), onclick: () => { deptOpen[name] = !open; rebuild('published'); } },
+      [h('span', { class: 'caret', 'aria-hidden': 'true', text: open ? '\u2212' : '+' }), h('b', { text: name }), h('span', { class: 'n', text: String(list.length) })]);
+    if (!open) return h('section', { class: 'depgroup' }, head);
+    const trs = list.map(r => h('tr', null, [td(h('b', { text: r.number || 'No PPC number' })), td(r.wi || ''), td(r.title || h('span', { class: 'mut', text: 'Title not recorded' })), td(r.requestor || ''), td(r.specialist || ''), td(r.published ? fmtDate(r.published) : h('span', { class: 'mut', text: 'No date recorded' }))]));
+    return h('section', { class: 'depgroup' }, [head, table(['PPC number', 'Work instruction', 'Title', 'Requested by', 'Specialist', 'Published'], trs, 'None.')]);
+  });
+  return h('div', { class: 'view', id: 'v-published', hidden: true }, [h('h1', { text: 'Published documents' }),
+    h('p', { class: 'lead' }, [h('strong', { text: pl(all.length, 'published document') + '.' }), ' Grouped by department. ' + dated + ' of ' + rows.length + ' shown ' + (dated === 1 ? 'has' : 'have') + ' a published date recorded.']),
+    h('div', { class: 'pubtools' }, [box, btn('Open every department', { quiet: true, onclick: () => { names.forEach(n => { deptOpen[n] = true; }); rebuild('published'); } }), btn('Close every department', { quiet: true, onclick: () => { names.forEach(n => { deptOpen[n] = false; }); rebuild('published'); } }), btn('Download as CSV', { quiet: true, onclick: () => downloadPublished(rows) })]),
+    q && !rows.length ? h('p', { class: 'empty', text: 'Nothing matches "' + pubFilter + '".' }) : null,
+    h('section', null, sections)]);
+}
+function downloadPublished(list) {
+  const heads = ['Department', 'PPC number', 'Work instruction', 'Title', 'Requested by', 'Specialist', 'Published'];
+  const lines = [heads].concat(list.slice().sort((a, b) => deptLabel(a.department).localeCompare(deptLabel(b.department)) || (b.published || '').localeCompare(a.published || ''))
+    .map(r => [deptLabel(r.department), r.number || '', r.wi || '', r.title || '', r.requestor || '', r.specialist || '', fmtDate(r.published)])).map(r => r.map(csvCell).join(','));
+  const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })), download: 'ppc-published-by-department.csv' });
+  document.body.append(a); a.click(); a.remove();
+}
 function vUpdates() {
   return h('div', { class: 'view', id: 'v-updates', hidden: true }, [h('h1', { text: 'Update requests' }), h('p', { class: 'lead' }, [h('strong', { text: 'Not built yet.' }), ' Requesters cannot ask for an update from the page until this exists.']),
     h('section', null, [h('h2', { text: 'The plan' }), h('ol', { class: 'steps4' }, ['A requester opens a request on their page and chooses Request an update.', 'It appears here, and the document specialist gets an email.', 'You write a short public update on the PPC. Internal notes are never shown to requesters.', 'You mark it answered, and the requester gets an email with the status and your note.'].map(t => h('li', { text: t })))])]);
@@ -268,7 +322,7 @@ function downloadCsv(list) {
   const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })), download: 'ppc-record-' + currentYear + '.csv' }); document.body.append(a); a.click(); a.remove();
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('printing-record', 'printing-wz'));
-const BUILDERS = { overview: vOverview, missing: vMissing, tests: vTests, routing: vRouting, updates: vUpdates, years: vYears };
+const BUILDERS = { overview: vOverview, published: vPublished, missing: vMissing, tests: vTests, routing: vRouting, updates: vUpdates, years: vYears };
 function rebuild(id) { const old = $('#v-' + id); const fresh = BUILDERS[id](); old.replaceWith(fresh); fresh.hidden = currentView !== id; }
 function show(id) {
   if (!BUILDERS[id]) id = 'overview'; currentView = id;

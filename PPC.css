@@ -161,3 +161,15 @@ body.printing-wz>*:not(.wz-overlay){display:none!important}body.printing-wz .wz-
 .flagover{margin-left:8px;border:1px solid var(--block);color:var(--block);border-radius:3px;padding:0 6px;font-size:11px}
 .dot.red{background:var(--block)}.sw.green{background:var(--done)}.sw.yellow{background:var(--draft)}.sw.overdue{background:var(--block)}
 .clocklegend{list-style:none;margin:0 0 14px;padding:0;display:flex;gap:22px;flex-wrap:wrap;color:var(--muted);font-size:13px}.clocklegend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px}
+
+.colhead{display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;font:inherit;color:var(--text);background:transparent;border:0;padding:0;margin:0 0 12px;cursor:pointer}
+.colhead h3{font-size:14px;margin:0;font-weight:600;flex:1;min-width:0}.colhead .c{font-size:22px;font-weight:600}
+.colhead .caret{width:16px;color:var(--muted);font-size:14px;line-height:1}.colhead:hover .caret,.dephead:hover .caret{color:var(--text)}
+.col.collapsed{padding-bottom:14px}.col.collapsed .colhead{margin-bottom:6px;flex-wrap:wrap}.col.collapsed .colhead h3{flex:1 1 100%;min-width:0;overflow-wrap:normal;word-break:normal;hyphens:none}.col.collapsed .colhead .c{font-size:18px}
+.pubtools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 18px}
+#pubSearch{flex:1;min-width:240px;font:inherit;color:var(--text);background:#0c1626;border:1px solid var(--line);border-radius:3px;padding:9px 11px}
+.depgroup{border-top:1px solid var(--line);padding:0}.depgroup .scroll{padding-bottom:14px}
+.dephead{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:var(--text);background:transparent;border:0;padding:13px 2px;cursor:pointer}
+.dephead b{flex:1;font-weight:600}.dephead .n{color:var(--muted)}.dephead:hover{background:#101c2f}
+@media(max-width:1100px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:760px){.flow{grid-template-columns:minmax(0,1fr)!important}.pubtools{flex-direction:column;align-items:stretch}#pubSearch{min-width:0}}
