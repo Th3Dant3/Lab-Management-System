@@ -65,11 +65,20 @@ async function refresh() { D = await api('bootstrap'); reqSel = null; renderCurr
 /* ---------- shared pieces ---------- */
 const STATUS_COLS = [
   { status: 'Not Started', title: 'Not started', cls: '' },
-  { status: 'Rough Draft in Progress', title: 'Rough draft in progress', cls: 'draft' },
+  { status: 'In Progress', title: 'In progress', cls: 'draft' },
   { status: 'Ready for Signature', title: 'Ready for signature', cls: 'sign' },
-  { status: 'In Routing', title: 'In routing', cls: 'route' },
+  { status: 'Completed', title: 'Completed', cls: 'route' },
   { status: 'Published', title: 'Published', cls: 'done' }
 ];
+const ADMIN_ONLY = ['Ready for Signature', 'Completed', 'Published'];   // only an administrator may set these (the server enforces it too)
+/* The age clock. It runs while a PPC is In Progress, counted from the day it became In Progress.
+   0 to 15 days: green. 16 to 29 days: yellow. 30 days or more: Overdue. */
+const CLOCK_GREEN_MAX = 15, CLOCK_YELLOW_MAX = 29;
+function isPending(r) { return /^PENDING-/.test((r && r.number) || ''); }
+function clockStart(r) { return r.progressStart || r.submitted || ''; }
+function clockDays(r) { return r.status === 'In Progress' ? daysSince(clockStart(r)) : null; }
+function clockBand(d) { return d === null ? '' : d <= CLOCK_GREEN_MAX ? 'green' : d <= CLOCK_YELLOW_MAX ? 'yellow' : 'overdue'; }
+function clockBar(d) { const s = h('span'); s.style.width = Math.min(100, Math.max(2, Math.round(d / 30 * 100))) + '%'; return h('div', { class: 'age ' + clockBand(d), role: 'img', 'aria-label': d + ' days in progress, ' + clockBand(d) }, s); }
 function ageBar(days, maxD) { const s = h('span'); s.style.width = (maxD ? Math.max(2, Math.round(days / maxD * 100)) : 0) + '%'; return h('div', { class: 'age', role: 'img', 'aria-label': days + ' days open' }, s); }
 function btn(label, o) { o = o || {}; return h('button', { type: 'button', class: 'btn' + (o.quiet ? ' quiet' : '') + (o.primary ? ' primary' : ''), disabled: o.disabled, title: o.title, onclick: o.onclick, 'data-open': o.open, 'data-ppc': o.ppc }, label); }
 function table(heads, rows, empty) {
@@ -77,15 +86,16 @@ function table(heads, rows, empty) {
   return h('div', { class: 'scroll' }, h('table', null, [h('thead', null, h('tr', null, heads.map(x => h('th', { text: x })))), h('tbody', null, rows)]));
 }
 function td(content, cls) { return h('td', { class: cls }, content); }
-function openRows() { return D.register.filter(r => r.status !== 'Published'); }
-function maxAge() { const a = openRows().concat(D.needsNumber).map(r => daysSince(r.submitted)).filter(x => x !== null); return a.length ? Math.max.apply(null, a) : 0; }
+function openRows() { return D.register.filter(r => r.status !== 'Completed' && r.status !== 'Published'); }   // work still going: not started, in progress, ready for signature
+function pendingRows() { return openRows().filter(isPending).concat(D.needsNumber); }
+function maxAge() { const a = openRows().map(clockDays).filter(x => x !== null); return a.length ? Math.max.apply(null, a) : 0; }
 const EDIT_STAGES = ['Request Submitted', 'Proposal Review', 'Testing', 'WI Draft', 'Approval / Routing', 'Published'];
 /* Edit one numbered PPC. Only status, stage, due date, blocker and the two notes can change here, and the server enforces that.
    "In Routing" and "Published" are offered only if the PPC is already there, because they have their own rules and buttons. */
 function openEdit(r) {
   if (!D.can.edit) return;
   const invalid = !STATUS_COLS.some(c => c.status === r.status);
-  const stSel = h('select', { id: 'edStatus' }, [invalid ? h('option', { value: '', text: 'Choose a status' }) : null].concat(STATUS_COLS.map(c => h('option', { value: c.status, text: c.title, disabled: c.status === 'Published' || (c.status === 'In Routing' && r.status !== 'In Routing') }))));
+  const stSel = h('select', { id: 'edStatus' }, [invalid ? h('option', { value: '', text: 'Choose a status' }) : null].concat(STATUS_COLS.map(c => h('option', { value: c.status, text: c.title, disabled: !D.can.allStatuses && ADMIN_ONLY.indexOf(c.status) >= 0 && r.status !== c.status }))));
   stSel.value = invalid ? '' : r.status;
   const stages = EDIT_STAGES.slice(); if (stages.indexOf(r.stage || '') < 0) stages.unshift(r.stage || '');
   const sgSel = h('select', { id: 'edStage' }, stages.map(s => h('option', { value: s, text: s || 'Not set', disabled: s === 'Published' && r.stage !== 'Published' })));
@@ -96,10 +106,11 @@ function openEdit(r) {
   const internal = h('textarea', { id: 'edInternal', maxlength: '1500' }); internal.value = r.internalNotes || '';
   const msg = h('p', { class: 'editmsg', role: 'status' });
   const setMsg = (t, err) => { msg.textContent = t; msg.classList.toggle('err', !!err); };
+  const syncStage = () => { Array.from(sgSel.options).forEach(o => { if (o.value === 'Published') o.disabled = stSel.value !== 'Published' && r.stage !== 'Published'; }); };
   stSel.addEventListener('change', () => {
-    const s = stSel.value; let d = ({ 'Not Started': 'Request Submitted', 'Ready for Signature': 'Approval / Routing', 'In Routing': 'Approval / Routing' })[s];
-    if (s === 'Rough Draft in Progress') d = ['Proposal Review', 'Testing', 'WI Draft'].indexOf(sgSel.value) >= 0 ? sgSel.value : 'WI Draft';
-    if (d) sgSel.value = d;
+    const s = stSel.value; let d = ({ 'Not Started': 'Request Submitted', 'Ready for Signature': 'Approval / Routing', 'Completed': 'Approval / Routing', 'Published': 'Published' })[s];
+    if (s === 'In Progress') d = ['Proposal Review', 'Testing', 'WI Draft'].indexOf(sgSel.value) >= 0 ? sgSel.value : 'WI Draft';
+    syncStage(); if (d) sgSel.value = d;
   });
   const onKey = e => { if (e.key === 'Escape') close(); };
   const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
@@ -122,7 +133,7 @@ function openEdit(r) {
   const field = (label, el, note) => h('label', null, [label, el, note ? h('small', { text: note }) : null]);
   const ov = h('div', { class: 'wz-overlay editov', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Edit ' + r.number }, h('div', { class: 'editbox' }, [
     h('h2', { text: r.number }), h('p', { class: 'sub', text: (r.title || 'Title not recorded') + (r.wi ? ' (' + r.wi + ')' : '') }),
-    field('Status', stSel, 'In routing and Published are set by their own buttons, which are not switched on yet.'), field('Stage', sgSel),
+    field('Status', stSel, D.can.allStatuses ? 'In progress starts the age clock. Completed and Published stamp today\'s date if none is set.' : 'Ready for signature, Completed and Published can be set by an administrator only.'), field('Stage', sgSel),
     field('Due date', due), field('Blocker or next action', blocker),
     field('Public update (requesters see this, and it is emailed when the PPC is routed or published)', pub), field('Internal notes (staff only)', internal),
     msg, h('div', { class: 'actions' }, [save, btn('Cancel', { quiet: true, onclick: close })])]));
@@ -134,42 +145,54 @@ const NOT_BUILT = 'Not switched on yet. This button needs a backend step that is
 /* ---------- staff views ---------- */
 const VIEWS = [['overview', 'Dashboard'], ['missing', 'Missing PPC, need update'], ['tests', 'Tests and reminders'], ['routing', 'Routing and emails'], ['updates', 'Update requests'], ['years', 'Year records']];
 let currentView = 'overview', currentYear = null, mailSel = null, mailEv = 'routed';
+function token(r, cls) {
+  const kids = [h('p', { class: 'num', text: isPending(r) ? 'PPC number pending' : r.number }), h('p', { class: 'ttl', text: r.title || 'Title not recorded' }), h('p', { class: 'who', text: (r.requestor || 'Requester not recorded') + (r.wi ? ', ' + r.wi : '') })];
+  if (r.stage) kids.push(h('p', { class: 'sub', text: r.stage }));
+  const d = clockDays(r);
+  if (d !== null) {
+    const band = clockBand(d);
+    kids.push(clockBar(d));
+    kids.push(h('p', { class: 'days ' + band, title: r.progressStart ? '' : 'Counted from the submitted date, because the day it became In Progress was not recorded.' }, [d + (d === 1 ? ' day' : ' days') + ' in progress', band === 'overdue' ? h('span', { class: 'flagover', text: 'Overdue' }) : null]));
+  } else if (r.status === 'Completed' && r.routing) kids.push(h('p', { class: 'days', text: 'Completed ' + fmtDate(r.routing) }));
+  else if (r.status === 'Published' && r.published) kids.push(h('p', { class: 'days', text: 'Published ' + fmtDate(r.published) }));
+  else if (r.submitted) kids.push(h('p', { class: 'days', text: 'Submitted ' + fmtDate(r.submitted) }));
+  if (D.can.edit) kids.push(h('button', { type: 'button', class: 'tokedit', onclick: () => openEdit(r) }, 'Edit'));
+  return h('li', { class: 'tok ' + cls }, kids);
+}
 function vOverview() {
-  const open = openRows(), need = D.needsNumber, maxD = maxAge();
-  const pubTotal = D.published.length + D.register.filter(r => r.status === 'Published').length;
+  const open = openRows(), pend = pendingRows(), numbered = open.filter(r => !isPending(r)), maxD = maxAge(), openTotal = open.length + D.needsNumber.length;
+  const pubRows = D.register.filter(r => r.status === 'Published'), pubTotal = D.published.length + pubRows.length;
+  const overdue = open.filter(r => clockBand(clockDays(r)) === 'overdue');
   const items = [];
-  if (need.length) items.push([h('span', null, [h('b', { text: pl(need.length, 'open request') + ' ' + (need.length === 1 ? 'has' : 'have') + ' no PPC number.' }), ' The oldest has waited ' + Math.max.apply(null, need.map(r => daysSince(r.submitted) || 0)) + ' days.']), 'Open Missing PPC, need update', 'missing', '']);
-  const noTest = open.filter(r => r.stage === 'Testing' && !D.tests.some(t => t.ppc === r.number));
+  if (overdue.length) items.push([h('span', null, [h('b', { text: pl(overdue.length, 'PPC') + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue (30 days or more in progress): ' }), overdue.map(r => (isPending(r) ? (r.wi || r.title || 'pending request') : r.number) + ' (' + clockDays(r) + ' days)').join(', ') + '.']), null, null, 'red']);
+  if (pend.length) items.push([h('span', null, [h('b', { text: pl(pend.length, 'open request') + ' ' + (pend.length === 1 ? 'has' : 'have') + ' no PPC number.' }), ' The longest has waited ' + Math.max.apply(null, pend.map(r => daysSince(clockStart(r)) || 0)) + ' days.']), 'Open Missing PPC, need update', 'missing', '']);
+  const noTest = numbered.filter(r => r.stage === 'Testing' && !D.tests.some(t => t.ppc === r.number));
   if (noTest.length) items.push([h('span', null, [h('b', { text: pl(noTest.length, 'PPC') + ' ' + (noTest.length === 1 ? 'is' : 'are') + ' in the Testing stage with no test recorded: ' }), noTest.map(r => r.number).join(' and ') + '. Without a test end date, no reminder can be sent.']), 'Open Tests and reminders', 'tests', 'amber']);
-  const routing = open.filter(r => r.status === 'In Routing'), late = routing.filter(r => (daysSince(r.routing) || 0) > 30);
-  if (routing.length) items.push([h('span', null, [h('b', { text: pl(routing.length, 'PPC') + ' ' + (routing.length === 1 ? 'is' : 'are') + ' in routing.' }), late.length ? ' ' + late.length + ' ' + (late.length === 1 ? 'has' : 'have') + ' been there more than a month: ' + late.map(r => daysSince(r.routing) + ' days').join(' and ') + '.' : '']), 'Open Routing and emails', 'routing', 'blue']);
+  const sign = open.filter(r => r.status === 'Ready for Signature');
+  if (sign.length) items.push([h('span', null, [h('b', { text: pl(sign.length, 'PPC') + ' ' + (sign.length === 1 ? 'is' : 'are') + ' ready for signature: ' }), sign.map(r => r.number).join(', ') + '.']), null, null, 'blue']);
   const odd = D.register.filter(r => !STATUS_COLS.some(c => c.status === r.status));
-  const att = h('section', null, [h('h2', { text: 'Needs attention' }), items.length ? h('ul', { class: 'attn' }, items.map(i => h('li', null, [h('div', null, [h('span', { class: 'dot ' + i[3] }), i[0]]), h('a', { class: 'btn', href: '#' + i[2], onclick: e => { e.preventDefault(); show(i[2]); } }, i[1])]))) : h('p', { class: 'empty', text: 'Nothing needs attention right now.' })]);
+  const att = h('section', null, [h('h2', { text: 'Needs attention' }), items.length ? h('ul', { class: 'attn' }, items.map(i => h('li', null, [h('div', null, [h('span', { class: 'dot ' + i[3] }), i[0]]), i[1] ? h('a', { class: 'btn', href: '#' + i[2], onclick: e => { e.preventDefault(); show(i[2]); } }, i[1]) : null]))) : h('p', { class: 'empty', text: 'Nothing needs attention right now.' })]);
   const cols = STATUS_COLS.map(c => {
-    const rows = D.register.filter(r => r.status === c.status), head = h('header', null, [h('h3', { text: c.title }), h('span', { class: 'c', text: String(c.status === 'Published' ? pubTotal : rows.length) })]);
-    if (c.status === 'Published') return h('div', { class: 'col done' }, [head, h('div', { class: 'arch' }, h('p', { text: 'Completed requests live in the archive, not in this board.' }))]);
-    return h('div', { class: 'col ' + c.cls }, [head, rows.length ? h('ul', null, rows.map(r => {
-      const d = daysSince(r.submitted), kids = [h('p', { class: 'num', text: r.number }), h('p', { class: 'ttl', text: r.title || 'Title not recorded' }), h('p', { class: 'who', text: (r.requestor || 'Requester not recorded') + (r.wi ? ', ' + r.wi : '') })];
-      if (r.status === 'In Routing' && r.routing) kids.push(h('p', { class: 'sub', text: 'In routing since ' + fmtDate(r.routing) + ' (' + daysSince(r.routing) + ' days)' })); else if (r.stage) kids.push(h('p', { class: 'sub', text: r.stage }));
-      if (d !== null) { kids.push(ageBar(d, maxD)); kids.push(h('p', { class: 'days', text: d + ' days open' })); }
-      if (D.can.edit) kids.push(h('button', { type: 'button', class: 'tokedit', onclick: () => openEdit(r) }, 'Edit'));
-      return h('li', { class: 'tok ' + c.cls }, kids);
-    })) : h('p', { class: 'none', text: c.status === 'Not Started' ? 'No PPC is waiting to start.' : 'No PPC is waiting for management signatures.' })]);
+    const rows = D.register.filter(r => r.status === c.status), count = c.status === 'Published' ? pubTotal : rows.length;
+    const head = h('header', null, [h('h3', { text: c.title }), h('span', { class: 'c', text: String(count) })]);
+    if (c.status === 'Published') return h('div', { class: 'col done' }, [head, pubRows.length ? h('ul', null, pubRows.slice(0, 8).map(r => token(r, 'done'))) : null, h('div', { class: 'arch' }, h('p', { text: D.published.length + ' older completed requests live in the archive, not on this board.' }))]);
+    return h('div', { class: 'col ' + c.cls }, [head, rows.length ? h('ul', null, rows.map(r => token(r, c.cls))) : h('p', { class: 'none', text: ({ 'Not Started': 'No PPC is waiting to start.', 'Ready for Signature': 'No PPC is waiting for management signatures.', 'Completed': 'No PPC is marked Completed.' })[c.status] || 'Nothing here.' })]);
   });
+  const legend = h('ul', { class: 'clocklegend' }, [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more is Overdue']].map(p => h('li', null, [h('span', { class: 'sw ' + p[0] }), p[1]])));
   return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: 'PPC command center' }),
-    h('p', { class: 'lead' }, [h('strong', { text: pl(open.length + need.length, 'request') + (open.length + need.length === 1 ? ' is' : ' are') + ' open. ' }), open.length + ' ' + (open.length === 1 ? 'has' : 'have') + ' a PPC number and ' + need.length + ' ' + (need.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (maxD ? ' The oldest open request has been waiting ' + maxD + ' days.' : '')]),
-    odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => r.number + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + r.number, { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
-    att, h('section', null, [h('h2', { text: 'Where the numbered PPCs are' }), h('p', { class: 'hint', text: 'Days open count from the submitted date in the sheet.' }), h('div', { class: 'flow' }, cols)])]);
+    h('p', { class: 'lead' }, [h('strong', { text: pl(openTotal, 'request') + (openTotal === 1 ? ' is' : ' are') + ' open. ' }), numbered.length + ' ' + (numbered.length === 1 ? 'has' : 'have') + ' a PPC number and ' + pend.length + ' ' + (pend.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (overdue.length ? ' ' + overdue.length + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue.' : '') + (maxD ? ' The longest in progress has been going ' + maxD + ' days.' : '')]),
+    odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => (isPending(r) ? 'pending ' + (r.wi || '') : r.number) + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + (isPending(r) ? (r.wi || 'pending request') : r.number), { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
+    att, h('section', null, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress.' }), legend, h('div', { class: 'flow' }, cols)])]);
 }
 function vMissing() {
-  const need = D.needsNumber, maxD = Math.max.apply(null, [0].concat(need.map(r => daysSince(r.submitted) || 0)));
-  const rows = need.map(r => { const d = daysSince(r.submitted); return h('tr', null, [td([h('b', { text: r.wi || 'No WI recorded' }), h('br'), h('span', { class: 'mut', text: r.title || 'Title not recorded' })]), td(r.requestor || ''), td(fmtDate(r.submitted)), td(d === null ? '' : [ageBar(d, maxD), h('span', { class: 'n', text: String(d) })], 'bar'), td(r.status + (r.stage ? ', ' + r.stage : '')), td([btn('Issue PPC number', { disabled: true, title: NOT_BUILT }), ' ', btn('Close request', { quiet: true, disabled: true, title: NOT_BUILT })], 'act')]); });
+  const need = pendingRows();
+  const rows = need.map(r => { const d = r.status === 'In Progress' ? clockDays(r) : daysSince(r.submitted); const inReg = D.register.indexOf(r) >= 0; return h('tr', null, [td([h('b', { text: r.wi || 'No WI recorded' }), h('br'), h('span', { class: 'mut', text: r.title || 'Title not recorded' })]), td(r.requestor || ''), td(fmtDate(r.submitted)), td(d === null ? '' : [r.status === 'In Progress' ? clockBar(d) : null, h('span', { class: 'n', text: String(d) })], 'bar'), td(r.status + (r.stage ? ', ' + r.stage : '')), td([btn('Issue PPC number', { disabled: true, title: NOT_BUILT }), ' ', btn('Close request', { quiet: true, disabled: true, title: NOT_BUILT }), D.can.edit && inReg ? ' ' : null, D.can.edit && inReg ? btn('Edit', { quiet: true, onclick: () => openEdit(r) }) : null], 'act')]); });
   return h('div', { class: 'view', id: 'v-missing', hidden: true }, [h('h1', { text: 'Missing PPC, need update' }),
-    h('p', { class: 'lead' }, [h('strong', { text: need.length ? pl(need.length, 'open request') + ' ' + (need.length === 1 ? 'has' : 'have') + ' no PPC number.' : 'Every open request has a PPC number.' }), need.length ? ' New requests with no WI number will land here too.' : '']),
-    h('section', null, [h('h2', { text: 'Decide each one' }), h('p', { class: 'hint', text: 'The buttons are visible so you can see the plan. They are switched on in a later step. No number is ever guessed.' }), table(['Request', 'Requested by', 'Submitted', 'Days open', 'Status in the sheet', 'Action'], rows, 'Nothing is waiting for a PPC number.')])]);
+    h('p', { class: 'lead' }, [h('strong', { text: need.length ? pl(need.length, 'open request') + ' ' + (need.length === 1 ? 'has' : 'have') + ' no PPC number.' : 'Every open request has a PPC number.' }), need.length ? ' They are on the register with the status the source sheet gives them. New requests with no WI number will land here too.' : '']),
+    h('section', null, [h('h2', { text: 'Decide each one' }), h('p', { class: 'hint', text: 'You can edit these now. Issue PPC number and Close request are switched on in a later step. No number is ever guessed.' }), table(['Request', 'Requested by', 'Submitted', 'Days in progress', 'Status, stage', 'Action'], rows, 'Nothing is waiting for a PPC number.')])]);
 }
 function vTests() {
-  const open = openRows(), cfg = D.config, noTest = open.filter(r => r.stage === 'Testing' && !D.tests.some(t => t.ppc === r.number));
+  const open = openRows().filter(r => !isPending(r)), cfg = D.config, noTest = open.filter(r => r.stage === 'Testing' && !D.tests.some(t => t.ppc === r.number));
   const rows1 = noTest.map(r => h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td(r.requestor || ''), td('No test recorded'), td(btn('Record a test', { open: 'test', ppc: r.number }), 'act')]));
   const rows2 = D.tests.map(t => { const d = daysSince(t.end); return h('tr', null, [td([h('b', { text: t.ppc }), h('br'), h('span', { class: 'mut', text: t.id })]), td([t.owner, h('br'), h('span', { class: 'mut', text: t.ownerEmail })]), td(fmtDate(t.end) + (d === null ? '' : d > 0 ? ', ended ' + pl(d, 'day') + ' ago' : d === 0 ? ', ends today' : ', ends in ' + pl(-d, 'day'))), td(t.result), td(btn('Send reminder now', { quiet: true, disabled: true, title: NOT_BUILT }), 'act')]); });
   const kv = [['Automatic check', 'Once a day, around 8 AM, after the daily trigger is installed.'], ['When it reminds', 'From ' + cfg.reminderLeadDays + ' days before the test end date, and every ' + cfg.reminderCooldownDays + ' days after it passes, until the PPC is published.'], ['Who gets it', 'The document specialist, or the requester if no specialist is recorded. Adding the test owner is a backend change.'], ['Minimum test length', cfg.minTestDays + ' calendar days, enforced by the server as well as the form.'], ['Email mode', cfg.emailMode === 'LIVE' ? 'Live. Reminders are emailed and logged.' : 'Dry run. Reminders are logged but not sent until PPC_CONFIG EMAIL_MODE is LIVE.']];
@@ -190,13 +213,13 @@ function mailBox() {
   return box;
 }
 function vRouting() {
-  const routing = openRows().filter(r => r.status === 'In Routing'); if (!mailSel && routing.length) mailSel = routing[0].number;
-  const rows = routing.map(r => { const d = daysSince(r.routing); return h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td([r.requestor || '', h('br'), h('span', { class: 'mut', text: r.requestorEmail || 'no email on file' })]), td(r.routing ? [fmtDate(r.routing), h('br'), h('span', { class: 'mut', text: d + ' days' })] : 'No routing date'), td([btn('Preview email', { quiet: true, onclick: () => { mailSel = r.number; renderMail(); } }), ' ', D.can.edit ? btn('Edit', { quiet: true, onclick: () => openEdit(r) }) : null, ' ', btn('Mark published', { disabled: true, title: NOT_BUILT })], 'act')]); });
+  const done = D.register.filter(r => r.status === 'Completed'); if ((!mailSel || !done.some(r => r.number === mailSel)) && done.length) mailSel = done[0].number;
+  const rows = done.map(r => { const d = daysSince(r.routing); return h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td([r.requestor || '', h('br'), h('span', { class: 'mut', text: r.requestorEmail || 'no email on file' })]), td(r.routing ? [fmtDate(r.routing), h('br'), h('span', { class: 'mut', text: d + ' days ago' })] : 'No completed date'), td([btn('Preview email', { quiet: true, onclick: () => { mailSel = r.number; renderMail(); } }), ' ', D.can.edit ? btn('Edit', { quiet: true, onclick: () => openEdit(r) }) : null, ' ', btn('Send email', { disabled: true, title: NOT_BUILT })], 'act')]); });
   const seg = (ev, label) => h('button', { type: 'button', class: 'seg' + (mailEv === ev ? ' on' : ''), 'aria-pressed': String(mailEv === ev), onclick: () => { mailEv = ev; renderMail(); } }, label);
   return h('div', { class: 'view', id: 'v-routing', hidden: true }, [h('h1', { text: 'Routing and emails' }),
-    h('p', { class: 'lead' }, [h('strong', { text: pl(routing.length, 'PPC') + (routing.length === 1 ? ' is' : ' are') + ' in routing.' }), ' Marking a PPC routed or published emails the requester.']),
-    h('section', null, [h('h2', { text: 'In routing now' }), table(['PPC', 'Requested by', 'In routing since', 'Action'], rows, 'No PPC is in routing.')]),
-    h('section', null, [h('h2', { text: 'Email the requester receives' }), h('div', { class: 'tabs2', role: 'group', 'aria-label': 'Email event' }, [seg('routed', 'Routed'), seg('published', 'Published')]), mailBox()])]);
+    h('p', { class: 'lead' }, [h('strong', { text: pl(done.length, 'PPC') + (done.length === 1 ? ' is' : ' are') + ' Completed.' }), ' Setting a status from the Edit panel does not send email. The email buttons are switched on in a later step.']),
+    h('section', null, [h('h2', { text: 'Completed PPCs' }), table(['PPC', 'Requested by', 'Completed on', 'Action'], rows, 'No PPC is marked Completed.')]),
+    h('section', null, [h('h2', { text: 'Email the requester will receive' }), h('div', { class: 'tabs2', role: 'group', 'aria-label': 'Email event' }, [seg('routed', 'Completed'), seg('published', 'Published')]), mailBox()])]);
 }
 function renderMail() { const v = $('#v-routing'); if (!v) return; const old = v.children[3]; const fresh = vRouting(); v.replaceWith(fresh); fresh.hidden = currentView !== 'routing'; }
 function vUpdates() {
@@ -204,14 +227,14 @@ function vUpdates() {
     h('section', null, [h('h2', { text: 'The plan' }), h('ol', { class: 'steps4' }, ['A requester opens a request on their page and chooses Request an update.', 'It appears here, and the document specialist gets an email.', 'You write a short public update on the PPC. Internal notes are never shown to requesters.', 'You mark it answered, and the requester gets an email with the status and your note.'].map(t => h('li', { text: t })))])]);
 }
 function allRows() {
-  return [].concat(D.register.map(r => Object.assign({ tab: r.status === 'Published' ? 'published' : 'register' }, r)), D.published.map(r => Object.assign({ tab: 'published' }, r)), D.blocked.map(r => Object.assign({ tab: 'blocked' }, r)), D.needsNumber.map(r => Object.assign({ tab: 'needsNumber' }, r)));
+  return [].concat(D.register.map(r => Object.assign({ tab: (r.status === 'Completed' || r.status === 'Published') ? 'published' : (isPending(r) ? 'needsNumber' : 'register') }, r)), D.published.map(r => Object.assign({ tab: 'published' }, r)), D.blocked.map(r => Object.assign({ tab: 'blocked' }, r)), D.needsNumber.map(r => Object.assign({ tab: 'needsNumber' }, r)));
 }
 function yearStats(rows) {
   const s = { total: rows.length, done: 0, doneDated: 0, open: 0, need: 0, blocked: 0 };
   rows.forEach(r => { if (r.tab === 'published') { s.done++; if (r.published) s.doneDated++; } else if (r.tab === 'blocked') s.blocked++; else if (r.tab === 'needsNumber') s.need++; else s.open++; });
   return s;
 }
-function rowStatus(r) { return r.tab === 'published' ? 'Published' : r.tab === 'blocked' ? 'Marked blocked' : r.tab === 'needsNumber' ? 'Open, no PPC number' : (r.status || 'Open'); }
+function rowStatus(r) { return r.tab === 'published' ? (r.status === 'Completed' ? 'Completed' : 'Published') : r.tab === 'blocked' ? 'Marked blocked' : r.tab === 'needsNumber' ? 'In progress, no PPC number' : (r.status || 'Open'); }
 function vYears() {
   const rows = allRows(), by = {}; rows.forEach(r => { (by[yearOf(r.submitted)] = by[yearOf(r.submitted)] || []).push(r); });
   const years = Object.keys(by).sort(); if (!currentYear || !by[currentYear]) currentYear = years.filter(y => y !== 'No date').pop() || years[0];
@@ -268,16 +291,16 @@ function renderStaff() {
 }
 
 /* ---------- requester view ---------- */
-const STEPS = ['Request received', 'Drafting and testing', 'Ready for signature', 'In routing', 'Published'];
+const STEPS = ['Request received', 'In progress', 'Ready for signature', 'Completed', 'Published'];
 let reqSel = null;
 function whereText(r) {
   if (r.tab === 'blocked') return 'On hold';
-  if (r.state === 'Complete') return 'Published' + (r.published ? ' ' + fmtDate(r.published) : '');
-  if (r.numberPending) return 'Waiting for a PPC number from document control';
-  if (r.status === 'In Routing') return 'In routing' + (r.routing ? ' since ' + fmtDate(r.routing) : '');
+  if (r.status === 'Published' || r.tab === 'published') return 'Published' + (r.published ? ' ' + fmtDate(r.published) : '');
+  if (r.status === 'Completed') return 'Completed' + (r.routing ? ' ' + fmtDate(r.routing) : '');
+  if (r.numberPending) return 'In progress, waiting for a PPC number from document control';
   if (r.status === 'Ready for Signature') return 'Waiting for management signatures';
   if (r.status === 'Not Started') return 'Not started yet';
-  return r.stage === 'Testing' ? 'Testing' : 'Drafting the work instruction';
+  return r.stage === 'Testing' ? 'In progress, testing' : 'In progress, drafting the work instruction';
 }
 function renderRequester() {
   $('#rwho').textContent = D.user.name; banner($('#rbanner'));
@@ -290,7 +313,7 @@ function renderRequester() {
   if (!reqSel) det.append(h('h2', { text: mine.length ? 'Choose a request' : 'No requests yet' }), h('p', { class: 'sub', text: mine.length ? 'Select one on the left to see its progress.' : 'Nothing is recorded under your email address.' }));
   else {
     const r = reqSel; det.append(h('h2', { text: r.number || 'PPC number pending' }), h('p', { class: 'sub', text: (r.title || 'Title not recorded') + (r.wi ? ' (' + r.wi + ')' : '') + ', submitted ' + fmtDate(r.submitted) }),
-      h('ol', { class: 'tl' }, STEPS.map((s, i) => h('li', { class: r.state === 'Complete' ? (i < 4 ? 'done' : 'now') : (i < r.step ? 'done' : i === r.step ? 'now' : ''), text: s }))),
+      h('ol', { class: 'tl' }, STEPS.map((s, i) => h('li', { class: i < r.step ? 'done' : i === r.step ? 'now' : '', text: s }))),
       h('p', null, [h('b', { text: 'Where it is: ' }), whereText(r)]), h('h3', { class: 'nh', text: 'Latest note from document control' }),
       r.publicNotes && !/^Imported from legacy source/.test(r.publicNotes) ? h('p', { class: 'note2', text: r.publicNotes }) : h('p', { class: 'note2 mut', text: 'No update has been written yet.' }),
       h('p', { class: 'mut', text: 'Asking document control for an update from this page is not built yet.' }));
@@ -312,7 +335,7 @@ function showApp() {
 const openers = new WeakSet();
 function wireOpeners() { $$('[data-open]').forEach(b => { if (openers.has(b)) return; openers.add(b); b.addEventListener('click', () => (b.dataset.open === 'request' ? WZ.request : WZ.test).open(b, b.dataset.ppc || null)); }); }
 const WZ = {};
-function ppcsForWizard() { const src = D.view === 'staff' ? D.register : D.mine.filter(m => m.tab === 'register' && m.number); return src.filter(r => r.status !== 'Published' && r.number).map(r => ({ n: r.number, dept: r.number.split('-')[1], title: r.title, wi: r.wi, status: r.status })); }
+function ppcsForWizard() { const src = D.view === 'staff' ? D.register : D.mine.filter(m => m.tab === 'register' && m.number); return src.filter(r => r.status !== 'Published' && r.status !== 'Completed' && r.number && !isPending(r)).map(r => ({ n: r.number, dept: r.number.split('-')[1], title: r.title, wi: r.wi, status: r.status })); }
 function wizard(ov, o) {
   const wz = $('.wz', ov); let step = 1, opener = null;
   const label = $('[data-label]', wz);

@@ -154,3 +154,10 @@ body.printing-wz>*:not(.wz-overlay){display:none!important}body.printing-wz .wz-
 .editbox label{display:grid;gap:5px;margin:12px 0 0;font-size:13px;color:var(--muted)}.editbox small{color:var(--muted);font-size:12px}
 .editbox input,.editbox select,.editbox textarea{font:inherit;color:var(--text);background:#0c1626;border:1px solid var(--line);border-radius:3px;padding:8px;width:100%}.editbox textarea{min-height:70px;resize:vertical}.editbox select option:disabled{color:#5d708a}
 .editbox .actions{margin-top:16px}.editmsg{margin:12px 0 0;min-height:20px;color:var(--muted)}.editmsg.err{color:#ffd5d0}
+
+.tok .age.green span{background:var(--done)}.tok .age.yellow span{background:var(--draft)}.tok .age.overdue span{background:var(--block)}
+.age.green span{background:var(--done)}.age.yellow span{background:var(--draft)}.age.overdue span{background:var(--block)}
+.tok .days.green{color:var(--done)}.tok .days.yellow{color:var(--draft)}.tok .days.overdue{color:var(--block);font-weight:600}
+.flagover{margin-left:8px;border:1px solid var(--block);color:var(--block);border-radius:3px;padding:0 6px;font-size:11px}
+.dot.red{background:var(--block)}.sw.green{background:var(--done)}.sw.yellow{background:var(--draft)}.sw.overdue{background:var(--block)}
+.clocklegend{list-style:none;margin:0 0 14px;padding:0;display:flex;gap:22px;flex-wrap:wrap;color:var(--muted);font-size:13px}.clocklegend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px}
