@@ -160,7 +160,7 @@ body.printing-wz>*:not(.wz-overlay){display:none!important}body.printing-wz .wz-
 .tok .days.green{color:var(--done)}.tok .days.yellow{color:var(--draft)}.tok .days.overdue{color:var(--block);font-weight:600}
 .flagover{margin-left:8px;border:1px solid var(--block);color:var(--block);border-radius:3px;padding:0 6px;font-size:11px}
 .dot.red{background:var(--block)}.sw.green{background:var(--done)}.sw.yellow{background:var(--draft)}.sw.overdue{background:var(--block)}
-.clocklegend{list-style:none;margin:0 0 14px;padding:0;display:flex;gap:22px;flex-wrap:wrap;color:var(--muted);font-size:13px}.clocklegend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px}
+
 
 .colhead{display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;font:inherit;color:var(--text);background:transparent;border:0;padding:0;margin:0 0 12px;cursor:pointer}
 .colhead h3{font-size:14px;margin:0;font-weight:600;flex:1;min-width:0}.colhead .c{font-size:22px;font-weight:600}
@@ -173,3 +173,11 @@ body.printing-wz>*:not(.wz-overlay){display:none!important}body.printing-wz .wz-
 .dephead b{flex:1;font-weight:600}.dephead .n{color:var(--muted)}.dephead:hover{background:#101c2f}
 @media(max-width:1100px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(max-width:760px){.flow{grid-template-columns:minmax(0,1fr)!important}.pubtools{flex-direction:column;align-items:stretch}#pubSearch{min-width:0}}
+
+.band{margin:0 0 4px}.band ul{list-style:none;margin:0;padding:0}
+.bandhead{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;font-size:13px;color:var(--muted);background:transparent;border:0;border-top:1px solid var(--line);padding:9px 2px;cursor:pointer}
+.bandhead:hover{color:var(--text)}.bandhead .bl{flex:1;min-width:0}.bandhead .n{font-weight:600;color:var(--text)}
+.bandhead .caret{width:12px;font-size:13px;line-height:1}
+.bandhead .sw{display:inline-block;width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+.bandhead.green .n{color:var(--done)}.bandhead.yellow .n{color:var(--draft)}.bandhead.overdue .n{color:var(--block)}
+.none.small{font-size:12px;margin:2px 0 10px}.bandplain{font-size:13px;color:var(--draft);border-top:1px solid var(--line);padding:9px 2px;margin:0}

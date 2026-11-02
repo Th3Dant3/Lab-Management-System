@@ -88,6 +88,8 @@ function byBand(a, b) {
   return (b.submitted || '').localeCompare(a.submitted || '');
 }
 const collapsed = {};                                  // which board columns are closed, remembered while the page is open
+const bandShut = {};                                   // which colour groups inside In progress are closed
+const BANDS = [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more, Overdue']];
 const deptOpen = {};                                   // which department groups are open on the Published page
 function clockBar(d) { const s = h('span'); s.style.width = Math.min(100, Math.max(2, Math.round(d / 30 * 100))) + '%'; return h('div', { class: 'age ' + clockBand(d), role: 'img', 'aria-label': d + ' days in progress, ' + clockBand(d) }, s); }
 function ageBar(days, maxD) { const s = h('span'); s.style.width = (maxD ? Math.max(2, Math.round(days / maxD * 100)) : 0) + '%'; return h('div', { class: 'age', role: 'img', 'aria-label': days + ' days open' }, s); }
@@ -191,6 +193,19 @@ function vOverview() {
       onclick: () => { collapsed[c.status] = !shut; rebuild('overview'); } },
       [h('span', { class: 'caret', 'aria-hidden': 'true', text: shut ? '+' : '\u2212' }), h('h3', { text: c.title }), h('span', { class: 'c', text: String(count) })]);
     if (shut) return h('div', { class: 'col ' + c.cls + ' collapsed' }, [head, h('p', { class: 'none', text: count === 1 ? '1 hidden' : count + ' hidden' })]);
+    if (c.status === 'In Progress') {
+      const kids = [head];
+      BANDS.forEach(p => {
+        const key = p[0], list = rows.filter(r => clockBand(clockDays(r)) === key), shutB = bandShut[key] === true;
+        const bh = h('button', { type: 'button', class: 'bandhead ' + key, 'aria-expanded': String(!shutB), title: (shutB ? 'Open' : 'Close') + ' ' + p[1],
+          onclick: () => { bandShut[key] = !shutB; rebuild('overview'); } },
+          [h('span', { class: 'caret', 'aria-hidden': 'true', text: shutB ? '+' : '\u2212' }), h('span', { class: 'sw ' + key, 'aria-hidden': 'true' }), h('span', { class: 'bl', text: p[1] }), h('span', { class: 'n', text: String(list.length) })]);
+        kids.push(h('div', { class: 'band ' + key }, [bh, shutB ? null : (list.length ? h('ul', null, list.map(r => token(r, c.cls))) : h('p', { class: 'none small', text: 'None in this range.' }))]));
+      });
+      const noClock = rows.filter(r => clockDays(r) === null);
+      if (noClock.length) kids.push(h('div', { class: 'band' }, [h('p', { class: 'bandplain', text: pl(noClock.length, 'with no start date recorded') }), h('ul', null, noClock.map(r => token(r, c.cls)))]));
+      return h('div', { class: 'col ' + c.cls }, kids);
+    }
     if (c.status === 'Published') return h('div', { class: 'col done' }, [head, rows.length ? h('ul', null, rows.slice(0, 8).map(r => token(r, 'done'))) : null,
       h('div', { class: 'arch' }, [h('p', { text: D.published.length + ' older completed requests are not on this board.' }), h('a', { class: 'btn', href: '#published', onclick: e => { e.preventDefault(); show('published'); } }, 'See all published documents')])]);
     return h('div', { class: 'col ' + c.cls }, [head, rows.length ? h('ul', null, rows.map(r => token(r, c.cls))) : h('p', { class: 'none', text: ({ 'Not Started': 'No PPC is waiting to start.', 'Ready for Signature': 'No PPC is waiting for management signatures.', 'Completed': 'No PPC is marked Completed.' })[c.status] || 'Nothing here.' })]);
@@ -198,11 +213,10 @@ function vOverview() {
   const cols = STATUS_COLS.map(colFor);
   const flow = h('div', { class: 'flow' }, cols);
   flow.style.gridTemplateColumns = STATUS_COLS.map(c => collapsed[c.status] ? 'minmax(118px,0.34fr)' : 'minmax(0,1fr)').join(' ');   // a closed column keeps enough room for its heading to read properly
-  const legend = h('ul', { class: 'clocklegend' }, [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more is Overdue']].map(p => h('li', null, [h('span', { class: 'sw ' + p[0] }), p[1]])));
   return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: 'PPC command center' }),
     h('p', { class: 'lead' }, [h('strong', { text: pl(openTotal, 'request') + (openTotal === 1 ? ' is' : ' are') + ' open. ' }), numbered.length + ' ' + (numbered.length === 1 ? 'has' : 'have') + ' a PPC number and ' + pend.length + ' ' + (pend.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (overdue.length ? ' ' + overdue.length + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue.' : '') + (maxD ? ' The longest in progress has been going ' + maxD + ' days.' : '')]),
     odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => (isPending(r) ? 'pending ' + (r.wi || '') : r.number) + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + (isPending(r) ? (r.wi || 'pending request') : r.number), { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
-    att, h('section', null, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. Cards run green first, then yellow, then overdue. Click a column heading to close it.' }), legend, flow])]);
+    att, h('section', null, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. Click a column heading, or a colour heading, to close it.' }), flow])]);
 }
 function vMissing() {
   const need = pendingRows();
