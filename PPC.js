@@ -125,7 +125,7 @@ function openEdit(r) {
     if (s === 'In Progress') d = ['Proposal Review', 'Testing', 'WI Draft'].indexOf(sgSel.value) >= 0 ? sgSel.value : 'WI Draft';
     syncStage(); if (d) sgSel.value = d;
   });
-  const onKey = e => { if (e.key === 'Escape') close(); };
+  const onKey = e => { if (e.key === 'Escape' && !document.querySelector('.lightbox')) close(); };   // Escape closes the image viewer first, never this panel underneath it
   const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
   const save = btn('Save changes', { primary: true, onclick: async () => {
     const ch = {};
@@ -149,9 +149,96 @@ function openEdit(r) {
     field('Status', stSel, D.can.allStatuses ? 'In progress starts the age clock. Completed and Published stamp today\'s date if none is set.' : 'Ready for signature, Completed and Published can be set by an administrator only.'), field('Stage', sgSel),
     field('Due date', due), field('Blocker or next action', blocker),
     field('Public update (requesters see this, and it is emailed when the PPC is routed or published)', pub), field('Internal notes (staff only)', internal),
-    msg, h('div', { class: 'actions' }, [save, btn('Cancel', { quiet: true, onclick: close })])]));
+    msg, h('div', { class: 'actions' }, [save, btn('Cancel', { quiet: true, onclick: close })]),
+    D.can.attach ? attachPanel(r.number, { canAdd: true, canDelete: true }) : h('p', { class: 'mut small', text: 'Images are not set up yet. An administrator must run setupPpcAttachmentsV7.' })]));
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
   document.addEventListener('keydown', onKey); document.body.append(ov); stSel.focus();
+}
+const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const IMG_MAX_BYTES = 4 * 1024 * 1024;
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => { const s = String(fr.result || ''); const i = s.indexOf(','); resolve(i >= 0 ? s.slice(i + 1) : ''); };
+    fr.onerror = () => reject(new Error('That file could not be read.'));
+    fr.readAsDataURL(file);
+  });
+}
+/* Images for one PPC. The server re-checks who you are on every list, every view and every upload, so this panel
+   only decides what to show. Pictures are fetched one at a time and never cached on disk. */
+function attachPanel(ppc, opts) {
+  opts = opts || {};
+  const grid = h('div', { class: 'thumbs' }), msg = h('p', { class: 'attachmsg', role: 'status' });
+  const setMsg = (t, err) => { msg.textContent = t || ''; msg.classList.toggle('err', !!err); };
+  const wrap = h('section', { class: 'attach' }, [h('h3', { class: 'nh', text: 'Images' }), grid, msg]);
+  let busy = false;
+  async function open(it) {
+    const box = h('div', { class: 'lightbox', role: 'dialog', 'aria-modal': 'true', 'aria-label': it.name });
+    const close = () => { box.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = e => { if (e.key === 'Escape') close(); };
+    const body = h('div', { class: 'lbbody' }, h('p', { class: 'mut', text: 'Loading ' + it.name + '...' }));
+    box.append(h('div', { class: 'lbbar' }, [h('b', { text: it.name }), h('span', { class: 'grow' }), btn('Close', { quiet: true, onclick: close })]), body);
+    box.addEventListener('click', e => { if (e.target === box) close(); });
+    document.addEventListener('keydown', onKey); document.body.append(box);
+    try {
+      const full = await api('getAttachment', { id: it.id });
+      setKids(body, [h('img', { src: full.dataUrl, alt: it.caption || it.name }), it.caption ? h('p', { class: 'cap', text: it.caption }) : null]);
+    } catch (e) { setKids(body, [h('p', { class: 'err', text: e.message })]); }
+  }
+  async function load() {
+    setKids(grid, [h('p', { class: 'mut', text: 'Loading images...' })]);
+    let items = [];
+    try { items = (await api('listAttachments', { number: ppc })).items || []; }
+    catch (e) { setKids(grid, [h('p', { class: 'err', text: e.message })]); return; }
+    if (!items.length) setKids(grid, [h('p', { class: 'mut', text: 'No images yet.' })]);
+    else setKids(grid, items.map(it => {
+      const fig = h('figure', { class: 'thumb' });
+      const img = h('img', { alt: it.caption || it.name });
+      const btns = [btn('View', { quiet: true, onclick: () => open(it) })];
+      if (opts.canDelete) btns.push(btn('Delete', { quiet: true, onclick: async () => {
+        if (!confirm('Delete ' + it.name + '? It is removed from this PPC and moved to the Drive bin.')) return;
+        try { await api('deleteAttachment', { id: it.id }); setMsg('Deleted ' + it.name + '.'); load(); }
+        catch (e) { setMsg(e.message, true); } } }));
+      fig.append(img, h('figcaption', null, [h('span', { class: 'fn', text: it.caption || it.name }), h('span', { class: 'mut', text: Math.max(1, Math.round(it.bytes / 1024)) + ' KB, added by ' + it.by.split('@')[0] + (it.at ? ' on ' + fmtDate(it.at) : '') }), h('span', { class: 'tb' }, btns)]));
+      let triedFull = false;
+      const giveUp = () => { if (img.isConnected) img.replaceWith(h('div', { class: 'nothumb', text: 'Preview unavailable' })); };
+      img.addEventListener('error', () => {            // Drive's small preview can be missing or unreadable; fall back to the real image once
+        if (triedFull) { giveUp(); return; }
+        triedFull = true;
+        api('getAttachment', { id: it.id }).then(f => { img.src = f.dataUrl; }).catch(giveUp);
+      });
+      api('getAttachment', { id: it.id, size: 'thumb' }).then(t => { img.src = t.dataUrl; }).catch(giveUp);
+      return fig;
+    }));
+  }
+  async function send(file, caption) {
+    if (busy) return;
+    if (!file) { setMsg('Choose an image first.', true); return; }
+    if (IMG_TYPES.indexOf(file.type) < 0) { setMsg('Only PNG, JPEG, GIF and WebP images can be attached.', true); return; }
+    if (file.size > IMG_MAX_BYTES) { setMsg('That image is ' + (Math.round(file.size / 1048576 * 10) / 10) + ' MB. The limit is 4 MB.', true); return; }
+    busy = true; setMsg('Uploading ' + (file.name || 'image') + '...');
+    try {
+      const data = await fileToBase64(file);
+      await api('addAttachment', { number: ppc, name: file.name || 'screenshot.png', data: data, caption: caption || '' });
+      setMsg('Added ' + (file.name || 'image') + '.'); await load();
+    } catch (e) { setMsg(e.code === 'WRITES_OFF' ? 'Saving from this page is switched off for now. Nothing was uploaded.' : e.message, true); }
+    busy = false;
+  }
+  if (opts.canAdd) {
+    const input = h('input', { type: 'file', id: 'imgFile-' + ppc, accept: IMG_TYPES.join(',') });
+    const cap = h('input', { type: 'text', maxlength: '300', placeholder: 'What does this image show? (optional)' });
+    const add = btn('Add image', { onclick: async () => { await send(input.files && input.files[0], cap.value); input.value = ''; cap.value = ''; } });
+    const paste = h('div', { class: 'pastebox', tabindex: '0', title: 'Click here, then press Ctrl+V to paste a screenshot' }, 'Or click here and press Ctrl+V to paste a screenshot');
+    paste.addEventListener('paste', async e => {
+      const items = (e.clipboardData && e.clipboardData.files) || [];
+      if (!items.length) { setMsg('There is no image on the clipboard. Take a screenshot first.', true); return; }
+      e.preventDefault(); await send(items[0], cap.value); cap.value = '';
+    });
+    wrap.append(h('div', { class: 'attachadd' }, [input, cap, add]), paste);
+  }
+  wrap.append(h('p', { class: 'mut small', text: 'PNG, JPEG, GIF or WebP, up to 4 MB each, 20 per PPC. Images are kept in the document control Drive folder and are only shown to people allowed to see this PPC.' }));
+  load();
+  return wrap;
 }
 const NOT_BUILT = 'Not switched on yet. This button needs a backend step that is built after sign-in is confirmed.';
 
@@ -169,6 +256,8 @@ function token(r, cls) {
   } else if (r.status === 'Completed' && r.routing) kids.push(h('p', { class: 'days', text: 'Completed ' + fmtDate(r.routing) }));
   else if (r.status === 'Published' && r.published) kids.push(h('p', { class: 'days', text: 'Published ' + fmtDate(r.published) }));
   else if (r.submitted) kids.push(h('p', { class: 'days', text: 'Submitted ' + fmtDate(r.submitted) }));
+  const pics = (D.imageCounts || {})[r.number] || 0;
+  if (pics) kids.push(h('p', { class: 'haspic', text: pics === 1 ? '1 image' : pics + ' images' }));
   if (D.can.edit) kids.push(h('button', { type: 'button', class: 'tokedit', onclick: () => openEdit(r) }, 'Edit'));
   return h('li', { class: 'tok ' + cls }, kids);
 }
@@ -385,6 +474,8 @@ function renderRequester() {
       h('p', null, [h('b', { text: 'Where it is: ' }), whereText(r)]), h('h3', { class: 'nh', text: 'Latest note from document control' }),
       r.publicNotes && !/^Imported from legacy source/.test(r.publicNotes) ? h('p', { class: 'note2', text: r.publicNotes }) : h('p', { class: 'note2 mut', text: 'No update has been written yet.' }),
       h('p', { class: 'mut', text: 'Asking document control for an update from this page is not built yet.' }));
+    if (D.can.attach && r.number) det.append(attachPanel(r.number, { canAdd: true, canDelete: true }));
+    else if (D.can.attach) det.append(h('p', { class: 'mut small', text: 'Images can be added once document control gives this request a PPC number.' }));
   }
   setKids($('#rview'), [h('h1', { text: 'My requests' }), h('p', { class: 'lead' }, ['You have ', h('strong', { text: pl(mine.length, 'request') }), '. Pick one to see where it is.']),
     h('p', { class: 'keyline' }, ['Not started', 'In progress', 'Complete'].map(s => h('span', null, [h('b', { text: String(cnt(s)) }), s]))),
