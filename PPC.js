@@ -164,13 +164,64 @@ function fileToBase64(file) {
     fr.readAsDataURL(file);
   });
 }
+/* Images chosen while filling in a form, before the PPC or test exists. Nothing is sent until the record is created,
+   so a half-finished form never leaves files behind. After it is created the staged images are uploaded one by one. */
+function stageImages(label) {
+  const picked = [], list = h('div', { class: 'staged' }), msg = h('p', { class: 'attachmsg', role: 'status' });
+  const setMsg = (t, err) => { msg.textContent = t || ''; msg.classList.toggle('err', !!err); };
+  function draw() {
+    if (!picked.length) { setKids(list, [h('p', { class: 'mut', text: 'No images chosen yet.' })]); return; }
+    setKids(list, picked.map((f, i) => h('div', { class: 'stagerow' }, [
+      h('span', { class: 'fn', text: f.name || 'screenshot.png' }),
+      h('span', { class: 'mut', text: Math.max(1, Math.round(f.size / 1024)) + ' KB' }),
+      btn('Remove', { quiet: true, onclick: () => { picked.splice(i, 1); draw(); setMsg(''); } })])));
+  }
+  function take(file) {
+    if (!file) { setMsg('Choose an image first.', true); return false; }
+    if (IMG_TYPES.indexOf(file.type) < 0) { setMsg('Only PNG, JPEG, GIF and WebP images can be attached.', true); return false; }
+    if (file.size > IMG_MAX_BYTES) { setMsg('That image is ' + (Math.round(file.size / 1048576 * 10) / 10) + ' MB. The limit is 4 MB.', true); return false; }
+    if (picked.length >= 20) { setMsg('You can attach 20 images. Remove one first.', true); return false; }
+    picked.push(file); draw(); setMsg('Added ' + (file.name || 'screenshot.png') + '. It is uploaded when you submit.');
+    return true;
+  }
+  const input = h('input', { type: 'file', accept: IMG_TYPES.join(',') });
+  const add = btn('Add image', { onclick: () => { if (take(input.files && input.files[0])) input.value = ''; } });
+  const paste = h('div', { class: 'pastebox', tabindex: '0', title: 'Click here, then press Ctrl+V to paste a screenshot' }, 'Or click here and press Ctrl+V to paste a screenshot');
+  paste.addEventListener('paste', e => {
+    const files = (e.clipboardData && e.clipboardData.files) || [];
+    if (!files.length) { setMsg('There is no image on the clipboard. Take a screenshot first.', true); return; }
+    e.preventDefault(); take(files[0]);
+  });
+  const wrap = h('section', { class: 'attach stage' }, [h('h3', { class: 'nh', text: label || 'Images (optional)' }), list,
+    h('div', { class: 'attachadd' }, [input, add]), paste, msg,
+    h('p', { class: 'mut small', text: 'PNG, JPEG, GIF or WebP, up to 4 MB each. They are uploaded only when you submit, and only people allowed to see this request can view them.' })]);
+  draw();
+  /* Upload everything that was staged. Returns a short message about anything that failed, so a lost image is never silent. */
+  wrap.upload = async (number, test) => {
+    const failed = [];
+    for (let i = 0; i < picked.length; i++) {
+      const f = picked[i];
+      try {
+        const data = await fileToBase64(f);
+        await api('addAttachment', { number: number, test: test || '', name: f.name || 'screenshot.png', data: data });
+      } catch (e) { failed.push((f.name || 'an image') + ' (' + e.message + ')'); }
+    }
+    const done = picked.length - failed.length;
+    picked.length = 0; draw();
+    return { done: done, failed: failed };
+  };
+  wrap.count = () => picked.length;
+  wrap.clear = () => { picked.length = 0; draw(); setMsg(''); };
+  return wrap;
+}
 /* Images for one PPC. The server re-checks who you are on every list, every view and every upload, so this panel
    only decides what to show. Pictures are fetched one at a time and never cached on disk. */
 function attachPanel(ppc, opts) {
   opts = opts || {};
+  const testId = opts.test || '';
   const grid = h('div', { class: 'thumbs' }), msg = h('p', { class: 'attachmsg', role: 'status' });
   const setMsg = (t, err) => { msg.textContent = t || ''; msg.classList.toggle('err', !!err); };
-  const wrap = h('section', { class: 'attach' }, [h('h3', { class: 'nh', text: 'Images' }), grid, msg]);
+  const wrap = h('section', { class: 'attach' }, [h('h3', { class: 'nh', text: opts.title || 'Images' }), grid, msg]);
   let busy = false;
   async function open(it) {
     const box = h('div', { class: 'lightbox', role: 'dialog', 'aria-modal': 'true', 'aria-label': it.name });
@@ -188,7 +239,7 @@ function attachPanel(ppc, opts) {
   async function load() {
     setKids(grid, [h('p', { class: 'mut', text: 'Loading images...' })]);
     let items = [];
-    try { items = (await api('listAttachments', { number: ppc })).items || []; }
+    try { items = (await api('listAttachments', { number: ppc, test: testId })).items || []; }
     catch (e) { setKids(grid, [h('p', { class: 'err', text: e.message })]); return; }
     if (!items.length) setKids(grid, [h('p', { class: 'mut', text: 'No images yet.' })]);
     else setKids(grid, items.map(it => {
@@ -219,13 +270,13 @@ function attachPanel(ppc, opts) {
     busy = true; setMsg('Uploading ' + (file.name || 'image') + '...');
     try {
       const data = await fileToBase64(file);
-      await api('addAttachment', { number: ppc, name: file.name || 'screenshot.png', data: data, caption: caption || '' });
+      await api('addAttachment', { number: ppc, test: testId, name: file.name || 'screenshot.png', data: data, caption: caption || '' });
       setMsg('Added ' + (file.name || 'image') + '.'); await load();
     } catch (e) { setMsg(e.code === 'WRITES_OFF' ? 'Saving from this page is switched off for now. Nothing was uploaded.' : e.message, true); }
     busy = false;
   }
   if (opts.canAdd) {
-    const input = h('input', { type: 'file', id: 'imgFile-' + ppc, accept: IMG_TYPES.join(',') });
+    const input = h('input', { type: 'file', id: 'imgFile-' + ppc + (testId ? '-' + testId : ''), accept: IMG_TYPES.join(',') });
     const cap = h('input', { type: 'text', maxlength: '300', placeholder: 'What does this image show? (optional)' });
     const add = btn('Add image', { onclick: async () => { await send(input.files && input.files[0], cap.value); input.value = ''; cap.value = ''; } });
     const paste = h('div', { class: 'pastebox', tabindex: '0', title: 'Click here, then press Ctrl+V to paste a screenshot' }, 'Or click here and press Ctrl+V to paste a screenshot');
@@ -239,6 +290,17 @@ function attachPanel(ppc, opts) {
   wrap.append(h('p', { class: 'mut small', text: 'PNG, JPEG, GIF or WebP, up to 4 MB each, 20 per PPC. Images are kept in the document control Drive folder and are only shown to people allowed to see this PPC.' }));
   load();
   return wrap;
+}
+/* A standalone Images window, used for a test and anywhere else that has no edit panel. */
+function openImages(ppc, test, title) {
+  const onKey = e => { if (e.key === 'Escape' && !document.querySelector('.lightbox')) close(); };
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const ov = h('div', { class: 'wz-overlay editov', role: 'dialog', 'aria-modal': 'true', 'aria-label': title || 'Images' },
+    h('div', { class: 'editbox' }, [h('h2', { text: title || 'Images' }), h('p', { class: 'sub', text: ppc }),
+      attachPanel(ppc, { test: test, canAdd: true, canDelete: true, title: 'Images' }),
+      h('div', { class: 'actions' }, btn('Close', { quiet: true, onclick: close }))]));
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', onKey); document.body.append(ov);
 }
 const NOT_BUILT = 'Not switched on yet. This button needs a backend step that is built after sign-in is confirmed.';
 
@@ -317,7 +379,7 @@ function vMissing() {
 function vTests() {
   const open = openRows().filter(r => !isPending(r)), cfg = D.config, noTest = open.filter(r => r.stage === 'Testing' && !D.tests.some(t => t.ppc === r.number));
   const rows1 = noTest.map(r => h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td(r.requestor || ''), td('No test recorded'), td(btn('Record a test', { open: 'test', ppc: r.number }), 'act')]));
-  const rows2 = D.tests.map(t => { const d = daysSince(t.end); return h('tr', null, [td([h('b', { text: t.ppc }), h('br'), h('span', { class: 'mut', text: t.id })]), td([t.owner, h('br'), h('span', { class: 'mut', text: t.ownerEmail })]), td(fmtDate(t.end) + (d === null ? '' : d > 0 ? ', ended ' + pl(d, 'day') + ' ago' : d === 0 ? ', ends today' : ', ends in ' + pl(-d, 'day'))), td(t.result), td(btn('Send reminder now', { quiet: true, disabled: true, title: NOT_BUILT }), 'act')]); });
+  const rows2 = D.tests.map(t => { const d = daysSince(t.end); return h('tr', null, [td([h('b', { text: t.ppc }), h('br'), h('span', { class: 'mut', text: t.id })]), td([t.owner, h('br'), h('span', { class: 'mut', text: t.ownerEmail })]), td(fmtDate(t.end) + (d === null ? '' : d > 0 ? ', ended ' + pl(d, 'day') + ' ago' : d === 0 ? ', ends today' : ', ends in ' + pl(-d, 'day'))), td(t.result), td([D.can.attach ? btn('Images' + (((D.imageCounts || {})[t.id]) ? ' (' + D.imageCounts[t.id] + ')' : ''), { quiet: true, onclick: () => openImages(t.ppc, t.id, 'Images for test ' + t.id) }) : null, ' ', btn('Send reminder now', { quiet: true, disabled: true, title: NOT_BUILT })], 'act')]); });
   const kv = [['Automatic check', 'Once a day, around 8 AM, after the daily trigger is installed.'], ['When it reminds', 'From ' + cfg.reminderLeadDays + ' days before the test end date, and every ' + cfg.reminderCooldownDays + ' days after it passes, until the PPC is published.'], ['Who gets it', 'The document specialist, or the requester if no specialist is recorded. Adding the test owner is a backend change.'], ['Minimum test length', cfg.minTestDays + ' calendar days, enforced by the server as well as the form.'], ['Email mode', cfg.emailMode === 'LIVE' ? 'Live. Reminders are emailed and logged.' : 'Dry run. Reminders are logged but not sent until PPC_CONFIG EMAIL_MODE is LIVE.']];
   return h('div', { class: 'view', id: 'v-tests', hidden: true }, [h('h1', { text: 'Tests and reminders' }),
     h('p', { class: 'lead' }, [h('strong', { text: D.tests.length ? pl(D.tests.length, 'test') + ' recorded.' : 'No test has been recorded yet, so no reminder is scheduled.' })]),
@@ -540,12 +602,14 @@ function initWizards() {
     const t = numText(); prev.textContent = t; $('#rqPpcPrint').value = t.split(' (')[0].split('. ')[0]; $('#rqWiPrint').value = wi.value;
   }
   dept.addEventListener('change', () => { fillEx(); rqRefresh(); }); [act, ex, meth].forEach(e => e.addEventListener('change', rqRefresh)); [wi, man].forEach(e => e.addEventListener('input', rqRefresh));
+  const rqStage = stageImages('Images (optional)');
+  $('#rqForm').append(rqStage);
   WZ.request = wizard(rq, {
     l1: 'Next: Fill Request Form →', submit: 'Submit PPC Proposal',
-    reset() { dept.value = ''; act.value = 'NEW'; meth.value = 'AUTO'; man.value = ''; wi.value = ''; $('#rqForm').reset(); $('#rqDone').hidden = true; $('#rqDate').value = new Date().toISOString().slice(0, 10); $('#rqInit').value = D.user.name; $('#rqEmail').value = D.user.email; $('.wz-nav [data-next]', rq).disabled = false; fillEx(); rqRefresh(); },
+    reset() { dept.value = ''; act.value = 'NEW'; meth.value = 'AUTO'; man.value = ''; wi.value = ''; $('#rqForm').reset(); rqStage.clear(); $('#rqDone').hidden = true; $('#rqDate').value = new Date().toISOString().slice(0, 10); $('#rqInit').value = D.user.name; $('#rqEmail').value = D.user.email; $('.wz-nav [data-next]', rq).disabled = false; fillEx(); rqRefresh(); },
     v1() { const e = []; if (!dept.value) e.push('Select a requesting department.'); if (act.value === 'EXISTING' && !ex.value) e.push('Choose the existing PPC.'); if (act.value === 'NEW' && meth.value === 'MANUAL' && !/^\d{4}-[A-Z]{2,8}-\d{3,6}-\d{1,6}$/.test(man.value.trim().toUpperCase())) e.push('Enter a manual number like 2026-SUR-246-014.'); if (/^The WI says/.test(numText())) e.push('The WI department does not match.'); return e; },
     review() {
-      const f = [['Department', dept.value ? dept.options[dept.selectedIndex].text : 'Not selected'], ['WI number(s)', wi.value || 'None yet'], ['PPC mode', act.value === 'NEW' ? 'New PPC' : 'Existing PPC'], ['PPC number', numText()], ['Initiator', val('#rqInit') || 'Missing'], ['Change title', val('#rqChTitle') || 'Missing'], ['Target date', val('#rqDue') || 'Not provided'], ['Description', val('#rqDesc') || 'Missing'], ['Justification', val('#rqJust') || 'Missing'], ['Email for updates', val('#rqEmail') || 'Missing']];
+      const f = [['Department', dept.value ? dept.options[dept.selectedIndex].text : 'Not selected'], ['WI number(s)', wi.value || 'None yet'], ['PPC mode', act.value === 'NEW' ? 'New PPC' : 'Existing PPC'], ['PPC number', numText()], ['Initiator', val('#rqInit') || 'Missing'], ['Change title', val('#rqChTitle') || 'Missing'], ['Target date', val('#rqDue') || 'Not provided'], ['Description', val('#rqDesc') || 'Missing'], ['Justification', val('#rqJust') || 'Missing'], ['Email for updates', val('#rqEmail') || 'Missing'], ['Images', rqStage.count() ? pl(rqStage.count(), 'image') + ', uploaded when you submit' : 'None']];
       $('#rqRev').replaceChildren(...f.flatMap(r => [h('dt', { text: r[0] }), h('dd', { text: r[1] })]));
       const m = []; if (!val('#rqInit').trim()) m.push('Initiator'); if (!val('#rqChTitle').trim()) m.push('Change title'); if (!val('#rqDesc').trim()) m.push('Description'); if (!val('#rqJust').trim()) m.push('Justification'); if (!val('#rqEmail').trim()) m.push('Email');
       const mm = $('#rqMiss'); mm.textContent = m.length ? 'Please complete: ' + m.join(', ') + '.' : 'All core fields are entered. Check the details, then submit.'; mm.className = m.length ? 'wz-miss' : 'wz-ok'; $('#rqDone').hidden = true;
@@ -554,7 +618,13 @@ function initWizards() {
       const out = $('#rqDone'), nx = $('.wz-nav [data-next]', rq); out.hidden = false; out.textContent = 'Saving...'; nx.disabled = true;
       try {
         const r = await api('submitRequest', { ppcAction: act.value, department: dept.value, existingPpc: ex.value, wiNumbers: wi.value.trim(), assignment: act.value === 'NEW' ? meth.value : 'AUTO', manualPpc: man.value.trim(), requestor: val('#rqInit').trim(), email: val('#rqEmail').trim(), title: val('#rqChTitle').trim(), description: val('#rqDesc'), justification: val('#rqJust'), formPriority: ($('input[name=prio]:checked', rq) || {}).value || 'Low', requestDate: val('#rqDate'), dueDate: val('#rqDue'), manager: val('#rqMgr'), poc: val('#rqPoc'), changeType: val('#rqType'), effort: val('#rqEffort'), impactQuality: val('#rqImpQ'), impactCost: val('#rqImpC'), impactSchedule: val('#rqImpS'), impactResources: val('#rqImpR'), impactOther: val('#rqImpO') });
-        out.textContent = 'Saved. PPC number: ' + r.id + '.'; await refresh();
+        out.textContent = 'Saved. PPC number: ' + r.id + '.';
+        if (rqStage.count()) {
+          out.textContent = 'Saved as ' + r.id + '. Uploading ' + pl(rqStage.count(), 'image') + '...';
+          const up = await rqStage.upload(r.id);
+          out.textContent = 'Saved as ' + r.id + '. ' + (up.done ? pl(up.done, 'image') + ' attached.' : '') + (up.failed.length ? ' These did not upload: ' + up.failed.join('; ') + '. Add them again from Edit.' : '');
+        }
+        await refresh();
       } catch (e) { out.textContent = e.code === 'WRITES_OFF' ? 'Saving from this page is switched off for now. Nothing was saved.' : e.message; nx.disabled = false; }
     }
   });
@@ -571,12 +641,14 @@ function initWizards() {
   }
   tD.addEventListener('change', tsFill); tP.addEventListener('change', tsDetails); [tS, tE, tPoc].forEach(e => e.addEventListener('input', dates));
   $('#tsStart2').addEventListener('input', e => { tS.value = e.target.value; dates(); }); $('#tsEnd2').addEventListener('input', e => { tE.value = e.target.value; dates(); }); $('#tsPocPrint').addEventListener('input', e => { tPoc.value = e.target.value; });
+  const tsStage = stageImages('Test images (optional)');
+  $('#tsForm').append(tsStage);
   WZ.test = wizard(ts, {
     l1: 'Next: Fill Test Form →', submit: 'Submit PPC Test',
-    reset(pre) { tD.value = ''; tP.replaceChildren(h('option', { value: '', text: 'Choose a department first' })); [tS, tE, tPoc].forEach(e => { e.value = ''; }); $('#tsForm').reset(); $('#tsDone').hidden = true; $('#tsNote').textContent = 'Reminders start ' + D.config.reminderLeadDays + ' days before the end date and repeat every ' + D.config.reminderCooldownDays + ' days. Email mode is ' + (D.config.emailMode === 'LIVE' ? 'live.' : 'dry run, so reminders are logged but not sent yet.'); if (pre) { const p = ppcsForWizard().find(x => x.n === pre); if (p) { tD.value = p.dept; tsFill(); tP.value = p.n; } } tsDetails(); dates(); },
+    reset(pre) { tD.value = ''; tP.replaceChildren(h('option', { value: '', text: 'Choose a department first' })); [tS, tE, tPoc].forEach(e => { e.value = ''; }); $('#tsForm').reset(); tsStage.clear(); $('#tsDone').hidden = true; $('#tsNote').textContent = 'Reminders start ' + D.config.reminderLeadDays + ' days before the end date and repeat every ' + D.config.reminderCooldownDays + ' days. Email mode is ' + (D.config.emailMode === 'LIVE' ? 'live.' : 'dry run, so reminders are logged but not sent yet.'); if (pre) { const p = ppcsForWizard().find(x => x.n === pre); if (p) { tD.value = p.dept; tsFill(); tP.value = p.n; } } tsDetails(); dates(); },
     v1() { const e = []; if (!tD.value) e.push('Choose a department.'); if (!tP.value) e.push('Choose an existing PPC.'); if (!tS.value || !tE.value) e.push('Select test start and end dates.'); else if (span(tS.value, tE.value) < D.config.minTestDays) e.push('The test must span at least ' + D.config.minTestDays + ' calendar days.'); if (!tPoc.value.trim()) e.push('Enter the main test POC.'); return e; },
     review() {
-      const p = cur(), f = [['PPC number', p ? p.n : 'Missing'], ['Department', tD.value || 'Missing'], ['Test reason', val('#tsReason') || 'Missing'], ['Main POC', tPoc.value || 'Missing'], ['Owner email', val('#tsEmail') || 'Missing'], ['Test dates', (tS.value || '—') + ' to ' + (tE.value || '—')], ['Define the test', val('#tsDefine') || 'Missing'], ['Expected results', val('#tsExpected') || 'Missing']];
+      const p = cur(), f = [['PPC number', p ? p.n : 'Missing'], ['Department', tD.value || 'Missing'], ['Test reason', val('#tsReason') || 'Missing'], ['Main POC', tPoc.value || 'Missing'], ['Owner email', val('#tsEmail') || 'Missing'], ['Test dates', (tS.value || '—') + ' to ' + (tE.value || '—')], ['Define the test', val('#tsDefine') || 'Missing'], ['Expected results', val('#tsExpected') || 'Missing'], ['Images', tsStage.count() ? pl(tsStage.count(), 'image') + ', uploaded when you submit' : 'None']];
       $('#tsRev').replaceChildren(...f.flatMap(r => [h('dt', { text: r[0] }), h('dd', { text: r[1] })]));
       const m = []; if (!val('#tsReason').trim()) m.push('Test reason'); if (!val('#tsDefine').trim()) m.push('Define the test'); if (!val('#tsExpected').trim()) m.push('Expected results'); if (!val('#tsEmail').trim()) m.push('Owner email');
       const mm = $('#tsMiss'); mm.textContent = m.length ? 'Complete before submitting: ' + m.join(', ') + '.' : 'Ready to submit. Review the values for accuracy.'; mm.className = m.length ? 'wz-miss' : 'wz-ok'; $('#tsDone').hidden = true;
@@ -585,7 +657,13 @@ function initWizards() {
       const out = $('#tsDone'), nx = $('.wz-nav [data-next]', ts); out.hidden = false; out.textContent = 'Saving...'; nx.disabled = true;
       try {
         const r = await api('submitTest', { ppc: tP.value, owner: tPoc.value.trim(), ownerEmail: val('#tsEmail').trim(), reason: val('#tsReason'), start: tS.value, end: tE.value, defineTest: val('#tsDefine'), variants: val('#tsVar'), timeline: val('#tsTl'), resources: val('#tsRes'), expected: val('#tsExpected'), actual: val('#tsActual'), evidence: val('#tsEvid').trim(), result: val('#tsResult'), testNumber: ($('input[name=tn]:checked', ts) || {}).value || '1', signer1: val('#tsSig1'), signer2: val('#tsSig2'), signer3: val('#tsSig3') });
-        out.textContent = 'Saved. Test ' + r.id + '.'; await refresh();
+        out.textContent = 'Saved. Test ' + r.id + '.';
+        if (tsStage.count()) {
+          out.textContent = 'Saved as ' + r.id + '. Uploading ' + pl(tsStage.count(), 'image') + '...';
+          const up = await tsStage.upload(tP.value, r.id);
+          out.textContent = 'Saved as ' + r.id + '. ' + (up.done ? pl(up.done, 'image') + ' attached to the test.' : '') + (up.failed.length ? ' These did not upload: ' + up.failed.join('; ') + '.' : '');
+        }
+        await refresh();
       } catch (e) { out.textContent = e.code === 'WRITES_OFF' ? 'Saving from this page is switched off for now. Nothing was saved.' : e.message; nx.disabled = false; }
     }
   });
