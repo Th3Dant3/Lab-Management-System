@@ -332,3 +332,10 @@ a.btn:hover{text-decoration:none;color:var(--text)}
 .steps li.now .sn{background:#fff8ec;border-color:#3b2f1c;color:var(--brown)}
 .stepbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 @media(max-width:700px){.steps li{font-size:12px;padding:4px 8px}.stepbtns .btn{flex:1}}
+
+.guide section{padding:18px 0}.guide h2{margin:0 0 6px}.guide .steps{margin:10px 0 14px}
+.guide .kv{grid-template-columns:260px 1fr;max-width:920px}
+.guide .clocklegend{margin:10px 0 8px}
+.guide table{max-width:860px}.guide .mut{max-width:80ch}
+.boardfirst{border-top:0;padding-top:4px}
+@media(max-width:760px){.guide .kv{grid-template-columns:1fr}.guide .kv dt{padding-bottom:0;border-bottom:0}}

@@ -328,7 +328,7 @@ function openImages(ppc, test, title) {
 const NOT_BUILT = 'Not switched on yet. This button needs a backend step that is built after sign-in is confirmed.';
 
 /* ---------- staff views ---------- */
-const VIEWS = [['overview', 'Dashboard'], ['published', 'Published documents'], ['missing', 'Missing PPC, need update'], ['tests', 'Tests and reminders'], ['routing', 'Routing and emails'], ['updates', 'Update requests'], ['years', 'Year records']];
+const VIEWS = [['overview', 'Dashboard'], ['guide', 'Quick start guide'], ['published', 'Published documents'], ['missing', 'Missing PPC, need update'], ['tests', 'Tests and reminders'], ['routing', 'Routing and emails'], ['updates', 'Update requests'], ['years', 'Year records']];
 let currentView = 'overview', currentYear = null, mailSel = null, mailEv = 'routed';
 function token(r, cls) {
   const kids = [h('p', { class: 'num', text: isPending(r) ? 'PPC number pending' : r.number }), h('p', { class: 'ttl', text: r.title || 'Title not recorded' }), h('p', { class: 'who', text: (r.requestor || 'Requester not recorded') + (r.wi ? ', ' + r.wi : '') })];
@@ -390,7 +390,8 @@ function vOverview() {
   return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: 'PPC command center' }),
     h('p', { class: 'lead' }, [h('strong', { text: pl(openTotal, 'request') + (openTotal === 1 ? ' is' : ' are') + ' open. ' }), numbered.length + ' ' + (numbered.length === 1 ? 'has' : 'have') + ' a PPC number and ' + pend.length + ' ' + (pend.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (overdue.length ? ' ' + overdue.length + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue.' : '') + (maxD ? ' The longest in progress has been going ' + maxD + ' days.' : '')]),
     odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => (isPending(r) ? 'pending ' + (r.wi || '') : r.number) + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + (isPending(r) ? (r.wi || 'pending request') : r.number), { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
-    att, h('section', null, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. Click a column heading, or a colour heading, to close it.' }), flow])]);
+    h('section', { class: 'boardfirst' }, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. Click a column heading, or a colour heading, to close it.' }), flow]),
+    att]);
 }
 function vMissing() {
   const need = pendingRows();
@@ -464,6 +465,71 @@ function downloadPublished(list) {
   const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })), download: 'ppc-published-by-department.csv' });
   document.body.append(a); a.click(); a.remove();
 }
+/* The guide. Where it states a rule or a number, it reads it from the live settings rather than repeating
+   something that could drift out of date. */
+function vGuide() {
+  const cfg = D.config, you = D.user.role.toLowerCase();
+  const can = (yes) => yes ? 'Yes' : 'No';
+  const sec = (title, kids) => h('section', null, [h('h2', { text: title })].concat(kids));
+  const steps = (items) => h('ol', { class: 'steps4' }, items.map(t => h('li', null, t)));
+  const dl = (pairs) => h('dl', { class: 'kv' }, pairs.flatMap(p => [h('dt', { text: p[0] }), h('dd', null, p[1])]));
+  const roleRow = (r, request, test, edit, all) => h('tr', null, [td(h('b', { text: r })), td(can(request)), td(can(test)), td(can(edit)), td(can(all))]);
+  return h('div', { class: 'view guide', id: 'v-guide', hidden: true }, [
+    h('h1', { text: 'Quick start guide' }),
+    h('p', { class: 'lead' }, ['You are signed in as ', h('strong', { text: D.user.name }), ', a ' + you + '. This page explains what everything does and what your role lets you do.',
+      D.writes ? '' : ' Right now the page is read-only, so you can look at everything but nothing is saved.']),
+
+    sec('The five steps a PPC goes through', [
+      h('p', { class: 'hint', text: 'Every numbered PPC sits at exactly one of these. A new request starts at Not started, and Published is the end.' }),
+      h('ol', { class: 'steps' }, STATUS_COLS.map((c, i) => h('li', null, [h('span', { class: 'sn', text: String(i + 1) }), h('span', { text: c.title })]))),
+      dl([['Who moves it on', 'Anyone who can edit may set Not started and In progress. Only an administrator may set Ready for signature, Completed or Published.'],
+          ['How to move it', 'Open a PPC with the Edit button, then use the one button at the top of the panel. It moves the PPC on by exactly one step and saves at the same time.'],
+          ['Going backwards', 'The Back button moves it one step the other way, for when something was set by mistake.'],
+          ['What happens on the way', 'Reaching In progress starts the age clock. Reaching Completed and Published records today\'s date, if one is not already there.']])]),
+
+    sec('The age clock and the colours', [
+      h('p', { class: 'hint', text: 'The clock runs only while a PPC is In progress, counted from the day it reached that step.' }),
+      h('ul', { class: 'clocklegend' }, [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more, shown as Overdue']].map(p => h('li', null, [h('span', { class: 'sw ' + p[0] }), p[1]]))),
+      h('p', { class: 'mut', text: 'On the board, In progress is split into those three groups and each one shows its own count. Cards run green first, then yellow, then overdue. Click a column heading, or a colour heading, to close it and give the others more room.' })]),
+
+    sec('What each page is for', [
+      dl([['Dashboard', 'The board, plus a Needs attention list at the bottom of the page.'],
+          ['Quick start guide', 'This page.'],
+          ['Published documents', 'Every completed document, grouped by department, with a search box and a CSV download.'],
+          ['Missing PPC, need update', 'Open requests that came in before PPC numbering started, so they have no number. You can edit them. Issuing a number is not switched on yet.'],
+          ['Tests and reminders', 'PPCs in the Testing stage, the tests recorded against them, and how reminders will work. Each test has its own Images button.'],
+          ['Routing and emails', 'PPCs marked Completed, and a preview of the email a requester would receive. Sending is not switched on yet.'],
+          ['Update requests', 'Not built yet. Requesters cannot ask for an update from their page.'],
+          ['Year records', 'Every request grouped by the year it was submitted, with a printable record and a CSV.']])]),
+
+    sec('Adding a photo or a screenshot', [
+      steps(['On a new request or a new test, use the Images box at the bottom of the form. Nothing uploads until you submit.',
+             'On an existing PPC, press Edit and scroll to Images at the bottom of the panel.',
+             'Either choose a file, or click the paste strip and press Ctrl+V to paste a screenshot straight from the clipboard.',
+             'Press View to see it full size, or Delete to remove it.']),
+      h('p', { class: 'mut', text: 'PNG, JPEG, GIF or WebP, up to 4 MB each, 20 per PPC and 20 per test. SVG is refused, because it can carry script. Requesters see and add images on their own requests only.' })]),
+
+    sec('What your role lets you do', [
+      h('div', { class: 'scroll' }, h('table', null, [
+        h('thead', null, h('tr', null, ['Role', 'Send a request', 'Record a test', 'Edit a PPC', 'Set the last three steps'].map(x => h('th', { text: x })))),
+        h('tbody', null, [roleRow('Administrator', true, true, true, true), roleRow('Director, Specialist, Manager', true, true, true, false),
+          roleRow('Supervisor', true, false, false, false), roleRow('Requestor', false, false, false, false)])])),
+      h('p', { class: 'mut' }, ['Your account can: send a request ', h('b', { text: can(D.can.request) }), ', record a test ', h('b', { text: can(D.can.test) }), ', edit a PPC ', h('b', { text: can(D.can.edit) }), ', set the last three steps ', h('b', { text: can(D.can.allStatuses) }), '.']),
+      h('p', { class: 'mut', text: 'Roles are set in the PPC_USERS tab of the spreadsheet. A requester sees only their own requests, and never the internal notes.' })]),
+
+    sec('Reminders and email', [
+      dl([['Minimum test length', cfg.minTestDays + ' calendar days. The form and the server both enforce it.'],
+          ['When a reminder is due', 'From ' + cfg.reminderLeadDays + ' days before the test end date, and every ' + cfg.reminderCooldownDays + ' days after it has passed.'],
+          ['Email right now', cfg.emailMode === 'LIVE' ? 'Live. Reminders and routing notices are sent and logged.' : 'Dry run. Everything is logged but nothing is sent, until an administrator sets EMAIL_MODE to LIVE in the PPC_CONFIG tab.']])]),
+
+    sec('If something looks wrong', [
+      steps(['A yellow bar at the top of the Dashboard means a status in the sheet is not one of the five. Press the Fix button next to it.',
+             'A card with no title means the source sheet never had one. Open Edit and the fields show what is recorded.',
+             'If the page says it cannot reach the server, reload it. If that keeps happening, sign in to Google again.',
+             'Anything you change here is written to the spreadsheet and recorded in the PPC_AUDIT tab, with who did it and when.']),
+      h('p', { class: 'mut', text: 'Nothing on this page can be deleted outright. Removing an image moves it to the Drive bin and keeps the record that it existed.' })])
+  ]);
+}
 function vUpdates() {
   return h('div', { class: 'view', id: 'v-updates', hidden: true }, [h('h1', { text: 'Update requests' }), h('p', { class: 'lead' }, [h('strong', { text: 'Not built yet.' }), ' Requesters cannot ask for an update from the page until this exists.']),
     h('section', null, [h('h2', { text: 'The plan' }), h('ol', { class: 'steps4' }, ['A requester opens a request on their page and chooses Request an update.', 'It appears here, and the document specialist gets an email.', 'You write a short public update on the PPC. Internal notes are never shown to requesters.', 'You mark it answered, and the requester gets an email with the status and your note.'].map(t => h('li', { text: t })))])]);
@@ -510,7 +576,7 @@ function downloadCsv(list) {
   const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })), download: 'ppc-record-' + currentYear + '.csv' }); document.body.append(a); a.click(); a.remove();
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('printing-record', 'printing-wz'));
-const BUILDERS = { overview: vOverview, published: vPublished, missing: vMissing, tests: vTests, routing: vRouting, updates: vUpdates, years: vYears };
+const BUILDERS = { overview: vOverview, guide: vGuide, published: vPublished, missing: vMissing, tests: vTests, routing: vRouting, updates: vUpdates, years: vYears };
 function rebuild(id) { const old = $('#v-' + id); const fresh = BUILDERS[id](); old.replaceWith(fresh); fresh.hidden = currentView !== id; }
 function show(id) {
   if (!BUILDERS[id]) id = 'overview'; currentView = id;
