@@ -469,11 +469,9 @@ function downloadPublished(list) {
    something that could drift out of date. */
 function vGuide() {
   const cfg = D.config, you = D.user.role.toLowerCase();
-  const can = (yes) => yes ? 'Yes' : 'No';
   const sec = (title, kids) => h('section', null, [h('h2', { text: title })].concat(kids));
   const steps = (items) => h('ol', { class: 'steps4' }, items.map(t => h('li', null, t)));
   const dl = (pairs) => h('dl', { class: 'kv' }, pairs.flatMap(p => [h('dt', { text: p[0] }), h('dd', null, p[1])]));
-  const roleRow = (r, request, test, edit, all) => h('tr', null, [td(h('b', { text: r })), td(can(request)), td(can(test)), td(can(edit)), td(can(all))]);
   return h('div', { class: 'view guide', id: 'v-guide', hidden: true }, [
     h('h1', { text: 'Quick start guide' }),
     h('p', { class: 'lead' }, ['You are signed in as ', h('strong', { text: D.user.name }), ', a ' + you + '. This page explains what everything does and what your role lets you do.',
@@ -509,25 +507,10 @@ function vGuide() {
              'Press View to see it full size, or Delete to remove it.']),
       h('p', { class: 'mut', text: 'PNG, JPEG, GIF or WebP, up to 4 MB each, 20 per PPC and 20 per test. SVG is refused, because it can carry script. Requesters see and add images on their own requests only.' })]),
 
-    sec('What your role lets you do', [
-      h('div', { class: 'scroll' }, h('table', null, [
-        h('thead', null, h('tr', null, ['Role', 'Send a request', 'Record a test', 'Edit a PPC', 'Set the last three steps'].map(x => h('th', { text: x })))),
-        h('tbody', null, [roleRow('Administrator', true, true, true, true), roleRow('Director, Specialist, Manager', true, true, true, false),
-          roleRow('Supervisor', true, false, false, false), roleRow('Requestor', false, false, false, false)])])),
-      h('p', { class: 'mut' }, ['Your account can: send a request ', h('b', { text: can(D.can.request) }), ', record a test ', h('b', { text: can(D.can.test) }), ', edit a PPC ', h('b', { text: can(D.can.edit) }), ', set the last three steps ', h('b', { text: can(D.can.allStatuses) }), '.']),
-      h('p', { class: 'mut', text: 'Roles are set in the PPC_USERS tab of the spreadsheet. A requester sees only their own requests, and never the internal notes.' })]),
-
     sec('Reminders and email', [
       dl([['Minimum test length', cfg.minTestDays + ' calendar days. The form and the server both enforce it.'],
           ['When a reminder is due', 'From ' + cfg.reminderLeadDays + ' days before the test end date, and every ' + cfg.reminderCooldownDays + ' days after it has passed.'],
-          ['Email right now', cfg.emailMode === 'LIVE' ? 'Live. Reminders and routing notices are sent and logged.' : 'Dry run. Everything is logged but nothing is sent, until an administrator sets EMAIL_MODE to LIVE in the PPC_CONFIG tab.']])]),
-
-    sec('If something looks wrong', [
-      steps(['A yellow bar at the top of the Dashboard means a status in the sheet is not one of the five. Press the Fix button next to it.',
-             'A card with no title means the source sheet never had one. Open Edit and the fields show what is recorded.',
-             'If the page says it cannot reach the server, reload it. If that keeps happening, sign in to Google again.',
-             'Anything you change here is written to the spreadsheet and recorded in the PPC_AUDIT tab, with who did it and when.']),
-      h('p', { class: 'mut', text: 'Nothing on this page can be deleted outright. Removing an image moves it to the Drive bin and keeps the record that it existed.' })])
+          ['Email right now', cfg.emailMode === 'LIVE' ? 'Live. Reminders and routing notices are sent and logged.' : 'Dry run. Everything is logged but nothing is sent, until an administrator sets EMAIL_MODE to LIVE in the PPC_CONFIG tab.']])])
   ]);
 }
 function vUpdates() {
