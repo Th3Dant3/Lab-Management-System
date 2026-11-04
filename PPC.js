@@ -822,16 +822,10 @@ function launcherMode() {
   document.title = APP_NAME + ', Zenni USA';
   $$('[data-appname]').forEach(el => { el.textContent = APP_NAME; });
   const problem = lmsProblem(), who = lmsWho();
-  const line = (state, text) => h('div', { class: 'chk ' + state }, [h('span', { class: 'mk', 'aria-hidden': 'true', text: state === 'ok' ? '\u2713' : state === 'bad' ? '\u00d7' : '\u25cb' }), h('span', { text: text })]);
-  const checks = [];
-  if (problem) checks.push(line('bad', problem));
-  else {
-    checks.push(line('ok', who ? 'Signed in to the LMS as ' + who : 'Signed in to the LMS in this tab'));
-    if (!who) checks.push(line('note', 'The LMS did not pass a name to this page, so it cannot be shown here.'));
-    checks.push(line('note', 'Your Google Workspace account and PPC_USERS entry are checked by the PPC application when it opens.'));
-  }
-  setKids($('#checks'), checks);
-  $('#statusbar').textContent = problem ? 'Access unavailable' : 'Ready';
+  const line = (state, text) => h('div', { class: 'chk ' + state }, [h('span', { class: 'mk', 'aria-hidden': 'true', text: state === 'ok' ? '\u2713' : '\u00d7' }), h('span', { text: text })]);
+  $('#accessLegend').textContent = problem ? 'Access denied' : 'Access granted';
+  setKids($('#checks'), [problem ? line('bad', problem) : line('ok', who ? 'Welcome, ' + who + '.' : 'Welcome.')]);
+  $('#statusbar').textContent = problem ? 'Access denied' : 'Access granted';
   if (problem) return;
   open.disabled = false;
   open.addEventListener('click', () => { if (open.disabled) return; if (EMBED) showEmbed(); else window.location.assign(PPC_SECURE_URL); });
