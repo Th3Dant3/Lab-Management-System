@@ -3,6 +3,7 @@
    the secure app. (2) Loaded by Google's tiny shell inside the secure app, it is the whole dashboard. Everything about how the
    page looks and behaves lives here in GitHub. The server trusts nothing on this page: every action is re-checked against PPC_USERS and
    your role. Every value that comes from the sheet is inserted with textContent, never as HTML. */
+const APP_NAME = "PPC Document Control";          // the name shown everywhere on this page. Change this one line to rename it.
 const LMS_URL = "https://th3dant3.github.io/Lab-Management-System/index.html";
 const PPC_SECURE_URL = "https://script.google.com/a/macros/zennioptical.com/s/AKfycbybKUJ9OP708EbnplRJVrGPy9aenOEz07ZOWUEPJ8PrVCQprd6X2dFTffOxxpkXsqIiFg/exec";
 const EMBED = true;                 // true: the dashboard opens INSIDE this page (the address bar stays on github.io). false: it opens in its own tab, as before.
@@ -387,7 +388,7 @@ function vOverview() {
   const cols = STATUS_COLS.map(colFor);
   const flow = h('div', { class: 'flow' }, cols);
   flow.style.gridTemplateColumns = STATUS_COLS.map(c => collapsed[c.status] ? 'minmax(118px,0.34fr)' : 'minmax(0,1fr)').join(' ');   // a closed column keeps enough room for its heading to read properly
-  return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: 'PPC command center' }),
+  return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: APP_NAME }),
     h('p', { class: 'lead' }, [h('strong', { text: pl(openTotal, 'request') + (openTotal === 1 ? ' is' : ' are') + ' open. ' }), numbered.length + ' ' + (numbered.length === 1 ? 'has' : 'have') + ' a PPC number and ' + pend.length + ' ' + (pend.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (overdue.length ? ' ' + overdue.length + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue.' : '') + (maxD ? ' The longest in progress has been going ' + maxD + ' days.' : '')]),
     odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => (isPending(r) ? 'pending ' + (r.wi || '') : r.number) + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + (isPending(r) ? (r.wi || 'pending request') : r.number), { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
     h('section', { class: 'boardfirst' }, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. Click a column heading, or a colour heading, to close it.' }), flow]),
@@ -465,53 +466,95 @@ function downloadPublished(list) {
   const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/csv' })), download: 'ppc-published-by-department.csv' });
   document.body.append(a); a.click(); a.remove();
 }
-/* The guide. Where it states a rule or a number, it reads it from the live settings rather than repeating
-   something that could drift out of date. */
+/* The quick start guide. Each role is shown only the parts that apply to it, and the rules and numbers are read
+   from the live settings rather than written out, so the guide cannot drift away from how the system behaves. */
 function vGuide() {
-  const cfg = D.config, you = D.user.role.toLowerCase();
-  const sec = (title, kids) => h('section', null, [h('h2', { text: title })].concat(kids));
-  const steps = (items) => h('ol', { class: 'steps4' }, items.map(t => h('li', null, t)));
-  const dl = (pairs) => h('dl', { class: 'kv' }, pairs.flatMap(p => [h('dt', { text: p[0] }), h('dd', null, p[1])]));
-  return h('div', { class: 'view guide', id: 'v-guide', hidden: true }, [
-    h('h1', { text: 'Quick start guide' }),
-    h('p', { class: 'lead' }, ['You are signed in as ', h('strong', { text: D.user.name }), ', a ' + you + '. This page explains what everything does and what your role lets you do.',
-      D.writes ? '' : ' Right now the page is read-only, so you can look at everything but nothing is saved.']),
+  const cfg = D.config, role = D.user.role, isAdmin = !!D.can.allStatuses;
+  const title = ({ ADMIN: 'administrator', DIRECTOR: 'director', MANAGER: 'manager', SPECIALIST: 'document specialist', SUPERVISOR: 'supervisor', REQUESTOR: 'requester' })[role] || role.toLowerCase();
+  const sec = (heading, kids) => h('section', null, [h('h2', { text: heading })].concat(kids.filter(Boolean)));
+  const dl = (pairs) => h('dl', { class: 'kv' }, pairs.filter(Boolean).flatMap(p => [h('dt', { text: p[0] }), h('dd', null, p[1])]));
+  const steps = (items) => h('ol', { class: 'steps4' }, items.filter(Boolean).map(t => h('li', null, t)));
+  const out = [h('h1', { text: 'Quick start guide' }),
+    h('p', { class: 'lead' }, ['Prepared for ', h('strong', { text: D.user.name }), ', ' + title + '. It covers the parts of the system your account is able to use.',
+      D.writes ? '' : ' The page is currently read-only, so changes cannot be saved.'])];
 
-    sec('The five steps a PPC goes through', [
-      h('p', { class: 'hint', text: 'Every numbered PPC sits at exactly one of these. A new request starts at Not started, and Published is the end.' }),
-      h('ol', { class: 'steps' }, STATUS_COLS.map((c, i) => h('li', null, [h('span', { class: 'sn', text: String(i + 1) }), h('span', { text: c.title })]))),
-      dl([['Who moves it on', 'Anyone who can edit may set Not started and In progress. Only an administrator may set Ready for signature, Completed or Published.'],
-          ['How to move it', 'Open a PPC with the Edit button, then use the one button at the top of the panel. It moves the PPC on by exactly one step and saves at the same time.'],
-          ['Going backwards', 'The Back button moves it one step the other way, for when something was set by mistake.'],
-          ['What happens on the way', 'Reaching In progress starts the age clock. Reaching Completed and Published records today\'s date, if one is not already there.']])]),
+  /* Sending a request: everyone who is allowed to create one. */
+  if (D.can.request) out.push(sec('Submitting a request', [
+    steps(['Select New PPC request. Choose the requesting department and the work instruction number, if the document already exists.',
+      'Complete the SOP-06-01 proposal form. The initiator, change title, description, justification and contact email are required.',
+      'Attach any photographs at the foot of the form. They are uploaded when the request is submitted.',
+      'Review the summary and submit. A PPC number is issued at that point and the request is recorded as Not started.']),
+    h('p', { class: 'mut', text: 'A request without a work instruction number is held in Missing PPC, need update until document control assigns one. The system does not generate work instruction numbers, as these come from GLG.' })]));
 
-    sec('The age clock and the colours', [
-      h('p', { class: 'hint', text: 'The clock runs only while a PPC is In progress, counted from the day it reached that step.' }),
-      h('ul', { class: 'clocklegend' }, [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more, shown as Overdue']].map(p => h('li', null, [h('span', { class: 'sw ' + p[0] }), p[1]]))),
-      h('p', { class: 'mut', text: 'On the board, In progress is split into those three groups and each one shows its own count. Cards run green first, then yellow, then overdue. Click a column heading, or a colour heading, to close it and give the others more room.' })]),
+  /* The five steps: anyone who can edit needs this. */
+  if (D.can.edit) out.push(sec('The five stages of a PPC', [
+    h('p', { class: 'hint', text: 'A PPC occupies one stage at any time. It is recorded as Not started on submission and concludes at Published.' }),
+    h('ol', { class: 'steps' }, STATUS_COLS.map((c, i) => h('li', null, [h('span', { class: 'sn', text: String(i + 1) }), h('span', { text: c.title })]))),
+    dl([['Advancing a PPC', 'Select Edit on the record, then use the button at the head of the panel. It advances the PPC by one stage and saves any other changes made in the panel at the same time.'],
+      ['Reversing a stage', 'The Back button returns the PPC to the previous stage, for corrections.'],
+      ['Your authority', isAdmin ? 'As an administrator you may set any of the five stages.' : 'You may set Not started and In progress. Ready for signature, Completed and Published are reserved for administrators.'],
+      ['Recorded automatically', 'Reaching In progress starts the age clock. Reaching Completed or Published records that date if one is not already held.']])]));
+  else out.push(sec('How work progresses', [
+    h('p', { class: 'hint', text: 'Document control moves each PPC through five stages. Your account has view access, so the board shows progress but cannot change it.' }),
+    h('ol', { class: 'steps' }, STATUS_COLS.map((c, i) => h('li', null, [h('span', { class: 'sn', text: String(i + 1) }), h('span', { text: c.title })])))]));
 
-    sec('What each page is for', [
-      dl([['Dashboard', 'The board, plus a Needs attention list at the bottom of the page.'],
-          ['Quick start guide', 'This page.'],
-          ['Published documents', 'Every completed document, grouped by department, with a search box and a CSV download.'],
-          ['Missing PPC, need update', 'Open requests that came in before PPC numbering started, so they have no number. You can edit them. Issuing a number is not switched on yet.'],
-          ['Tests and reminders', 'PPCs in the Testing stage, the tests recorded against them, and how reminders will work. Each test has its own Images button.'],
-          ['Routing and emails', 'PPCs marked Completed, and a preview of the email a requester would receive. Sending is not switched on yet.'],
-          ['Update requests', 'Not built yet. Requesters cannot ask for an update from their page.'],
-          ['Year records', 'Every request grouped by the year it was submitted, with a printable record and a CSV.']])]),
+  /* Reading the board: everyone. */
+  out.push(sec('Reading the board', [
+    h('p', { class: 'hint', text: 'The age clock runs only while a PPC is In progress and is counted from the date it reached that stage.' }),
+    h('ul', { class: 'clocklegend' }, [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more, shown as Overdue']].map(p => h('li', null, [h('span', { class: 'sw ' + p[0] }), p[1]]))),
+    h('p', { class: 'mut', text: 'The In progress column is divided into those three ranges, each with its own count, ordered from green through to overdue. Selecting a column heading, or a range heading, closes it and gives the remaining columns more width.' })]));
 
-    sec('Adding a photo or a screenshot', [
-      steps(['On a new request or a new test, use the Images box at the bottom of the form. Nothing uploads until you submit.',
-             'On an existing PPC, press Edit and scroll to Images at the bottom of the panel.',
-             'Either choose a file, or click the paste strip and press Ctrl+V to paste a screenshot straight from the clipboard.',
-             'Press View to see it full size, or Delete to remove it.']),
-      h('p', { class: 'mut', text: 'PNG, JPEG, GIF or WebP, up to 4 MB each, 20 per PPC and 20 per test. SVG is refused, because it can carry script. Requesters see and add images on their own requests only.' })]),
+  /* Recording a test: only those who may. */
+  if (D.can.test) out.push(sec('Recording a test', [
+    steps(['Select New PPC test, or Record a test against a PPC shown in the Testing stage.',
+      'Choose the PPC, then set the test dates and the person responsible.',
+      'Complete the SOP-06-02 form and attach any photographs at the foot of it.',
+      'Review and submit. The test is linked to the PPC and its end date is recorded.']),
+    dl([['Minimum duration', cfg.minTestDays + ' calendar days. This is enforced by the form and again by the server.'],
+      ['Reminders', 'Issued from ' + cfg.reminderLeadDays + ' days before the test end date and repeated every ' + cfg.reminderCooldownDays + ' days once it has passed.'],
+      ['Current email setting', cfg.emailMode === 'LIVE' ? 'Live. Reminders and notifications are sent and recorded.' : 'Dry run. Reminders are recorded but not sent.']])]));
 
-    sec('Reminders and email', [
-      dl([['Minimum test length', cfg.minTestDays + ' calendar days. The form and the server both enforce it.'],
-          ['When a reminder is due', 'From ' + cfg.reminderLeadDays + ' days before the test end date, and every ' + cfg.reminderCooldownDays + ' days after it has passed.'],
-          ['Email right now', cfg.emailMode === 'LIVE' ? 'Live. Reminders and routing notices are sent and logged.' : 'Dry run. Everything is logged but nothing is sent, until an administrator sets EMAIL_MODE to LIVE in the PPC_CONFIG tab.']])])
-  ]);
+  /* Images: anyone who can attach. */
+  if (D.can.attach) out.push(sec('Attaching photographs', [
+    steps([D.can.request ? 'On a new request' + (D.can.test ? ' or test' : '') + ', use the Images panel at the foot of the form. Files are uploaded when the record is submitted.' : null,
+      D.can.edit ? 'On an existing record, select Edit and scroll to Images.' : 'Images already held against a PPC are shown when document control opens the record. Your account cannot add to an existing PPC.',
+      'Select a file, or use the paste area and press Ctrl+V to insert a screenshot from the clipboard.',
+      'Select View to open an image at full size' + (D.can.edit ? ', or Delete to remove it.' : '. Images you added yourself can be deleted.')]),
+    h('p', { class: 'mut', text: 'Accepted formats are PNG, JPEG, GIF and WebP, up to 4 MB per file and 20 per record. SVG files are not accepted. Images are visible only to those permitted to see the PPC.' })]));
+
+  /* The pages: describe only what this role will actually use. */
+  const pages = [['Dashboard', 'The stage board, with items requiring attention listed beneath it.'],
+    ['Quick start guide', 'This page.'],
+    ['Published documents', 'Completed documents grouped by department, with a search facility and a CSV export.'],
+    ['Missing PPC, need update', 'Open requests received before PPC numbering began.' + (D.can.edit ? ' These can be edited; number assignment is not yet available.' : ' View only for your account.')],
+    ['Tests and reminders', 'PPCs at the Testing stage and the tests recorded against them.' + (D.can.test ? ' Each test holds its own images.' : ' View only for your account.')],
+    ['Routing and emails', 'PPCs marked Completed, with a preview of the notification a requester would receive.' + (D.can.edit ? ' Sending is not yet available.' : ' View only for your account.')],
+    ['Update requests', 'Not yet available.'],
+    ['Year records', 'Requests grouped by year of submission, with a printable record and a CSV export.']];
+  out.push(sec('The pages in the menu', [dl(pages)]));
+
+  /* Administrator-only settings. */
+  if (isAdmin) out.push(sec('Administrator settings', [
+    dl([['Saving from this page', D.writes ? 'Enabled. Set the script property PPC_API_WRITES to OFF to suspend it.' : 'Suspended. Set the script property PPC_API_WRITES to ON to enable saving.'],
+      ['Email', 'Controlled by EMAIL_MODE in the PPC_CONFIG tab. It is currently ' + (cfg.emailMode === 'LIVE' ? 'LIVE.' : 'DRY_RUN, so nothing is sent.')],
+      ['Roles', 'Held in the PPC_USERS tab. A requester sees only their own requests and never the internal notes.'],
+      ['Suspending the page', 'Set PPC_API_ENABLED to OFF to close the page to all users.']])]));
+  return h('div', { class: 'view guide', id: 'v-guide', hidden: true }, out);
+}
+/* A short guide for requesters, shown on their own page. It explains only what they can see and do. */
+function requesterGuide() {
+  const open = !!requesterGuide.open;
+  const head = h('button', { type: 'button', class: 'dephead', 'aria-expanded': String(open), onclick: () => { requesterGuide.open = !open; renderRequester(); } },
+    [h('span', { class: 'caret', 'aria-hidden': 'true', text: open ? '\u2212' : '+' }), h('b', { text: 'How this page works' })]);
+  if (!open) return h('section', { class: 'depgroup reqguide' }, head);
+  return h('section', { class: 'depgroup reqguide' }, [head, h('div', { class: 'reqguidebody' }, [
+    h('p', { text: 'This page lists the document change requests recorded under your email address, and the stage each one has reached.' }),
+    h('dl', { class: 'kv' }, [['Not started', 'Received by document control and awaiting work.'],
+      ['In progress', 'Being drafted or tested.'], ['Complete', 'Published, or completed and awaiting publication.']]
+      .flatMap(p => [h('dt', { text: p[0] }), h('dd', { text: p[1] })])),
+    h('p', { text: 'Select a request to see its progress and the latest note from document control. Internal working notes are not shown here.' }),
+    D.can.attach ? h('p', { text: 'Photographs may be added to your own requests from the Images panel, using either a file or Ctrl+V to paste a screenshot. PNG, JPEG, GIF and WebP are accepted, up to 4 MB each.' }) : null,
+    h('p', { class: 'mut', text: 'Requesting an update from this page is not yet available. Contact document control directly in the meantime.' })])]);
 }
 function vUpdates() {
   return h('div', { class: 'view', id: 'v-updates', hidden: true }, [h('h1', { text: 'Update requests' }), h('p', { class: 'lead' }, [h('strong', { text: 'Not built yet.' }), ' Requesters cannot ask for an update from the page until this exists.']),
@@ -614,14 +657,14 @@ function renderRequester() {
   setKids($('#rview'), [h('h1', { text: 'My requests' }), h('p', { class: 'lead' }, ['You have ', h('strong', { text: pl(mine.length, 'request') }), '. Pick one to see where it is.']),
     h('p', { class: 'keyline' }, ['Not started', 'In progress', 'Complete'].map(s => h('span', null, [h('b', { text: String(cnt(s)) }), s]))),
     D.can.request ? null : h('p', { class: 'mut', text: 'Sending a new request from this page is not turned on for your account.' }),
-    h('div', { class: 'cols' }, [h('div', null, [].concat(group('In progress'), group('Complete'), mine.length ? [] : [h('p', { class: 'empty', text: 'No requests found.' })])), det])]);
+    h('div', { class: 'cols' }, [h('div', null, [].concat(group('In progress'), group('Complete'), mine.length ? [] : [h('p', { class: 'empty', text: 'No requests found.' })], [requesterGuide()])), det])]);
   wireOpeners();
 }
 function renderCurrent() { if (!D) return; if (D.view === 'staff') renderStaff(); else renderRequester(); }
 function showApp() {
   if (!WZ.request) initWizards();
   $('#gate').hidden = true; $('#shellStaff').hidden = D.view !== 'staff'; $('#shellReq').hidden = D.view !== 'requester';
-  document.title = 'PPC command center, Zenni USA'; renderCurrent();
+  document.title = APP_NAME + ', Zenni USA'; renderCurrent();
 }
 
 /* ---------- wizards (your 3-step format) ---------- */
@@ -743,9 +786,31 @@ function initWizards() {
 
 /* ---------- launcher (what PPC.html does when you open it from the LMS) ---------- */
 function flag(v) { return v === true || v === 1 || (typeof v === 'string' && ['true', 'yes', '1'].includes(v.toLowerCase().trim())); }
-function readSS(k) { try { return JSON.parse(sessionStorage.getItem(k) || 'null') || {}; } catch (e) { return {}; } }
+/* Browser storage can be unreadable: a privacy setting, or a frame the browser treats as third party. Reading it must
+   never throw, or the entry page would stall with nothing on screen. */
+let SS_BLOCKED = false;
+function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { SS_BLOCKED = true; return null; } }
+function readSS(k) { try { return JSON.parse(ssGet(k) || 'null') || {}; } catch (e) { return {}; } }
+/* The LMS stores its session in this tab before opening PPC. This reads a display name from it when one is there,
+   checking the shapes an LMS commonly uses. It never invents one: with nothing to read, the page says so. */
+function lmsWho() {
+  const pick = o => {
+    if (!o || typeof o !== 'object') return '';
+    const direct = o.displayName || o.display_name || o.fullName || o.full_name || o.name || o.user_name || o.username || o.email || o.userEmail || o.user_email || '';
+    if (typeof direct === 'string' && direct.trim()) return direct.trim();
+    for (const k of ['user', 'profile', 'account', 'session', 'identity']) { const v = pick(o[k]); if (v) return v; }
+    return '';
+  };
+  for (const k of ['lms_user', 'lms_profile', 'lms_account', 'lms_session', 'lms_identity', 'lms_visibility']) { const v = pick(readSS(k)); if (v) return v; }
+  for (const k of ['lms_display_name', 'lms_name', 'lms_user_name', 'lms_full_name', 'lms_email', 'lms_user_email']) {
+    const v = ssGet(k); if (v && v.trim() && v.trim() !== 'null') return v.trim().replace(/^"|"$/g, '');
+  }
+  return '';
+}
 function lmsProblem() {
-  if (sessionStorage.getItem('lms_logged_in') !== 'true') return 'No active LMS login in this tab. Return to LMS login, then open PPC from the dashboard.';
+  const flagv = ssGet('lms_logged_in');
+  if (SS_BLOCKED) return 'This tab cannot read the LMS session, because the browser is blocking site storage here. Open PPC from the LMS dashboard, or allow storage for this site.';
+  if (flagv !== 'true') return 'No active LMS login in this tab. Return to LMS login, then open PPC from the dashboard.';
   const vis = readSS('lms_visibility');
   const dept = Object.assign({}, vis.departments || {}, readSS('lms_departments'));
   const feat = Object.assign({}, vis.features || {}, readSS('lms_features'));
@@ -753,18 +818,31 @@ function lmsProblem() {
   return '';
 }
 function launcherMode() {
-  const st = $('#launchStatus'), open = $('#open'); if (!st || !open) return;
-  const problem = lmsProblem();
-  if (problem) { st.textContent = problem; st.classList.add('err'); return; }
-  open.disabled = false; st.textContent = 'LMS navigation permission confirmed. Google Workspace will separately verify PPC_USERS access.';
+  const open = $('#open'); if (!open) return;
+  document.title = APP_NAME + ', Zenni USA';
+  $$('[data-appname]').forEach(el => { el.textContent = APP_NAME; });
+  const problem = lmsProblem(), who = lmsWho();
+  const line = (state, text) => h('div', { class: 'chk ' + state }, [h('span', { class: 'mk', 'aria-hidden': 'true', text: state === 'ok' ? '\u2713' : state === 'bad' ? '\u00d7' : '\u25cb' }), h('span', { text: text })]);
+  const checks = [];
+  if (problem) checks.push(line('bad', problem));
+  else {
+    checks.push(line('ok', who ? 'Signed in to the LMS as ' + who : 'Signed in to the LMS in this tab'));
+    if (!who) checks.push(line('note', 'The LMS did not pass a name to this page, so it cannot be shown here.'));
+    checks.push(line('note', 'Your Google Workspace account and PPC_USERS entry are checked by the PPC application when it opens.'));
+  }
+  setKids($('#checks'), checks);
+  $('#statusbar').textContent = problem ? 'Access unavailable' : 'Ready';
+  if (problem) return;
+  open.disabled = false;
   open.addEventListener('click', () => { if (open.disabled) return; if (EMBED) showEmbed(); else window.location.assign(PPC_SECURE_URL); });
 }
+
 const GOOGLE_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*(google\.com|googleusercontent\.com)$/;
 function showEmbed() {
   $('#launcher').hidden = true;
   const hint = h('span', { class: 'embedhint', text: 'Loading the secure PPC application...' });
-  const frame = h('iframe', { id: 'ppcFrame', title: 'PPC command center', src: PPC_SECURE_URL, referrerpolicy: 'no-referrer' });
-  const bar = h('div', { class: 'embedbar' }, [h('b', { text: 'PPC command center' }), hint, h('span', { class: 'grow' }), h('a', { href: PPC_SECURE_URL, target: '_blank', rel: 'noopener' }, 'Open in a new tab'), h('a', { href: 'index.html' }, 'Return to LMS Command Center')]);
+  const frame = h('iframe', { id: 'ppcFrame', title: APP_NAME, src: PPC_SECURE_URL, referrerpolicy: 'no-referrer' });
+  const bar = h('div', { class: 'embedbar' }, [h('b', { text: APP_NAME }), hint, h('span', { class: 'grow' }), h('a', { href: PPC_SECURE_URL, target: '_blank', rel: 'noopener' }, 'Open in a new tab'), h('a', { href: 'index.html' }, 'Return to the LMS')]);
   document.body.append(h('div', { id: 'embedWrap', class: 'embedwrap' }, [bar, frame]));
   const timer = setTimeout(() => { hint.textContent = 'This is taking a while. If nothing appears, your browser may be blocking Google sign-in inside this page. Use "Open in a new tab".'; hint.classList.add('warn'); }, EMBED_TIMEOUT_MS);
   window.addEventListener('message', e => { if (GOOGLE_ORIGIN.test(e.origin) && e.data && e.data.ppc === 'ready') { clearTimeout(timer); hint.textContent = ''; } });

@@ -339,3 +339,28 @@ a.btn:hover{text-decoration:none;color:var(--text)}
 .guide table{max-width:860px}.guide .mut{max-width:80ch}
 .boardfirst{border-top:0;padding-top:4px}
 @media(max-width:760px){.guide .kv{grid-template-columns:1fr}.guide .kv dt{padding-bottom:0;border-bottom:0}}
+
+.reqguide{margin-top:18px}.reqguidebody{padding:4px 2px 16px}.reqguidebody p{max-width:78ch}
+.reqguidebody .kv{grid-template-columns:150px 1fr;max-width:640px;margin:10px 0}
+@media(max-width:700px){.reqguidebody .kv{grid-template-columns:1fr}}
+
+/* ---- the entry window ---- */
+#launcher.gate{display:grid;place-items:center;min-height:100vh;padding:24px}
+.winbox{width:min(660px,100%);background:var(--bg);border:2px solid;border-color:var(--hi) #8d8470 #8d8470 var(--hi)}
+.wintitle{background:linear-gradient(90deg,#5b4a2f,#a08a5e);color:#fff8ec;padding:6px 8px;display:flex;align-items:center;gap:8px;font-weight:700}
+.wintitle .wsp{flex:1}.wintitle .wicon{font-size:13px}
+.wbtn{width:20px;height:18px;background:#e4d9c3;border:2px solid;border-color:var(--hi) #8d8470 #8d8470 var(--hi);text-align:center;line-height:13px;font-size:11px;color:var(--text)}
+.winmenu{background:#e8dfcc;border-bottom:1px solid var(--lo);padding:5px 12px;display:flex;gap:18px;color:#4a3f2a;font-size:13px}
+.winbody{padding:26px 24px 20px;text-align:center}
+.winbody h1{font-size:26px;margin:0 0 6px}
+.winsub{color:var(--muted);margin:0 0 20px;max-width:52ch;margin-inline:auto}
+.wingrp{border:2px groove #d8cdb4;padding:14px 16px;margin:0 0 20px;text-align:left}
+.wingrp legend{padding:0 6px;font-weight:700}
+.chk{display:flex;gap:10px;padding:5px 0;font-size:13px;align-items:flex-start}
+.chk .mk{flex:0 0 14px;font-weight:700;line-height:1.5}
+.chk.ok .mk{color:#1f5c22}.chk.bad .mk{color:var(--block)}.chk.bad{color:#8c231b}.chk.note,.chk.note .mk{color:var(--muted)}
+.winacts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.winstatus{display:flex;gap:6px;padding:6px 8px;background:#e8dfcc;border-top:2px solid var(--lo);font-size:12px}
+.winstatus div{border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:3px 9px;color:var(--muted)}
+.winstatus .g{flex:1}
+@media(max-width:620px){.winbody{padding:18px 14px 14px}.winacts .btn{flex:1}.winstatus{flex-direction:column}}

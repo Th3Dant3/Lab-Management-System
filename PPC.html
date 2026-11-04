@@ -1,22 +1,26 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zenni USA, PPC Document Control</title><link rel="stylesheet" href="PPC.css"></head>
+<title>PPC Document Control, Zenni USA</title><link rel="stylesheet" href="PPC.css"></head>
 <body>
-<main id="launcher" class="gate"><div class="gatecard">
-<div class="gbrand"><b>Zenni USA</b><span>Lab management, document control</span></div>
-<h1>PPC command center</h1>
-<p>Open the Workspace-secured PPC dashboard to view authorized requests, testing, approvals and documents. Your Google Workspace identity and <code>PPC_USERS</code> access are checked by the PPC application.</p>
-<div id="launchStatus" class="gstatus" role="status">Checking your LMS session...</div>
-<div class="actions"><button type="button" class="btn primary" id="open" disabled>Open secure PPC application</button><a href="index.html">Return to LMS Command Center</a></div>
-<p class="gfoot">The secure dashboard opens at Google's Apps Script address. This page does not display PPC records.</p>
+<main id="launcher" class="gate"><div class="winbox">
+<div class="wintitle"><span class="wicon" aria-hidden="true">&#9638;</span><span data-appname>PPC Document Control</span><span class="wsp"></span>
+<span class="wbtn" aria-hidden="true">&#8211;</span><span class="wbtn" aria-hidden="true">&#9633;</span><span class="wbtn" aria-hidden="true">&times;</span></div>
+<div class="winmenu"><span>File</span><span>View</span><span>Help</span></div>
+<div class="winbody">
+<h1 data-appname>PPC Document Control</h1>
+<p class="winsub">Zenni USA, Ohio facility. Proposal of Process Change requests, testing and published work instructions.</p>
+<fieldset class="wingrp"><legend>Access</legend><div id="checks"><div class="chk note"><span class="mk" aria-hidden="true">&#9675;</span><span>Checking your LMS session...</span></div></div></fieldset>
+<div class="winacts"><button type="button" class="btn primary" id="open" disabled>Open the PPC application</button><a class="btn" href="index.html">Return to the LMS</a></div>
+</div>
+<div class="winstatus"><div class="g" id="statusbar">Checking...</div><div>No records are held on this page</div></div>
 </div></main>
 <template id="app-layout">
 <section id="gate" class="gate"><div class="gatecard">
 <div class="gbrand"><b>Zenni USA</b><span>Lab management, document control</span></div>
-<h1>PPC command center</h1>
+<h1 data-appname>PPC Document Control</h1>
 <div id="gateStatus" class="gstatus" role="status">Loading your PPC requests...</div>
 <button type="button" class="btn" id="retry" hidden>Try again</button>
-<p class="gfoot"><a href="#" data-lms>Return to LMS Command Center</a></p>
+<p class="gfoot"><a href="#" data-lms>Return to the LMS</a></p>
 </div></section>
 
 <div id="shellStaff" class="app" hidden>
