@@ -127,7 +127,8 @@ function openEdit(r) {
   });
   const onKey = e => { if (e.key === 'Escape' && !document.querySelector('.lightbox')) close(); };   // Escape closes the image viewer first, never this panel underneath it
   const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
-  const save = btn('Save changes', { primary: true, onclick: async () => {
+  let save;
+  const commit = async () => {
     const ch = {};
     if (invalid && !stSel.value) { setMsg('Choose a status for this PPC.', true); return; }
     if (stSel.value && stSel.value !== r.status) ch.status = stSel.value;
@@ -142,10 +143,32 @@ function openEdit(r) {
       await api('updatePpc', { number: r.number, changes: ch, expect: { status: r.status, stage: r.stage } });
       FLASH = 'Saved ' + r.number + (ch.status ? '. Status is now ' + ch.status + '.' : '.'); close(); await refresh();
     } catch (e) { setMsg(e.code === 'WRITES_OFF' ? 'Saving from this page is switched off for now. Nothing was saved.' : e.message, true); save.disabled = false; }
-  } });
+  };
+  save = btn('Save changes', { primary: true, onclick: commit });
+  /* The five steps, in order, with one button that moves this PPC on by exactly one. A PPC starts at Not Started
+     when it is submitted and ends at Published. Saving a step saves anything else typed in this panel at the same time. */
+  const here = STATUS_COLS.findIndex(c => c.status === r.status);
+  const stepTo = async (to) => {
+    stSel.value = to; stSel.dispatchEvent(new Event('change'));
+    setMsg('Moving to ' + to + '...');
+    await commit();
+  };
+  const stepRow = h('ol', { class: 'steps' }, STATUS_COLS.map((c, i) => h('li', {
+    class: (here < 0 ? '' : i < here ? 'done' : i === here ? 'now' : ''), 'aria-current': i === here ? 'step' : null
+  }, [h('span', { class: 'sn', text: String(i + 1) }), h('span', { text: c.title })])));
+  const next = here >= 0 && here < STATUS_COLS.length - 1 ? STATUS_COLS[here + 1] : null;
+  const back = here > 0 ? STATUS_COLS[here - 1] : null;
+  const blocked = s => !D.can.allStatuses && ADMIN_ONLY.indexOf(s.status) >= 0;
+  const stepBtns = h('div', { class: 'stepbtns' }, [
+    next ? btn('Move to ' + next.title, { primary: true, disabled: blocked(next), title: blocked(next) ? 'Only an administrator can set ' + next.status + '.' : '', onclick: () => stepTo(next.status) }) : h('span', { class: 'mut', text: 'This PPC is Published. It is the last step.' }),
+    back ? btn('Back to ' + back.title, { quiet: true, disabled: blocked(back), title: blocked(back) ? 'Only an administrator can set ' + back.status + '.' : '', onclick: () => stepTo(back.status) }) : null,
+    here < 0 ? h('span', { class: 'mut', text: 'This status is not one of the five, so choose one below first.' }) : null]);
+  const stepper = h('section', { class: 'stepper' }, [h('h3', { class: 'nh', text: 'Where it is' }), stepRow, stepBtns,
+    next && !blocked(next) ? h('p', { class: 'mut small', text: 'Or pick any status below to jump straight to it.' }) : null]);
   const field = (label, el, note) => h('label', null, [label, el, note ? h('small', { text: note }) : null]);
   const ov = h('div', { class: 'wz-overlay editov', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Edit ' + r.number }, h('div', { class: 'editbox' }, [
     h('h2', { text: r.number }), h('p', { class: 'sub', text: (r.title || 'Title not recorded') + (r.wi ? ' (' + r.wi + ')' : '') }),
+    stepper,
     field('Status', stSel, D.can.allStatuses ? 'In progress starts the age clock. Completed and Published stamp today\'s date if none is set.' : 'Ready for signature, Completed and Published can be set by an administrator only.'), field('Stage', sgSel),
     field('Due date', due), field('Blocker or next action', blocker),
     field('Public update (requesters see this, and it is emailed when the PPC is routed or published)', pub), field('Internal notes (staff only)', internal),

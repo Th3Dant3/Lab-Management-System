@@ -321,3 +321,14 @@ a{color:#2f5e9e}
 a.btn{text-decoration:none;display:inline-block;color:var(--text)}
 a.btn:hover{text-decoration:none;color:var(--text)}
 .col .btn{white-space:normal}
+
+/* the five steps, shown in order */
+.stepper{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin:12px 0 4px}
+.steps{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px;padding:0;counter-reset:s}
+.steps li{display:flex;align-items:center;gap:7px;padding:5px 10px;font-size:13px;color:var(--muted);background:#e8dfcc;border:2px solid;border-color:var(--hi) var(--lo) var(--lo) var(--hi)}
+.steps li .sn{display:grid;place-items:center;width:18px;height:18px;border:1px solid var(--lo);background:var(--field);font-size:11px;font-weight:700}
+.steps li.done{color:#1f5c22;background:#e9f3e6}.steps li.done .sn{border-color:#2f7d32;color:#1f5c22}
+.steps li.now{color:#fff8ec;background:var(--brown);border-color:#8a7450 #3b2f1c #3b2f1c #8a7450;font-weight:700}
+.steps li.now .sn{background:#fff8ec;border-color:#3b2f1c;color:var(--brown)}
+.stepbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+@media(max-width:700px){.steps li{font-size:12px;padding:4px 8px}.stepbtns .btn{flex:1}}
