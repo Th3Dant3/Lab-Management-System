@@ -216,3 +216,108 @@ body.printing-wz>*:not(.wz-overlay){display:none!important}body.printing-wz .wz-
 .paper .attach.stage .attachadd .btn{background:#fff;color:#10243d;border:1px solid #a3b2c1;border-radius:4px;padding:7px 14px;font:600 13px Arial}
 .paper .attach.stage .attachadd .btn:hover{border-color:#2563eb;color:#1d4fd0}
 .paper .attach.stage .attachmsg{color:#506781}.paper .attach.stage .attachmsg.err{color:#a52c27}
+
+/* ================= VERSION B: warm beige, 90s desktop ==================================================
+   Appended last, so it overrides everything above. To go back to the dark look, delete from this line down.
+   Only colours, borders and spacing change: no layout, no markup, no behaviour. */
+:root{color-scheme:light;
+  --bg:#efe7d8;--rail:#e8dfcc;--panel:#f6f0e4;--line:#c3b79b;--text:#2b2419;--muted:#6b5e45;
+  --draft:#a4700a;--route:#2f5e9e;--done:#2f7d32;--block:#a82a20;--steel:#8d8470;--focus:#5b4a2f;
+  --hi:#fffaf0}
+:root{--hi:#fffaf0;--lo:#b3a687;--field:#fffdf7;--track:#e2d8c2;--hover:#e6dcc6;--brown:#5b4a2f}
+body{font-family:Tahoma,Verdana,"Segoe UI",system-ui,sans-serif;font-variant-numeric:normal}
+/* --- raised and sunken edges, the way the period did it --- */
+.rail,.col,.tok,.panel,.editbox,.gatecard,.detail,.thumb,.mail,.band .bandh,.depgroup,.reauthbox,.embedwrap .embedbar{border-style:solid;border-width:2px}
+.rail{border-color:var(--hi) var(--lo) var(--lo) var(--hi);border-right-width:2px}
+.col{background:var(--panel);border-color:var(--hi) var(--lo) var(--lo) var(--hi);padding:9px}
+.col.collapsed{padding-bottom:12px}
+.flow{border:0;gap:9px}
+.tok{background:#fffdf7;border-color:var(--hi) var(--lo) var(--lo) var(--hi);border-left-width:4px;box-shadow:none}
+.tok.draft{border-left-color:var(--draft)}.tok.route{border-left-color:var(--route)}.tok.done{border-left-color:var(--done)}
+.tok.sign,.col.sign{border-left-color:#6f5aa8}.col.sign{border-top-color:#6f5aa8}
+/* --- the column and group headings read like title bars --- */
+.colhead{background:#dcd0b4;margin:-9px -9px 9px;padding:6px 8px;border-bottom:2px solid var(--lo)}
+.colhead h3{font-size:13px}.colhead .c{font-size:19px}
+.col.draft .colhead{background:var(--brown);color:#fff8ec}
+.col.draft .colhead h3,.col.draft .colhead .c,.col.draft .colhead .caret{color:#fff8ec}
+.bandhead{background:#e8dfcc;border:2px solid;border-color:var(--hi) var(--lo) var(--lo) var(--hi);padding:4px 7px;color:var(--text)}
+.bandhead:hover{background:var(--hover)}
+.brand{background:var(--brown);color:#fff8ec;margin:-22px 0 0;padding:12px 16px;border-bottom:2px solid var(--lo)}
+.brand b{color:#fff8ec}.brand span{color:#e0d2b4}
+.rail nav a[aria-current=page]{background:#cdbd97;color:var(--text);box-shadow:inset 3px 0 var(--brown);font-weight:600}
+.rail nav a:hover{background:var(--hover);color:var(--text)}
+.rail nav a .b{background:var(--brown);color:#fff8ec;border-radius:2px}
+.rail .stamp{border-top:2px solid var(--lo)}
+/* --- buttons: raised, and they press in --- */
+.btn,.seg,.wz-out{background:#e4d9c3;color:var(--text);border:2px solid;border-color:var(--hi) #8d8470 #8d8470 var(--hi);border-radius:2px;font-weight:600}
+.btn:hover,.seg:hover{background:#eee5d3;border-color:var(--hi) #8d8470 #8d8470 var(--hi)}
+.btn:active,.seg:active{border-color:#8d8470 var(--hi) var(--hi) #8d8470}
+.btn.primary{background:var(--brown);color:#fff8ec;border-color:#8a7450 #3b2f1c #3b2f1c #8a7450}
+.btn.primary:hover{background:#6b5838}
+.btn.quiet{background:#e4d9c3;color:var(--muted)}
+.btn:disabled{color:#9a8f79;background:#e4d9c3}
+.seg.on{background:var(--brown);color:#fff8ec;box-shadow:none;border-color:#8a7450 #3b2f1c #3b2f1c #8a7450}
+.tokedit{background:#e4d9c3;border:2px solid;border-color:var(--hi) #8d8470 #8d8470 var(--hi);border-radius:2px;color:var(--text)}
+.tokedit:hover{background:#eee5d3;border-color:var(--hi) #8d8470 #8d8470 var(--hi);color:var(--text)}
+.linkbtn{color:var(--muted)}
+/* --- fields look pressed in --- */
+.editbox input,.editbox select,.editbox textarea,#pubSearch,.ask-form textarea,.attachadd input[type=text],.gstatus{
+  background:var(--field);color:var(--text);border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);border-radius:0}
+.editbox select option:disabled{color:#9a8f79}
+/* --- bars and tracks --- */
+.age,.bar2,.split{background:var(--track);border:1px solid var(--lo);border-radius:0}
+.age{height:7px}
+/* --- the clock colours, which are the point of the board --- */
+.age.green span,.tok .age.green span{background:var(--done)}
+.age.yellow span,.tok .age.yellow span{background:var(--draft)}
+.age.overdue span,.tok .age.overdue span{background:var(--block)}
+.tok .days.green{color:#226b25}.tok .days.yellow{color:#8a5f08}.tok .days.overdue{color:var(--block)}
+.flagover{border-color:var(--block);color:var(--block);background:#fdeceb;border-radius:0}
+.bandhead.green .n{color:#226b25}.bandhead.yellow .n{color:#8a5f08}.bandhead.overdue .n{color:var(--block)}
+.sw{border:1px solid #6b5e45;border-radius:0}
+.chip2,.chip{border-radius:0}
+/* --- notices --- */
+.banner{background:#fff6cf;border:2px solid;border-color:var(--hi) var(--lo) var(--lo) var(--hi);border-left:5px solid #b07d12;color:#6b4a06}
+.banner.ok{background:#e8f4e4;border-left-color:var(--done);color:#1f5c22}
+.warnbox{background:#fff6cf;border:2px solid;border-color:var(--hi) var(--lo) var(--lo) var(--hi);border-left:5px solid #b07d12;color:#6b4a06}
+.editmsg.err,.attachmsg.err,.thumbs .err,.gstatus.err{color:#8c231b}
+.gstatus.err{border-color:var(--block)}
+/* --- tables --- */
+th{background:#e2d8c2;color:var(--text);border-bottom:2px solid var(--lo)}
+td{color:var(--text)}
+tbody tr:nth-child(even) td{background:#f4eee1}
+/* --- requester list and published groups --- */
+.req:hover{background:var(--hover)}
+.req[aria-pressed=true]{background:#e4d9c3;box-shadow:inset 3px 0 var(--brown)}
+.dephead:hover{background:var(--hover)}
+.depgroup{border-top:2px solid var(--lo);border-left:0;border-right:0;border-bottom:0}
+.pbar{background:var(--brown);color:#fff8ec}
+.pbar span,.pright a{color:#e0d2b4}
+/* --- images --- */
+.thumb{background:#fffdf7;border-color:var(--hi) var(--lo) var(--lo) var(--hi)}
+.thumb img,.nothumb{background:var(--track)}
+.pastebox{border:1px dashed var(--lo);color:var(--muted)}
+.lightbox{background:rgba(43,36,25,.86)}
+.lbbody img{background:var(--track);border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo)}
+.lbbar{color:#fff8ec}
+.mail{background:var(--field);color:var(--text);border-color:var(--lo) var(--hi) var(--hi) var(--lo)}
+/* --- misc --- */
+.editbox,.gatecard,.detail,.reauthbox{background:var(--panel);border-color:var(--hi) var(--lo) var(--lo) var(--hi)}
+.attn li,.facts li,.trust li,.kv dt,.kv dd,.steps4 li,.reqs,.req{border-color:var(--line)}
+.steps4 li:before{border-color:var(--brown);color:var(--brown)}
+.dot{border:1px solid #6b5e45}
+section{border-top-color:var(--line)}
+a{color:#2f5e9e}
+.empty,.none,.hint,.mut,.sub,.lead{color:var(--muted)}
+
+/* contrast touch-ups measured against the beige, not guessed */
+.colhead .caret,.bandhead .caret,.dephead .caret{color:#4a3f2a}
+.col.draft .colhead .caret{color:#f0e6d2}
+.bandhead.yellow .n,.tok .days.yellow{color:#7a5407}
+
+.chip2.p{color:#7a5407;border-color:#7a5407;background:#fdf4df}
+.chip2.c{color:#1f5c22;border-color:#1f5c22;background:#e9f3e6}
+
+a.btn{text-decoration:none;display:inline-block;color:var(--text)}
+a.btn:hover{text-decoration:none;color:var(--text)}
+.col .btn{white-space:normal}
