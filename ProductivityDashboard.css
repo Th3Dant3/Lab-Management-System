@@ -5047,3 +5047,183 @@ body.associate-signing-active #pageContent {
 @media(max-width:1280px){.score-v3-grid,.score-v3-grid.panel-open{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:820px){.score-v3-layout{display:block}.score-v3-grid,.score-v3-grid.panel-open{grid-template-columns:repeat(2,minmax(0,1fr))}.score-v3-panel.open{position:fixed;z-index:1100;inset:0 0 0 auto;width:min(100%,440px);min-width:0;max-height:100vh;box-shadow:-20px 0 80px #000a}}
 @media(max-width:480px){.score-v3-grid,.score-v3-grid.panel-open{grid-template-columns:1fr}}
+
+
+/* HYBRID ASSOCIATE HEADER V7 — presentation only */
+.profile-hero.profile-hero-hybrid-v7 {
+  display:grid!important;
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  gap:12px!important;
+  align-items:stretch!important;
+  padding:18px!important;
+  overflow:visible!important;
+  background:linear-gradient(135deg,rgba(12,34,59,.95),rgba(6,18,35,.97));
+}
+.profile-hero-hybrid-v7 .hybrid-profile-heading-v7 {
+  grid-column:1/-1;min-width:0;display:grid;gap:15px;
+  padding:20px 22px;border:1px solid rgba(51,124,170,.42);
+  border-radius:16px;background:linear-gradient(110deg,rgba(16,46,76,.9),rgba(10,24,49,.88));
+}
+.hybrid-profile-heading-top-v7 { display:flex;justify-content:space-between;align-items:center;gap:20px;min-width:0;flex-wrap:wrap; }
+.hybrid-profile-person-v7 { display:flex;align-items:center;gap:16px;min-width:0;flex:1 1 360px; }
+.hybrid-profile-avatar-v7 {display:grid;place-items:center;flex:0 0 66px;width:66px;height:66px;border-radius:18px;background:linear-gradient(135deg,#3268bb,#6f46c1);border:1px solid rgba(139,188,255,.5);color:#fff;font-weight:900;font-size:23px;letter-spacing:.03em;}
+.hybrid-profile-person-text-v7 {min-width:0;flex:1;}
+.hybrid-profile-kicker-v7 {display:block;font-size:10px;font-weight:900;letter-spacing:.15em;color:#67d6f9;}
+.hybrid-profile-person-text-v7 h2 {margin:5px 0!important;font-size:clamp(22px,2.2vw,32px)!important;line-height:1.15!important;overflow-wrap:anywhere;text-transform:none;color:#f6fbff;}
+.hybrid-profile-person-text-v7 p {margin:0;color:#acc6d9;line-height:1.4;font-size:12px;font-weight:600;}
+.hybrid-profile-actions-v7 {display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;}
+.hybrid-profile-status-v7 {border-radius:999px;padding:7px 11px;font-size:11px;font-weight:850;color:#dbeafe;border:1px solid #3c5470;background:#192d45;white-space:nowrap;}
+.hybrid-profile-status-v7.good {border-color:#257c5c;color:#8ef4c3;background:rgba(13,82,60,.3)}
+.hybrid-profile-status-v7.watch {border-color:#ac8123;color:#ffe2a6;background:rgba(119,77,16,.27)}
+.hybrid-profile-status-v7.warning {border-color:#ab3b55;color:#ffc0cd;background:rgba(128,31,57,.29)}
+.hybrid-profile-status-v7.training {border-color:#8055e8;color:#e4ceff;background:rgba(103,52,181,.3)}
+.hybrid-profile-status-v7.certified {border-color:#3a658e;color:#c1defb;background:#12314e}
+.profile-hero-hybrid-v7 .profile-signature-button.hybrid-signature-action-v7 {position:static!important;inset:auto!important;width:auto!important;height:auto!important;margin:0!important;padding:11px 16px!important;display:inline-flex;align-items:center;justify-content:center;border-radius:10px!important;background:#2b60dc!important;color:#fff!important;border:1px solid #5790f4!important;font:800 12px Inter,'Segoe UI',sans-serif!important;white-space:nowrap;cursor:pointer;}
+.profile-hero-hybrid-v7 .profile-signature-button[disabled] {opacity:.65!important;cursor:default!important;}
+.hybrid-training-v7 {display:grid;gap:10px;padding:14px 17px;background:rgba(52,33,96,.32);border:1px solid rgba(154,108,252,.28);border-radius:12px;}
+.hybrid-training-head-v7 {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.hybrid-training-head-v7 span {font-weight:850;color:#ddd0ff;font-size:13px;}
+.hybrid-training-head-v7 strong {color:#fff;margin-left:9px;}
+.hybrid-training-head-v7 small {color:#adbbd7;font-size:12px;}
+.hybrid-week-track-v7 {display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px;}
+.hybrid-week-track-v7 i {height:8px;border-radius:5px;background:#30425c;}
+.hybrid-week-track-v7 i.done {background:linear-gradient(90deg,#805ce0,#ac92ff);}
+.hybrid-training-summary-v7 {display:flex;align-items:center;justify-content:space-between;gap:8px;color:#bbcbe3;font-size:12px;}
+.hybrid-training-summary-v7 strong {font-size:17px;color:#75ecc5;}
+.profile-hero-hybrid-v7 > .ring-wrap {grid-column:span 1;align-self:center;}
+.profile-hero-hybrid-v7 > .hero-metric {grid-column:span 1;min-width:0;border-left:0;border:1px solid rgba(49,90,127,.5);border-radius:12px;background:rgba(15,37,61,.8);padding:12px 6px;min-height:110px;}
+.profile-hero-hybrid-v7 > .hero-metric strong {font-size:clamp(17px,1.7vw,25px)!important;}
+.profile-hero-hybrid-v7 > .associate-admin-toolbar,.profile-hero-hybrid-v7 > .temp-archive-toolbar,.profile-hero-hybrid-v7 > .fte-archive-toolbar {grid-column:1/-1;}
+@media(max-width:1200px){.profile-hero.profile-hero-hybrid-v7{grid-template-columns:repeat(3,minmax(0,1fr))!important;}.profile-hero-hybrid-v7 > .ring-wrap{grid-column:span 1;}}
+@media(max-width:680px){.profile-hero.profile-hero-hybrid-v7{grid-template-columns:repeat(2,minmax(0,1fr))!important;padding:10px!important;}.profile-hero-hybrid-v7 .hybrid-profile-heading-v7{padding:15px;}.hybrid-profile-avatar-v7{width:49px;height:49px;flex-basis:49px;font-size:18px;}.hybrid-profile-actions-v7{justify-content:flex-start;}.profile-hero-hybrid-v7 > .ring-wrap{grid-column:1/-1;}.profile-hero-hybrid-v7 > .hero-metric{grid-column:span 1;}}
+@media print{.profile-hero-hybrid-v7 .hybrid-profile-heading-v7{background:#fff!important;color:#000!important;}.profile-hero-hybrid-v7 .hybrid-profile-person-text-v7 h2{color:#000!important;}.profile-hero-hybrid-v7 .hybrid-profile-actions-v7 .profile-signature-button{display:none!important;}}
+
+
+/* PRODUCTIVITY HUB 3.0 · DARK ASSOCIATE-FIRST OVERRIDES */
+:root { --bg:#06101e; --panel:#0d1d30; --panel-2:#132740; --panel-3:#18314b;
+ --text:#f1f7ff; --muted:#a8c3dd; --line:rgba(93,175,223,.36);
+ --line-strong:rgba(75,210,240,.75); --soft:rgba(255,255,255,.07); }
+body {background:linear-gradient(145deg,#06101e 0%,#0b1c30 52%,#071321 100%);color:#f1f7ff;}
+/* Preserve facility department filters, but stop driving the app from shift buttons. */
+.hub-shift-row {display:none!important;}
+/* In a full profile, its own fiscal selector replaces the global filter strip. */
+body:has(.profile-shell) .command-filter {display:none!important;}
+body:has(.profile-shell) .compact-kpis {display:none!important;}
+body:has(.profile-shell) .hub-nav-shell {display:none!important;}
+/* Legible dark dashboard cards, even when previous beige CSS exists in browser cache. */
+.v2-heading, .v2-panel, .v2-kpis>div, .kpi-card, .command-filter, .filter-bar,
+.profile-shell, .profile-hero, .area-card, .day-card, .mini-meta {color:#f1f7ff;}
+.v2-heading {background:#10243e!important;border-color:#35638b!important;}
+.v2-heading h2, .v2-heading p,.v2-kicker{color:#f1f7ff!important;}
+.v2-kpis>div {background:#122a43!important;border:1px solid #35638b!important;}
+.v2-kpis>div span,.v2-kpis>div small {color:#b6d4ea!important;}
+.v2-kpis>div strong {color:#fff!important;}
+.v2-panel {background:#0b1c30!important;border:1px solid #305677!important;}
+.v2-panel h3,.v2-panel-head h3 {color:#f2f8ff!important;}
+.v2-dept {background:#132c49!important;color:#f6faff!important;}
+.v2-dept strong,.v2-dept span {color:#f6faff!important;}
+.associate-first-week-v3 {margin:14px 0 18px;padding:18px;background:linear-gradient(130deg,#0e2139,#102a43);border:1px solid #36658a;border-radius:15px;color:#f4f9ff;}
+.af-week-bar {display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid #2f5677;}
+.af-week-bar label {font-size:11px;letter-spacing:.12em;font-weight:900;color:#73dafa;}
+.af-week-bar select {min-width:265px;max-width:100%;padding:11px 14px;border-radius:9px;border:1px solid #5b9cc6;background:#173653;color:#fff;font-weight:750;}
+.af-period {font-size:12px;color:#d7e8fa;}
+.af-week-summary {margin-left:auto;background:#183d54;color:#d5f8ff;border:1px solid #387a99;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800;}
+.af-subheading {display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:16px 0 12px;}
+.af-subheading h3 {margin:0;font-size:15px;color:#f4f9ff;letter-spacing:.025em;}
+.af-subheading span {font-size:11px;color:#b9cee3;}
+.af-day-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:9px;}
+.af-day {background:#11283f;border:1px solid #365372;border-radius:10px;padding:12px 8px;display:flex;flex-direction:column;gap:5px;min-height:116px;min-width:0;}
+.af-day b {font-size:14px;color:#f3f8ff;}
+.af-day small {font-size:11px;color:#b3c9db;}
+.af-day strong {font-size:12px;color:#b7c5d7;}
+.af-day span,.af-day em {font-size:10px;color:#bdd2e8;font-style:normal;overflow-wrap:anywhere;}
+.af-day.worked {border-color:#22bc88;background:#0d302e;}
+.af-day.worked strong {color:#7df2bd;}
+.af-day.unrecorded {background:#102237;}
+@media(max-width:1100px){.af-day-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.af-week-summary{margin-left:0}}
+@media(max-width:650px){.af-day-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.associate-first-week-v3{padding:12px}.af-week-bar select{min-width:0;width:100%}}
+
+/* Productivity HUB 3.0: two-division directory navigation */
+.hub-nav-shell.af-divisions {margin-bottom: 18px; background:#091728; border:1px solid rgba(70,189,230,.30);}
+.af-divisions .hub-dept-row {padding: 10px 16px; gap:20px; align-items:center; justify-content:space-between; border-bottom:0;}
+.af-divisions .hub-dept-tabs {display:flex; flex-wrap:wrap; gap:10px;}
+.af-divisions .hub-dept-tab {border:1px solid rgba(96,172,214,.3);border-radius:9px;padding:12px 22px;color:#d9eafb;background:#10273e;font-size:12px;letter-spacing:.06em;}
+.af-divisions .hub-dept-tab:hover {background:#1c3a58;color:#fff;border-color:#5fcdea;}
+.af-divisions .hub-dept-tab.active, .af-divisions .hub-dept-tab.inv.active {background:#205880;color:#fff;border:1px solid #5ec9f4;box-shadow:0 0 0 1px rgba(94,201,244,.12);}
+.af-divisions .af-nav-hint {color:#b2c9dc;font-size:12px;line-height:1.5;}
+@media(max-width:1100px){.af-divisions .hub-dept-row{align-items:flex-start;flex-direction:column;gap:9px;}}
+
+/* Associate schedule selector: internal associate picker stays available to JS only. */
+.af-hidden-associate-picker { display:none !important; }
+#associateScheduleFilter { color:#eaf5ff; background:#24466e; border:1px solid #527dab; font-weight:700; }
+#associateScheduleFilter:focus-visible { outline:2px solid #69d5f4; outline-offset:2px; }
+
+/* Hours adjustment: clear record identity, three separate fields */
+.hours-record-identity {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+.hours-identity-item {
+  padding: 12px 14px;
+  background: #152e47;
+  border: 1px solid #36647f;
+  border-radius: 11px;
+  min-width: 0;
+}
+.hours-identity-item span {
+  display: block;
+  color: #91d7f6;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  margin-bottom: 6px;
+}
+.hours-identity-item strong {
+  display: block;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 850;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.hours-quick-row button:active { transform: translateY(1px); background: #1b5670; }
+.hours-quick-row button:focus-visible { outline: 2px solid #83e6ff; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .hours-record-identity { grid-template-columns: 1fr; }
+}
+
+
+/* Daily breakage inside associate productivity scorecards */
+.daily-breakage-v3 { margin-top:12px; padding:10px; border-top:1px solid rgba(117,193,228,.28); background:rgba(10,29,48,.65); border-radius:8px; color:#e8f4ff; }
+.db-heading { display:flex; align-items:center; justify-content:space-between; gap:6px; color:#7cdcf3; font-size:10px; font-weight:850; letter-spacing:.06em; }
+.db-heading span { color:#b9ccdf; font-size:10px; font-weight:600; letter-spacing:0; }
+.db-counts { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:8px 0; }
+.db-counts > span { display:flex; justify-content:space-between; align-items:center; gap:4px; padding:7px 8px; border-radius:6px; background:#172d45; color:#d1e3f5; font-size:11px; font-weight:650; }
+.db-counts strong { font-size:16px; color:#fff; }
+.db-reasons > summary { cursor:pointer; padding:5px 2px; color:#7cdcf3; font-weight:750; font-size:11px; }
+.db-reason-list { display:grid; gap:6px; padding-top:7px; }
+.db-reason-item { display:flex; justify-content:space-between; gap:8px; padding:7px; border:1px solid rgba(119,171,213,.25); border-radius:6px; background:#0e2136; font-size:11px; }
+.db-reason-item strong { display:block; overflow-wrap:anywhere; color:#f5faff; font-size:11px; }
+.db-reason-item small { display:block; color:#a9c3d9; margin-top:3px; overflow-wrap:anywhere; }
+.db-reason-values { display:flex; flex-direction:column; white-space:nowrap; color:#f2cb95; font-size:10px; font-weight:750; }
+.db-loading, .db-zero { color:#b0c5d9; font-size:11px; line-height:1.4; margin-top:8px; }
+
+
+/* PH3 — four-tier productivity status (view-only classification) */
+:root { --near-target: #38bdf8; }
+.badge.BLUE, .badge.blue { color:#bdeaff; background:rgba(56,189,248,.16); border-color:rgba(56,189,248,.55); }
+.hub-status-card.blue { border-color:rgba(56,189,248,.45); background:linear-gradient(150deg,#122c48,#091b2d); }
+.hub-status-card.blue strong, .insight-kpi.blue strong { color:#69d0fb; }
+.hub-productivity-ring.BLUE { border-color:var(--near-target); }
+.associate-area-card-v3.BLUE { border-left-color:var(--near-target)!important; }
+.associate-day-card.BLUE { border-top-color:var(--near-target); }
+.BLUE .associate-area-title em, .BLUE .associate-day-head-v3 em { color:#bdeaff; border:1px solid rgba(56,189,248,.42); background:rgba(56,189,248,.17); }
+.score-v3-card.blue { border-color:#267ca9; background:linear-gradient(155deg,#102b41,#091a2c 68%); }
+.score-v3-card.blue .score-v3-spark i { background:linear-gradient(#6dd5ff,#1687bc); }
+.score-v3-card.blue em { background:#124b70; color:#bdeaff!important; }
+.score-v3-pill.blue { border-color:#267ca9; color:#8bdcff; }
+.v2-pill.near, .hybrid-profile-heading-v7 .near { color:#8bdcff; border-color:#267ca9; }
+.hub-status-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
+@media(max-width:1050px){.hub-status-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}

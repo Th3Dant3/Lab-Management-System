@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Productivity Hub Command Center</title>
+  <title>Productivity Hub 3.0 | Associate Command Center</title>
   <link rel="stylesheet" href="ProductivityDashboard.css" />
 </head>
 
@@ -102,14 +102,10 @@
       </nav>
 
       <div class="side-block">
-        <label for="sideDeptSelect">Department</label>
+        <label for="sideDeptSelect">Division</label>
         <select id="sideDeptSelect">
-          
-          <option value="FINISH">Finish</option>
-          <option value="SURFACE">Surface</option>
-          <option value="AR">AR</option>
-          <option value="INVENTORY">Picking</option>
-          
+          <option value="PROD_ALL">Production</option>
+          <option value="DIST_ALL">Distribution &amp; Inventory</option>
         </select>
       </div>
 
@@ -136,49 +132,29 @@
         </div>
       </header>
 
-      <!-- SHIFT TOGGLE + GROUPED DEPT NAV -->
-      <nav class="hub-nav-shell">
-
-        <div class="hub-shift-row">
-          <div class="hub-shift-toggle">
-            <button class="hub-shift-btn active wd" data-shift="WEEKDAY" type="button" id="shiftBtnWD">⬡ Weekday</button>
-            <button class="hub-shift-btn we" data-shift="WEEKEND" type="button" id="shiftBtnWE">⬡ Weekend</button>
-            <button class="hub-shift-btn all" data-shift="ALL" type="button" id="shiftBtnALL">⬡ All Shifts</button>
-          </div>
-          <div class="hub-shift-meta" id="shiftMetaLabel">Shift: <strong>Weekday</strong></div>
-        </div>
-
+      <!-- ASSOCIATE-FIRST: only the two divisions are selectable.
+           Station/department information belongs inside each associate profile. -->
+      <nav class="hub-nav-shell af-divisions" aria-label="Associate directory division">
         <div class="hub-dept-row">
-          <div class="hub-dept-group">
-            <span class="hub-group-label">Production Dept</span>
-            <div class="hub-dept-tabs">
-              <button class="hub-dept-tab active" data-dept="FINISH" type="button">Finish</button>
-              <button class="hub-dept-tab" data-dept="SURFACE" type="button">Surface</button>
-              <button class="hub-dept-tab" data-dept="AR" type="button">AR</button>
-              <button class="hub-dept-tab all-dept" data-dept="PROD_ALL" type="button">All Depts</button>
-            </div>
+          <div class="hub-dept-tabs" role="group" aria-label="Division">
+            <button class="hub-dept-tab active" data-dept="PROD_ALL" type="button">Production</button>
+            <button class="hub-dept-tab inv" data-dept="DIST_ALL" type="button">Distribution &amp; Inventory</button>
           </div>
-          <div class="hub-dept-divider"></div>
-          <div class="hub-dept-group">
-            <span class="hub-group-label">Distribution &amp; Inventory Dept</span>
-            <div class="hub-dept-tabs">
-              <button class="hub-dept-tab inv" data-dept="INVENTORY" type="button">Picking</button>
-              <button class="hub-dept-tab inv all-dept" data-dept="DIST_ALL" type="button">All</button>
-            </div>
-          </div>
+          <span class="af-nav-hint">Choose a division, then select an associate to see all days and areas worked.</span>
         </div>
-
-        <div class="hub-ap-bar" id="hubApBar">
-          <span class="hub-ap-label">Station Group</span>
-          <button class="hub-ap-chip active" data-ap="ALL" type="button">All Stations</button>
-        </div>
-
       </nav>
 
       <section class="filter-bar command-filter">
         <div class="field wide">
-          <label for="associateSelect">Associate</label>
-          <select id="associateSelect"></select>
+          <label for="associateScheduleFilter">Associate Schedule</label>
+          <select id="associateScheduleFilter" aria-label="Filter associates by assigned schedule">
+            <option value="ALL">All Associates</option>
+            <option value="WEEKDAY">Weekday Associates</option>
+            <option value="WEEKEND">Weekend Associates</option>
+            <option value="CUSTOM">Custom Schedule</option>
+          </select>
+          <!-- Retained for the existing internal profile-selection workflow. -->
+          <select id="associateSelect" class="af-hidden-associate-picker" tabindex="-1" aria-hidden="true"></select>
         </div>
 
         <div class="field">

@@ -74,8 +74,9 @@ const STATE = {
   fiscalWeeks: [],
   weekDataCache: {},
   scorecardEmployeeType: 'FTE',
-  activeDept: 'FINISH',
-  activeShift: 'WEEKDAY',
+  activeDept: 'PROD_ALL',
+  activeShift: 'ALL',
+  associateScheduleFilter: 'ALL',
   activeStationGroup: 'ALL',
   activePage: 'dashboard',
   selectedAssociate: '',
@@ -303,7 +304,7 @@ function bindEvents() {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.hub-dept-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      STATE.activeDept = tab.dataset.dept || 'FINISH';
+      STATE.activeDept = tab.dataset.dept || 'PROD_ALL';
       STATE.selectedAssociate = '';
       STATE.activeStationGroup = 'ALL';
       const sideDept = document.getElementById('sideDeptSelect');
@@ -317,7 +318,7 @@ function bindEvents() {
   const sideDept = document.getElementById('sideDeptSelect');
   if (sideDept) {
     sideDept.addEventListener('change', e => {
-      STATE.activeDept = e.target.value || 'FINISH';
+      STATE.activeDept = e.target.value || 'PROD_ALL';
       STATE.selectedAssociate = '';
       STATE.activeStationGroup = 'ALL';
       document.querySelectorAll('.hub-dept-tab').forEach(t => {
@@ -328,7 +329,24 @@ function bindEvents() {
     });
   }
 
-  // Associate dropdown
+  // Directory-only schedule selector. It NEVER alters STATE.activeShift,
+  // the weekly source rows, or the full-profile productivity calculations.
+  const scheduleFilter = document.getElementById('associateScheduleFilter');
+  if (scheduleFilter) {
+    scheduleFilter.value = STATE.associateScheduleFilter || 'ALL';
+    scheduleFilter.addEventListener('change', e => {
+      STATE.associateScheduleFilter = String(e.target.value || 'ALL').toUpperCase();
+      if (typeof SCORE_V3 !== 'undefined') {
+        SCORE_V3.open = '';
+        SCORE_V3.tab = 'overview';
+      }
+      STATE.activePage = 'scorecards';
+      setActiveSideNav('scorecards');
+      renderEverything();
+    });
+  }
+
+  // Associate dropdown (kept hidden for the existing internal profile workflow).
   const associateSelect = document.getElementById('associateSelect');
   if (associateSelect) {
     associateSelect.addEventListener('change', e => {
@@ -382,54 +400,15 @@ function bindEvents() {
  * Called after data loads and after shift/dept changes.
  ************************************************************/
 function renderNavBar() {
-  const bar = document.getElementById('hubApBar');
-  if (!bar) return;
-
-  // Get all rows for active dept (no AP filter yet, shift filter applied by WorkDate)
-  const startDate = STATE.selectedWeekStartDate || STATE.meta.weekStartDate;
-  const endDate = STATE.selectedWeekEndDate || STATE.meta.weekEndDate;
-  const start = parseLocalDate(startDate);
-  const end = parseLocalDate(endDate);
-  const activeDept = String(STATE.activeDept || 'FINISH').toUpperCase();
-  const activeShift = String(STATE.activeShift || 'WEEKDAY').toUpperCase();
-
-  const PROD_DEPTS_NAV = ['FINISH', 'SURFACE', 'AR'];
-  const DIST_DEPTS_NAV = ['INVENTORY'];
-
-  function navDeptMatch(r) {
-    const rd = String(r.FinalDepartment || '').trim().toUpperCase();
-    if (activeDept === 'PROD_ALL') return PROD_DEPTS_NAV.includes(rd);
-    if (activeDept === 'DIST_ALL') return DIST_DEPTS_NAV.includes(rd);
-    return rd === activeDept;
-  }
-
-  const allRows = dedupeDailyRows([...(STATE.dailySnapshot || [])]).filter(r => {
-    const d = parseLocalDate(r.WorkDate);
-    const dateMatch = d && start && end && d >= start && d <= end;
-    const rowShiftMatch = rowMatchesActiveShiftByDate(r, activeShift);
-    return navDeptMatch(r) && dateMatch && rowShiftMatch;
+  // Division-only directory: station groups are discovered inside each profile.
+  STATE.activeStationGroup = 'ALL';
+  document.querySelectorAll('.hub-dept-tab').forEach(btn => {
+    const selected = btn.dataset.dept === STATE.activeDept;
+    btn.classList.toggle('active', selected);
+    btn.setAttribute('aria-pressed', String(selected));
   });
-
-  // Collect unique StationGroups
-  const groups = Array.from(new Set(allRows.map(r => String(r.StationGroup || '').trim()).filter(Boolean))).sort();
-
-  const isInv = activeDept === 'INVENTORY';
-  const chipClass = isInv ? 'hub-ap-chip inv' : 'hub-ap-chip';
-
-  bar.innerHTML = `<span class="hub-ap-label">Station Group</span>
-    <button class="${chipClass}${STATE.activeStationGroup === 'ALL' ? ' active' : ''}" data-ap="ALL" type="button">All Stations</button>
-    ${groups.map(g => `<button class="${chipClass}${STATE.activeStationGroup === g ? ' active' : ''}" data-ap="${escapeHtml(g)}" type="button">${escapeHtml(g)}</button>`).join('')}`;
-
-  // Wire AP chip clicks
-  bar.querySelectorAll('.hub-ap-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      STATE.activeStationGroup = chip.dataset.ap || 'ALL';
-      STATE.selectedAssociate = '';
-      bar.querySelectorAll('.hub-ap-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      renderEverything();
-    });
-  });
+  const side = document.getElementById('sideDeptSelect');
+  if (side && side.value !== STATE.activeDept) side.value = STATE.activeDept;
 }
 
 function isMachineRow(r) {
@@ -1436,7 +1415,9 @@ function renderAssociateDropdown() {
   const select = document.getElementById('associateSelect');
   if (!select) return;
 
-  const summaries = buildAssociateSummaries();
+  const summaries = buildAssociateSummaries().filter(associateMatchesDirectorySchedule_).slice().sort((a, b) =>
+    getAssociateDisplayName(a).localeCompare(getAssociateDisplayName(b), undefined, { sensitivity: 'base', numeric: true })
+  );
 
   if (!summaries.length) {
     select.innerHTML = '<option value="">No associates found</option>';
@@ -1468,9 +1449,10 @@ function renderDashboardHub() {
   const groups = buildDashboardTopScorecardGroups();
   const allTopRows = groups.flatMap(g => g.top || []);
 
-  const green = allTopRows.filter(s => s.status === 'GREEN').length;
-  const amber = allTopRows.filter(s => s.status === 'AMBER').length;
-  const red = allTopRows.filter(s => s.status === 'RED').length;
+  const green = allTopRows.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'GREEN').length;
+  const blue = allTopRows.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'BLUE').length;
+  const amber = allTopRows.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'AMBER').length;
+  const red = allTopRows.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'RED').length;
   const noTarget = allTopRows.filter(s => s.status === 'NO TARGET').length;
 
   const totalHours = allTopRows.reduce((sum, s) => sum + Number(s.totalHours || 0), 0);
@@ -1496,7 +1478,8 @@ function renderDashboardHub() {
 
       <div class="hub-status-grid">
         <article class="hub-status-card green"><span>On Target</span><strong>${green}</strong><small>100% or higher</small></article>
-        <article class="hub-status-card amber"><span>Watch</span><strong>${amber}</strong><small>90% to 99%</small></article>
+        <article class="hub-status-card blue"><span>Near Target</span><strong>${blue}</strong><small>95% to below 100%</small></article>
+        <article class="hub-status-card amber"><span>Watch</span><strong>${amber}</strong><small>90% to below 95%</small></article>
         <article class="hub-status-card red"><span>Warning</span><strong>${red}</strong><small>Below 90%</small></article>
         <article class="hub-status-card gray"><span>No Target</span><strong>${noTarget}</strong><small>Target missing or zero</small></article>
       </div>
@@ -1669,7 +1652,8 @@ function buildDepartmentHubRows(summaries) {
 }
 
 function jumpToDeptScorecards(department) {
-  const dept = String(department || 'FINISH').trim().toUpperCase();
+  const requested = String(department || 'PROD_ALL').trim().toUpperCase();
+  const dept = requested === 'INVENTORY' || requested === 'DIST_ALL' ? 'DIST_ALL' : 'PROD_ALL';
   STATE.activeDept = dept;
   STATE.activeStationGroup = 'ALL';
   STATE.selectedAssociate = '';
@@ -1942,9 +1926,10 @@ function getInsightTotals(rows, summaries) {
     jobs,
     workProduced,
     productivityPercent,
-    green: safeSummaries.filter(s => s.status === 'GREEN').length,
-    amber: safeSummaries.filter(s => s.status === 'AMBER').length,
-    red: safeSummaries.filter(s => s.status === 'RED').length,
+    green: safeSummaries.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'GREEN').length,
+    blue: safeSummaries.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'BLUE').length,
+    amber: safeSummaries.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'AMBER').length,
+    red: safeSummaries.filter(s => getStatusFromPercent(s.productivityPercent,s.workProduced) === 'RED').length,
     noTarget: safeSummaries.filter(s => s.status === 'NO_TARGET').length
   };
 }
@@ -1993,7 +1978,8 @@ function renderDailySummaryHub() {
         <div class="insight-kpi"><span>Total Hours</span><strong>${formatDecimal(totals.hours)}</strong><small>Login/session hours</small></div>
         <div class="insight-kpi"><span>Work Produced</span><strong>${formatDecimal(totals.workProduced)}</strong><small>Target-equivalent hours</small></div>
         <div class="insight-kpi green"><span>On Target</span><strong>${formatNumber(totals.green)}</strong><small>100%+</small></div>
-        <div class="insight-kpi amber"><span>Watch</span><strong>${formatNumber(totals.amber)}</strong><small>90% - 99%</small></div>
+        <div class="insight-kpi blue"><span>Near Target</span><strong>${formatNumber(totals.blue)}</strong><small>95–99%</small></div>
+        <div class="insight-kpi amber"><span>Watch</span><strong>${formatNumber(totals.amber)}</strong><small>90–94%</small></div>
         <div class="insight-kpi red"><span>Warning</span><strong>${formatNumber(totals.red)}</strong><small>Below 90%</small></div>
         <div class="insight-kpi"><span>No Target</span><strong>${formatNumber(totals.noTarget)}</strong><small>Missing JPH setup</small></div>
       </div>
@@ -3177,7 +3163,8 @@ function toggleAdjustmentRecords() {
 
 function getWeekRowsForActiveDept() {
   const activeDept = String(STATE.activeDept || 'FINISH').trim().toUpperCase();
-  const activeShift = String(STATE.activeShift || 'WEEKDAY').trim().toUpperCase();
+  // Weekly cards and profiles always use the complete fiscal week, including overtime.
+  const activeShift = 'ALL';
   const activeAP = String(STATE.activeStationGroup || 'ALL').trim();
 
   const startDate = STATE.selectedWeekStartDate || STATE.meta.weekStartDate;
@@ -3383,8 +3370,9 @@ function getStatusFromPercent(percent, workProduced) {
 
   // Higher-is-better model:
   // Work Produced / Hours Scanned
-  // 100% or higher = GREEN, 90% to 99.99% = AMBER, below 90% = RED.
+  // 100% or higher = GREEN, 95%-99.99% = BLUE, 90%-94.99% = AMBER, below 90% = RED.
   if (ratio >= 1.00) return 'GREEN';
+  if (ratio >= 0.95) return 'BLUE';
   if (ratio >= 0.90) return 'AMBER';
   return 'RED';
 }
@@ -3399,7 +3387,7 @@ function getStatusFromPercent(percent, workProduced) {
  * Work Produced = TotalJobScan / TargetAvgPerHour
  * Productivity % = Work Produced / Hours Scanned
  *
- * This keeps 100%+ GREEN, 90%-99.99% AMBER, below 90% RED.
+ * This keeps 100%+ GREEN, 95%-99.99% BLUE, 90%-94.99% AMBER, below 90% RED.
  ************************************************************/
 
 function recalcClientProductivityRows(rows) {
@@ -3609,7 +3597,20 @@ function openHoursNoteEditor(recordKey) {
         <div>
           <span class="modal-eyebrow">Productivity Adjustment</span>
           <h3>Edit Hours + Supervisor Note</h3>
-          <p>${escapeHtml(row.OperatorName)} • ${escapeHtml(row.StationGroup)} • ${formatDatePretty(row.WorkDate)}</p>
+          <div class="hours-record-identity" aria-label="Adjustment record details">
+            <div class="hours-identity-item hours-identity-associate">
+              <span>ASSOCIATE</span>
+              <strong>${escapeHtml(row.OperatorName || 'Unknown')}</strong>
+            </div>
+            <div class="hours-identity-item">
+              <span>AREA / STATION</span>
+              <strong>${escapeHtml(row.StationGroup || row.AccessPoint || 'Unknown')}</strong>
+            </div>
+            <div class="hours-identity-item">
+              <span>WORK DATE</span>
+              <strong>${formatDatePretty(row.WorkDate)}</strong>
+            </div>
+          </div>
         </div>
         <button type="button" class="modal-x" onclick="closeHoursNoteEditor()" aria-label="Close adjustment modal">×</button>
       </div>
@@ -3642,9 +3643,9 @@ function openHoursNoteEditor(recordKey) {
 
           <div class="hours-quick-row">
             <button type="button" onclick="setAdjustedHoursQuick('${formatDecimal(originalHours)}')">Original</button>
-            <button type="button" onclick="setAdjustedHoursQuick('${formatDecimal(Math.max(currentHours - 0.25, 0))}')">-0.25 hr</button>
-            <button type="button" onclick="setAdjustedHoursQuick('${formatDecimal(Math.max(currentHours - 0.50, 0))}')">-0.50 hr</button>
-            <button type="button" onclick="setAdjustedHoursQuick('${formatDecimal(Math.max(currentHours - 1.00, 0))}')">-1.00 hr</button>
+            <button type="button" onclick="subtractAdjustedHours(0.25)" title="Subtract another 0.25 hours">−0.25 hr</button>
+            <button type="button" onclick="subtractAdjustedHours(0.50)" title="Subtract another 0.50 hours">−0.50 hr</button>
+            <button type="button" onclick="subtractAdjustedHours(1.00)" title="Subtract another 1.00 hours">−1.00 hr</button>
             <button type="button" onclick="setAdjustedHoursQuick('0.00')">Set 0</button>
           </div>
 
@@ -3683,6 +3684,25 @@ function setAdjustedHoursQuick(value) {
   const input = document.getElementById('editAdjustedHours');
   if (!input) return;
   input.value = value;
+  input.focus();
+}
+
+// Repeated shortcuts apply to the CURRENT value in the editor, not the initially loaded hours.
+// Use integer hundredths to avoid floating-point drift (e.g. 8.70 - .25 - .25 = 8.20).
+function subtractAdjustedHours(amount) {
+  const input = document.getElementById('editAdjustedHours');
+  if (!input) return;
+  const current = Number(input.value);
+  if (!Number.isFinite(current) || current < 0) {
+    input.setCustomValidity('Enter valid hours before using a shortcut.');
+    input.reportValidity();
+    return;
+  }
+  input.setCustomValidity('');
+  const currentHundredths = Math.round(current * 100);
+  const reductionHundredths = Math.round(Number(amount) * 100);
+  input.value = (Math.max(0, currentHundredths - reductionHundredths) / 100).toFixed(2);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
   input.focus();
 }
 
@@ -4305,6 +4325,7 @@ function animateCounters() {
 function statusLabel(status) {
   const s = normalizeStatus(status);
   if (s === 'GREEN') return 'On Target';
+  if (s === 'BLUE') return 'Near Target';
   if (s === 'AMBER') return 'Watch';
   if (s === 'RED') return 'Warning';
   if (s === 'NO TARGET') return 'No Target';
@@ -7978,39 +7999,24 @@ function formatAssociateBreakageRate(count, totalJobs) {
 
 
 function getAssociateDailyStatus(productivity, suppliedStatus) {
-  const existing = String(suppliedStatus || '').trim();
-
-  if (existing) {
-    const normalized = existing.toUpperCase().replace(/_/g, ' ');
-
-    if (normalized === 'GREEN') return 'On Target';
-    if (normalized === 'AMBER') return 'Watch';
-    if (normalized === 'RED') return 'Warning';
-    if (normalized === 'NO TARGET') return 'No Target';
-
-    return existing;
+  const normalized = String(suppliedStatus || '').trim().toUpperCase().replace(/_/g, ' ');
+  // Keep exceptional statuses; ordinary productivity bands are derived from
+  // the actual unrounded value so legacy API AMBER still splits correctly.
+  if (['NO TARGET','NO SCAN MATCH','HOLIDAY','NO OT','EXCUSED','SCAN COUNT'].includes(normalized)) {
+    return statusLabel(normalized);
   }
-
-  const value = Number(productivity || 0);
-
-  if (value >= 1) return 'On Target';
-  if (value >= 0.9) return 'Watch';
-  if (value > 0) return 'Warning';
-
-  return 'No Target';
+  const n = Number(productivity);
+  if (!Number.isFinite(n)) return 'No Target';
+  const status = getStatusFromPercent(n, n > 0 ? 1 : 0);
+  return statusLabel(status);
 }
 
-
 function getAssociateDailyStatusClass(productivity, suppliedStatus) {
-  const status = getAssociateDailyStatus(
-    productivity,
-    suppliedStatus
-  ).toUpperCase();
-
-  if (status.includes('ON TARGET')) return 'GREEN';
-  if (status.includes('WATCH')) return 'AMBER';
-  if (status.includes('WARNING')) return 'RED';
-
+  const normalized = getAssociateDailyStatus(productivity, suppliedStatus).toUpperCase();
+  if (normalized === 'ON TARGET') return 'GREEN';
+  if (normalized === 'NEAR TARGET') return 'BLUE';
+  if (normalized === 'WATCH') return 'AMBER';
+  if (normalized === 'WARNING') return 'RED';
   return 'NO-TARGET';
 }
 
@@ -8628,6 +8634,7 @@ function hubV2DepartmentCards() {
   }).join('');
 }
 function hubV2SetDept(dept){
+  dept=(dept==='INVENTORY'||dept==='DIST_ALL')?'DIST_ALL':'PROD_ALL';
   STATE.activeDept=dept; STATE.activeStationGroup='ALL'; STATE.selectedAssociate='';
   const side=document.getElementById('sideDeptSelect'); if(side)side.value=dept;
   document.querySelectorAll('.hub-dept-tab').forEach(t=>t.classList.toggle('active',t.dataset.dept===dept));
@@ -8827,7 +8834,7 @@ function canManageTrainingV2() {
 }
 function openTrainingModalV2(operator){
  if(!canManageTrainingV2()){alert('Training management requires an LMS, Director, Manager, or Supervisor login.');return;}
- const active=trainingActiveFor_(operator);const prior=active[0];const initialDept=prior?prior.Department:(STATE.activeDept==='AR'?'AR':'FINISH');
+ const active=trainingActiveFor_(operator);const prior=active[0];const initialDept=prior?prior.Department:(function(){const row=(STATE.dailySnapshot||[]).find(r=>String(r.OperatorName||'').trim()===String(operator||'').trim() && ['FINISH','AR'].includes(String(r.FinalDepartment||'').toUpperCase()));return row?String(row.FinalDepartment).toUpperCase():'FINISH';})();
  const wrap=document.createElement('div');wrap.className='training-modal-backdrop-v2';wrap.id='trainingModalV2';
  wrap.innerHTML=`<div class="training-dialog-v2" role="dialog" aria-modal="true" aria-labelledby="trainingDialogTitleV2"><div class="training-head-v2"><h3 id="trainingDialogTitleV2">Training · ${escapeHtml(operator)}</h3><button type="button" id="closeTrainingV2">✕</button></div><p>Training applies to one assigned station only. Certified targets remain unchanged.</p><label>Department<select id="trainingDeptV2"><option value="FINISH">Finish</option><option value="AR">AR</option></select></label><label>Station<select id="trainingStationV2"></select></label><label>Effective Start Date<input type="date" id="trainingStartV2" required></label><label>Effective End Date<input type="date" id="trainingEndV2" required></label><label><input type="checkbox" id="trainingAutoV6" checked> Automatically advance training week every 7 days</label><label>Training Week<select id="trainingWeekV2">${Array.from({length:10},(_,i)=>`<option value="${i+1}">Week ${i+1}</option>`).join('')}</select></label><div class="training-target-v2" id="trainingTargetV2"></div><label>Qualification effective date<input type="date" id="trainingQualificationDateV6"></label><label>Supervisor Notes<input type="text" id="trainingNotesV2" maxlength="300" placeholder="Optional notes" /></label><p class="training-error-v2" id="trainingErrorV2"></p><div class="training-modal-actions-v2"><button type="button" class="ghost-action" id="cancelTrainingV2">Cancel</button>${prior?'<button type="button" class="ghost-action" id="certifyTrainingV6">Certified</button><button type="button" class="ghost-action" id="tqTrainingV6">TQ</button>':''}<button type="button" class="small-action" id="saveTrainingV2">Save Assignment</button></div></div>`;
  document.body.append(wrap);const dept=wrap.querySelector('#trainingDeptV2'), station=wrap.querySelector('#trainingStationV2'),week=wrap.querySelector('#trainingWeekV2');dept.value=initialDept;
@@ -8877,11 +8884,20 @@ document.addEventListener('DOMContentLoaded',()=>{refreshTrainingRosterV2(false)
    SCORECARDS V3 — grid + slide-out detail. View layer only.
    The existing snapshot calculations and training API are reused.
    ============================================================= */
-const SCORE_V3={filter:'ALL',query:'',sort:'PRODUCTIVITY',open:'',tab:'overview'};
+// Assigned schedule changes membership in the directory only. The source
+// records remain full-week records regardless of weekday/weekend selection.
+function associateMatchesDirectorySchedule_(summary) {
+  const selected = String(STATE.associateScheduleFilter || 'ALL').toUpperCase();
+  if (selected === 'ALL') return true;
+  // ScheduleType originates in ASSOCIATE_SCHEDULES, not scan dates.
+  const assigned = String(getAssociateSchedule(summary.associate).scheduleType || 'WEEKDAY').toUpperCase();
+  return assigned === selected;
+}
+const SCORE_V3={filter:'ALL',query:'',sort:'NAME',open:'',tab:'overview'};
 function scoreV3Initials(name){return String(getAssociateDisplayName(name)||name).split(/[\s,]+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?';}
-function scoreV3Status(s){const p=Number(s.productivityPercent);return !(s.workProduced>0)||!Number.isFinite(p)?'gray':p>=1?'green':p>=.9?'amber':'red';}
-function scoreV3Group(s){if((s.rows||[]).some(r=>!!r.TrainingTargetV4))return 'TRAINING';const st=scoreV3Status(s);return st==='gray'?'NO TARGET':st==='green'?'GREEN':st==='amber'?'AMBER':'RED';}
-function scoreV3Rows(){const all=buildAssociateSummaries();const type=String(STATE.scorecardEmployeeType||'FTE').toUpperCase();return all.filter(s=>getAssociateEmployeeType(s)===type);}
+function scoreV3Status(s){const p=Number(s.productivityPercent);return !(s.workProduced>0)||!Number.isFinite(p)?'gray':p>=1?'green':p>=.95?'blue':p>=.9?'amber':'red';}
+function scoreV3Group(s){if((s.rows||[]).some(r=>!!r.TrainingTargetV4))return 'TRAINING';const st=scoreV3Status(s);return st==='gray'?'NO TARGET':st==='green'?'GREEN':st==='blue'?'BLUE':st==='amber'?'AMBER':'RED';}
+function scoreV3Rows(){const all=buildAssociateSummaries();const type=String(STATE.scorecardEmployeeType||'FTE').toUpperCase();return all.filter(s=>getAssociateEmployeeType(s)===type&&associateMatchesDirectorySchedule_(s));}
 function scoreV3Filtered(){let rows=scoreV3Rows(); if(SCORE_V3.filter!=='ALL')rows=rows.filter(s=>scoreV3Group(s)===SCORE_V3.filter);if(SCORE_V3.query)rows=rows.filter(s=>[getAssociateDisplayName(s),s.associate,s.departments,...(s.areas||[]).map(a=>a.StationGroup||a.AccessPoint||'')].join(' ').toLowerCase().includes(SCORE_V3.query.toLowerCase()));return rows.sort((a,b)=>SCORE_V3.sort==='NAME'?getAssociateDisplayName(a).localeCompare(getAssociateDisplayName(b)):SCORE_V3.sort==='JOBS'?b.totalJobs-a.totalJobs:SCORE_V3.sort==='HOURS'?b.totalHours-a.totalHours:b.productivityPercent-a.productivityPercent);}
 function scoreV3SetFilter(f){SCORE_V3.filter=f;renderScorecardsPage();}
 function scoreV3Search(value){SCORE_V3.query=value;renderScorecardsPage();const q=document.querySelector('#scoreV3Search');if(q){q.focus();q.setSelectionRange(value.length,value.length);}}
@@ -8893,10 +8909,10 @@ function scoreV3StatusCount(rows,f){return rows.filter(r=>scoreV3Group(r)===f).l
 function scoreV3SafePct(s){return s.workProduced>0?formatPercent(s.productivityPercent):'N/A';}
 function scoreV3MiniBars(s){const keys=['H06','H07','H08','H09','H10','H11','H12','H13','H14','H15','H16','H17','H18','H19','H20'];const values=keys.map(k=>(s.rows||[]).reduce((a,r)=>a+Number(r[k]||0),0));const top=Math.max(1,...values);return `<div class="score-v3-spark" aria-hidden="true">${values.map(v=>`<i style="height:${Math.max(8,Math.round(v/top*100))}%"></i>`).join('')}</div>`;}
 renderScorecardsPage=function(){const root=document.querySelector('#pageContent');if(!root)return;const all=scoreV3Rows();const visible=scoreV3Filtered();const full=buildAssociateSummaries();const counts={FTE:0,TEMP:0,MACHINE:0};full.forEach(s=>{const t=getAssociateEmployeeType(s);if(t in counts)counts[t]++;});const allJobs=all.reduce((n,s)=>n+s.totalJobs,0);const hours=all.reduce((n,s)=>n+s.totalHours,0);const produced=all.reduce((n,s)=>n+s.workProduced,0);const avg=hours&&produced?formatPercent(produced/hours):'N/A';
-root.innerHTML=`<section class="score-v3-page"><div class="score-v3-title"><div><span class="v2-kicker">PRODUCTIVITY HUB 2.0</span><h2>ASSOCIATE SCORECARDS</h2><p>${escapeHtml(String(STATE.activeDept||''))} · ${escapeHtml(String(STATE.activeShift||''))} · ${escapeHtml(String(STATE.selectedFiscalWeek||STATE.meta.fiscalWeek||''))}</p></div><div class="score-v3-topstats"><div><strong>${formatNumber(all.length)}</strong><small>Associates</small></div><div><strong>${formatNumber(allJobs)}</strong><small>Jobs</small></div><div><strong>${avg}</strong><small>Weighted Productivity</small></div></div></div>
+root.innerHTML=`<section class="score-v3-page"><div class="score-v3-title"><div><span class="v2-kicker">PRODUCTIVITY HUB 2.0</span><h2>ASSOCIATE SCORECARDS</h2><p>${escapeHtml(String(STATE.activeDept||''))} · ${escapeHtml(String(STATE.associateScheduleFilter||'ALL'))} ASSOCIATE SCHEDULE · ${escapeHtml(String(STATE.selectedFiscalWeek||STATE.meta.fiscalWeek||''))}</p></div><div class="score-v3-topstats"><div><strong>${formatNumber(all.length)}</strong><small>Associates</small></div><div><strong>${formatNumber(allJobs)}</strong><small>Jobs</small></div><div><strong>${avg}</strong><small>Weighted Productivity</small></div></div></div>
 <div class="score-v3-types">${[['FTE','Full Time'],['TEMP','Temps'],['MACHINE','Machine']].map(([t,l])=>`<button type="button" class="score-v3-type ${STATE.scorecardEmployeeType===t?'on':''}" onclick="setScorecardEmployeeType('${t}')"><span>${l}</span><strong>${counts[t]}</strong></button>`).join('')}</div>
-<div class="score-v3-toolbar"><div class="score-v3-pills">${[['ALL','All'],['GREEN','On Target'],['AMBER','Watch'],['RED','Warning'],['NO TARGET','No Target'],['TRAINING','Training']].map(([k,l])=>`<button type="button" class="score-v3-pill ${SCORE_V3.filter===k?'active':''} ${k.toLowerCase().replace(' ','-')}" onclick="scoreV3SetFilter('${k}')">${l} <b>${k==='ALL'?all.length:scoreV3StatusCount(all,k)}</b></button>`).join('')}</div><div class="score-v3-tools"><input id="scoreV3Search" aria-label="Search associates" placeholder="Search associates or stations" value="${escapeHtml(SCORE_V3.query)}" oninput="scoreV3Search(this.value)"><select aria-label="Sort scorecards" onchange="scoreV3SetSort(this.value)">${[['PRODUCTIVITY','Productivity'],['NAME','Name'],['JOBS','Jobs'],['HOURS','Hours']].map(([v,l])=>`<option value="${v}" ${SCORE_V3.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
-<div class="score-v3-layout"><div class="score-v3-grid ${SCORE_V3.open?'panel-open':''}">${visible.length?visible.map(s=>{const group=scoreV3Group(s),status=scoreV3Status(s),train=(s.rows||[]).some(r=>!!r.TrainingTargetV4),area=(s.areas||[]).map(a=>a.StationGroup||a.AccessPoint||'').filter(Boolean)[0]||s.departments||'—';return `<button type="button" class="score-v3-card ${train?'training':status} ${SCORE_V3.open===s.associate?'selected':''}" data-operator="${escapeHtml(s.associate)}"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><span class="score-v3-card-title"><b>${escapeHtml(getAssociateDisplayName(s))}</b><small>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</small><em>${train?'🎓 TRAINING':status==='green'?'● ON TARGET':status==='amber'?'● WATCH':status==='red'?'● WARNING':'● NO TARGET'}</em></span><span class="score-v3-value">${scoreV3SafePct(s)}</span>${scoreV3MiniBars(s)}<span class="score-v3-detail"><span>◷ ${formatDecimal(s.totalHours)} hrs</span><span>▣ ${formatNumber(s.totalJobs)} jobs</span><span>◈ ${formatDecimal(s.workProduced)} produced</span></span><span class="score-v3-tags"><small>${escapeHtml(area)}</small>${train?`<small>Week ${escapeHtml((s.rows||[]).find(r=>r.TrainingWeekV4)?.TrainingWeekV4||'—')}</small>`:''}</span></button>`;}).join(''):'<p class="score-v3-empty">No matching associates. Try changing filters.</p>'}</div><aside id="scoreV3Panel" class="score-v3-panel" aria-label="Associate details"></aside></div></section>`;
+<div class="score-v3-toolbar"><div class="score-v3-pills">${[['ALL','All'],['GREEN','On Target 100%+'],['BLUE','Near Target 95–99%'],['AMBER','Watch 90–94%'],['RED','Warning'],['NO TARGET','No Target'],['TRAINING','Training']].map(([k,l])=>`<button type="button" class="score-v3-pill ${SCORE_V3.filter===k?'active':''} ${k.toLowerCase().replace(' ','-')}" onclick="scoreV3SetFilter('${k}')">${l} <b>${k==='ALL'?all.length:scoreV3StatusCount(all,k)}</b></button>`).join('')}</div><div class="score-v3-tools"><input id="scoreV3Search" aria-label="Search associates" placeholder="Search associates or stations" value="${escapeHtml(SCORE_V3.query)}" oninput="scoreV3Search(this.value)"><select aria-label="Sort scorecards" onchange="scoreV3SetSort(this.value)">${[['NAME','Name (A–Z)'],['PRODUCTIVITY','Productivity'],['JOBS','Jobs'],['HOURS','Hours']].map(([v,l])=>`<option value="${v}" ${SCORE_V3.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
+<div class="score-v3-layout"><div class="score-v3-grid ${SCORE_V3.open?'panel-open':''}">${visible.length?visible.map(s=>{const group=scoreV3Group(s),status=scoreV3Status(s),train=(s.rows||[]).some(r=>!!r.TrainingTargetV4),area=(s.areas||[]).map(a=>a.StationGroup||a.AccessPoint||'').filter(Boolean)[0]||s.departments||'—';return `<button type="button" class="score-v3-card ${train?'training':status} ${SCORE_V3.open===s.associate?'selected':''}" data-operator="${escapeHtml(s.associate)}"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><span class="score-v3-card-title"><b>${escapeHtml(getAssociateDisplayName(s))}</b><small>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</small><em>${train?'🎓 TRAINING':status==='green'?'● ON TARGET':status==='blue'?'● NEAR TARGET':status==='amber'?'● WATCH':status==='red'?'● WARNING':'● NO TARGET'}</em></span><span class="score-v3-value">${scoreV3SafePct(s)}</span>${scoreV3MiniBars(s)}<span class="score-v3-detail"><span>◷ ${formatDecimal(s.totalHours)} hrs</span><span>▣ ${formatNumber(s.totalJobs)} jobs</span><span>◈ ${formatDecimal(s.workProduced)} produced</span></span><span class="score-v3-tags"><small>${escapeHtml(area)}</small>${train?`<small>Week ${escapeHtml((s.rows||[]).find(r=>r.TrainingWeekV4)?.TrainingWeekV4||'—')}</small>`:''}</span></button>`;}).join(''):'<p class="score-v3-empty">No matching associates. Try changing filters.</p>'}</div><aside id="scoreV3Panel" class="score-v3-panel" aria-label="Associate details"></aside></div></section>`;
 root.querySelectorAll('.score-v3-card').forEach(card=>card.addEventListener('click',()=>scoreV3Select(card.dataset.operator)));scoreV3UpdatePanel();};
 function scoreV3UpdatePanel(){const panel=document.querySelector('#scoreV3Panel');if(!panel)return;const page=document.querySelector('.score-v3-grid');if(page)page.classList.toggle('panel-open',!!SCORE_V3.open);if(!SCORE_V3.open){panel.classList.remove('open');panel.innerHTML='';return;}const s=scoreV3Rows().find(x=>x.associate===SCORE_V3.open);if(!s){SCORE_V3.open='';panel.classList.remove('open');return;}const datesInView=(s.rows||[]).map(r=>formatDateKey(r.WorkDate)).filter(Boolean);
 const assignments=(STATE.trainingHistory||[]).filter(a=>trainingNormalizeLabelV4_(a.OperatorName)===trainingNormalizeLabelV4_(s.associate)&&datesInView.some(d=>d>=String(a.StartDate||'').slice(0,10)&&d<=String(a.EndDate||'').slice(0,10)));
@@ -8908,3 +8924,218 @@ if(SCORE_V3.tab==='stations'){body=`<section class="score-v3-panel-section"><h4>
 panel.classList.add('open');panel.innerHTML=`<div class="score-v3-panel-head"><button type="button" id="scoreV3Close" aria-label="Close associate panel">✕</button><div class="score-v3-panel-ident"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><div><h3>${escapeHtml(getAssociateDisplayName(s))}</h3><p>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</p></div></div>${trained?'<span class="training-pill-v2">🎓 TRAINING</span>':''}</div><nav class="score-v3-tabs">${tabs.map(([k,l])=>`<button type="button" class="${SCORE_V3.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('')}</nav><div class="score-v3-panel-body">${body}</div><div class="score-v3-panel-footer"><button type="button" id="scoreV3OpenFull">Open Full Scorecard ↗</button><button type="button" id="scoreV3Review">Review Associate ↗</button></div>`;
 panel.querySelector('#scoreV3Close').onclick=scoreV3Close;panel.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>scoreV3Tab(b.dataset.tab));const manage=panel.querySelector('#scoreV3ManageTraining');if(manage)manage.onclick=()=>openTrainingModalV2(s.associate);panel.querySelector('#scoreV3OpenFull').onclick=()=>selectAssociateFromScoreboard(s.associate);const review=panel.querySelector('#scoreV3Review');if(review)review.onclick=()=>{SCORE_V3.tab='stations';scoreV3UpdatePanel();};
 }
+
+
+/* =============================================================
+   ASSOCIATE PROFILE — HYBRID COMMAND CENTER + TRAINING PROGRESS
+   Presentation-only wrapper. Preserves source hero metrics, quality,
+   archive tools, print controls, signature callbacks and training logic.
+   ============================================================= */
+(function installHybridAssociateProfileHeroV7() {
+  if (typeof renderHero !== 'function') return;
+  const priorRenderHero = renderHero;
+  renderHero = function(summary) {
+    const source = priorRenderHero(summary);
+    if (!summary || !source || typeof document === 'undefined') return source;
+    const host = document.createElement('div');
+    host.innerHTML = source;
+    const hero = host.querySelector('.profile-hero');
+    if (!hero || hero.classList.contains('profile-hero-hybrid-v7')) return source;
+    hero.classList.add('profile-hero-hybrid-v7');
+
+    const name = String(summary.associate || 'Associate');
+    const rows = Array.isArray(summary.rows) ? summary.rows : [];
+    const dated = rows.filter(r => Number(r.TrainingTargetV4) > 0 && Number(r.TrainingWeekV4) >= 1);
+    // Prefer the latest *recorded* training week inside the selected fiscal window.
+    dated.sort((a,b) => String(a.WorkDate || '').localeCompare(String(b.WorkDate || '')));
+    const current = dated.length ? dated[dated.length - 1] : null;
+    const week = current ? Math.max(1, Math.min(10, Number(current.TrainingWeekV4))) : 0;
+    const trainingStation = current ? String(current.StationGroup || current.AccessPoint || '').trim() : '';
+    const qualified = !current && (typeof STATE !== 'undefined') && Array.isArray(STATE.trainingQualifications)
+      ? STATE.trainingQualifications.filter(q => String(q.OperatorName || '').trim().toUpperCase() === name.trim().toUpperCase()).sort((a,b) => String(b.EffectiveDate || '').localeCompare(String(a.EffectiveDate || '')))[0]
+      : null;
+    const classification = current ? 'TRAINING' : (qualified && /^(CERTIFIED|TQ)$/.test(String(qualified.Qualification || qualified.Status || '').toUpperCase()) ? String(qualified.Qualification || qualified.Status).toUpperCase() : 'CERTIFIED');
+    const safe = v => escapeHtml(String(v == null ? '' : v));
+    const initials = name.replace(/[,]+/g,' ').split(/\s+/).filter(Boolean).slice(0,2).map(s=>s[0]).join('').toUpperCase() || 'A';
+    const status = getStatusFromPercent(summary.productivityPercent,summary.workProduced);
+    const label = statusLabel(status);
+    const stateCss = status === 'GREEN' ? 'good' : status === 'BLUE' ? 'near' : status === 'AMBER' ? 'watch' : status === 'RED' ? 'warning' : 'neutral';
+    const trainingPct = Number(summary.productivityPercent || 0);
+    const trainingTarget = current ? Number(current.TrainingTargetV4 || 0) : 0;
+    const trainingStrip = current ? `
+      <div class="hybrid-training-v7">
+        <div class="hybrid-training-head-v7"><span>🎓 Training progress <strong>Week ${week} of 10</strong></span><small>${safe(trainingStation)} · ${formatDecimal(trainingTarget)} JPH target</small></div>
+        <div class="hybrid-week-track-v7" aria-label="Training week ${week} of 10">${Array.from({length:10}, (_,i)=>`<i class="${i < week ? 'done':''}"></i>`).join('')}</div>
+        <div class="hybrid-training-summary-v7"><span>Weekly training productivity</span><strong>${summary.workProduced > 0 ? formatPercent(trainingPct) : 'N/A'}</strong></div>
+      </div>` : '';
+
+    const header = document.createElement('div');
+    header.className = 'hybrid-profile-heading-v7';
+    header.innerHTML = `
+      <div class="hybrid-profile-heading-top-v7">
+        <div class="hybrid-profile-person-v7">
+          <span class="hybrid-profile-avatar-v7" aria-hidden="true">${safe(initials)}</span>
+          <div class="hybrid-profile-person-text-v7">
+            <span class="hybrid-profile-kicker-v7">ASSOCIATE PROFILE · COMMAND CENTER</span>
+            <h2>${safe(name)}</h2>
+            <p>${safe(summary.departments || STATE.activeDept)} · ${safe(formatScheduleType(summary.scheduleType))} · ${safe(summary.scheduledDaysWorked)} of ${safe(summary.eligibleWorkDays)} eligible days · ${safe((summary.areas || []).length)} areas</p>
+          </div>
+        </div>
+        <div class="hybrid-profile-actions-v7">
+          <span class="hybrid-profile-status-v7 ${stateCss}">${safe(label)}</span>
+          <span class="hybrid-profile-status-v7 ${current ? 'training' : 'certified'}">${current ? `Training · Week ${week}` : safe(classification)}</span>
+        </div>
+      </div>
+      ${trainingStrip}`;
+    // Existing signature button is moved, never recreated, so its onclick /
+    // completed/disabled behavior remains exactly what the signature module set.
+    const existingSign = hero.querySelector('.profile-signature-button');
+    if (existingSign) {
+      existingSign.classList.add('hybrid-signature-action-v7');
+      header.querySelector('.hybrid-profile-actions-v7').appendChild(existingSign);
+    }
+    const originalIdentity = hero.querySelector('.identity');
+    if (originalIdentity) originalIdentity.remove();
+    hero.insertBefore(header, hero.firstChild);
+    return host.innerHTML;
+  };
+})();
+
+
+/* ================================================================
+   PRODUCTIVITY HUB 3.0 · ASSOCIATE-FIRST PRESENTATION LAYER
+   Keeps existing API, calculations, signature, adjustment, archive,
+   training, and verification callbacks. No data writes introduced.
+   ================================================================ */
+(function installAssociateFirstDarkV3(){
+  const previousRenderProfile = renderProfile;
+  renderProfile = function(){
+    previousRenderProfile();
+    const page = document.getElementById('pageContent');
+    const shell = page && page.querySelector('.profile-main');
+    const hero = shell && shell.querySelector('.profile-hero');
+    const originalWeek = document.getElementById('fiscalWeekSelect');
+    if(!shell || !hero) return;
+    const summary = buildAssociateSummaries().find(s => s.associate === STATE.selectedAssociate);
+    if(!summary) return;
+    const weekKey = String(STATE.selectedFiscalWeek || STATE.meta.fiscalWeek || 'Fiscal week');
+    const startKey = String(STATE.selectedWeekStartDate || STATE.meta.weekStartDate || '');
+    const endKey = String(STATE.selectedWeekEndDate || STATE.meta.weekEndDate || '');
+    const escape = v => escapeHtml(String(v == null ? '' : v));
+    const weekOptions = originalWeek ? Array.from(originalWeek.options).map(o =>
+      `<option value="${escape(o.value)}" ${o.selected?'selected':''}>${escape(o.textContent)}</option>`).join('') : '';
+    const dates = getWeekDateList();
+    const rowDates = new Map();
+    (summary.rows || []).forEach(r=>{
+      const key = formatDateKey(r.WorkDate);
+      if(!key) return;
+      if(!rowDates.has(key)) rowDates.set(key, { jobs:0, hours:0, areas:new Set() });
+      const rec = rowDates.get(key);
+      rec.jobs += Number(r.TotalJobScan||0);
+      rec.hours += Number(r.SessionTimeHours||0);
+      rec.areas.add(String(r.StationGroup || r.AccessPoint || 'Station'));
+    });
+    const worked = dates.filter(d=>rowDates.has(formatDateKey(d))).length;
+    const box = document.createElement('section');
+    box.className = 'associate-first-week-v3';
+    box.innerHTML = `<div class="af-week-bar"><label for="associateFiscalWeekV3">FISCAL WEEK</label>
+      <select id="associateFiscalWeekV3" aria-label="Associate fiscal week">${weekOptions}</select>
+      <span class="af-period">${escape(startKey)} – ${escape(endKey)}</span>
+      <span class="af-week-summary">${worked} recorded day${worked===1?'':'s'} · ${(summary.areas||[]).length} worked area${(summary.areas||[]).length===1?'':'s'}</span>
+      </div><div class="af-subheading"><h3>Worked days this fiscal week</h3><span>Based on recorded production · dates with no records are not assumed days off</span></div>
+      <div class="af-day-grid">${dates.map(d=>{
+        const key = formatDateKey(d);
+        const rec = rowDates.get(key);
+        const title = d.toLocaleDateString('en-US',{weekday:'short'});
+        const shortDate = d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        return `<div class="af-day ${rec?'worked':'unrecorded'}"><b>${escape(title)}</b><small>${escape(shortDate)}</small>
+          <strong>${rec?'Worked':'No record'}</strong><span>${rec?`${formatNumber(rec.jobs)} jobs · ${formatDecimal(rec.hours)} hrs`:'Not classified as off'}</span>
+          ${rec?`<em title="Stations recorded on this date">${escape(Array.from(rec.areas).join(', '))}</em>`:''}</div>`;
+      }).join('')}</div>`;
+    hero.insertAdjacentElement('afterend',box);
+    const weekClone = box.querySelector('#associateFiscalWeekV3');
+    if(weekClone && originalWeek){
+      weekClone.value = originalWeek.value;
+      weekClone.addEventListener('change',()=>{
+        originalWeek.value = weekClone.value;
+        originalWeek.dispatchEvent(new Event('change',{bubbles:true}));
+      });
+    }
+    const areaTitle = Array.from(shell.querySelectorAll('.section-head h3')).find(e=>/Areas Worked This Week/i.test(e.textContent||''));
+    if(areaTitle) areaTitle.textContent = 'Areas Worked This Fiscal Week ('+(summary.areas||[]).length+')';
+  };
+  const previousHybridHub = renderHybridHubV2;
+  renderHybridHubV2 = function(){
+    previousHybridHub();
+    const stage = document.getElementById('pageContent');
+    const head = stage && stage.querySelector('.v2-heading');
+    if(head){
+      const label=head.querySelector('h2'); if(label) label.textContent='Facility Overview';
+      const sub=head.querySelector('p'); if(sub) sub.textContent='All recorded shifts · '+(STATE.selectedFiscalWeek||STATE.meta.fiscalWeek||'');
+    }
+    const deptSub=stage && stage.querySelector('.v2-panel-head small');
+    if(deptSub) deptSub.textContent='Current fiscal week · all recorded shifts';
+  };
+})();
+
+
+/* ================================================================
+ * PRODUCTIVITY HUB 3.0 — DAILY BREAKAGE DETAILS (READ ONLY)
+ * Keep original daily-card actions and productivity calculations.
+ * Only display operator-matched date-detail records, never facility
+ * summary totals as associate breakage.
+ * ================================================================ */
+(function installDailyAssociateBreakageV3(){
+  const existingDayCard = renderDayCard;
+  renderDayCard = function(day, row, summary, dateValue){
+    const html = existingDayCard(day, row, summary, dateValue);
+    if (!row || !summary || !summary.associate) return html;
+
+    const dateKey = formatDateKey(dateValue);
+    const cacheKey = getBreakageDateDetailsCacheKey(dateKey);
+    const hasDetails = !!(STATE.breakageDateDetailsCache &&
+      Object.prototype.hasOwnProperty.call(STATE.breakageDateDetailsCache, cacheKey));
+
+    // The fast associate-detail loader is already triggered by renderHero.
+    // A date with no loaded details is NOT equivalent to zero breakages.
+    const safe = value => escapeHtml(String(value == null ? '' : value));
+    let content = '';
+    if (!hasDetails) {
+      content = '<div class="db-loading">Date-level breakage records loading…</div>';
+    } else {
+      const operator = normalizeQualityText(summary.associate);
+      const dateRows = dedupeBreakageRows((STATE.breakageDateDetailsCache[cacheKey] || [])
+        .filter(r => formatDateKey(r.WorkDate) === dateKey &&
+          normalizeQualityText(r.OperatorName) === operator &&
+          String(r.RowType || '').toUpperCase() !== 'SUMMARY'));
+      const lens = dateRows.reduce((n,r) => n + Number(r.LensBreakageCount||0), 0);
+      const frame = dateRows.reduce((n,r) => n + Number(r.FrameBreakageCount||0), 0);
+      const groups = new Map();
+      dateRows.forEach(r => {
+        const l = Number(r.LensBreakageCount||0);
+        const f = Number(r.FrameBreakageCount||0);
+        if (l<=0 && f<=0) return;
+        const reason = String(r.BreakageReason||'Reason not supplied').trim();
+        const station = String(r.AccessPoint||'Station not supplied').trim();
+        const key = reason + '\u0000' + station;
+        if (!groups.has(key)) groups.set(key,{reason,station,lens:0,frame:0});
+        const v = groups.get(key); v.lens += l; v.frame += f;
+      });
+      content = `<div class="db-counts">
+        <span>Lens <strong>${formatNumber(lens)}</strong></span>
+        <span>Frame <strong>${formatNumber(frame)}</strong></span>
+      </div>` + (groups.size ? `<details class="db-reasons" onclick="event.stopPropagation()">
+          <summary>View reasons (${groups.size})</summary>
+          <div class="db-reason-list">${[...groups.values()].sort((a,b)=>a.reason.localeCompare(b.reason)).map(g=>`
+          <div class="db-reason-item"><div><strong>${safe(g.reason)}</strong><small>${safe(g.station)}</small></div>
+          <div class="db-reason-values">${g.lens ? `<span>Lens ${formatNumber(g.lens)}</span>` : ''}${g.frame ? `<span>Frame ${formatNumber(g.frame)}</span>` : ''}</div></div>`).join('')}</div>
+        </details>` : '<div class="db-zero">No breakages recorded for this associate on this date</div>');
+    }
+    const panel = `<div class="daily-breakage-v3" onclick="event.stopPropagation()">
+      <div class="db-heading">DAILY BREAKAGE <span>${safe(dateKey)}</span></div>
+      ${content}
+    </div>`;
+    // Insert inside article so original edit/confirm/lock actions still work.
+    return html.replace(/<\/article>\s*$/, panel + '</article>');
+  };
+})();
