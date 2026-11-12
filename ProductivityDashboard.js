@@ -1427,7 +1427,7 @@ function renderAssociateDropdown() {
 
   select.innerHTML = summaries.map(s => `
     <option value="${escapeHtml(s.associate)}">
-      ${escapeHtml(getAssociateDisplayName(s))} — ${formatScheduleType(s.scheduleType)} — ${s.areas.length} area${s.areas.length === 1 ? '' : 's'} — ${s.workDays} day${s.workDays === 1 ? '' : 's'}
+      ${escapeHtml(getAssociateDisplayName(s))} — ${escapeHtml(getVerifiedScheduleBadge_(s.associate).label)} — ${s.areas.length} area${s.areas.length === 1 ? '' : 's'} — ${s.workDays} day${s.workDays === 1 ? '' : 's'}
     </option>
   `).join('');
 
@@ -4024,6 +4024,26 @@ function getAssociateSchedule(operatorName) {
     scheduleType: 'WEEKDAY',
     scheduledDays: ['MON', 'TUE', 'WED', 'THU']
   };
+}
+
+/* Visible schedule badges read from actual ASSOCIATE_SCHEDULES assignments.
+   Missing assignments are not represented as confirmed weekday schedules. */
+function getVerifiedScheduleBadge_(operatorName) {
+  const key = String(operatorName || '').trim().toUpperCase();
+  const row = (STATE.associateSchedules || []).find(r =>
+    String(r.OperatorName || '').trim().toUpperCase() === key &&
+    !['FALSE','NO','0','INACTIVE'].includes(String(r.Active == null ? 'TRUE' : r.Active).trim().toUpperCase())
+  );
+  const type = row ? String(row.ScheduleType || '').trim().toUpperCase() : '';
+  const label = type === 'WEEKDAY' ? 'Weekday Associate' :
+    type === 'WEEKEND' ? 'Weekend Associate' :
+    type === 'CUSTOM' ? 'Custom Schedule' : 'Schedule Unassigned';
+  const cls = ['WEEKDAY','WEEKEND','CUSTOM'].includes(type) ? type.toLowerCase() : 'unassigned';
+  return { label, cls, verified: cls !== 'unassigned' };
+}
+function scheduleBadgeHtml_(operatorName) {
+  const badge = getVerifiedScheduleBadge_(operatorName);
+  return `<span class="associate-schedule-badge ${badge.cls}" title="Assigned schedule from ASSOCIATE_SCHEDULES">${badge.verified ? '✓ ' : '○ '}${escapeHtml(badge.label)}</span>`;
 }
 
 function parseScheduledDays(value) {
@@ -8912,7 +8932,7 @@ renderScorecardsPage=function(){const root=document.querySelector('#pageContent'
 root.innerHTML=`<section class="score-v3-page"><div class="score-v3-title"><div><span class="v2-kicker">PRODUCTIVITY HUB 2.0</span><h2>ASSOCIATE SCORECARDS</h2><p>${escapeHtml(String(STATE.activeDept||''))} · ${escapeHtml(String(STATE.associateScheduleFilter||'ALL'))} ASSOCIATE SCHEDULE · ${escapeHtml(String(STATE.selectedFiscalWeek||STATE.meta.fiscalWeek||''))}</p></div><div class="score-v3-topstats"><div><strong>${formatNumber(all.length)}</strong><small>Associates</small></div><div><strong>${formatNumber(allJobs)}</strong><small>Jobs</small></div><div><strong>${avg}</strong><small>Weighted Productivity</small></div></div></div>
 <div class="score-v3-types">${[['FTE','Full Time'],['TEMP','Temps'],['MACHINE','Machine']].map(([t,l])=>`<button type="button" class="score-v3-type ${STATE.scorecardEmployeeType===t?'on':''}" onclick="setScorecardEmployeeType('${t}')"><span>${l}</span><strong>${counts[t]}</strong></button>`).join('')}</div>
 <div class="score-v3-toolbar"><div class="score-v3-pills">${[['ALL','All'],['GREEN','On Target 100%+'],['BLUE','Near Target 95–99%'],['AMBER','Watch 90–94%'],['RED','Warning'],['NO TARGET','No Target'],['TRAINING','Training']].map(([k,l])=>`<button type="button" class="score-v3-pill ${SCORE_V3.filter===k?'active':''} ${k.toLowerCase().replace(' ','-')}" onclick="scoreV3SetFilter('${k}')">${l} <b>${k==='ALL'?all.length:scoreV3StatusCount(all,k)}</b></button>`).join('')}</div><div class="score-v3-tools"><input id="scoreV3Search" aria-label="Search associates" placeholder="Search associates or stations" value="${escapeHtml(SCORE_V3.query)}" oninput="scoreV3Search(this.value)"><select aria-label="Sort scorecards" onchange="scoreV3SetSort(this.value)">${[['NAME','Name (A–Z)'],['PRODUCTIVITY','Productivity'],['JOBS','Jobs'],['HOURS','Hours']].map(([v,l])=>`<option value="${v}" ${SCORE_V3.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>
-<div class="score-v3-layout"><div class="score-v3-grid ${SCORE_V3.open?'panel-open':''}">${visible.length?visible.map(s=>{const group=scoreV3Group(s),status=scoreV3Status(s),train=(s.rows||[]).some(r=>!!r.TrainingTargetV4),area=(s.areas||[]).map(a=>a.StationGroup||a.AccessPoint||'').filter(Boolean)[0]||s.departments||'—';return `<button type="button" class="score-v3-card ${train?'training':status} ${SCORE_V3.open===s.associate?'selected':''}" data-operator="${escapeHtml(s.associate)}"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><span class="score-v3-card-title"><b>${escapeHtml(getAssociateDisplayName(s))}</b><small>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</small><em>${train?'🎓 TRAINING':status==='green'?'● ON TARGET':status==='blue'?'● NEAR TARGET':status==='amber'?'● WATCH':status==='red'?'● WARNING':'● NO TARGET'}</em></span><span class="score-v3-value">${scoreV3SafePct(s)}</span>${scoreV3MiniBars(s)}<span class="score-v3-detail"><span>◷ ${formatDecimal(s.totalHours)} hrs</span><span>▣ ${formatNumber(s.totalJobs)} jobs</span><span>◈ ${formatDecimal(s.workProduced)} produced</span></span><span class="score-v3-tags"><small>${escapeHtml(area)}</small>${train?`<small>Week ${escapeHtml((s.rows||[]).find(r=>r.TrainingWeekV4)?.TrainingWeekV4||'—')}</small>`:''}</span></button>`;}).join(''):'<p class="score-v3-empty">No matching associates. Try changing filters.</p>'}</div><aside id="scoreV3Panel" class="score-v3-panel" aria-label="Associate details"></aside></div></section>`;
+<div class="score-v3-layout"><div class="score-v3-grid ${SCORE_V3.open?'panel-open':''}">${visible.length?visible.map(s=>{const group=scoreV3Group(s),status=scoreV3Status(s),train=(s.rows||[]).some(r=>!!r.TrainingTargetV4),area=(s.areas||[]).map(a=>a.StationGroup||a.AccessPoint||'').filter(Boolean)[0]||s.departments||'—';return `<button type="button" class="score-v3-card ${train?'training':status} ${SCORE_V3.open===s.associate?'selected':''}" data-operator="${escapeHtml(s.associate)}"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><span class="score-v3-card-title"><b>${escapeHtml(getAssociateDisplayName(s))}</b>${scheduleBadgeHtml_(s.associate)}<small>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</small><em>${train?'🎓 TRAINING':status==='green'?'● ON TARGET':status==='blue'?'● NEAR TARGET':status==='amber'?'● WATCH':status==='red'?'● WARNING':'● NO TARGET'}</em></span><span class="score-v3-value">${scoreV3SafePct(s)}</span>${scoreV3MiniBars(s)}<span class="score-v3-detail"><span>◷ ${formatDecimal(s.totalHours)} hrs</span><span>▣ ${formatNumber(s.totalJobs)} jobs</span><span>◈ ${formatDecimal(s.workProduced)} produced</span></span><span class="score-v3-tags"><small>${escapeHtml(area)}</small>${train?`<small>Week ${escapeHtml((s.rows||[]).find(r=>r.TrainingWeekV4)?.TrainingWeekV4||'—')}</small>`:''}</span></button>`;}).join(''):'<p class="score-v3-empty">No matching associates. Try changing filters.</p>'}</div><aside id="scoreV3Panel" class="score-v3-panel" aria-label="Associate details"></aside></div></section>`;
 root.querySelectorAll('.score-v3-card').forEach(card=>card.addEventListener('click',()=>scoreV3Select(card.dataset.operator)));scoreV3UpdatePanel();};
 function scoreV3UpdatePanel(){const panel=document.querySelector('#scoreV3Panel');if(!panel)return;const page=document.querySelector('.score-v3-grid');if(page)page.classList.toggle('panel-open',!!SCORE_V3.open);if(!SCORE_V3.open){panel.classList.remove('open');panel.innerHTML='';return;}const s=scoreV3Rows().find(x=>x.associate===SCORE_V3.open);if(!s){SCORE_V3.open='';panel.classList.remove('open');return;}const datesInView=(s.rows||[]).map(r=>formatDateKey(r.WorkDate)).filter(Boolean);
 const assignments=(STATE.trainingHistory||[]).filter(a=>trainingNormalizeLabelV4_(a.OperatorName)===trainingNormalizeLabelV4_(s.associate)&&datesInView.some(d=>d>=String(a.StartDate||'').slice(0,10)&&d<=String(a.EndDate||'').slice(0,10)));
@@ -8921,7 +8941,7 @@ if(SCORE_V3.tab==='overview'){body=`<div class="score-v3-facts"><div><small>Cert
 if(SCORE_V3.tab==='training'){body=`<section class="score-v3-panel-section"><h4>Training assignments · Finish / AR</h4>${assignments.length?assignments.map(a=>{const dept=String(a.Department||'').toUpperCase(),week=Number(a.TrainingWeek),target=TRAINING_TARGETS_V2[dept]?.[a.Station]?.[week-1];return `<div class="score-v3-trainingrow"><strong>${escapeHtml(a.Station)}</strong><span>${escapeHtml(a.Department)} · Week ${week} of 10</span><b>${target===undefined?'Target unavailable':target+' training JPH'}</b><span>${escapeHtml(a.StartDate||'')} to ${escapeHtml(a.EndDate||'')}</span></div>`;}).join(''):'<p>No active training assignments.</p>'}<p>Training targets and certified targets are tracked separately. The displayed productivity uses the assigned training target for matching station work; certified targets in the source remain unchanged.</p>${(['FINISH','AR','PROD_ALL'].includes(String(STATE.activeDept).toUpperCase())&&canManageTrainingV2())?`<button class="score-v3-primary" type="button" id="scoreV3ManageTraining">${trained?'Manage Training':'Mark as Training'}</button>`:'<p>Training updates require LMS, Director, Manager, or Supervisor access.</p>'}</section>`;}
 if(SCORE_V3.tab==='daily'){const dates=new Map();(s.rows||[]).forEach(r=>{const d=String(r.WorkDate||'Unknown').slice(0,10);if(!dates.has(d))dates.set(d,{jobs:0,hours:0});const item=dates.get(d);item.jobs+=Number(r.TotalJobScan||0);item.hours+=Number(r.SessionTimeHours||0)});body=`<section class="score-v3-panel-section"><h4>Daily output · selected fiscal week</h4>${[...dates.entries()].sort((a,b)=>b[0].localeCompare(a[0])).map(([d,r])=>`<div class="score-v3-listrow"><span>${escapeHtml(d)}</span><span>${formatNumber(r.jobs)} jobs · ${formatDecimal(r.hours)} hrs</span></div>`).join('')||'<p>No daily records.</p>'}<p>These are recorded scans and hours, not training-adjusted percentages.</p></section>`;}
 if(SCORE_V3.tab==='stations'){body=`<section class="score-v3-panel-section"><h4>Source station rows</h4><div class="score-v3-stations"><table><thead><tr><th>Station</th><th>Jobs</th><th>Hours</th><th>Target JPH</th></tr></thead><tbody>${(s.rows||[]).map(r=>`<tr><td>${escapeHtml(r.StationGroup||r.AccessPoint||'—')}</td><td>${formatNumber(r.TotalJobScan||0)}</td><td>${formatDecimal(r.SessionTimeHours||0)}</td><td>${formatDecimal(r.TargetAvgPerHour||0)}</td></tr>`).join('')}</tbody></table></div><p>Source snapshot detail is read-only. Use the existing full profile for adjustments.</p></section>`;}
-panel.classList.add('open');panel.innerHTML=`<div class="score-v3-panel-head"><button type="button" id="scoreV3Close" aria-label="Close associate panel">✕</button><div class="score-v3-panel-ident"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><div><h3>${escapeHtml(getAssociateDisplayName(s))}</h3><p>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</p></div></div>${trained?'<span class="training-pill-v2">🎓 TRAINING</span>':''}</div><nav class="score-v3-tabs">${tabs.map(([k,l])=>`<button type="button" class="${SCORE_V3.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('')}</nav><div class="score-v3-panel-body">${body}</div><div class="score-v3-panel-footer"><button type="button" id="scoreV3OpenFull">Open Full Scorecard ↗</button><button type="button" id="scoreV3Review">Review Associate ↗</button></div>`;
+panel.classList.add('open');panel.innerHTML=`<div class="score-v3-panel-head"><button type="button" id="scoreV3Close" aria-label="Close associate panel">✕</button><div class="score-v3-panel-ident"><span class="score-v3-avatar">${escapeHtml(scoreV3Initials(s.associate))}</span><div><h3>${escapeHtml(getAssociateDisplayName(s))}</h3>${scheduleBadgeHtml_(s.associate)}<p>${escapeHtml(s.departments||'—')} · ${escapeHtml(getEmployeeTypeLabel(getAssociateEmployeeType(s)))}</p></div></div>${trained?'<span class="training-pill-v2">🎓 TRAINING</span>':''}</div><nav class="score-v3-tabs">${tabs.map(([k,l])=>`<button type="button" class="${SCORE_V3.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('')}</nav><div class="score-v3-panel-body">${body}</div><div class="score-v3-panel-footer"><button type="button" id="scoreV3OpenFull">Open Full Scorecard ↗</button><button type="button" id="scoreV3Review">Review Associate ↗</button></div>`;
 panel.querySelector('#scoreV3Close').onclick=scoreV3Close;panel.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>scoreV3Tab(b.dataset.tab));const manage=panel.querySelector('#scoreV3ManageTraining');if(manage)manage.onclick=()=>openTrainingModalV2(s.associate);panel.querySelector('#scoreV3OpenFull').onclick=()=>selectAssociateFromScoreboard(s.associate);const review=panel.querySelector('#scoreV3Review');if(review)review.onclick=()=>{SCORE_V3.tab='stations';scoreV3UpdatePanel();};
 }
 
@@ -8977,7 +8997,7 @@ panel.querySelector('#scoreV3Close').onclick=scoreV3Close;panel.querySelectorAll
           <span class="hybrid-profile-avatar-v7" aria-hidden="true">${safe(initials)}</span>
           <div class="hybrid-profile-person-text-v7">
             <span class="hybrid-profile-kicker-v7">ASSOCIATE PROFILE · COMMAND CENTER</span>
-            <h2>${safe(name)}</h2>
+            <div class="hybrid-profile-name-row-v7"><h2>${safe(name)}</h2>${scheduleBadgeHtml_(name)}</div>
             <p>${safe(summary.departments || STATE.activeDept)} · ${safe(formatScheduleType(summary.scheduleType))} · ${safe(summary.scheduledDaysWorked)} of ${safe(summary.eligibleWorkDays)} eligible days · ${safe((summary.areas || []).length)} areas</p>
           </div>
         </div>
@@ -9137,5 +9157,110 @@ panel.querySelector('#scoreV3Close').onclick=scoreV3Close;panel.querySelectorAll
     </div>`;
     // Insert inside article so original edit/confirm/lock actions still work.
     return html.replace(/<\/article>\s*$/, panel + '</article>');
+  };
+})();
+
+
+/* ===============================================================
+ * ZENNI USA — VERIFIED ASSOCIATE SIGN-OFF OVERVIEW
+ * Staging UI only; existing production, time edits and API writes unchanged.
+ * Counts use daily productivity locks and weekly signature records.
+ * =============================================================== */
+(function installZenniVerificationOverview(){
+  let locksLoaded = false, signaturesLoaded = false;
+  function cleanName(x){return String(x||'').trim().replace(/\s+/g,' ').toUpperCase();}
+  function workDates(p){
+    return [...new Set((p.rows||[]).map(r=>formatDateKey(r.WorkDate)).filter(Boolean))];
+  }
+  function signedRecord(name){
+    return (STATE.signatureRecords||[]).find(r=>cleanName(r.AssociateName||r.associateName)===cleanName(name))||null;
+  }
+  function isAssociateSigned(r){
+    if(!r) return false;
+    const s=String(r.Status||r.status||r.SignatureStatus||r.signatureStatus||'').toUpperCase();
+    return !!(r.AssociateSignature||r.associateSignature||r.AssociateSignedAt||r.associateSignedAt||/ASSOCIATE_SIGNED|FULLY_SIGNED|COMPLETED|COMPLETE/.test(s));
+  }
+  function isReviewed(r){
+    if(!r) return false;
+    return !!(r.SupervisorSignature||r.supervisorSignature||r.SupervisorSignedAt||r.supervisorSignedAt||r.RecordID||r.recordId);
+  }
+  function deptFromPerson(p){
+    const r=(p.rows||[])[0]||{};
+    const raw=String(r.FinalDepartment||r.finalDepartment||r.Department||r.department||'').toUpperCase();
+    if(raw.includes('FINISH'))return 'Finish';
+    if(raw.includes('SURFACE'))return 'Surface';
+    if(raw==='AR'||raw.includes('ANTI-REFLECT'))return 'AR';
+    if(raw.includes('INVENTORY')||raw.includes('PICK'))return 'Picking';
+    return 'Unassigned';
+  }
+  function records(){
+    const people=hubV2Snapshot().people.filter(p=>p.associate);
+    return people.map(p=>{
+      const days=workDates(p), locks=STATE.productivityLocks||[];
+      const confirmedDays=days.filter(d=>(p.rows||[]).filter(r=>formatDateKey(r.WorkDate)===d).every(r=>
+        locks.some(l=>cleanName(l.OperatorName)===cleanName(p.associate)&&formatDateKey(l.WorkDate)===d&&
+          String(l.FinalDepartment||'').toUpperCase()===String(r.FinalDepartment||'').toUpperCase()&&String(l.LockStatus).toUpperCase()==='LOCKED'))).length;
+      const rec=signedRecord(p.associate);
+      return {name:p.associate,dept:deptFromPerson(p),days:days.length,confirmedDays,
+        confirmed:days.length>0&&confirmedDays===days.length,partial:confirmedDays>0&&confirmedDays<days.length,
+        reviewed:isReviewed(rec),signed:isAssociateSigned(rec)};
+    });
+  }
+  function numberOrDash(n,loaded){return loaded?String(n):'—';}
+  function showNames(dept,stage){
+    const filtered=records().filter(p=>(dept==='ALL'||p.dept===dept)&&(
+      stage==='all'||stage==='pending'&&!p.confirmed||stage==='confirmed'&&p.confirmed||
+      stage==='reviewed'&&p.reviewed||stage==='signed'&&p.signed));
+    const title=stage==='all'?'Associates':stage==='pending'?'Awaiting full confirmation':stage==='confirmed'?'Confirmed':stage==='reviewed'?'Reviewed':'Signed';
+    const stageEl=document.getElementById('pageContent');if(!stageEl)return;
+    const modal=document.createElement('div');modal.className='zv-modal';
+    modal.innerHTML=`<section class="zv-dialog" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}"><header><h2>${escapeHtml(dept==='ALL'?'All departments':dept)} · ${escapeHtml(title)}</h2><button type="button" class="secondary-btn" data-zv-close>Close ✕</button></header><p>${filtered.length} associate(s) · selected fiscal week</p><div class="zv-names">${filtered.map(p=>`<button type="button" data-zv-associate="${escapeHtml(p.name)}">${escapeHtml(p.name)} <small>${p.confirmedDays}/${p.days} days confirmed</small></button>`).join('')||'<p>No matching associate records.</p>'}</div></section>`;
+    modal.addEventListener('click',e=>{if(e.target===modal||e.target.closest('[data-zv-close]'))modal.remove();const b=e.target.closest('[data-zv-associate]');if(b){const name=b.getAttribute('data-zv-associate');modal.remove();hubV2SelectAssociate(name);}});
+    document.body.append(modal);
+  }
+  window.zenniVerificationInspect=showNames;
+  function inject(){
+    if(STATE.activePage!=='dashboard')return;
+    const stage=document.getElementById('pageContent');if(!stage)return;
+    const list=records(), total=list.length, confirmed=list.filter(x=>x.confirmed).length,
+      reviewed=list.filter(x=>x.reviewed).length, signed=list.filter(x=>x.signed).length,
+      partial=list.filter(x=>x.partial).length;
+    const top=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+    top('totalAssociates',formatNumber(total));top('totalJobs',numberOrDash(confirmed,locksLoaded)+' / '+total);
+    top('avgProductivity',numberOrDash(reviewed,signaturesLoaded)+' / '+total);
+    top('watchWarning',numberOrDash(signed,signaturesLoaded)+' / '+total);
+    const head=stage.querySelector('.v2-heading h2');if(head)head.textContent='Associate Verification & Sign-Off Overview';
+    const cards=stage.querySelector('.v2-kpis');
+    if(cards)cards.innerHTML=`
+      <button class="zv-kpi" onclick="zenniVerificationInspect('ALL','all')"><span>ASSOCIATES</span><strong>${total}</strong><small>Unique people in current view</small></button>
+      <button class="zv-kpi" onclick="zenniVerificationInspect('ALL','confirmed')"><span>FULLY CONFIRMED</span><strong>${numberOrDash(confirmed,locksLoaded)}</strong><small>All recorded workdays locked</small></button>
+      <button class="zv-kpi" onclick="zenniVerificationInspect('ALL','pending')"><span>PARTIALLY CONFIRMED</span><strong>${numberOrDash(partial,locksLoaded)}</strong><small>More days need confirmation</small></button>
+      <button class="zv-kpi" onclick="zenniVerificationInspect('ALL','reviewed')"><span>SUPERVISOR REVIEWED</span><strong>${numberOrDash(reviewed,signaturesLoaded)}</strong><small>Weekly review record exists</small></button>
+      <button class="zv-kpi" onclick="zenniVerificationInspect('ALL','signed')"><span>ASSOCIATE SIGNED</span><strong>${numberOrDash(signed,signaturesLoaded)}</strong><small>Acknowledgment recorded</small></button>
+      <button class="zv-kpi" onclick="zenniVerificationInspect('ALL','pending')"><span>AWAITING CONFIRMATION</span><strong>${numberOrDash(total-confirmed,locksLoaded)}</strong><small>Including partially confirmed</small></button>`;
+    const deptPanel=stage.querySelector('.v2-depts');
+    if(deptPanel){
+      const depts=['Finish','AR','Surface','Picking'];
+      deptPanel.innerHTML=depts.map(d=>{
+        const rows=list.filter(p=>p.dept===d);
+        const c=rows.filter(p=>p.confirmed).length, r=rows.filter(p=>p.reviewed).length, s=rows.filter(p=>p.signed).length;
+        return `<article class="zv-dept"><h4>${d}</h4><div class="zv-dept-total">${rows.length} <small>associates</small></div><button onclick="zenniVerificationInspect('${d}','confirmed')">Confirmed <b>${numberOrDash(c,locksLoaded)}</b></button><button onclick="zenniVerificationInspect('${d}','reviewed')">Reviewed <b>${numberOrDash(r,signaturesLoaded)}</b></button><button onclick="zenniVerificationInspect('${d}','signed')">Signed <b>${numberOrDash(s,signaturesLoaded)}</b></button></article>`;
+      }).join('');
+      const panel=deptPanel.closest('.v2-panel');if(panel){const h=panel.querySelector('h3');if(h)h.textContent='Verification by Department';const small=panel.querySelector('.v2-panel-head small');if(small)small.textContent='Provisional department based on first recorded work area';}
+    }
+    const status=stage.querySelector('.v2-status-grid');
+    if(status)status.innerHTML=`<button onclick="zenniVerificationInspect('ALL','confirmed')"><strong>${numberOrDash(confirmed,locksLoaded)}</strong><span>Fully confirmed</span></button><button onclick="zenniVerificationInspect('ALL','pending')"><strong>${numberOrDash(partial,locksLoaded)}</strong><span>Partially confirmed</span></button><button onclick="zenniVerificationInspect('ALL','reviewed')"><strong>${numberOrDash(reviewed,signaturesLoaded)}</strong><span>Reviewed</span></button><button onclick="zenniVerificationInspect('ALL','signed')"><strong>${numberOrDash(signed,signaturesLoaded)}</strong><span>Signed</span></button>`;
+    const statusPanel=status?.closest('.v2-panel');if(statusPanel){const h=statusPanel.querySelector('h3');if(h)h.textContent='Verification Status';}
+  }
+  const oldHub=renderHybridHubV2;
+  renderHybridHubV2=function(){oldHub();inject();};
+  // Read-only wrappers: preserve original API requests, no extra polling.
+  const oldLocks=loadProductivityLocksQuietly;
+  loadProductivityLocksQuietly=function(...args){
+    return Promise.resolve(oldLocks.apply(this,args)).then(v=>{locksLoaded=true;if(STATE.activePage==='dashboard')inject();return v;});
+  };
+  const oldSignatures=loadSignatureStatusesQuietly;
+  loadSignatureStatusesQuietly=function(...args){
+    return Promise.resolve(oldSignatures.apply(this,args)).then(v=>{signaturesLoaded=true;if(STATE.activePage==='dashboard')inject();return v;});
   };
 })();

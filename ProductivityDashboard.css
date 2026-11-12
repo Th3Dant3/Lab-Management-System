@@ -5227,3 +5227,27 @@ body:has(.profile-shell) .hub-nav-shell {display:none!important;}
 .v2-pill.near, .hybrid-profile-heading-v7 .near { color:#8bdcff; border-color:#267ca9; }
 .hub-status-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
 @media(max-width:1050px){.hub-status-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+/* Zenni verification & sign-off dashboard */
+.v2-kpis .zv-kpi{min-width:0;text-align:left;cursor:pointer;border:1px solid rgba(85,199,255,.25);background:#172c47;border-radius:12px;padding:15px;color:#e8f2ff;display:flex;flex-direction:column;gap:7px}
+.v2-kpis .zv-kpi strong{font-size:27px}.v2-kpis .zv-kpi small{color:#aac7e3;font-size:11px}
+.v2-depts .zv-dept{flex:1;min-width:155px;border:1px solid rgba(85,199,255,.25);background:#1a2e4d;border-radius:10px;padding:13px;display:grid;gap:7px}
+.zv-dept h4{margin:0;color:#fff}.zv-dept-total{font-size:25px;font-weight:800}.zv-dept-total small{font-size:11px;color:#abc3de;font-weight:400}
+.zv-dept button,.v2-status-grid button{color:#e8f2ff;background:rgba(255,255,255,.04);border:1px solid rgba(85,199,255,.18);padding:8px;border-radius:8px;display:flex;justify-content:space-between;gap:6px;cursor:pointer}
+.v2-status-grid button{flex-direction:column;text-align:left;padding:12px}
+.zv-modal{position:fixed;inset:0;background:rgba(0,5,13,.82);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px}
+.zv-dialog{width:min(680px,100%);max-height:85vh;overflow:auto;background:#101f36;color:#fff;border:1px solid #3977a3;border-radius:16px;padding:22px}
+.zv-dialog header{display:flex;justify-content:space-between;align-items:center;gap:12px}.zv-dialog h2{margin:0;font-size:20px}.zv-names{display:grid;gap:8px;max-height:55vh;overflow:auto}
+.zv-names button{display:flex;justify-content:space-between;background:#1b3250;border:1px solid #36577b;color:#fff;text-align:left;border-radius:8px;padding:11px;cursor:pointer}.zv-names small{color:#9bdaf5}
+
+/* Zenni USA Associate Schedule Identification — presentation-only */
+.associate-schedule-badge {display:inline-flex;align-items:center;gap:4px;width:max-content;max-width:100%;padding:5px 9px;border-radius:999px;border:1px solid;font:800 10px/1.2 Inter,"Segoe UI",sans-serif;white-space:nowrap;letter-spacing:.02em;vertical-align:middle;}
+.associate-schedule-badge.weekday {color:#93f3bf;border-color:#257d53;background:rgba(22,117,69,.25)}
+.associate-schedule-badge.weekend {color:#b6ddff;border-color:#347cbd;background:rgba(26,85,151,.30)}
+.associate-schedule-badge.custom {color:#f6dca9;border-color:#93692c;background:rgba(138,97,34,.24)}
+.associate-schedule-badge.unassigned {color:#c1cede;border-color:#5b6e81;background:rgba(105,119,137,.18)}
+.score-v3-card-title>.associate-schedule-badge {display:flex;margin:5px 0 2px;font-size:9px;padding:4px 7px;}
+.score-v3-panel-ident .associate-schedule-badge {margin-top:6px;}
+.hybrid-profile-name-row-v7 {display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0;}
+.hybrid-profile-name-row-v7 h2 {margin:5px 0!important;}
+@media(max-width:680px){.hybrid-profile-name-row-v7{align-items:flex-start;gap:6px}.associate-schedule-badge{white-space:normal;}}
