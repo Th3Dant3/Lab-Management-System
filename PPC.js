@@ -88,7 +88,8 @@ function byBand(a, b) {
   if (da !== null && db !== null) return da - db;
   return (b.submitted || '').localeCompare(a.submitted || '');
 }
-const collapsed = {};                                  // which board columns are closed, remembered while the page is open
+const collapsed = { 'In Progress': true };            // which board columns are closed, remembered while the page is open. In progress starts closed: a click shows its documents
+const IP_SHORT = { green: '0 to 15 days', yellow: '16 to 29 days', overdue: 'Overdue' };   // labels for the closed In progress column
 const bandShut = {};                                   // which colour groups inside In progress are closed
 const BANDS = [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more, Overdue']];
 const deptOpen = {};                                   // which department groups are open on the Published page
@@ -329,7 +330,7 @@ function openImages(ppc, test, title) {
 const NOT_BUILT = 'Not switched on yet. This button needs a backend step that is built after sign-in is confirmed.';
 
 /* ---------- staff views ---------- */
-const VIEWS = [['overview', 'Dashboard'], ['guide', 'Quick start guide'], ['published', 'Published documents'], ['missing', 'Missing PPC, need update'], ['tests', 'Tests and reminders'], ['routing', 'Routing and emails'], ['updates', 'Update requests'], ['years', 'Year records']];
+const VIEWS = [['overview', 'Dashboard'], ['guide', 'Quick start guide'], ['published', 'Published documents'], ['missing', 'Missing PPC, need update'], ['tests', 'Active PPC tests and reminders'], ['routing', 'Ready for signature and Completed'], ['updates', 'Update requests'], ['years', 'Year records']];
 let currentView = 'overview', currentYear = null, mailSel = null, mailEv = 'routed';
 function token(r, cls) {
   const kids = [h('p', { class: 'num', text: isPending(r) ? 'PPC number pending' : r.number }), h('p', { class: 'ttl', text: r.title || 'Title not recorded' }), h('p', { class: 'who', text: (r.requestor || 'Requester not recorded') + (r.wi ? ', ' + r.wi : '') })];
@@ -355,9 +356,9 @@ function vOverview() {
   if (overdue.length) items.push([h('span', null, [h('b', { text: pl(overdue.length, 'PPC') + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue (30 days or more in progress): ' }), overdue.map(r => (isPending(r) ? (r.wi || r.title || 'pending request') : r.number) + ' (' + clockDays(r) + ' days)').join(', ') + '.']), null, null, 'red']);
   if (pend.length) items.push([h('span', null, [h('b', { text: pl(pend.length, 'open request') + ' ' + (pend.length === 1 ? 'has' : 'have') + ' no PPC number.' }), ' The longest has waited ' + Math.max.apply(null, pend.map(r => daysSince(clockStart(r)) || 0)) + ' days.']), 'Open Missing PPC, need update', 'missing', '']);
   const noTest = numbered.filter(r => r.stage === 'Testing' && !D.tests.some(t => t.ppc === r.number));
-  if (noTest.length) items.push([h('span', null, [h('b', { text: pl(noTest.length, 'PPC') + ' ' + (noTest.length === 1 ? 'is' : 'are') + ' in the Testing stage with no test recorded: ' }), noTest.map(r => r.number).join(' and ') + '. Without a test end date, no reminder can be sent.']), 'Open Tests and reminders', 'tests', 'amber']);
+  if (noTest.length) items.push([h('span', null, [h('b', { text: pl(noTest.length, 'PPC') + ' ' + (noTest.length === 1 ? 'is' : 'are') + ' in the Testing stage with no test recorded: ' }), noTest.map(r => r.number).join(' and ') + '. Without a test end date, no reminder can be sent.']), 'Open Active PPC tests and reminders', 'tests', 'amber']);
   const sign = open.filter(r => r.status === 'Ready for Signature');
-  if (sign.length) items.push([h('span', null, [h('b', { text: pl(sign.length, 'PPC') + ' ' + (sign.length === 1 ? 'is' : 'are') + ' ready for signature: ' }), sign.map(r => r.number).join(', ') + '.']), null, null, 'blue']);
+  if (sign.length) items.push([h('span', null, [h('b', { text: pl(sign.length, 'PPC') + ' ' + (sign.length === 1 ? 'is' : 'are') + ' ready for signature: ' }), sign.map(r => r.number).join(', ') + '.']), 'Open Ready for signature and Completed', 'routing', 'blue']);
   const odd = D.register.filter(r => !STATUS_COLS.some(c => c.status === r.status));
   const att = h('section', null, [h('h2', { text: 'Needs attention' }), items.length ? h('ul', { class: 'attn' }, items.map(i => h('li', null, [h('div', null, [h('span', { class: 'dot ' + i[3] }), i[0]]), i[1] ? h('a', { class: 'btn', href: '#' + i[2], onclick: e => { e.preventDefault(); show(i[2]); } }, i[1]) : null]))) : h('p', { class: 'empty', text: 'Nothing needs attention right now.' })]);
   const colFor = c => {
@@ -367,6 +368,14 @@ function vOverview() {
     const head = h('button', { type: 'button', class: 'colhead', 'aria-expanded': String(!shut), title: (shut ? 'Open' : 'Close') + ' the ' + c.title + ' column',
       onclick: () => { collapsed[c.status] = !shut; rebuild('overview'); } },
       [h('span', { class: 'caret', 'aria-hidden': 'true', text: shut ? '+' : '\u2212' }), h('h3', { text: c.title }), h('span', { class: 'c', text: String(count) })]);
+    if (shut && c.status === 'In Progress') {   // closed, but the counts per age range stay visible, so Overdue is never hidden
+      const sum = BANDS.map(p => { const n = rows.filter(r => clockBand(clockDays(r)) === p[0]).length;
+        return h('li', { class: 'ipsum ' + p[0] + (n ? ' hot' : '') }, [h('span', { class: 'sw ' + p[0], 'aria-hidden': 'true' }), h('span', { class: 'bl', text: IP_SHORT[p[0]] }), h('span', { class: 'n', text: String(n) })]); });
+      const noClock = rows.filter(r => clockDays(r) === null).length;
+      if (noClock) sum.push(h('li', { class: 'ipsum' }, [h('span', { class: 'bl', text: 'No start date' }), h('span', { class: 'n', text: String(noClock) })]));
+      return h('div', { class: 'col ' + c.cls + ' collapsed' }, [head, h('ul', { class: 'ipsums', 'aria-label': 'In progress by age' }, sum),
+        count ? h('button', { type: 'button', class: 'btn ipshow', onclick: () => { collapsed[c.status] = false; rebuild('overview'); } }, count === 1 ? 'Show 1 document' : 'Show ' + count + ' documents') : h('p', { class: 'none small', text: 'Nothing in progress.' })]);
+    }
     if (shut) return h('div', { class: 'col ' + c.cls + ' collapsed' }, [head, h('p', { class: 'none', text: count === 1 ? '1 hidden' : count + ' hidden' })]);
     if (c.status === 'In Progress') {
       const kids = [head];
@@ -391,7 +400,7 @@ function vOverview() {
   return h('div', { class: 'view', id: 'v-overview' }, [h('h1', { text: APP_NAME }),
     h('p', { class: 'lead' }, [h('strong', { text: pl(openTotal, 'request') + (openTotal === 1 ? ' is' : ' are') + ' open. ' }), numbered.length + ' ' + (numbered.length === 1 ? 'has' : 'have') + ' a PPC number and ' + pend.length + ' ' + (pend.length === 1 ? 'is' : 'are') + ' still waiting for one.' + (overdue.length ? ' ' + overdue.length + ' ' + (overdue.length === 1 ? 'is' : 'are') + ' overdue.' : '') + (maxD ? ' The longest in progress has been going ' + maxD + ' days.' : '')]),
     odd.length ? h('div', { class: 'banner' }, [pl(odd.length, 'register row') + ' ' + (odd.length === 1 ? 'has' : 'have') + ' a status that is not one of the five (' + odd.map(r => (isPending(r) ? 'pending ' + (r.wi || '') : r.number) + ' says "' + r.status + '"').join('; ') + '), so ' + (odd.length === 1 ? 'it is' : 'they are') + ' not shown on the board. ', ...(D.can.edit ? odd.map(r => btn('Fix ' + (isPending(r) ? (r.wi || 'pending request') : r.number), { onclick: () => openEdit(r) })) : ['Ask someone who can edit to fix it.'])]) : null,
-    h('section', { class: 'boardfirst' }, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. Click a column heading, or a colour heading, to close it.' }), flow]),
+    h('section', { class: 'boardfirst' }, [h('h2', { text: 'Where the PPCs are' }), h('p', { class: 'hint', text: 'The age clock runs while a PPC is In Progress, counted from the day it became In Progress. The In progress column opens closed with its counts showing; click its heading to show the documents. Click any column heading, or a colour heading, to close it.' }), flow]),
     att]);
 }
 function vMissing() {
@@ -403,10 +412,10 @@ function vMissing() {
 }
 function vTests() {
   const open = openRows().filter(r => !isPending(r)), cfg = D.config, noTest = open.filter(r => r.stage === 'Testing' && !D.tests.some(t => t.ppc === r.number));
-  const rows1 = noTest.map(r => h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td(r.requestor || ''), td('No test recorded'), td(btn('Record a test', { open: 'test', ppc: r.number }), 'act')]));
+  const rows1 = noTest.map(r => h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td(r.requestor || ''), td('No test recorded'), td(btn('Create a PPC test', { open: 'test', ppc: r.number }), 'act')]));
   const rows2 = D.tests.map(t => { const d = daysSince(t.end); return h('tr', null, [td([h('b', { text: t.ppc }), h('br'), h('span', { class: 'mut', text: t.id })]), td([t.owner, h('br'), h('span', { class: 'mut', text: t.ownerEmail })]), td(fmtDate(t.end) + (d === null ? '' : d > 0 ? ', ended ' + pl(d, 'day') + ' ago' : d === 0 ? ', ends today' : ', ends in ' + pl(-d, 'day'))), td(t.result), td([D.can.attach ? btn('Images' + (((D.imageCounts || {})[t.id]) ? ' (' + D.imageCounts[t.id] + ')' : ''), { quiet: true, onclick: () => openImages(t.ppc, t.id, 'Images for test ' + t.id) }) : null, ' ', btn('Send reminder now', { quiet: true, disabled: true, title: NOT_BUILT })], 'act')]); });
   const kv = [['Automatic check', 'Once a day, around 8 AM, after the daily trigger is installed.'], ['When it reminds', 'From ' + cfg.reminderLeadDays + ' days before the test end date, and every ' + cfg.reminderCooldownDays + ' days after it passes, until the PPC is published.'], ['Who gets it', 'The document specialist, or the requester if no specialist is recorded. Adding the test owner is a backend change.'], ['Minimum test length', cfg.minTestDays + ' calendar days, enforced by the server as well as the form.'], ['Email mode', cfg.emailMode === 'LIVE' ? 'Live. Reminders are emailed and logged.' : 'Dry run. Reminders are logged but not sent until PPC_CONFIG EMAIL_MODE is LIVE.']];
-  return h('div', { class: 'view', id: 'v-tests', hidden: true }, [h('h1', { text: 'Tests and reminders' }),
+  return h('div', { class: 'view', id: 'v-tests', hidden: true }, [h('h1', { text: 'Active PPC tests and reminders' }),
     h('p', { class: 'lead' }, [h('strong', { text: D.tests.length ? pl(D.tests.length, 'test') + ' recorded.' : 'No test has been recorded yet, so no reminder is scheduled.' })]),
     h('section', null, [h('h2', { text: 'PPCs in the Testing stage with no test record' }), table(['PPC', 'Requested by', 'Test', 'Action'], rows1, 'Every PPC in the Testing stage has a test.')]),
     h('section', null, [h('h2', { text: 'Recorded tests' }), table(['PPC and test', 'Owner', 'Ends', 'Result', 'Action'], rows2, 'No tests recorded.')]),
@@ -423,12 +432,16 @@ function mailBox() {
   return box;
 }
 function vRouting() {
+  const sign = D.register.filter(r => r.status === 'Ready for Signature').slice().sort((a, b) => (a.submitted || '').localeCompare(b.submitted || ''));   // oldest submitted first
   const done = D.register.filter(r => r.status === 'Completed'); if ((!mailSel || !done.some(r => r.number === mailSel)) && done.length) mailSel = done[0].number;
-  const rows = done.map(r => { const d = daysSince(r.routing); return h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), td([r.requestor || '', h('br'), h('span', { class: 'mut', text: r.requestorEmail || 'no email on file' })]), td(r.routing ? [fmtDate(r.routing), h('br'), h('span', { class: 'mut', text: d + ' days ago' })] : 'No completed date'), td([btn('Preview email', { quiet: true, onclick: () => { mailSel = r.number; renderMail(); } }), ' ', D.can.edit ? btn('Edit', { quiet: true, onclick: () => openEdit(r) }) : null, ' ', btn('Send email', { disabled: true, title: NOT_BUILT })], 'act')]); });
+  const who = r => td([r.requestor || '', h('br'), h('span', { class: 'mut', text: r.requestorEmail || 'no email on file' })]);
+  const rowsS = sign.map(r => h('tr', null, [td([h('b', { text: isPending(r) ? 'PPC number pending' : r.number }), h('br'), h('span', { class: 'mut', text: r.title || 'Title not recorded' })]), who(r), td([r.submitted ? fmtDate(r.submitted) : 'Not recorded', r.stage ? h('br') : null, r.stage ? h('span', { class: 'mut', text: r.stage }) : null]), td([D.can.edit ? btn('Edit', { quiet: true, onclick: () => openEdit(r) }) : null], 'act')]));
+  const rows = done.map(r => { const d = daysSince(r.routing); return h('tr', null, [td([h('b', { text: r.number }), h('br'), h('span', { class: 'mut', text: r.title })]), who(r), td(r.routing ? [fmtDate(r.routing), h('br'), h('span', { class: 'mut', text: d + ' days ago' })] : 'No completed date'), td([btn('Preview email', { quiet: true, onclick: () => { mailSel = r.number; renderMail(); } }), ' ', D.can.edit ? btn('Edit', { quiet: true, onclick: () => openEdit(r) }) : null, ' ', btn('Send email', { disabled: true, title: NOT_BUILT })], 'act')]); });
   const seg = (ev, label) => h('button', { type: 'button', class: 'seg' + (mailEv === ev ? ' on' : ''), 'aria-pressed': String(mailEv === ev), onclick: () => { mailEv = ev; renderMail(); } }, label);
-  return h('div', { class: 'view', id: 'v-routing', hidden: true }, [h('h1', { text: 'Routing and emails' }),
-    h('p', { class: 'lead' }, [h('strong', { text: pl(done.length, 'PPC') + (done.length === 1 ? ' is' : ' are') + ' Completed.' }), ' Setting a status from the Edit panel does not send email. The email buttons are switched on in a later step.']),
-    h('section', null, [h('h2', { text: 'Completed PPCs' }), table(['PPC', 'Requested by', 'Completed on', 'Action'], rows, 'No PPC is marked Completed.')]),
+  return h('div', { class: 'view', id: 'v-routing', hidden: true }, [h('h1', { text: 'Ready for signature and Completed' }),
+    h('p', { class: 'lead' }, [h('strong', { text: pl(sign.length, 'PPC') + (sign.length === 1 ? ' is' : ' are') + ' ready for signature and ' + done.length + (done.length === 1 ? ' is' : ' are') + ' Completed.' }), ' Setting a status from the Edit panel does not send email. The email buttons are switched on in a later step.']),
+    h('section', null, [h('h2', { text: 'Ready for signature' }), h('p', { class: 'hint', text: 'Waiting for management signatures, oldest request first. Recording signatures from this page is not built yet.' }), table(['PPC', 'Requested by', 'Submitted, stage', 'Action'], rowsS, 'No PPC is waiting for management signatures.')]),
+    h('section', null, [h('h2', { text: 'Completed' }), table(['PPC', 'Requested by', 'Completed on', 'Action'], rows, 'No PPC is marked Completed.')]),
     h('section', null, [h('h2', { text: 'Email the requester will receive' }), h('div', { class: 'tabs2', role: 'group', 'aria-label': 'Email event' }, [seg('routed', 'Completed'), seg('published', 'Published')]), mailBox()])]);
 }
 function renderMail() { const v = $('#v-routing'); if (!v) return; const old = v.children[3]; const fresh = vRouting(); v.replaceWith(fresh); fresh.hidden = currentView !== 'routing'; }
@@ -502,11 +515,11 @@ function vGuide() {
   out.push(sec('Reading the board', [
     h('p', { class: 'hint', text: 'The age clock runs only while a PPC is In progress and is counted from the date it reached that stage.' }),
     h('ul', { class: 'clocklegend' }, [['green', '0 to 15 days'], ['yellow', '16 to 29 days'], ['overdue', '30 days or more, shown as Overdue']].map(p => h('li', null, [h('span', { class: 'sw ' + p[0] }), p[1]]))),
-    h('p', { class: 'mut', text: 'The In progress column is divided into those three ranges, each with its own count, ordered from green through to overdue. Selecting a column heading, or a range heading, closes it and gives the remaining columns more width.' })]));
+    h('p', { class: 'mut', text: 'The In progress column opens closed, showing only the count in each of those three ranges. Select its heading to show the documents. Once open, it lists them from green through to overdue. Selecting any column heading, or a range heading, closes it and gives the remaining columns more width.' })]));
 
   /* Recording a test: only those who may. */
   if (D.can.test) out.push(sec('Recording a test', [
-    steps(['Select New PPC test, or Record a test against a PPC shown in the Testing stage.',
+    steps(['Select New PPC test at the top of the page, or Create a PPC test against a PPC listed on Active PPC tests and reminders.',
       'Choose the PPC, then set the test dates and the person responsible.',
       'Complete the SOP-06-02 form and attach any photographs at the foot of it.',
       'Review and submit. The test is linked to the PPC and its end date is recorded.']),
@@ -527,8 +540,8 @@ function vGuide() {
     ['Quick start guide', 'This page.'],
     ['Published documents', 'Completed documents grouped by department, with a search facility and a CSV export.'],
     ['Missing PPC, need update', 'Open requests received before PPC numbering began.' + (D.can.edit ? ' These can be edited; number assignment is not yet available.' : ' View only for your account.')],
-    ['Tests and reminders', 'PPCs at the Testing stage and the tests recorded against them.' + (D.can.test ? ' Each test holds its own images.' : ' View only for your account.')],
-    ['Routing and emails', 'PPCs marked Completed, with a preview of the notification a requester would receive.' + (D.can.edit ? ' Sending is not yet available.' : ' View only for your account.')],
+    ['Active PPC tests and reminders', 'PPCs at the Testing stage and the tests recorded against them.' + (D.can.test ? ' Each test holds its own images.' : ' View only for your account.')],
+    ['Ready for signature and Completed', 'PPCs waiting for management signatures, then PPCs marked Completed with a preview of the notification a requester would receive.' + (D.can.edit ? ' Sending is not yet available.' : ' View only for your account.')],
     ['Update requests', 'Not yet available.'],
     ['Year records', 'Requests grouped by year of submission, with a printable record and a CSV export.']];
   out.push(sec('The pages in the menu', [dl(pages)]));

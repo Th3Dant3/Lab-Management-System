@@ -364,3 +364,11 @@ a.btn:hover{text-decoration:none;color:var(--text)}
 .winstatus div{border:2px solid;border-color:var(--lo) var(--hi) var(--hi) var(--lo);padding:3px 9px;color:var(--muted)}
 .winstatus .g{flex:1}
 @media(max-width:620px){.winbody{padding:18px 14px 14px}.winacts .btn{flex:1}.winstatus{flex-direction:column}}
+/* Closed In progress column: per-range counts stay visible, a button shows the documents */
+.ipsums{list-style:none;margin:0 0 10px;padding:0}
+.ipsum{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 2px;border-top:1px solid var(--line);color:var(--muted)}
+.ipsum .sw{margin-right:0;flex:0 0 auto;width:9px;height:9px}
+.ipsum .bl{flex:1;min-width:0}.ipsum .n{font-weight:700;color:var(--text)}
+.ipsum.hot{color:var(--text)}.ipsum.green.hot .n{color:#226b25}.ipsum.yellow.hot .n{color:#7a5407}
+.ipsum.overdue.hot{background:#f3dcd4;color:#8c231b;font-weight:700}.ipsum.overdue.hot .n{color:var(--block)}
+.ipshow{width:100%;font-size:12px;padding:4px 6px;white-space:normal;text-align:center}
