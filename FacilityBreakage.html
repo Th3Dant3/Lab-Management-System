@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="FacilityBreakage.css?v=20260824-prod-filter" />
+  <link rel="stylesheet" href="FacilityBreakage.css?v=20261116-v51-analysis" />
   <style>
     .back-btn {
       display: inline-flex; align-items: center; gap: 7px;
@@ -347,6 +347,7 @@
       <div id="sumDailyView">
         <!-- KPI strip -->
         <div class="sum-kpi-strip" id="sumKpiStrip"></div>
+        <div id="v5DailyStory" class="v5-story" aria-live="polite"></div>
 
         <!-- Split: dept sidebar + main detail -->
         <div class="sum-split">
@@ -368,6 +369,7 @@
       <!-- Weekly view -->
       <div id="sumWeeklyView" style="display:none">
         <div class="sum-kpi-strip" id="sumWeekKpiStrip"></div>
+        <div id="v5WeeklyStory" class="v5-story" aria-live="polite"></div>
         <div id="sumWeekDetail"></div>
       </div>
 
@@ -666,7 +668,7 @@
 
   </main>
 
-  <script src="FacilityBreakage.js?v=20261116-lens-frame-split"></script>
+  <script src="FacilityBreakage.js?v=20261116-v53-daily"></script>
 
   <script>
 (function applyRoleRestrictions() {

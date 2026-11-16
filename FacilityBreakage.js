@@ -3037,6 +3037,7 @@ async function loadSumDate(date) {
   renderSumKpis(d);
   renderSumSidebar(d);
   renderSumMain(d, 'LAB');
+  renderV5DailyStory(d);
   hideTransition();
 }
 
@@ -3059,6 +3060,7 @@ async function loadSumWeek(weekStart) {
     SUM.weekData = json.data;
 
     renderSumWeekly(json.data);
+    renderV5WeeklyStory(json.data);
 
     hideTransition();
 
@@ -3069,34 +3071,28 @@ async function loadSumWeek(weekStart) {
 }
 
 function renderSumKpis(d) {
-  const lt       = getDisplayedSummaryLabTotals_(d);
-  const lc       = d.lensCount  || 1;
-  const oc       = d.orderCount || 1;
-  const labPct   = (lt.labLensPct  || 0) * 100;
-  const framePct = (lt.labFramePct || 0) * 100;
-  const dayName  = d.reportDate ? new Date(d.reportDate).toLocaleDateString('en-US',{weekday:'long'}) : '';
-
+  const lt = getDisplayedSummaryLabTotals_(d);
+  const lc = Number(d.lensCount || 0);
+  const oc = Number(d.orderCount || 0);
+  const labPct = lc > 0 ? (Number(lt.labLensPct || 0) * 100) : null;
+  const framePct = oc > 0 ? (Number(lt.labFramePct || 0) * 100) : null;
   const el = document.getElementById('sumKpiStrip');
   if (!el) return;
-  el.innerHTML = `
-    <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-      <div style="font-family:var(--font-display);font-size:15px;letter-spacing:2px">DAILY SUMMARY</div>
-      <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${dayName.toUpperCase()} · ${d.reportDate||'—'}</div>
-    </div>
-    ${[
-      { label:'Lab Lenses Broken', value:U.fmt(lt.labLensesBroken||0), sub:`of ${U.fmt(lc)} lenses`,    accent:'var(--cyan)' },
-      { label:'Lab Lens %',        value:labPct.toFixed(2)+'%',        sub:'Goal ≤5.00%', accent:U.statusColor(labPct,5.00), badge:U.statusBadge(labPct,5.00) },
-      { label:'Frames Broken',     value:U.fmt(lt.framesBroken||0),    sub:`of ${U.fmt(oc)} orders`,    accent:'var(--amber)' },
-      { label:'Frame Brk %',       value:framePct.toFixed(2)+'%',      sub:'Goal ≤1.00%', accent:U.statusColor(framePct,1.00), badge:U.statusBadge(framePct,1.00) },
-      { label:'Total Orders',      value:U.fmt(oc),                    sub:'Mailroom shipped', accent:'var(--mail)' },
-      { label:'Report Date',       value:d.reportDate||'—',            sub:'Date as of', accent:'var(--muted)' },
-    ].map(k => `
-      <div class="kpi-card" style="--accent:${k.accent}">
-        <div class="kpi-label">${k.label}</div>
-        <div class="kpi-value" style="color:${k.accent}">${k.value}</div>
-        <div class="kpi-sub">${k.sub}</div>
-        ${k.badge||''}
-      </div>`).join('')}`;
+  const pct = n => n === null ? '—' : n.toFixed(2) + '%';
+  const kpis = [
+    {label:'LAB LENSES BROKEN',value:U.fmt(lt.labLensesBroken || 0),sub:lc ? `of ${U.fmt(lc)} lenses` : 'Lens volume unavailable',color:'var(--cyan)',asset:'lenses.png'},
+    {label:'LAB LENS %',value:pct(labPct),sub:'Goal ≤5.00%',color:labPct!==null && labPct>5?'var(--red)':'var(--green)',asset:'lens-rate.png',goal:5,actual:labPct},
+    {label:'FRAMES BROKEN',value:U.fmt(lt.framesBroken || 0),sub:oc?`of ${U.fmt(oc)} orders`:'Order count unavailable',color:'var(--amber)',asset:'frames.png'},
+    {label:'FRAME BREAK %',value:pct(framePct),sub:'Goal ≤1.00%',color:framePct!==null && framePct>1?'var(--red)':'var(--green)',asset:'frame-rate.png',goal:1,actual:framePct},
+    {label:'TOTAL ORDERS',value:oc?U.fmt(oc):'—',sub:'Mailroom shipped',color:'var(--mail)',asset:'orders.png'},
+  ];
+  el.innerHTML = `<div class="v53-kpi-heading"><div><b>DAILY QUALITY COMMAND CENTER</b><span>${v5Esc(d.reportDate || 'Selected day')} · Live API metrics</span></div><span class="v53-live-indicator">● ${String(d.reportDate||'')===String(State.meta?.reportDate||'')?'LIVE':'HISTORY'}</span></div>
+    <div class="v53-kpi-grid">${kpis.map(k=>`<article class="v53-kpi" style="--v53-accent:${k.color}">
+      <img class="v53-kpi-art" src="assets/kpi/${k.asset}" alt="" loading="lazy" aria-hidden="true">
+      <div class="v53-kpi-label">${k.label}</div><strong class="v53-kpi-number">${k.value}</strong>
+      <div class="v53-kpi-sub">${k.sub}</div>
+      ${k.goal!==undefined&&k.actual!==null?`<span class="v53-kpi-state ${k.actual<=k.goal?'ok':'bad'}">${k.actual<=k.goal?'ON GOAL':'OVER GOAL'} · ${Math.abs(k.actual-k.goal).toFixed(2)} pp ${k.actual<=k.goal?'under':'over'}</span>`:''}
+    </article>`).join('')}</div>`;
 }
 
 function renderSumSidebar(d) {
@@ -4254,6 +4250,7 @@ const App = {
         // Keep Summary → Weekly synchronized without re-fetching the API.
         if (SUM.weekData) {
           renderSumWeekly(SUM.weekData);
+          renderV5WeeklyStory(SUM.weekData);
         }
       } catch (err) {
         console.debug('Summary filter refresh skipped:', err);
@@ -4989,4 +4986,252 @@ async function exportCompareCSV() {
   const to = CMP.selected[0]?.replaceAll('/', '-') || 'to';
 
   downloadCSV(`facility_compare_${from}_to_${to}.csv`, rows);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   V5 QUALITY STORY — additive enhancement to SUMMARY only
+   All visual values come from the existing action=all / action=weekly.
+   Counts and lens rates are labeled explicitly; LMS/Inventory do not
+   receive synthetic goals or inferred rates from missing denominators.
+═══════════════════════════════════════════════════════════════════ */
+const V5_DEPTS = [
+  {name:'Surface',key:'srfPct',color:'var(--srf)',goal:2.8},
+  {name:'Finish',key:'finPct',color:'var(--fin)',goal:1.7},
+  {name:'AR',key:'arPct',color:'var(--ar)',goal:0.5},
+  {name:'Inventory',key:null,color:'var(--inv)',goal:null},
+  {name:'LMS',key:null,color:'var(--lms)',goal:null},
+];
+const v5N = n => Number(n || 0);
+const v5Esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const v5DeptDay = (day,name) => (day.departments||[]).find(x => String(x.department||'').toLowerCase()===name.toLowerCase()) || null;
+function v5ReasonCount(r, dept) {
+  // SAME approved Finish frame rule as Top Reasons: for its frame-breakage
+  // reason use the DEPARTMENT TOTAL FRAMES only when provided by the source.
+  // Otherwise do not invent a replacement frame count.
+  return v5N(r.lensesBroken ?? r.count ?? 0);
+}
+function v5ReasonList(d) {
+  const out=[];
+  V5_DEPTS.forEach(dep=> {
+    const rs=d.summary?.topReasons?.[dep.name] || d[dep.name.toLowerCase()]?.reasons || [];
+    rs.forEach(r=>out.push({department:dep.name,reason:r.reason||'Unknown',count:(dep.name==='Finish' && /^F-Frame Breakage$/i.test(String(r.reason||'').trim()) && Number.isFinite(Number(d.finish?.totals?.framesBroken))) ? v5N(d.finish.totals.framesBroken) : v5ReasonCount(r,dep.name),color:dep.color}));
+  });
+  return out.sort((a,b)=>b.count-a.count);
+}
+function v5Panel(title,body,extra='') {return `<section class="v5-panel ${extra}"><div class="v5-panel-title">${title}</div>${body}</section>`;}
+function v52Collapse(title, body, cssClass='', open=true) {
+  return `<details class="v52-section ${cssClass}" ${open?'open':''}><summary class="v52-toggle"><span>${v5Esc(title)}</span><span class="v52-toggle-hint"><span class="v52-toggle-state"></span><span class="v52-chevron" aria-hidden="true">⌄</span></span></summary><div class="v52-section-body">${body}</div></details>`;
+}
+function v52SetAll(open) {
+  const root=document.getElementById('v5WeeklyStory'); if(!root) return;
+  root.querySelectorAll('details.v52-section').forEach(d=>{d.open=open;});
+}
+function v5Pill(label,ok) {return `<span class="v5-pill ${ok?'v5-good':'v5-bad'}">${label}</span>`;}
+function v5Card(label,value,sub,color,flag='') {
+  return `<div class="v5-mini-kpi" style="--v5-accent:${color}"><div class="v5-mini-label">${label}</div><div class="v5-mini-value">${value}</div><div class="v5-mini-sub">${sub}</div>${flag}</div>`;
+}
+function v5ReasonRows(reasons,limit=5){
+  const top=reasons.filter(r=>r.count>0).slice(0,limit), max=top[0]?.count||1;
+  return top.length ? top.map((r,i)=>`<div class="v5-reason"><span class="v5-rank">${i+1}</span><div class="v5-reason-main"><div>${v5Esc(r.reason)} <small style="color:${r.color}">${v5Esc(r.department||'')}</small></div><div class="v5-reason-track"><i style="width:${(r.count/max*100).toFixed(1)}%;background:${r.color}"></i></div></div><strong>${U.fmt(r.count)}</strong></div>`).join('') : '<div class="v5-muted">No reason details supplied by the API</div>';
+}
+// Daily V5.3 keeps all calculations on the existing summary endpoint.
+// Trend chart uses the existing weekly snapshots, never illustrative values.
+let V53_OPEN_DEPT = 'Surface';
+let V53_TREND_SEQ = 0;
+const V53_WEEK_CACHE = new Map();
+function v53Num(n){return n===null||n===undefined||n===''||!Number.isFinite(Number(n))?null:Number(n);}
+function v53Percent(n){return n===null?'—':n.toFixed(2)+'%';}
+function v53Reasons(d,name){
+  const cfg=V5_DEPTS.find(x=>x.name===name);
+  const rs=d.summary?.topReasons?.[name] || d[name.toLowerCase()]?.reasons || [];
+  const items=rs.map(r=>{
+    const reason=String(r.reason||'Unknown');
+    const frame=name==='Finish' && /^F-Frame Breakage$/i.test(reason.trim());
+    const frames=v53Num(d.finish?.totals?.framesBroken);
+    const count=frame&&frames!==null?frames:v5ReasonCount(r,name);
+    return {reason,count,department:name,color:cfg?.color||'var(--cyan)'};
+  }).sort((a,b)=>b.count-a.count);
+  return items;
+}
+function v53SetDept(name){
+  V53_OPEN_DEPT = (V53_OPEN_DEPT===name ? null : name);
+  if(SUM.data) renderV5DailyStory(SUM.data);
+}
+function v53ExpandDepartments(expand){
+  V53_OPEN_DEPT=expand?'ALL':null;
+  if(SUM.data)renderV5DailyStory(SUM.data);
+}
+function v53SparkSVG(points, color){
+  const vals=points.map(x=>v53Num(x)).filter(x=>x!==null);
+  if(!vals.length)return '<div class="v53-chart-unavailable">No daily trend snapshots available</div>';
+  let min=Math.min(...vals),max=Math.max(...vals); const range=Math.max(.2,max-min);
+  min-=range*.15;max+=range*.15;
+  const x=i=>25+i*55, y=v=>118-(v-min)/(max-min)*87;
+  const segments=[];let cur=[];
+  points.forEach((v,i)=>{v=v53Num(v);if(v===null){if(cur.length){segments.push(cur);cur=[];}}else cur.push(`${x(i)},${y(v).toFixed(1)}`);});
+  if(cur.length)segments.push(cur);
+  return `<svg class="v53-trend-svg" viewBox="0 0 390 145" role="img" aria-label="Seven daily breakage values">${[25,65,105].map(v=>`<line x1="20" y1="${v}" x2="372" y2="${v}" stroke="rgba(255,255,255,.12)"/>`).join('')}${segments.map(s=>`<polyline points="${s.join(' ')}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>`).join('')}${points.map((v,i)=>v53Num(v)===null?'':`<circle cx="${x(i)}" cy="${y(Number(v)).toFixed(1)}" r="4" fill="${color}"/>`).join('')}</svg>`;
+}
+function v53TrendMarkup(days,field,color,goal=null){
+  if(!Array.isArray(days)||!days.length)return '<div class="v53-chart-unavailable">Trend unavailable — select a date with weekly snapshots</div>';
+  const values=days.map(x=>x.hasData?v53Num(x[field]):null);
+  if(!values.some(x=>x!==null))return '<div class="v53-chart-unavailable">No rate data for this selected week</div>';
+  const vals=values.filter(x=>x!==null),low=Math.min(...vals,goal??Infinity),high=Math.max(...vals,goal??-Infinity);
+  const bottom=Math.max(0,low-(high-low)*.3-.1),top=high+(high-low)*.3+.1;
+  const y=v=>123-(v-bottom)/(top-bottom)*90;
+  const x=i=>27+i*56;
+  let path='',current='';
+  values.forEach((v,i)=>{if(v===null){if(current){path+=`<polyline points="${current.trim()}" fill="none" stroke="${color}" stroke-width="3"/>`;current='';}}else current+=`${x(i)},${y(v).toFixed(1)} `;});
+  if(current)path+=`<polyline points="${current.trim()}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return `<svg class="v53-trend-svg" viewBox="0 0 390 180" role="img" aria-label="Breakage rates by day of the selected week">${[25,70,115].map(v=>`<line x1="15" y1="${v}" x2="370" y2="${v}" stroke="rgba(255,255,255,.1)"/>`).join('')}${goal===null?'':`<line x1="15" y1="${y(goal)}" x2="370" y2="${y(goal)}" stroke="#d6e4ee" stroke-dasharray="5,5" opacity=".65"/><text x="367" y="${y(goal)-5}" text-anchor="end" fill="#d8e9f0" font-size="10">Goal ${goal.toFixed(2)}%</text>`}${path}${values.map((v,i)=>v===null?'':`<circle cx="${x(i)}" cy="${y(v)}" r="4.2" fill="${color}"/><text x="${x(i)}" y="${y(v)-10}" text-anchor="middle" fill="#f1f7ff" font-size="10">${v.toFixed(2)}%</text>`).join('')}${days.map((d,i)=>`<text x="${x(i)}" y="166" text-anchor="middle" fill="#d3e5f1" font-size="11">${v5Esc((d.day||'').slice(0,3))}</text>`).join('')}</svg>`;
+}
+async function v53LoadTrend(d){
+  const root=document.getElementById('v53DailyTrend');if(!root)return;
+  const seq=++V53_TREND_SEQ;
+  const date=d.reportDate;
+  const week=getSundayWeekStart_(date);
+  if(!week){root.innerHTML='<div class="v53-chart-unavailable">Historical trend is unavailable for this date</div>';return;}
+  const key=week;
+  try {
+    if(!V53_WEEK_CACHE.has(key)){
+      V53_WEEK_CACHE.set(key,fetch(`${API_URL}?action=weekly&weekStart=${encodeURIComponent(key)}`)
+        .then(r=>{if(!r.ok)throw new Error('Weekly API unavailable');return r.json();})
+        .then(j=>{if(j.success===false)throw new Error(j.error||'Weekly API failed');return j.data||j;})
+        .catch(e=>{V53_WEEK_CACHE.delete(key);throw e;}));
+    }
+    const data=await V53_WEEK_CACHE.get(key);
+    if(seq!==V53_TREND_SEQ||SUM.selectedDate!==date||!document.getElementById('v53DailyTrend'))return;
+    const days=getDisplayedWeeklyDays_(data.days||[]);
+    root.innerHTML=v53TrendMarkup(days,'labLensPct','#38d6e8',5);
+    const active = V53_OPEN_DEPT==='ALL' ? V5_DEPTS : V5_DEPTS.filter(x=>x.name===V53_OPEN_DEPT);
+    active.forEach(cfg=>{
+      const byId=document.getElementById(V53_OPEN_DEPT==='ALL'?'v53Trend'+cfg.name:'v53DeptTrend');
+      if(!byId)return;
+      const color={Surface:'#fb923c',Finish:'#34d399',AR:'#a78bfa',Inventory:'#f472b6',LMS:'#60a5fa'}[cfg.name];
+      if(cfg.key)byId.innerHTML=v53TrendMarkup(days,cfg.key,color,cfg.goal);
+      else byId.innerHTML=`<div class="v53-daily-counts">${days.map(x=>{const r=v5DeptDay(x,cfg.name);return `<span>${v5Esc((x.day||'').slice(0,3))}<b>${x.hasData?(r?U.fmt(r.lensesBroken):'—'):'—'}</b></span>`;}).join('')}</div>`;
+    });
+  }catch(e){if(seq===V53_TREND_SEQ)root.innerHTML='<div class="v53-chart-unavailable">Historical trend unavailable from weekly API</div>';}
+}
+function renderV5DailyStory(d){
+  const target=document.getElementById('v5DailyStory');if(!target||!d)return;
+  const sum=d.summary?.departments||[],reasons=v5ReasonList(d),top=reasons.find(r=>r.count>0);
+  const getRec=name=>sum.find(x=>String(x.department||'').toLowerCase()===name.toLowerCase());
+  const deptCards=V5_DEPTS.map(cfg=>{
+    const rec=getRec(cfg.name),count=rec?v53Num(rec.lensesBroken):null;
+    const pct=rec?v53Num(rec.lensBrkPct):null;
+    const actual=pct===null?null:pct*100;
+    const status=cfg.goal!==null&&actual!==null?v5Pill(actual<=cfg.goal?'ON GOAL':'OVER GOAL',actual<=cfg.goal):'<span class="v53-count-only">COUNT ONLY</span>';
+    const active=V53_OPEN_DEPT===cfg.name||V53_OPEN_DEPT==='ALL';
+    return `<button type="button" class="v53-dept-tile ${active?'active':''}" style="--v53-accent:${cfg.color}" onclick="v53SetDept('${cfg.name}')" aria-expanded="${active}"><span class="v53-dept-title">${cfg.name.toUpperCase()} <span>${active?'−':'⌄'}</span></span><strong>${actual!==null?v53Percent(actual):count!==null?U.fmt(count):'—'}</strong><div class="v53-dept-description">${count!==null?U.fmt(count)+' lenses broken':'No department data'} ${cfg.goal!==null?`· Goal ≤${cfg.goal.toFixed(2)}%`:''}</div>${status}</button>`;
+  }).join('');
+  const over=V5_DEPTS.filter(x=>x.goal!==null).map(cfg=>{const rec=getRec(cfg.name);const pct=rec?v53Num(rec.lensBrkPct):null;return pct!==null?{...cfg,pct:pct*100}:null;}).filter(x=>x&&x.pct>x.goal).sort((a,b)=>(b.pct-b.goal)-(a.pct-a.goal));
+  const topActions=[...over.slice(0,2).map(x=>({title:`Review ${x.name} process`,detail:`${x.pct.toFixed(2)}% vs ${x.goal.toFixed(2)}% goal (+${(x.pct-x.goal).toFixed(2)} pp). Check the leading defect by station or shift, then reassess after corrective action.`})),...(top?[{title:`Investigate ${top.reason} (${top.count})`,detail:`Validate the leading reported reason in ${top.department} against jobs, equipment and handling records before assigning a cause.`}]:[]),{title:'Verify follow-up',detail:'Confirm frame and lens totals separately, check data attribution, and review the next available shift or day.'}];
+  const selected=V53_OPEN_DEPT==='ALL'?V5_DEPTS:V5_DEPTS.filter(x=>x.name===V53_OPEN_DEPT);
+  const details=selected.map(cfg=>{
+    const rec=getRec(cfg.name),pct=rec?v53Num(rec.lensBrkPct):null,actual=pct===null?null:pct*100;
+    const title=cfg.name.toUpperCase();const reasons=v53Reasons(d,cfg.name);
+    return `<section class="v53-dept-expanded" style="--v53-accent:${cfg.color}"><div class="v53-detail-title"><strong>${title} — DETAILS</strong><button type="button" onclick="v53SetDept('${cfg.name}')" aria-label="Close ${title} details">×</button></div><div class="v53-detail-columns"><div><h4>TOP BREAKAGE REASONS</h4>${v5ReasonRows(reasons,4)}</div><div><h4>SELECTED WEEK TREND</h4><div id="${V53_OPEN_DEPT==='ALL'?'v53Trend'+cfg.name:'v53DeptTrend'}" class="v53-mini-trend">Loading available records…</div></div><div><h4>ANALYSIS & NEXT STEP</h4><p>${actual!==null&&cfg.goal!==null?`${title} is ${actual.toFixed(2)}% against a ${cfg.goal.toFixed(2)}% goal (${Math.abs(actual-cfg.goal).toFixed(2)} percentage points ${actual>cfg.goal?'over':'under'}).`:`${title} shows ${rec?U.fmt(rec.lensesBroken):'no reported'} broken lenses; no configured rate goal.`}</p><p>${reasons[0]?`Leading reported reason: ${v5Esc(reasons[0].reason)} (${U.fmt(reasons[0].count)}). Review corresponding jobs and validate the cause.`:'Review source attribution and whether any reasons were recorded.'}</p></div></div></section>`;
+  }).join('');
+  target.innerHTML=`<div class="v53-main-panels"><div class="v53-panel v53-trend-panel"><h3>LAB BREAKAGE TREND — SELECTED WEEK</h3><div id="v53DailyTrend" class="v53-trend-plot">Loading weekly snapshots…</div></div>
+  <div class="v53-panel"><h3>TOP BREAKAGE REASONS — FACILITY</h3>${v5ReasonRows(reasons,5)}</div>
+  <div class="v53-panel"><h3>TODAY'S QUALITY ALERTS</h3><div class="v53-alert-list">${over.length?over.map(x=>`<div class="v53-alert"><b>${x.name} above goal by ${(x.pct-x.goal).toFixed(2)} pp</b><span>${x.pct.toFixed(2)}% vs ≤${x.goal.toFixed(2)}% goal</span></div>`).join(''):'<div class="v53-ok">All measured departments are on goal</div>'}${top?`<div class="v53-alert amber"><b>Leading reported reason: ${v5Esc(top.reason)}</b><span>${U.fmt(top.count)} · ${v5Esc(top.department)}</span></div>`:''}</div></div></div>
+  <div class="v53-departments-header"><h3>DEPARTMENT PERFORMANCE — TODAY</h3><div><button type="button" onclick="v53ExpandDepartments(true)">EXPAND ALL</button><button type="button" onclick="v53ExpandDepartments(false)">COLLAPSE ALL</button></div></div>
+  <div class="v53-dept-grid">${deptCards}</div>
+  <div class="v53-bottom"><div class="v53-details-wrap">${details||'<div class="v53-collapsed-message">Select a department above to inspect its breakage reasons and performance.</div>'}</div><div class="v53-panel v53-actions"><h3>TODAY'S ACTION PLAN</h3>${topActions.map((a,i)=>`<div class="v53-action-line"><span>${i+1}</span><div><strong>${v5Esc(a.title)}</strong><small>${v5Esc(a.detail)}</small></div></div>`).join('')}</div></div>
+  <p class="v53-disclaimer">All counts and rates are supplied by the existing API and Production Breakage Only setting. Inventory and LMS do not receive invented goals. Finish frame-breakage reason uses the approved total-frame display rule. Trend uses available weekly snapshots, not simulated history.</p>`;
+  v53LoadTrend(d);
+}
+function renderV5WeeklyStory(data){
+  const target=document.getElementById('v5WeeklyStory');
+  if(!target||!data)return;
+  const days=getDisplayedWeeklyDays_(data.days);
+  const valid=days.filter(d=>d.hasData);
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:null;
+  const num=x=>x!==null&&x!==undefined&&x!==''&&Number.isFinite(Number(x))?Number(x):null;
+  const percent=(n)=>n===null?'—':n.toFixed(2)+'%';
+  const goalForLab=5.00;
+  // Same canonical count used by renderSumWeekly(), including the selected
+  // Production Breakage Only filter through getDisplayedWeeklyDays_().
+  const labBroken=valid.reduce((sum,day)=>sum+(num(day.labLenses)||0),0);
+  const labRate=avg(valid.map(d=>num(d.labLensPct)).filter(x=>x!==null));
+  const weekRows=V5_DEPTS.map(cfg=>{
+    const records=valid.map(d=>v5DeptDay(d,cfg.name));
+    const present=records.filter(Boolean);
+    const broken=present.reduce((sum,r)=>sum+(num(r.lensesBroken)||0),0);
+    const rates=cfg.key?valid.map(d=>num(d[cfg.key])).filter(x=>x!==null):[];
+    const rate=avg(rates);
+    const reasonMap=new Map();
+    valid.forEach(day=>(day.topReasons?.[cfg.name]||[]).forEach(r=>{
+      const name=String(r.reason||'Unknown');
+      const isFrame=cfg.name==='Finish'&&/^F-Frame Breakage$/i.test(name.trim());
+      const depRecord=v5DeptDay(day,'Finish');
+      const count=isFrame && num(depRecord?.framesBroken)!==null
+        ? num(depRecord.framesBroken):v5ReasonCount(r,cfg.name);
+      reasonMap.set(name,(reasonMap.get(name)||0)+count);
+    }));
+    const reasons=[...reasonMap].map(([reason,count])=>({reason,count,color:cfg.color,department:cfg.name})).sort((a,b)=>b.count-a.count);
+    return {...cfg,broken,rate,present:present.length,reasons};
+  });
+  const measured=weekRows.filter(d=>d.goal!==null&&d.rate!==null);
+  const over=measured.filter(d=>d.rate>d.goal).sort((a,b)=>(b.rate-b.goal)-(a.rate-a.goal));
+  const onGoal=measured.filter(d=>d.rate<=d.goal);
+  const leading=weekRows.flatMap(dep=>dep.reasons).sort((a,b)=>b.count-a.count)[0];
+  const kpis=[
+    v5Card('DAYS CAPTURED',`${valid.length}/7`,'Daily snapshots','#dcecf7'),
+    v5Card('TOTAL LAB LENSES BROKEN',U.fmt(labBroken),'Sum of captured daily Lab lenses','var(--cyan)'),
+    v5Card('AVG LAB %',percent(labRate),'Goal ≤5.00%','var(--red)',labRate===null?'':v5Pill(labRate<=goalForLab?'ON GOAL':'OVER GOAL',labRate<=goalForLab)),
+    ...weekRows.slice(0,3).map(d=>v5Card('AVG '+d.name.toUpperCase()+' %',percent(d.rate),`Goal ≤${d.goal.toFixed(2)}%`,d.color,d.rate===null?'':v5Pill(d.rate<=d.goal?'ON GOAL':'OVER GOAL',d.rate<=d.goal))),
+    ...weekRows.slice(3).map(d=>v5Card(d.name.toUpperCase()+' BROKEN',d.present?U.fmt(d.broken):'—',`${d.present}/${valid.length} daily records · count only`,d.color))
+  ];
+  const dailyPct=(day,key)=>percent(num(day[key]));
+  const dailyCount=(day,name)=>{const record=v5DeptDay(day,name);return record?U.fmt(record.lensesBroken):'—';};
+  const weekTable=`<div class="v5-table-scroll"><table class="v5-table"><thead><tr><th>DAY</th><th>LAB %</th><th>SURFACE %</th><th>FINISH %</th><th>AR %</th><th>INVENTORY</th><th>LMS</th><th>TOP REASON</th></tr></thead><tbody>${days.map(day=>{
+    if(!day.hasData)return `<tr><td>${v5Esc(day.day||'')} ${v5Esc(day.date||'')}</td><td colspan="7">${day.isFuture?'Future date':'No snapshot'}</td></tr>`;
+    const reasons=Object.entries(day.topReasons||{}).flatMap(([dept,list])=>(list||[]).map(r=>({reason:r.reason,count:v5ReasonCount(r,dept)}))).sort((a,b)=>b.count-a.count);
+    return `<tr><td><b>${v5Esc(day.day||'')}</b> ${v5Esc(day.date||'')}</td><td>${dailyPct(day,'labLensPct')}</td><td>${dailyPct(day,'srfPct')}</td><td>${dailyPct(day,'finPct')}</td><td>${dailyPct(day,'arPct')}</td><td>${dailyCount(day,'Inventory')}</td><td>${dailyCount(day,'LMS')}</td><td>${v5Esc(reasons[0]?.reason||'—')}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  // Chart drawn from the selected week's genuine day snapshots.
+  const points=days.map((d,i)=>({i,v:d.hasData?num(d.labLensPct):null})).filter(p=>p.v!==null);
+  const values=[...points.map(p=>p.v),goalForLab];
+  const lo=Math.max(0,Math.floor(Math.min(...values)-.5));
+  const hi=Math.max(lo+1,Math.ceil(Math.max(...values)+.5));
+  const x=i=>42+i*78,y=v=>156-(v-lo)/(hi-lo)*112;
+  const poly=points.map(p=>`${x(p.i)},${y(p.v)}`).join(' ');
+  const trend=`<svg viewBox="0 0 565 192" role="img" aria-label="Weekly daily lab breakage percentage" class="v5-chart">${[lo,(lo+hi)/2,hi].map(n=>`<line x1="42" y1="${y(n)}" x2="524" y2="${y(n)}" stroke="white" opacity=".12"/><text x="35" y="${y(n)+3}" text-anchor="end" fill="#a7bbc9" font-size="10">${n.toFixed(1)}%</text>`).join('')}<line x1="42" y1="${y(goalForLab)}" x2="524" y2="${y(goalForLab)}" stroke="#25d09b" stroke-width="1.5" stroke-dasharray="6 5"/><text x="524" y="${Math.max(12,y(goalForLab)-6)}" text-anchor="end" fill="#25d09b" font-size="10">Goal 5.00%</text>${points.length>1?`<polyline fill="none" stroke="#22d3ee" stroke-width="3" points="${poly}"/>`:''}${points.map(p=>`<circle cx="${x(p.i)}" cy="${y(p.v)}" r="4" fill="#22d3ee"/><text x="${x(p.i)}" y="${y(p.v)-10}" text-anchor="middle" fill="#f4fbff" font-size="10">${p.v.toFixed(2)}%</text>`).join('')}${days.map((d,i)=>`<text x="${x(i)}" y="178" text-anchor="middle" font-size="10" fill="#c7d7e6">${v5Esc((d.day||'').slice(0,3))}</text>`).join('')}</svg>`;
+  const priority=over[0];
+  const summary=`<div class="v5-narrative-lead"><span>WEEKLY PERFORMANCE</span><strong>${labRate!==null?`${percent(labRate)} lab breakage`: 'Lab rate unavailable'}</strong><small>${labRate!==null?(labRate<=goalForLab?`${(goalForLab-labRate).toFixed(2)} pp within the 5.00% goal`:`${(labRate-goalForLab).toFixed(2)} pp above the 5.00% goal`):'No valid lab rate data'}</small></div><div class="v5-analysis-facts"><div><span>PRIMARY DEPARTMENT RISK</span><strong>${priority?v5Esc(priority.name):'None above goal'}</strong><small>${priority?`${percent(priority.rate)} vs ${percent(priority.goal)} goal`:'Measured departments within targets'}</small></div><div><span>LEADING REPORTED REASON</span><strong>${leading?v5Esc(leading.reason):'Not supplied'}</strong><small>${leading?`${v5Esc(leading.department)} · ${U.fmt(leading.count)} reported`:''}</small></div><div><span>AT OR BELOW GOAL</span><strong>${onGoal.length}/${measured.length}</strong><small>Departments with defined goals</small></div></div>`;
+  const insights=[
+    ...over.map(d=>`<div class="v5-insight bad"><b>${v5Esc(d.name)} · ${percent(d.rate)}</b><span>${(d.rate-d.goal).toFixed(2)} pp over ${percent(d.goal)} target</span></div>`),
+    ...onGoal.map(d=>`<div class="v5-insight good"><b>${v5Esc(d.name)} · ${percent(d.rate)}</b><span>${(d.goal-d.rate).toFixed(2)} pp below ${percent(d.goal)} goal</span></div>`),
+    `<div class="v5-insight"><b>Inventory ${U.fmt(weekRows[3].broken)} · LMS ${U.fmt(weekRows[4].broken)}</b><span>Lens breakage counts; no department rate goals configured</span></div>`
+  ].join('');
+  const deep=weekRows.map(dep=>{
+    const series=days.map(d=>{const r=v5DeptDay(d,dep.name);return dep.key?(d.hasData?num(d[dep.key]):null):(r?num(r.lensesBroken):null)});
+    const validSeries=series.filter(n=>n!==null);const mn=validSeries.length?Math.min(...validSeries):0,mx=validSeries.length?Math.max(...validSeries):1;
+    const dots=series.map((n,i)=>n===null?null:`${8+i*30},${45-(n-mn)/(mx-mn||1)*34}`).filter(Boolean).join(' ');
+    const headline=dep.rate!==null?percent(dep.rate):dep.present?U.fmt(dep.broken):'—';
+    const status=dep.rate!==null?(dep.rate<=dep.goal?v5Pill('ON GOAL',true):v5Pill('OVER GOAL',false)):'<span class="v5-muted">COUNT ONLY</span>';
+    return `<details open class="v52-section v52-department v5-deep v5-deep-analysis" style="--v5-accent:${dep.color}"><summary class="v52-toggle v52-department-head"><span class="v52-dept-name">${dep.name.toUpperCase()}</span><span class="v52-dept-right"><strong>${headline}</strong><span class="v52-chevron" aria-hidden="true">⌄</span></span></summary><div class="v52-section-body"><div class="v5-deep-meta">${dep.goal!==null?`Goal ≤${percent(dep.goal)}`:`${dep.present}/${valid.length} days · broken lenses`} ${status}</div><svg viewBox="0 0 200 55" preserveAspectRatio="none" class="v5-spark"><polyline points="${dots}" stroke="${dep.color}" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/></svg><div class="v5-deep-caption">TOP REASONS · WEEK</div>${v5ReasonRows(dep.reasons,3)}<div class="v5-daily-mini">${days.map((day,i)=>`<span>${v5Esc((day.day||'').slice(0,3))}<b>${dep.key?(day.hasData?dailyPct(day,dep.key):'—'):dailyCount(day,dep.name)}</b></span>`).join('')}</div></div></details>`;
+  }).join('');
+  // Findings and suggested follow-through are generated from the selected week,
+  // and deliberately do not assert an unverified root cause.
+  const actions=[];
+  if(priority){
+    const weeklyMax=days.reduce((best,day)=>{
+      const val=day.hasData?num(day[priority.key]):null;
+      return val!==null&&(!best||val>best.value)?{day:day.day||day.date,value:val}:best;
+    },null);
+    actions.push({type:'HIGH PRIORITY',title:`Reduce ${priority.name} breakage`,finding:`${percent(priority.rate)} average, ${(priority.rate-priority.goal).toFixed(2)} percentage points above the ${percent(priority.goal)} goal${weeklyMax?`; highest daily rate was ${percent(weeklyMax.value)} on ${v5Esc(weeklyMax.day)}`:''}.`,next:`Review ${priority.name} breakage records and the process steps associated with the leading reasons; validate the defect classification with the area supervisor.`,verify:`Compare the next 7 captured days against the ${percent(priority.goal)} goal and the current ${percent(priority.rate)} weekly average.`});
+  }
+  if(leading){
+    actions.push({type:'REASON REVIEW',title:`Investigate ${leading.reason} (${leading.department})`,finding:`${U.fmt(leading.count)} reported against this reason during the selected week.`,next:'Sample affected jobs, check whether the reason codes are consistent, and identify whether specific stations or shifts cluster in the records.',verify:'Track this reason’s daily count next week and confirm whether repeat occurrences decrease.'});
+  }
+  if(onGoal.length){
+    const names=onGoal.map(d=>d.name).join(' and ');
+    actions.push({type:'MAINTAIN',title:`Protect on-goal performance: ${names}`,finding:onGoal.map(d=>`${d.name} ${percent(d.rate)} (goal ≤${percent(d.goal)})`).join(' · ')+'.',next:'Continue routine quality checks; review any daily spikes even when the weekly average meets goal.',verify:'Confirm goal compliance across the next reporting week.'});
+  }
+  actions.push({type:'DATA QUALITY',title:'Validate Inventory and LMS records',finding:`Inventory: ${U.fmt(weekRows[3].broken)} lens breaks (${weekRows[3].present}/${valid.length} daily records). LMS: ${U.fmt(weekRows[4].broken)} (${weekRows[4].present}/${valid.length} records).`,next:'Confirm department ownership and reason attribution, especially any cross-department reason prefixes; do not infer department rates without denominators.',verify:'Reconcile weekly department counts to the source snapshots and confirm all expected days are represented.'});
+  const actionBody=`<div class="v52-action-intro">Prioritized follow-through based on this selected week. These are investigation recommendations, not confirmed root causes.</div><div class="v52-action-grid">${actions.map((a,i)=>`<article class="v52-action-item"><div class="v52-action-top"><span class="v52-action-type">${v5Esc(a.type)}</span><strong>${i+1}. ${v5Esc(a.title)}</strong></div><p><b>Finding</b> ${a.finding}</p><p><b>Next step</b> ${v5Esc(a.next)}</p><p><b>Verify</b> ${v5Esc(a.verify)}</p></article>`).join('')}</div>`;
+  target.innerHTML=`<div class="v5-week-heading"><div><strong>WEEKLY QUALITY ANALYSIS</strong><span>${v5Esc(data.weekStart||'')} – ${v5Esc(data.weekEnd||'')} · ${valid.length}/7 snapshots</span></div><div class="v52-global-controls"><span class="v5-live-tag">LIVE API DATA</span><button type="button" class="v52-all-btn" onclick="v52SetAll(true)">Expand all</button><button type="button" class="v52-all-btn" onclick="v52SetAll(false)">Collapse all</button></div></div><div class="v5-week-kpis">${kpis.join('')}</div>${v52Collapse('WEEKLY EXECUTIVE ANALYSIS',summary,'v5-week-summary')}<div class="v5-week-main">${v52Collapse('DAY-BY-DAY PERFORMANCE',weekTable)}${v52Collapse('LAB BREAKAGE TREND',trend)}${v52Collapse('QUALITY INSIGHTS',`<div class="v5-insight-list">${insights}</div>`)}</div><div class="v5-deep-caption v5-section-title">DEPARTMENT ANALYSIS — ALL FIVE DEPARTMENTS</div><div class="v5-week-deeps">${deep}</div>${v52Collapse('RECOMMENDED ACTIONS · NEXT STEPS',actionBody,'v52-next-steps')}<div class="v5-data-caption">Total Lab Lenses Broken uses the sum of daily labLenses and respects the production-only filter. Weekly percentages are averages of captured daily rates. Inventory and LMS show counts because no rate goals are defined. Suggested actions require local validation.</div>`;
 }
