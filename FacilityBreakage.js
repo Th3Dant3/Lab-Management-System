@@ -680,6 +680,113 @@ function getDisplayedWeeklyDays_(days) {
 }
 
 /* ── SUMMARY TAB ────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   REASON TABLE — shared by Overview Top Reasons + Dept tabs
+   Lenses and frames are separate units with separate denominators:
+     Lens %  = lensesBroken / lensCount
+     Frame % = framesBroken / orderCount
+   Ranking rule (one metric for every reason, no FRAME special case):
+     total damaged units (lenses + frames) desc, then lenses desc.
+═══════════════════════════════════════════════════════════ */
+function rankReasonsForDisplay(reasons) {
+  return (Array.isArray(reasons) ? reasons : [])
+    .map(r => {
+      const lenses = Number(r.lensesBroken || 0);
+      const frames = Number(r.framesBroken || 0);
+      return { ...r, lensesBroken: lenses, framesBroken: frames, _total: lenses + frames };
+    })
+    .filter(r => r._total > 0)
+    .sort((a, b) => (b._total - a._total) || (b.lensesBroken - a.lensesBroken))
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+function buildReasonTableHtml(rankedReasons, color) {
+  const lensCount  = Number(State.meta?.lensCount  || 0);
+  const orderCount = Number(State.meta?.orderCount || 0);
+  const maxTotal   = rankedReasons[0]?._total || 1;
+  const pct = (n, d) => d > 0 ? (n / d * 100).toFixed(2) + '%' : '—';
+
+  return `
+    <table class="data-table">
+      <thead><tr>
+        <th>#</th><th>Reason</th>
+        <th style="text-align:right">Lenses</th><th style="text-align:right">Lens %</th>
+        <th style="text-align:right">Frames</th><th style="text-align:right">Frame %</th>
+      </tr></thead>
+      <tbody>
+        ${rankedReasons.map((r, i) => {
+          const lensW  = (r.lensesBroken / maxTotal) * 100;
+          const frameW = (r.framesBroken / maxTotal) * 100;
+          const hasFrames = r.framesBroken > 0;
+          return `
+          <tr>
+            <td class="rank ${i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : ''}">${r.rank}</td>
+            <td>
+              <div class="reason-name">${r.reason}</div>
+              <div class="mini-bar" style="display:flex" title="${r.lensesBroken} lenses · ${r.framesBroken} frames">
+                <div class="mini-bar-fill" style="width:${lensW}%;background:${color}"></div>
+                <div class="mini-bar-fill" style="width:${frameW}%;background:var(--amber)"></div>
+              </div>
+            </td>
+            <td class="count" style="color:${color}">${r.lensesBroken}</td>
+            <td class="pct-cell">${pct(r.lensesBroken, lensCount)}</td>
+            <td class="count" style="color:${hasFrames ? 'var(--amber)' : 'var(--muted)'};opacity:${hasFrames ? 1 : 0.35}">${hasFrames ? r.framesBroken : '—'}</td>
+            <td class="pct-cell" style="opacity:${hasFrames ? 1 : 0.35}">${hasFrames ? pct(r.framesBroken, orderCount) : '—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* Finish Overview Top Reasons: use the approved department-specific display rule.
+   F-Frame Breakage displays the entire Finish frame total and frame rate;
+   every other F- reason displays lenses and lens rate. This deliberately
+   changes the OVERVIEW Finish table only, not department detail or reports. */
+function buildFinishTopReasonsHtml(source, summary, color) {
+  const finishSummary = (summary?.departments || []).find(d =>
+    String(d.department || '').trim().toLowerCase() === 'finish'
+  );
+  const finishTotals = State.depts?.finish?.totals;
+  const frameTotal = Number(finishTotals?.framesBroken ?? finishSummary?.framesBroken ?? 0);
+  const lensCount = Number(State.meta?.lensCount || 0);
+  const orderCount = Number(State.meta?.orderCount || summary?.labTotal?.orderCount || 0);
+  const frameReason = 'F-Frame Breakage';
+  const frameKey = frameReason.toLowerCase();
+
+  const rows = (Array.isArray(source) ? source : [])
+    .filter(r => /^F-/i.test(String(r.reason || '').trim()))
+    .filter(r => String(r.reason || '').trim().toLowerCase() !== frameKey)
+    .map(r => ({ reason: r.reason, broken: Number(r.lensesBroken || 0), isFrame: false }));
+
+  if (frameTotal > 0) {
+    rows.push({ reason: frameReason, broken: frameTotal, isFrame: true });
+  }
+
+  const top = rows.filter(r => r.broken > 0)
+    .sort((a, b) => b.broken - a.broken || a.reason.localeCompare(b.reason))
+    .slice(0, 3);
+  const maxBroken = Math.max(1, ...top.map(r => r.broken));
+  const pct = (n, denominator) => denominator > 0
+    ? (n / denominator * 100).toFixed(2) + '%' : '—';
+
+  return `<table class="data-table">
+    <thead><tr><th>#</th><th>Reason</th>
+      <th style="text-align:right">Broken</th>
+      <th style="text-align:right">%</th>
+    </tr></thead>
+    <tbody>${top.map((r, i) => `
+      <tr>
+        <td class="rank ${i === 0 ? 'r1' : i === 1 ? 'r2' : 'r3'}">${i + 1}</td>
+        <td><div class="reason-name">${r.reason}</div>
+          <div class="mini-bar"><div class="mini-bar-fill"
+            style="width:${r.broken / maxBroken * 100}%;background:${color}"></div></div>
+        </td>
+        <td class="count" style="color:${color}">${U.fmt(r.broken)}</td>
+        <td class="pct-cell">${pct(r.broken, r.isFrame ? orderCount : lensCount)}</td>
+      </tr>`).join('')}</tbody>
+  </table>`;
+}
+
 function renderSummary(summary, meta, history) {
   // Guard — skip if Overview tab elements not in DOM
   if (!document.getElementById('labKpis')) return;
@@ -783,33 +890,23 @@ function renderSummary(summary, meta, history) {
   /* Top reasons panels */
   const deptKeys = ['AR', 'Finish', 'Surface', 'LMS', 'Inventory', 'Breakage'];
   const deptClrs = ['var(--ar)', 'var(--fin)', 'var(--srf)', 'var(--lms)', 'var(--inv)', 'var(--brk)'];
+  // Source of truth = each department's FULL reason list (State.depts), so the
+  // top 3 is chosen with the same ranking rule the table displays. Falls back to
+  // summary.topReasons only if department payloads are unavailable.
   document.getElementById('topReasonsGrid').innerHTML = deptKeys.map((dept, i) => {
-    const reasons = summary.topReasons[dept] || [];
-    if (!reasons.length) return '';
-    const maxB = reasons[0]?.lensesBroken || 1;
+    const full = State.depts?.[dept.toLowerCase()]?.reasons;
+    const source = Array.isArray(full) && full.length ? full : (summary.topReasons?.[dept] || []);
+    const reasons = rankReasonsForDisplay(source).slice(0, 3);
+    if (!reasons.length && dept !== 'Finish') return '';
     return `
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title" style="color:${deptClrs[i]}">${dept} — Top Reasons</div>
         </div>
         <div class="panel-body">
-          <table class="data-table">
-            <thead><tr><th>#</th><th>Reason</th><th style="text-align:right">Broken</th><th style="text-align:right">%</th></tr></thead>
-            <tbody>
-              ${reasons.map((r, ri) => `
-                <tr>
-                  <td class="rank ${ri === 0 ? 'r1' : ri === 1 ? 'r2' : 'r3'}">${r.rank}</td>
-                  <td>
-                    <div class="reason-name">${r.reason}</div>
-                    <div class="mini-bar">
-                      <div class="mini-bar-fill" style="width:${(r.lensesBroken/maxB)*100}%;background:${deptClrs[i]}"></div>
-                    </div>
-                  </td>
-                  <td class="count" style="color:${deptClrs[i]}">${r.lensesBroken}</td>
-                  <td class="pct-cell">${((r.lensesBroken||0) / (State.meta.lensCount||1) * 100).toFixed(2)}%</td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
+          ${dept === 'Finish'
+            ? buildFinishTopReasonsHtml(source, summary, deptClrs[i])
+            : buildReasonTableHtml(reasons, deptClrs[i])}
         </div>
       </div>`;
   }).filter(Boolean).join('');
@@ -1205,27 +1302,9 @@ function renderDeptTab(tabId, data, deptName, color, chartId) {
   /* Reasons table */
   const reasonsEl = document.querySelector(`#tab-${tabId} [id$="ReasonsTable"]`);
   if (reasonsEl) {
-    const active = reasons.filter(r => r.lensesBroken > 0 || r.framesBroken > 0);
+    const active = rankReasonsForDisplay(reasons);
     if (active.length) {
-      const maxB = active[0].lensesBroken || active[0].framesBroken || 1;
-      reasonsEl.innerHTML = `
-        <table class="data-table">
-          <thead><tr><th>#</th><th>Reason</th><th style="text-align:right">Broken</th><th style="text-align:right">%</th></tr></thead>
-          <tbody>
-            ${active.map((r, i) => `
-              <tr>
-                <td class="rank ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${r.rank}</td>
-                <td>
-                  <div class="reason-name">${r.reason}</div>
-                  <div class="mini-bar">
-                    <div class="mini-bar-fill" style="width:${((r.lensesBroken||r.framesBroken)/maxB)*100}%;background:${color}"></div>
-                  </div>
-                </td>
-                <td class="count" style="color:${color};text-align:right">${r.lensesBroken || r.framesBroken}</td>
-                <td class="pct-cell">${((r.lensesBroken||r.framesBroken||0) / (State.meta.lensCount||1) * 100).toFixed(2)}%</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>`;
+      reasonsEl.innerHTML = buildReasonTableHtml(active, color);
     } else {
       reasonsEl.innerHTML = U.emptyState('No breakage data for today');
     }
