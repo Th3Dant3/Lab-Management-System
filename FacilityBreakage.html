@@ -669,34 +669,6 @@
   </main>
 
   <script src="FacilityBreakage.js?v=20261116-v53-daily"></script>
-
-  <script>
-(function applyRoleRestrictions() {
-  const role     = (sessionStorage.getItem("lms_role")    || "").trim().toUpperCase();
-  const subRole  = (sessionStorage.getItem("lms_subrole") || "").trim().toUpperCase();
-  const username = (sessionStorage.getItem("lms_user")    || "").trim().toUpperCase();
-
-  const ALLOWED_ROLES     = ["ADMIN", "MANAGER", "SR DIRECTOR", "SR MANAGER", "Supervisor"];
-  const ALLOWED_USERNAMES = ["BDADE", "KMANACK"]; // e.g. ["JSMITH", "CBAYLIS"]
-
-  const hasAccess =
-    ALLOWED_ROLES.some(r => role.includes(r) || subRole.includes(r)) ||
-    ALLOWED_USERNAMES.includes(username);
-
-  if (!hasAccess) {
-    // Hide the entire Summary nav tab
-    const navTab = document.getElementById("summaryNavTab");
-    if (navTab) navTab.style.display = "none";
-
-    // Hide the flush dropdown panel
-    const dropPanel = document.getElementById("summarySubmenu");
-    if (dropPanel) dropPanel.style.display = "none";
-
-    // Hide the Summary tab content panel
-    const tabPanel = document.getElementById("tab-summary");
-    if (tabPanel) tabPanel.style.display = "none";
-  }
-})();
-</script>
+  <!-- Summary Daily / Weekly visible to all authenticated dashboard users. -->
 </body>
 </html>
