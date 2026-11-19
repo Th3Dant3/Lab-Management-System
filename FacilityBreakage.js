@@ -76,74 +76,69 @@ window.addEventListener('load', () => {
   );
 });
 
-/*
- * Audit every network request on this page.
- * Only measures fetch → response headers and preserves the original Response.
+/* ── Secure Apps Script HTML-service transport ──────────────────────────
+ * The page must be served by the domain-restricted Apps Script web app.
+ * No external API URLs are requested by the browser.
+ * fbCall validates and routes every requested action server-side.
  */
-const __facilityOriginalFetch = window.fetch.bind(window);
-let __facilityFetchId = 0;
-
-window.fetch = async function(...args) {
-  const requestId = ++__facilityFetchId;
-  const input = args[0];
-  const url =
-    typeof input === 'string'
-      ? input
-      : (input && input.url ? input.url : String(input || ''));
-
-  let label = 'fetch';
-
-  try {
-    const parsed = new URL(url, window.location.href);
-    label =
-      parsed.searchParams.get('action') ||
-      parsed.searchParams.get('area') ||
-      parsed.pathname.split('/').filter(Boolean).pop() ||
-      'fetch';
-  } catch (_) {}
-
-  const t0 = performance.now();
-
-  FacilityPerf.log(`▶ FETCH #${requestId} ${label}`, {
-    url: url.replace(/([?&]t=)\d+/g, '$1<timestamp>'),
-  });
-
-  try {
-    const response = await __facilityOriginalFetch(...args);
-    const elapsed = performance.now() - t0;
-
-    FacilityPerf.log(
-      `FETCH #${requestId} ${label} response headers: ${elapsed.toFixed(1)} ms`,
-      {
-        status: response.status,
-        ok: response.ok,
-      }
-    );
-
-    return response;
-  } catch (error) {
-    const elapsed = performance.now() - t0;
-
-    FacilityPerf.log(
-      `✗ FETCH #${requestId} ${label}: ${elapsed.toFixed(1)} ms`,
-      {
-        error: error && error.message ? error.message : String(error),
-      }
-    );
-
-    throw error;
+const FB_ALLOWED_HOSTS = Object.freeze({ breakage: true, production: true, incoming: true });
+function fbFetch(endpoint, options = {}) {
+  const started = performance.now();
+  const url = new URL(String(endpoint));
+  if (url.protocol !== 'fb:' || !FB_ALLOWED_HOSTS[url.hostname]) {
+    return Promise.reject(new Error('Unrecognized Facility Breakage data source'));
   }
-};
-
+  if (options.method && options.method.toUpperCase() !== 'GET') {
+    return Promise.reject(new Error('Only read operations are supported'));
+  }
+  if (!window.google || !google.script || !google.script.run) {
+    return Promise.reject(new Error('Secure dashboard is not active. Open the Apps Script dashboard URL (page=dashboard), not the GitHub HTML directly.'));
+  }
+  let action, args;
+  if (url.hostname === 'breakage') {
+    action = url.searchParams.get('action') || 'all';
+    args = {};
+    if (url.searchParams.has('date')) args.date = url.searchParams.get('date');
+    if (url.searchParams.has('weekStart')) args.weekStart = url.searchParams.get('weekStart');
+  } else if (url.hostname === 'incoming') {
+    action = 'incoming';
+    args = { date: url.searchParams.get('date') || '' };
+  } else {
+    const area = url.searchParams.get('area') || 'All';
+    action = url.searchParams.get('action') === 'pickingDashboard'
+      ? 'picking' : area === 'Finish' ? 'finish'
+      : area === 'Surface' ? 'surface' : area === 'AR' ? 'ar' : 'productionFlow';
+    args = {};
+  }
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(result => {
+        FacilityPerf.log(`SECURE ${action} response: ${(performance.now()-started).toFixed(1)} ms`,
+          { action, success: result && result.success !== false });
+        if (!result || result.success === false) {
+          reject(new Error(result && result.error ? result.error : `${action} server request failed`));
+          return;
+        }
+        // Breakage payloads already have the legacy {success,data} structure.
+        // Production/Incoming payloads preserve their original response structure.
+        const body = action === 'incoming' || action === 'productionFlow' ||
+          action === 'finish' || action === 'surface' || action === 'ar' || action === 'picking'
+          ? result.data : result;
+        resolve({ ok: true, status: 200, json: async () => body });
+      })
+      .withFailureHandler(error => reject(new Error(error && error.message ? error.message : String(error))))
+      .fbCall(action, args);
+  });
+}
 
 /* ── CONFIG ─────────────────────────────────────────────── */
-const API_URL = 'https://script.google.com/macros/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec';
-const PRODUCTION_FLOW_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=productionFlow&area=All&debug=true";
-const INCOMING_API_URL = "https://script.google.com/macros/s/AKfycbyI2YqO9wXZ4-v34OXqqxD-yCYe3Dnly1-d_cf9mYtkcVkZoXeWhgQ8u6WbgY-lvIQQjg/exec";
-const FINISH_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Finish";
-const SURFACE_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?area=Surface";
-const AR_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=productionFlow&area=AR&debug=true";
-const PICKING_DASH_API_URL = "https://script.google.com/macros/s/AKfycbxJR3xCmLA-CW8WamTDuW3704meywwulltVe7i4-wmS7ulZN2YpnMrxwawbcVjcfLJ93Q/exec?action=pickingDashboard&debug=true";
+const API_URL = 'fb://breakage';
+const PRODUCTION_FLOW_API_URL = 'fb://production?action=productionFlow&area=All&debug=true';
+const INCOMING_API_URL = 'fb://incoming';
+const FINISH_DASH_API_URL = 'fb://production?area=Finish';
+const SURFACE_DASH_API_URL = 'fb://production?area=Surface';
+const AR_DASH_API_URL = 'fb://production?action=productionFlow&area=AR&debug=true';
+const PICKING_DASH_API_URL = 'fb://production?action=pickingDashboard&debug=true';
 
 
 const GOALS = {
@@ -212,7 +207,7 @@ const API = {
     const qs   = Object.entries(params).map(([k,v]) => `&${k}=${encodeURIComponent(v)}`).join('');
 
     const fetchStarted = performance.now();
-    const res  = await fetch(`${API_URL}?action=${action}${qs}`);
+    const res  = await fbFetch(`${API_URL}?action=${action}${qs}`);
     const headersMs = performance.now() - fetchStarted;
 
     const jsonStarted = performance.now();
@@ -3047,7 +3042,7 @@ async function loadSumWeek(weekStart) {
   SUM.selectedWeek = weekStart;
 
   try {
-    const res = await fetch(
+    const res = await fbFetch(
       `${API_URL}?action=weekly&weekStart=${encodeURIComponent(weekStart)}`
     );
 
@@ -4045,7 +4040,7 @@ const App = {
   async loadWeekly() {
     try {
       const qs  = App._currentWeekStart ? `&weekStart=${encodeURIComponent(App._currentWeekStart)}` : '';
-      const res = await fetch(`${API_URL}?action=weekly${qs}`);
+      const res = await fbFetch(`${API_URL}?action=weekly${qs}`);
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       renderWeekly(json.data);
@@ -4059,7 +4054,7 @@ const App = {
     if (!dateStr) { await App.loadToday(); return; }
 
     // Check if selected date is today
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayIncomingDate_();
     if (dateStr === today) { await App.loadToday(); return; }
 
     // Load from Snapshot_History
@@ -4408,40 +4403,10 @@ async function loadMailroomIncoming() {
 
   try {
     countEl.textContent = "…";
-    if (subEl) subEl.textContent = "Reading live incoming queue…";
-
-    const today = getTodayIncomingDate_();
-    const res = await fetch(`${INCOMING_API_URL}?date=${encodeURIComponent(today)}&t=${Date.now()}`);
-    const json = await res.json();
-
-    if (!json.success) throw new Error(json.error || "Incoming API failed");
-
-    const totalIncoming = Number(json.total || 0);
-
-    animateMailNumber("mailIncomingCount", totalIncoming);
-
-    if (subEl) {
-      subEl.textContent = "Live Total Jobs from Incoming Dashboard";
-    }
-
-  } catch (err) {
-    console.error("Mailroom incoming failed:", err);
-    countEl.textContent = "—";
-    if (subEl) subEl.textContent = "Incoming Total Jobs failed";
-  }
-}
-
-async function loadMailroomIncoming() {
-  const countEl = document.getElementById("mailIncomingCount");
-  const subEl   = document.getElementById("mailIncomingSub");
-  if (!countEl) return;
-
-  try {
-    countEl.textContent = "…";
     if (subEl) subEl.textContent = "Reading Incoming Total Jobs…";
 
     const today = getTodayIncomingDate_();
-    const res = await fetch(`${INCOMING_API_URL}?date=${encodeURIComponent(today)}&t=${Date.now()}`);
+    const res = await fbFetch(`${INCOMING_API_URL}?date=${encodeURIComponent(today)}&t=${Date.now()}`);
     const json = await res.json();
 
     if (!json.success) throw new Error(json.error || "Incoming API failed");
@@ -4463,7 +4428,7 @@ async function loadMailroomFacilityWip() {
   const subEl = document.getElementById("mailFacilityWipSub");
 
   try {
-    const res = await fetch(PRODUCTION_FLOW_API_URL, {
+    const res = await fbFetch(PRODUCTION_FLOW_API_URL, {
       method: "GET",
       cache: "no-store"
     });
@@ -4557,7 +4522,7 @@ function isFacilityPickingTrackingOnlyQueue_(name) {
 
 async function loadPickingWipForFlowMap() {
   try {
-    const res = await fetch(`${PICKING_DASH_API_URL}&t=${Date.now()}`, {
+    const res = await fbFetch(`${PICKING_DASH_API_URL}&t=${Date.now()}`, {
       method: "GET",
       cache: "no-store"
     });
@@ -4602,7 +4567,7 @@ async function loadPickingWipForFlowMap() {
 
 async function loadFinishWipForFlowMap() {
   try {
-    const res = await fetch(FINISH_DASH_API_URL, {
+    const res = await fbFetch(FINISH_DASH_API_URL, {
       method: "GET",
       cache: "no-store"
     });
@@ -4649,7 +4614,7 @@ async function loadFinishWipForFlowMap() {
 
 async function loadSurfaceWipForFlowMap() {
   try {
-    const res = await fetch(SURFACE_DASH_API_URL, {
+    const res = await fbFetch(SURFACE_DASH_API_URL, {
       method: "GET",
       cache: "no-store"
     });
@@ -4730,7 +4695,7 @@ async function loadSurfaceWipForFlowMap() {
 
 async function loadArWipForFlowMap() {
   try {
-    const res = await fetch(AR_DASH_API_URL, {
+    const res = await fbFetch(AR_DASH_API_URL, {
       method: "GET",
       cache: "no-store"
     });
@@ -5094,7 +5059,7 @@ async function v53LoadTrend(d){
   const key=week;
   try {
     if(!V53_WEEK_CACHE.has(key)){
-      V53_WEEK_CACHE.set(key,fetch(`${API_URL}?action=weekly&weekStart=${encodeURIComponent(key)}`)
+      V53_WEEK_CACHE.set(key,fbFetch(`${API_URL}?action=weekly&weekStart=${encodeURIComponent(key)}`)
         .then(r=>{if(!r.ok)throw new Error('Weekly API unavailable');return r.json();})
         .then(j=>{if(j.success===false)throw new Error(j.error||'Weekly API failed');return j.data||j;})
         .catch(e=>{V53_WEEK_CACHE.delete(key);throw e;}));
