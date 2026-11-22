@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zenni LMS | Returning</title>
+  <style>
+    * { box-sizing:border-box; }
+    html,body { margin:0;min-height:100%;background:#060e1b;color:#eef7ff;font:15px/1.5 system-ui,Arial,sans-serif; }
+    main { min-height:100dvh;display:grid;place-items:center;padding:24px; }
+    section { max-width:420px;width:100%;border:1px solid #29445b;border-radius:18px;background:#111e31;padding:26px;text-align:center; }
+    a { display:block;margin-top:20px;padding:13px;border-radius:9px;background:linear-gradient(90deg,#42c4d0,#8060ed);color:#fff;font-weight:700;text-decoration:none; }
+  </style>
+</head>
+<body><main><section>
+  <h1>Returning to Zenni LMS</h1>
+  <p id="status">Opening the dashboard in your original tab…</p>
+  <a href="./index.html" id="fallback">Open LMS Dashboard</a>
+</section></main>
+<script>
+(function () {
+  'use strict';
+  const payload = { product:'ZENNI_LMS_V6', type:'RETURN_TO_LMS' };
+  // This is a navigation hint, NOT a permission token. The server rechecks access.
+  if (window.opener && !window.opener.closed) {
+    try {
+      window.opener.postMessage(payload, window.location.origin);
+      document.getElementById('status').textContent = 'You can return to your LMS tab.';
+      window.close();
+    } catch (_) {
+      document.getElementById('status').textContent = 'Select Open LMS Dashboard below.';
+    }
+  } else {
+    // Mobile browsers sometimes open a new tab without preserving window.opener.
+    document.getElementById('status').textContent = 'Select Open LMS Dashboard below.';
+  }
+})();
+</script></body></html>
