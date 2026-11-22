@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zenni LMS — Google Sign-In</title><style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{margin:0;width:100%;min-height:100%;background:#050c18;color:#e9f3ff;font:14px system-ui,Arial,sans-serif}
+main{height:100dvh;display:flex;flex-direction:column}iframe{width:100%;flex:1;border:0;background:#050c18}
+#fallback{display:none;padding:12px 18px;text-align:center;background:#101d34;border-top:1px solid #263e5d}
+a{color:#6de7f2}#status{position:absolute;left:-9999px}
+</style></head><body><main>
+<iframe id="googleApp" title="Zenni Workspace Account Verification" allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin" src="https://script.google.com/a/macros/zennioptical.com/s/AKfycbzqOAt8pc3gHT3vcnk6G-P3HuxkTHiV4ZrB5u7Gmr9oLPoI-8S2aixMfBWEZa4fk00y/exec?page=authPopup"></iframe>
+<div id="fallback"><a href="./index.html" id="dashboardLink">Open LMS Dashboard</a></div>
+<p id="status" role="status" aria-live="polite">Verifying your Zenni Google account</p>
+</main><script>
+'use strict';
+const frame=document.getElementById('googleApp');
+const fallback=document.getElementById('fallback');
+const status=document.getElementById('status');
+const expectedOpenerOrigin=window.location.origin;
+let handled=false;
+window.addEventListener('message',(event)=>{
+ // Google may insert an additional HtmlService sandbox iframe, so source
+ // can be the iframe or its descendant. Never use this message as authorization.
+ // HTML Service may emit from script.googleusercontent.com or an opaque
+ // sandbox origin. Source matching is required; this is only a navigation hint,
+ // never an authorization token. The secure index must recheck the account.
+ if(event.origin!=='null'&&!/^https:\/\/(?:script\.google\.com|(?:[a-z0-9-]+\.)?script\.googleusercontent\.com)$/.test(event.origin))return;
+ const d=event.data;
+ if(!d||d.product!=='ZENNI_LMS_V6'||d.type!=='AUTH_RESULT')return;
+ if(d.status==='AUTHORIZED'&&!handled){
+  handled=true;status.textContent='Verified. Opening LMS dashboard.';
+  if(window.opener&&!window.opener.closed){
+   try{window.opener.postMessage({product:'ZENNI_LMS_V6',type:'AUTH_RESULT',status:'AUTHORIZED'},expectedOpenerOrigin);}catch(_){}
+   // Opened by login click: close this GitHub-owned window, not Google's iframe.
+   setTimeout(()=>{try{window.close();}catch(_){};fallback.style.display='block';},400);
+  }else{
+   // Mobile browsers can detach popup/open in same tab: navigate here instead.
+   window.location.replace('./index.html');
+  }
+ }else if(d.status==='DENIED'){
+  status.textContent='Access denied. Contact LMS ADMIN for registration.';
+ }
+});
+</script></body></html>

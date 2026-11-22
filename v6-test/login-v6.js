@@ -1,7 +1,7 @@
 /* Zenni V6 staging — Google login popup; no client-entered email or password. */
 'use strict';
-const QA_SIGNIN_URL = 'https://script.google.com/a/macros/zennioptical.com/s/AKfycbzqOAt8pc3gHT3vcnk6G-P3HuxkTHiV4ZrB5u7Gmr9oLPoI-8S2aixMfBWEZa4fk00y/exec?page=authPopup';
-const QA_ALLOWED_GOOGLE_ORIGINS = new Set(['https://script.google.com', 'https://script.googleusercontent.com']);
+const QA_SIGNIN_URL = './auth-bridge.html';
+const QA_ALLOWED_GOOGLE_ORIGINS = new Set([window.location.origin]);
 let qaPopup = null;
 const qaBtn = document.getElementById('loginBtn');
 const qaLabel = document.getElementById('loginBtnText');
