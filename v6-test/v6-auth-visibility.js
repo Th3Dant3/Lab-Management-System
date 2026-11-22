@@ -119,33 +119,76 @@ function qaApplyV6Visibility(){
 }
 
 
-// Admin-only, server-authenticated access request notifications.
-// Nothing here grants access or writes profile permissions.
+// Admin notifications: explicit APPROVE / DENY / REVIEW actions.
+// Every action is reauthorized by Apps Script; UI buttons are not authority.
 function qaV6MountAdminAlerts(){
  if(!window.google?.script?.run || !window.__ZENNI_V6_USER__?.canManageRequests)return;
  const host=document.createElement('div');host.id='qaV6Alerts';
- host.style.cssText='position:fixed;z-index:2000;right:14px;top:76px;font:13px system-ui;color:#eaf5ff;max-width:min(380px,calc(100vw - 28px));';
+ host.style.cssText='position:fixed;z-index:2000;right:14px;top:76px;font:13px system-ui;color:#eaf5ff;max-width:min(405px,calc(100vw - 28px));';
  const bell=document.createElement('button');bell.type='button';bell.textContent='🔔 Access requests';
  bell.style.cssText='cursor:pointer;border:1px solid #406b83;border-radius:12px;background:#0d2138;color:#fff;padding:11px 15px;font-weight:700;';
- const panel=document.createElement('div');panel.hidden=true;panel.style.cssText='max-height:60vh;overflow:auto;background:#0b182c;border:1px solid #38607e;border-radius:12px;margin-top:7px;padding:12px;box-shadow:0 18px 45px #0009;';
+ const panel=document.createElement('div');panel.hidden=true;panel.style.cssText='max-height:70vh;overflow:auto;background:#0b182c;border:1px solid #38607e;border-radius:12px;margin-top:7px;padding:12px;box-shadow:0 18px 45px #0009;';
+ const status=document.createElement('div');status.style.cssText='color:#a6dfef;font-size:12px;padding-top:7px;';status.setAttribute('role','status');
  bell.addEventListener('click',()=>{panel.hidden=!panel.hidden;});
  host.append(bell,panel);document.body.append(host);
+ const pageOptions=[
+ ['PAGE_FACILITY_WIP','Facility WIP'],['PAGE_INVESTIGATION_HOLD','Investigation Hold'],['PAGE_LENS_INTAKE','Lens Intake'],['PAGE_TRUE_CURVE','True Curve'],
+ ['PAGE_SURFACE_DASHBOARD','Surface Dashboard'],['PAGE_AR_DASHBOARD','AR Dashboard'],['PAGE_AR_RUN_TRACKER','AR Run Tracker'],['PAGE_PRODUCTION_FORECAST','Production Forecast'],
+ ['PAGE_FINISH_DASHBOARD','Finish Dashboard'],['PAGE_COATING_BREAKAGE','Coating Breakage'],['PAGE_POWER_ANALYSIS','Power Analysis'],
+ ['PAGE_INCOMING_JOBS','Incoming Jobs'],['PAGE_PICKING_DASHBOARD','Picking Dashboard'],['PAGE_PRODUCTIVITY_HUB','Productivity Hub'],
+ ['PAGE_BREAKAGE_QUALITY_HUB','Breakage / Quality Hub'],['PAGE_FACILITY_BREAKAGE','Facility Breakage'],['PAGE_PPC_DOCUMENT_CONTROL','PPC Document Control'],['PAGE_SYSTEM','System']
+ ];
+ function button(label,color,handler){
+  const b=document.createElement('button');b.type='button';b.textContent=label;
+  b.style.cssText='cursor:pointer;border:1px solid #3e6682;border-radius:7px;padding:7px 10px;background:'+color+';color:white;font-weight:600;';
+  b.onclick=handler;return b;
+ }
+ function invoke(name,args,buttons){
+  buttons.forEach(b=>b.disabled=true);status.textContent='Saving decision…';
+  google.script.run.withSuccessHandler(result=>{status.textContent=result.status+' · '+result.email;poll();})
+   .withFailureHandler(err=>{buttons.forEach(b=>b.disabled=false);status.textContent=err?.message||'Could not save request decision';console.error(err);})[name](...args);
+ }
  function render(data){
   const requests=Array.isArray(data?.requests)?data.requests:[];
   const count=Number(data?.count||0);
   bell.textContent='🔔 Access requests'+(count?' ('+count+')':'');
   panel.replaceChildren();
   const title=document.createElement('strong');title.textContent=count?'Pending registration / access requests':'No pending access requests';panel.append(title);
+  if(count){const hint=document.createElement('p');hint.textContent='Approval grants only the explicitly selected pages. No pages are preselected.';hint.style.cssText='font-size:11px;color:#aec8db;margin:8px 0;';panel.append(hint);}
   requests.forEach(r=>{
    const row=document.createElement('div');row.style.cssText='border-top:1px solid #29435e;margin-top:9px;padding-top:9px;';
    const who=document.createElement('div');who.style.fontWeight='700';who.textContent=r.email;
    const info=document.createElement('div');info.textContent=r.reason+' · '+r.at+' · Attempts '+r.attempts;
-   info.style.cssText='color:#9cb7cf;font-size:11px;margin:5px 0;';
-   const review=document.createElement('button');review.textContent='Mark reviewed';
-   review.style.cssText='background:#2c5d6c;color:#fff;border:0;border-radius:6px;padding:7px 10px;cursor:pointer';
-   review.onclick=()=>{review.disabled=true;google.script.run.withSuccessHandler(poll).withFailureHandler(err=>{review.disabled=false;console.error(err);}).qaV6ResolveRequest(r.id);};
-   row.append(who,info,review);panel.append(row);
+   info.style.cssText='color:#9cb7cf;font-size:11px;margin:5px 0 9px;';
+   const actions=document.createElement('div');actions.style.cssText='display:flex;flex-wrap:wrap;gap:6px;';
+   const deny=button('Deny','#663146',()=>{
+    if(confirm('Deny this access request for '+r.email+'? No permissions will be granted.'))invoke('qaV64DenyRequest',[r.id],[deny,review]);
+   });
+   const review=button('Mark reviewed','#2c5d6c',()=>invoke('qaV64ReviewRequest',[r.id],[deny,review]));
+   actions.append(deny,review);
+   row.append(who,info,actions);
+   if(window.__ZENNI_V6_USER__.canApproveRequests===true){
+    const approve=button('Approve / select pages','#246b51',()=>{details.hidden=!details.hidden;});actions.prepend(approve);
+    const details=document.createElement('div');details.hidden=true;
+    details.style.cssText='background:#0d2538;border:1px solid #345570;border-radius:8px;padding:10px;margin-top:9px;';
+    const label=document.createElement('div');label.textContent='Select pages for new EMPLOYEE account:';label.style.cssText='font-size:12px;font-weight:600;margin-bottom:8px;';details.append(label);
+    const checks=[];
+    pageOptions.forEach(([key,title])=>{
+     const line=document.createElement('label');line.style.cssText='display:flex;align-items:center;gap:8px;margin:5px 0;cursor:pointer;';
+     const input=document.createElement('input');input.type='checkbox';input.value=key;input.checked=false;
+     const text=document.createElement('span');text.textContent=title;line.append(input,text);details.append(line);checks.push(input);
+    });
+    const submit=button('Confirm approval','#246b51',()=>{
+     const selected=checks.filter(i=>i.checked).map(i=>i.value);
+     if(!selected.length){status.textContent='Select at least one page to approve.';return;}
+     if(!confirm('Register '+r.email+' as EMPLOYEE with exactly '+selected.length+' selected page(s)?'))return;
+     invoke('qaV64ApproveRequest',[r.id,selected],[submit,approve,deny,review]);
+    });
+    details.append(submit);row.append(details);
+   }
+   panel.append(row);
   });
+  panel.append(status);
  }
  function poll(){
   if(document.visibilityState==='hidden')return;
