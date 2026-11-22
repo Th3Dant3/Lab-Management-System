@@ -1,2 +1,5 @@
+/* V6 TEST ONLY: Github login launcher. Identity is verified by the iframe Apps Script server, not this page. */
 'use strict';
-document.getElementById('loginBtn')?.addEventListener('click',()=>{window.location.assign('https://script.google.com/a/macros/zennioptical.com/s/AKfycbzqOAt8pc3gHT3vcnk6G-P3HuxkTHiV4ZrB5u7Gmr9oLPoI-8S2aixMfBWEZa4fk00y/exec?page=lmsV6');});
+document.getElementById('loginBtn')?.addEventListener('click', () => {
+  window.location.assign('./index.html');
+});
