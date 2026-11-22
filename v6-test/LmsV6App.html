@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+  <script src="real-index-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LMS Operational Control Center</title>
+
+<script>
+console.time("INDEX_LOAD");
+window.addEventListener("load", () => { console.timeEnd("INDEX_LOAD"); });
+</script>
+
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700,800&f[]=space-grotesk@300,400,500,600,700&display=swap" rel="stylesheet">
+
+<link rel="preload" href="style-index.css?v=6-0" as="style">
+<link rel="stylesheet" href="style-index.css?v=6-0">
+<style id="v6-preflight">body{visibility:hidden}</style>
+</head>
+
+<body>
+<!-- ============================================================
+     LOADING SCREEN (unchanged)
+     ============================================================ -->
+<div id="lms-loader" class="lms-loader">
+  <canvas id="loaderCanvas" class="loader-canvas"></canvas>
+
+  <!-- vignette -->
+  <div class="loader-vignette"></div>
+
+  <!-- corner reticles -->
+  <div class="loader-reticle lr-tl"></div>
+  <div class="loader-reticle lr-tr"></div>
+  <div class="loader-reticle lr-bl"></div>
+  <div class="loader-reticle lr-br"></div>
+
+  <!-- orbital rings -->
+  <div class="loader-rings">
+    <svg class="lring lring-outer" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="260" cy="260" r="240" stroke="url(#lgold)" stroke-width="1" stroke-dasharray="130 50 200 70" stroke-linecap="round"/>
+      <defs>
+        <linearGradient id="lgold" x1="0" y1="0" x2="520" y2="0">
+          <stop offset="0%" stop-color="rgba(240,180,41,0)"/>
+          <stop offset="40%" stop-color="rgba(240,180,41,0.85)"/>
+          <stop offset="70%" stop-color="rgba(232,147,26,0.5)"/>
+          <stop offset="100%" stop-color="rgba(240,180,41,0)"/>
+        </linearGradient>
+      </defs>
+    </svg>
+    <svg class="lring lring-inner" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="260" cy="260" r="220" stroke="url(#lcyan)" stroke-width="0.8" stroke-dasharray="90 70 150 100" stroke-linecap="round"/>
+      <defs>
+        <linearGradient id="lcyan" x1="0" y1="520" x2="520" y2="0">
+          <stop offset="0%" stop-color="rgba(79,195,247,0)"/>
+          <stop offset="40%" stop-color="rgba(79,195,247,0.75)"/>
+          <stop offset="70%" stop-color="rgba(66,197,183,0.45)"/>
+          <stop offset="100%" stop-color="rgba(79,195,247,0)"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  </div>
+
+  <!-- center content -->
+  <div class="loader-inner">
+    <div class="loader-logo">
+      <div class="loader-bar"></div>
+      <div class="loader-bar"></div>
+      <div class="loader-bar"></div>
+    </div>
+    <div class="loader-brand">Zenni USA</div>
+    <div class="loader-sub">Dashboard</div>
+
+    <div class="loader-track">
+      <div class="loader-fill-gold" id="loaderFillGold"></div>
+      <div class="loader-fill-cyan" id="loaderFillCyan"></div>
+      <div class="loader-fill-dot" id="loaderFillDot"></div>
+    </div>
+
+    <div class="loader-status" id="loaderStatus">Initializing…</div>
+    <div class="loader-pct" id="loaderPct">0%</div>
+  </div>
+
+  <!-- dept tags -->
+  <div class="loader-dept-tags">
+    <div class="ldt" id="ltag-ar">AR</div>
+    <div class="ldt" id="ltag-finish">Finish</div>
+    <div class="ldt" id="ltag-surface">Surface</div>
+    <div class="ldt" id="ltag-inventory">Inventory</div>
+    <div class="ldt" id="ltag-lms">LMS Core</div>
+  </div>
+</div>
+
+<!-- Custom cursor (unchanged) -->
+<div id="lms-cursor" class="lms-cursor">
+  <div class="cursor-ring"></div>
+  <div class="cursor-dot"></div>
+</div>
+
+<!-- ============================================================
+     COMMAND BAR (unchanged)
+     ============================================================ -->
+<div class="command-bar">
+
+  <div class="cb-brand">
+    <canvas id="cb-brand-canvas" class="cb-brand-canvas" width="220" height="80"></canvas>
+    <div class="cb-brand-text-over">
+      <div class="cb-name">Zenni USA</div>
+      <div class="cb-sub">Dashboard</div>
+    </div>
+  </div>
+
+  <div class="cb-metrics">
+
+    <div class="cb-metric cb-metric--hi">
+      <div class="cb-m-label">Total Incoming</div>
+      <div class="cb-m-val cb-m-val--gold" id="totalIncoming">—</div>
+      <canvas class="cb-sparkline" id="spark-incoming" height="28"></canvas>
+    </div>
+
+    <div class="cb-metric">
+      <div class="cb-m-label">Scanner Health</div>
+      <div class="cb-m-val cb-m-val--green" id="scannerHealth">—</div>
+      <div class="cb-m-sub" id="scannerSub">All ports</div>
+      <canvas class="cb-sparkline" id="spark-scanner" height="28"></canvas>
+    </div>
+
+  </div>
+
+  <div class="cb-right">
+    <div class="live-tag">
+      <span class="live-dot"></span>
+      Live
+    </div>
+    <div class="cb-datetime">
+      <div class="cb-date" id="topbarDate">—</div>
+      <div class="cb-time" id="topbarTime">—</div>
+    </div>
+    <div class="user-chip">
+      <div class="user-avatar" id="userAvatar">—</div>
+      <div class="user-info">
+        <span class="user-name" id="userName">Loading…</span>
+        <span class="user-role">Operator</span>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="logout()" title="Logout">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION NAV (unchanged)
+     ============================================================ -->
+<div class="section-nav">
+  <div class="nav-group-label">Facility</div>
+  <button class="nav-item nav-item--facility active" data-tab="facility">
+    <div class="facility-nav-icon" aria-hidden="true">◎</div>
+    <div class="facility-nav-copy">
+      <strong>Facility WIP</strong>
+      <span>Live Command Center</span>
+    </div>
+  </button>
+
+  <div class="nav-group-label">Operations</div>
+  <button class="nav-item nav-item--anim" data-tab="operations">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-ops" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+        </svg>
+        <span>LMS Command</span>
+      </div>
+    </div>
+  </button>
+  <button class="nav-item nav-item--anim" data-tab="production">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-prod" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M2 20h20M6 20V10l6-6 6 6v10"/><path d="M10 20v-6h4v6"/>
+        </svg>
+        <span>Production</span>
+      </div>
+    </div>
+  </button>
+  <button class="nav-item nav-item--anim" data-tab="inventory">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-inv" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M5 8h14M5 8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2M5 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/>
+        </svg>
+        <span>Picking</span>
+      </div>
+    </div>
+  </button>
+
+  <div class="nav-group-label">Performance</div>
+  <button class="nav-item nav-item--anim" data-tab="productivity">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-productivity" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M4 19h16"/>
+          <path d="M7 16V9"/>
+          <path d="M12 16V5"/>
+          <path d="M17 16v-3"/>
+        </svg>
+        <span>Productivity</span>
+      </div>
+    </div>
+  </button>
+  <button class="nav-item nav-item--anim" data-tab="training">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-training" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span>Training / Quality</span>
+      </div>
+    </div>
+  </button>
+
+  <div class="nav-group-label">System</div>
+  <button class="nav-item nav-item--anim" data-tab="system">
+    <div class="nav-canvas-wrap">
+      <canvas class="nav-canvas" id="nav-canvas-sys" width="160" height="72"></canvas>
+      <div class="nav-label-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="nav-icon">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M4.93 4.93a10 10 0 0 1 14.14 14.14"/>
+        </svg>
+        <span>System</span>
+      </div>
+    </div>
+  </button>
+</div>
+
+<!-- ============================================================
+     MAIN CONTENT
+     ============================================================ -->
+<main class="main">
+
+  <!-- FACILITY WIP HOME -->
+  <section id="facility" class="tab-content active facility-home">
+<div class="facility-home__frame-shell">
+      <iframe
+        id="facilityWipFrame"
+        class="facility-home__frame"
+        data-data-src="./FacilityWIP.html?embedded=1"
+        title="Facility WIP Command Center"
+        loading="eager"
+      ></iframe>
+    </div>
+  </section>
+
+  <!-- OPERATIONS TAB -->
+  <section id="operations" class="tab-content">
+    <div class="module-head">
+      <div class="module-label">LMS Command Center</div>
+    </div>
+    <div class="cards-grid">
+
+      <div id="investigation-card" class="card card--featured" data-gated>
+        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#64a0dc"></canvas>
+        <div class="card-accent"></div>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Investigation Hold Management</h3>
+              <span class="badge badge--lms-live">LMS Live</span>
+            </div>
+            <p class="card-desc">Active hold tracking and investigation workflow monitor</p>
+          </div>
+          <div class="card-metrics">
+            <div class="metric">
+              <span class="metric-val" id="activeHolds">—</span>
+              <span class="metric-lbl">Active</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric">
+              <span class="metric-val" id="completed">—</span>
+              <span class="metric-lbl">Completed</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric">
+              <span class="metric-val" id="coverageDetail">—</span>
+              <span class="metric-lbl">Coverage</span>
+            </div>
+          </div>
+          <button class="card-btn" onclick="openPage('page3.html')">
+            Open Tracker
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="tools-card" class="card" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Lens Intake &amp; Upload</h3>
+              <span class="badge badge--lms">LMS</span>
+            </div>
+            <p class="card-desc">IN8 · IN9 format processing and upload queue management</p>
+          </div>
+          <button class="card-btn" onclick="openPage('in8-in9.html')">
+            Open Tool
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="truecurve-card" class="card" data-gated>
+        <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#f5c842"></canvas>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">True Curve &amp; Power Analysis</h3>
+              <span class="badge badge--engineering">LMS Engineering</span>
+            </div>
+            <p class="card-desc">Exceptions and power validation trend monitoring</p>
+          </div>
+          <div class="card-tags">
+            <span class="tag">Exceptions</span>
+            <span class="tag">Power Validation</span>
+            <span class="tag">Trends</span>
+          </div>
+          <button class="card-btn" onclick="openPage('true-curve.html')">
+            View Analysis
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PRODUCTION TAB -->
+<section id="production" class="tab-content">
+  <div class="module-head">
+    <div class="module-label">Production Modules</div>
+  </div>
+
+  <div class="cards-grid">
+
+    <!-- ── Surface Flow / WIP Dashboard ── -->
+    <div id="surfaceflow-card" class="card card--featured" data-gated>
+      <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#22d3ee"></canvas>
+      <div class="card-accent card-accent--cyan"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Surface Dashboard</h3>
+            <span class="badge badge--lms-live">Production Live</span>
+          </div>
+
+          <p class="card-desc">
+            Live Surface WIP flow, bottleneck visibility, transfer movement.
+          </p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">Surface WIP</span>
+          <span class="tag">Transfer Flow</span>
+          <span class="tag">BOS / EOS</span>
+          <span class="tag">Bottleneck</span>
+        </div>
+
+        <button class="card-btn" onclick="openPage('SurfaceWIP.html')">
+          Open Surface Flow
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── AR Dashboard ── -->
+<div id="ar-card" class="card card--ar" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#ff9900"></canvas>
+  <div class="card-accent card-accent--ar"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">AR Dashboard</h3>
+        <span class="badge badge--ar">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        Live AR Work in Progress & Output of the day.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">AR-IN</span>
+      <span class="tag">Basket</span>
+      <span class="tag">Oven</span>
+      <span class="tag">Sectoring</span>
+      <span class="tag">AR-OUT</span>
+    </div>
+
+    <button class="card-btn card-btn--ar" onclick="openPage('ARDash.html')">
+      Open AR Dashboard
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+
+<!-- ── AR Run Tracker ── -->
+<div id="arruntracker-card" class="card card--arruntracker" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#f97316"></canvas>
+  <div class="card-accent card-accent--arruntracker"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">AR Run Tracker</h3>
+        <span class="badge badge--arruntracker">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        AR run planning, BOS/EOS WIP input, hourly Combine AR tracking, maintenance delay notes, and run build projection.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">BOS / EOS</span>
+      <span class="tag">Combine AR</span>
+      <span class="tag">Hourly Runs</span>
+      <span class="tag">Maintenance</span>
+      <span class="tag">Projection</span>
+    </div>
+
+    <button class="card-btn card-btn--arruntracker" onclick="openPage('ARRunTracker.html')">
+      Open AR Run Tracker
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+
+<!-- ── Production Forecast ── -->
+<div id="productionforecast-card" class="card card--featured" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#22d3ee"></canvas>
+  <div class="card-accent card-accent--cyan"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">Production Forecast</h3>
+        <span class="badge badge--lms-live">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        Surface, AR, and Finish goal forecasting with live WIP, staffing, machine capacity, hourly pace, and downtime impact.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">Surface Forecast</span>
+      <span class="tag">AR Forecast</span>
+      <span class="tag">Finish Forecast</span>
+      <span class="tag">Goal Readiness</span>
+    </div>
+
+    <button class="card-btn" onclick="openPage('ProductionForecast.html')">
+      Open Production Forecast
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ── Finish Dashboard ── -->
+<div id="finishdash-card" class="card card--featured" data-gated>
+  <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#00d9ff"></canvas>
+  <div class="card-accent card-accent--cyan"></div>
+
+  <div class="card-inner">
+    <div class="card-top">
+      <div class="card-title-row">
+        <h3 class="card-title">Finish Dashboard</h3>
+        <span class="badge badge--lms-live">Production Live</span>
+      </div>
+
+      <p class="card-desc">
+        Live Finish WIP flow, MEI output, Mounting, Drill, Final Inspection, and hourly station health.
+      </p>
+    </div>
+
+    <div class="card-tags">
+      <span class="tag">Finish Unbox</span>
+      <span class="tag">MEI Line B/C</span>
+      <span class="tag">Mounting</span>
+      <span class="tag">Final Inspection</span>
+    </div>
+
+    <button class="card-btn" onclick="openPage('FinishDash.html')">
+      Open Finish Dashboard
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+    <!-- ── Coating Breakage Analytics ── -->
+    <div id="coating-card" class="card" data-gated>
+      <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#64a0dc"></canvas>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Coating Breakage Analytics</h3>
+            <span class="badge badge--lms">Production</span>
+          </div>
+
+          <p class="card-desc">Breakage trends and root cause analysis by line</p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">54R</span>
+          <span class="tag">44R</span>
+          <span class="tag">Trends</span>
+        </div>
+
+        <button class="card-btn" onclick="openPage('coating.html')">
+          Open Dashboard
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Power Analysis Tool ── -->
+    <div id="power-card" class="card card--power" data-gated>
+      <canvas class="card-bg-canvas" data-anim="pulse-dots" data-color="#9b6bff"></canvas>
+      <div class="card-accent card-accent--violet"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Power Analysis Tool</h3>
+            <span class="badge badge--violet">Production</span>
+          </div>
+
+          <p class="card-desc">Power metrics, performance monitoring, and production analysis</p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">Blocking</span>
+          <span class="tag">Generator</span>
+          <span class="tag">Trends</span>
+        </div>
+
+        <button class="card-btn card-btn--violet" onclick="openPage('power.html')">
+          Open Tool
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+  <!-- PRODUCTIVITY TAB -->
+  <section id="productivity" class="tab-content">
+    <div class="module-head">
+      <div class="module-label">Productivity Command Center</div>
+    </div>
+
+    <div class="cards-grid">
+
+      <div id="productivity-card" class="card card--productivity card--featured" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#22d3ee"></canvas>
+        <div class="card-accent card-accent--productivity"></div>
+
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Productivity Hub</h3>
+              <span class="badge badge--productivity">Productivity Live</span>
+            </div>
+
+            <p class="card-desc">
+              Associate scorecards, time adjustments, supervisor confirmation, and productivity lock control.
+            </p>
+          </div>
+
+          <div class="card-tags">
+            <span class="tag">Associate Scorecards</span>
+            <span class="tag">Edit Time</span>
+            <span class="tag">Confirm Day</span>
+            <span class="tag">Locks</span>
+          </div>
+
+          <button class="card-btn card-btn--productivity" onclick="openPage('ProductivityDashboard.html')">
+            Open Productivity Hub
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="breakage-quality-card" class="card card--quality card--breakage-quality" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#fb7185"></canvas>
+        <div class="card-accent card-accent--quality"></div>
+
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Breakage / Quality Hub</h3>
+              <span class="badge badge--quality">Quality Live</span>
+            </div>
+
+            <p class="card-desc">
+              Separate breakage command center for associate lens/frame breakage, reason, access point, and weekly quality view.
+            </p>
+          </div>
+
+          <div class="card-tags">
+            <span class="tag">Lens Breakage</span>
+            <span class="tag">Frame Breakage</span>
+            <span class="tag">Reason</span>
+            <span class="tag">Access Point</span>
+            <span class="tag">Associate Count</span>
+          </div>
+
+          <button class="card-btn card-btn--quality" onclick="openPage('BreakageDashboard.html')">
+            Open Breakage Hub
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+
+    </div>
+  </section>
+
+  <!-- SYSTEM TAB -->
+  <section id="system" class="tab-content">
+    <div class="module-head">
+      <div class="module-label">System Modules</div>
+    </div>
+    <div class="cards-grid">
+
+      <div id="scanner-card" class="card card--featured" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#30e8c0"></canvas>
+        <div class="card-accent card-accent--cyan"></div>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Scanner Network Monitor</h3>
+              <span class="badge badge--lms-live">LMS/IT Live</span>
+            </div>
+            <p class="card-desc">Real-time scanner activity across all ports</p>
+          </div>
+          <div class="card-tags">
+            <span class="tag">Finish</span>
+            <span class="tag">Surface</span>
+            <span class="tag">AR</span>
+          </div>
+          <div id="scannerDetail" class="scanner-alert"></div>
+          <button class="card-btn" onclick="openPage('scanner-map.html')">
+            Open Scanner Map
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PICKING TAB -->
+  <section id="inventory" class="tab-content">
+    <div class="module-head">
+      <div class="module-label">Picking</div>
+    </div>
+    <div class="cards-grid">
+
+      <div id="incoming-card" class="card card--inventory" data-gated>
+        <canvas class="card-bg-canvas" data-anim="inventory-flow" data-color="#3fd189"></canvas>
+        <div class="card-accent card-accent--green"></div>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Incoming Jobs Dashboard</h3>
+              <span class="badge badge--inventory">Picking</span>
+            </div>
+            <p class="card-desc">Live queue volume and hourly flow metrics</p>
+          </div>
+          <div class="card-tags">
+            <span class="tag">Finish</span>
+            <span class="tag">Specialty</span>
+            <span class="tag">Surface</span>
+            <span class="tag">Frame</span>
+          </div>
+          <button class="card-btn card-btn--green" onclick="openPage('incoming.html')">
+            Open Dashboard
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── NEW: Picking WIP Command Center ── -->
+      <div id="pickwip-card" class="card card--inventory" data-gated>
+        <canvas class="card-bg-canvas" data-anim="flow-lines" data-color="#19c8ff"></canvas>
+        <div class="card-accent card-accent--green"></div>
+        <div class="card-inner">
+          <div class="card-top">
+            <div class="card-title-row">
+              <h3 class="card-title">Picking Dashboard</h3>
+              <span class="badge badge--inventory">Picking</span>
+            </div>
+            <p class="card-desc">Live WIP tracking for SF, FSV &amp; Breakage.</p>
+          </div>
+          <div class="card-tags">
+            <span class="tag">SF Scan &amp; Verify</span>
+            <span class="tag">FSV</span>
+            <span class="tag">Breakage</span>
+            <span class="tag">Queues</span>
+            <span class="tag">Reports</span>
+          </div>
+          <button class="card-btn card-btn--green" onclick="openPage('PickWip.html')">
+            Open Dashboard
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+ 
+<!-- TRAINING / QUALITY TAB -->
+<section id="training" class="tab-content">
+  <div class="module-head">
+    <div class="module-label">Training &amp; Quality</div>
+  </div>
+
+  <div class="cards-grid">
+
+    <!-- FACILITY BREAKAGE -->
+    <div id="facility-breakage-card"
+         class="card card--training"
+         data-gated>
+
+      <canvas class="card-bg-canvas"
+              data-anim="flow-lines"
+              data-color="#f59e0b"></canvas>
+
+      <div class="card-accent card-accent--amber"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">Facility Breakage</h3>
+            <span class="badge badge--training">
+              Training / Quality
+            </span>
+          </div>
+          <p class="card-desc">
+            Facility wide breakage tracking, trend analysis,
+            and quality reporting
+          </p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">Finish</span>
+          <span class="tag">Surface</span>
+          <span class="tag">AR</span>
+          <span class="tag">Inventory</span>
+          <span class="tag">Trends</span>
+        </div>
+
+        <button class="card-btn card-btn--amber"
+                type="button"
+                onclick="openPage('FacilityBreakage.html')">
+          Open Dashboard
+          <svg width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor"
+               stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- PPC DOCUMENT CONTROL — GITHUB NAVIGATION -->
+    <div id="ppc-document-control-card"
+         class="card card--training"
+         data-gated
+         data-lms-feature="PPC_Document_Control_ViewHub"
+         style="display:none">
+
+      <canvas class="card-bg-canvas"
+              data-anim="flow-lines"
+              data-color="#36e0e8"></canvas>
+
+      <div class="card-accent card-accent--amber"></div>
+
+      <div class="card-inner">
+        <div class="card-top">
+          <div class="card-title-row">
+            <h3 class="card-title">PPC Document Control</h3>
+            <span class="badge badge--training">
+              Training / Quality
+            </span>
+          </div>
+          <p class="card-desc">
+            Process change requests, PPC testing, signatures,
+            publication and document deadlines.
+          </p>
+        </div>
+
+        <div class="card-tags">
+          <span class="tag">PPC Requests</span>
+          <span class="tag">Tests</span>
+          <span class="tag">Approvals</span>
+          <span class="tag">Documents</span>
+        </div>
+
+        <!-- Direct link to GitHub PPC page -->
+        <a href="./PPC.html"
+           class="card-btn card-btn--amber"
+           style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;">
+          Open PPC Hub
+
+          <svg width="14" height="14"
+               viewBox="0 0 24 24"
+               fill="none"
+               stroke="currentColor"
+               stroke-width="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </a>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+</main>
+
+<!-- Dashboard behavior -->
+<script defer src="v6-auth-visibility.js?v=6-0"></script>
+<script defer src="index.js?v=6-0"></script>
+
+
+
+</body>
+</html>

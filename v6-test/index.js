@@ -1,0 +1,1582 @@
+/* =====================================================
+   INDEX DASHBOARD — Command Center Redesign
+===================================================== */
+
+const API_URL =
+  "https://script.google.com/a/macros/zennioptical.com/s/AKfycbzbQBjzoEEBpvukFkR-XMw8kG_gzCIuxZrTLodZZ_EnwqYAujOBqSzYslx-x9XTw7_UUA/exec";
+
+/*
+  Production Flow is intentionally not fetched directly from this browser page.
+
+  Reason:
+  The Production Flow deployment works from Apps Script server-to-server calls,
+  but the browser receives HTTP 404 because that deployment is not publicly
+  callable from the GitHub-hosted dashboard.
+
+  Facility WIP remains available inside FacilityWIP.html. The top KPI uses:
+  1) facilityWip returned by the main dashboard API, when available;
+  2) the last known good browser value;
+  3) an em dash when neither exists.
+
+  This prevents a broken optional API from delaying the entire dashboard.
+*/
+const FACILITY_WIP_STORAGE_KEY = "lms_last_good_facility_wip";
+
+const AUTH_API =
+  "https://script.google.com/macros/s/AKfycbzESjnpNzOyDP76Gm6atwBgh5txV5N2AI225kxz5Q8w7jXgVTIqZrDtIIpQigEE6250/exec";
+  
+
+const SCANNER_STORAGE_KEY = "lms_scanner_attention";
+
+/* Custom cursor animation removed in Command Center V2 for lower idle CPU usage. */
+
+/* =====================================================
+   LOADING SCREEN
+===================================================== */
+(function initLoader() {
+  const loader  = document.getElementById("lms-loader");
+  const status  = document.getElementById("loaderStatus");
+  const canvas  = document.getElementById("loaderCanvas");
+  const cursor  = document.getElementById("lms-cursor");
+  const goldEl  = document.getElementById("loaderFillGold");
+  const cyanEl  = document.getElementById("loaderFillCyan");
+  const dotEl   = document.getElementById("loaderFillDot");
+  const pctEl   = document.getElementById("loaderPct");
+  if (!loader) return;
+
+  document.body.classList.add("lms-loading");
+
+  /* ── Constellation particle canvas ── */
+  const ctx = canvas.getContext("2d");
+  function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
+
+  const COLORS = [
+    { r:240, g:180, b:41  },  // gold
+    { r:79,  g:195, b:247 },  // cyan
+    { r:232, g:147, b:26  },  // amber
+    { r:200, g:220, b:255 },  // white
+  ];
+  const COUNT = Math.min(Math.floor(window.innerWidth * window.innerHeight / 7000), 130);
+  const particles = Array.from({ length: COUNT }, () => {
+    const c = COLORS[Math.floor(Math.random() * COLORS.length)];
+    return {
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - 0.5) * 0.38,
+      vy: (Math.random() - 0.5) * 0.38,
+      r:  0.7 + Math.random() * 2.2,
+      alpha: 0.15 + Math.random() * 0.5,
+      glow: Math.random() > 0.78,
+      c,
+    };
+  });
+
+  let loaderRaf;
+  function drawParticles() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    /* connection lines */
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < 135) {
+          const a = (1 - d / 135) * 0.16;
+          const c = particles[i].c;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${a})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    /* dots */
+    for (const p of particles) {
+      if (p.glow) {
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 5);
+        g.addColorStop(0, `rgba(${p.c.r},${p.c.g},${p.c.b},${p.alpha * 0.9})`);
+        g.addColorStop(1, `rgba(${p.c.r},${p.c.g},${p.c.b},0)`);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 5, 0, Math.PI * 2);
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${p.c.r},${p.c.g},${p.c.b},${p.alpha})`;
+      ctx.fill();
+
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < -10) p.x = W + 10;
+      if (p.x > W+10) p.x = -10;
+      if (p.y < -10) p.y = H + 10;
+      if (p.y > H+10) p.y = -10;
+    }
+    loaderRaf = requestAnimationFrame(drawParticles);
+  }
+  drawParticles();
+
+  /* ── Dual-tone progress helper ── */
+  function setProgress(pct) {
+    const half = 50;
+    if (pct <= half) {
+      if (goldEl) goldEl.style.width = (pct * 2) + "%";
+      if (cyanEl) { cyanEl.style.left = (pct * 2) + "%"; cyanEl.style.width = "0%"; }
+      if (dotEl)  dotEl.style.left = (pct * 2) + "%";
+    } else {
+      if (goldEl) goldEl.style.width = "100%";
+      const cw = ((pct - half) / half) * 100;
+      if (cyanEl) { cyanEl.style.left = "50%"; cyanEl.style.width = cw + "%"; }
+      if (dotEl)  dotEl.style.left = (50 + cw / 2) + "%";
+    }
+    if (pctEl) pctEl.textContent = Math.round(pct) + "%";
+  }
+
+  function activateTag(id) {
+    const el = document.getElementById("ltag-" + id);
+    if (el) el.classList.add("active");
+  }
+
+  /* ── Steps ── */
+  const steps = [
+    { pct: 12, msg: "Establishing secure connection…", tag: null      },
+    { pct: 28, msg: "Authenticating session…",         tag: null      },
+    { pct: 42, msg: "Loading AR department…",          tag: "ar"      },
+    { pct: 55, msg: "Syncing Finish operations…",      tag: "finish"  },
+    { pct: 67, msg: "Loading Surface workflow…",       tag: "surface" },
+    { pct: 78, msg: "Indexing inventory records…",     tag: "inventory"},
+    { pct: 88, msg: "Booting LMS core systems…",       tag: "lms"     },
+    { pct: 95, msg: "Applying permissions…",           tag: null      },
+  ];
+  let stepIdx = 0;
+
+  const stepTimer = setInterval(() => {
+    if (stepIdx < steps.length) {
+      const s = steps[stepIdx++];
+      setProgress(s.pct);
+      if (status) status.textContent = s.msg;
+      if (s.tag)  activateTag(s.tag);
+    }
+  }, 460);
+
+  /* ── Called by renderDashboard when real data is ready ── */
+  window.dismissLoader = function () {
+    clearInterval(stepTimer);
+    setProgress(100);
+    if (status) status.textContent = "Ready";
+    setTimeout(() => {
+      cancelAnimationFrame(loaderRaf);
+      loader.classList.add("fade-out");
+      document.body.classList.remove("lms-loading");
+      if (cursor) cursor.classList.add("hidden");
+      if (window._stopCursorAnim) window._stopCursorAnim();
+    }, 450);
+  };
+})();
+
+/* =====================================================
+   NAV CANVAS ANIMATIONS
+===================================================== */
+function initNavAnimations() {
+  animOps(document.getElementById("nav-canvas-ops"));
+  animProd(document.getElementById("nav-canvas-prod"));
+  animSys(document.getElementById("nav-canvas-sys"));
+  animInv(document.getElementById("nav-canvas-inv"));
+  animProductivity(document.getElementById("nav-canvas-productivity"));
+  animTraining(document.getElementById("nav-canvas-training"));
+}
+
+
+/* Productivity nav — rising scorecard bars and confirmation pulse */
+function animProductivity(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const CYAN = "#22d3ee";
+  const GREEN = "#3fd189";
+
+  const bars = [
+    { x: 24, h: 22, target: 36, speed: 0.020, phase: 0.0 },
+    { x: 52, h: 34, target: 48, speed: 0.017, phase: 0.8 },
+    { x: 80, h: 28, target: 42, speed: 0.019, phase: 1.5 },
+    { x: 108, h: 44, target: 55, speed: 0.015, phase: 2.2 },
+  ];
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // faint baseline
+    ctx.strokeStyle = "rgba(34,211,238,0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(14, H - 10);
+    ctx.lineTo(W - 14, H - 10);
+    ctx.stroke();
+
+    bars.forEach((b, i) => {
+      b.phase += 0.025;
+      const dynamicTarget = b.target + Math.sin(b.phase) * 8;
+      b.h += (dynamicTarget - b.h) * b.speed;
+
+      const y = H - 10 - b.h;
+      const alpha = 0.35 + (b.h / 60) * 0.45;
+
+      ctx.fillStyle = `rgba(34,211,238,${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(b.x, y, 14, b.h, 4);
+      ctx.fill();
+
+      // cap glow
+      ctx.fillStyle = i === 3 ? GREEN : CYAN;
+      ctx.globalAlpha = 0.88;
+      ctx.beginPath();
+      ctx.roundRect(b.x, y, 14, 3, 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    // confirmation pulse dot
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 320);
+    ctx.beginPath();
+    ctx.arc(W - 24, 16, 4 + pulse * 2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(63,209,137,${0.35 + pulse * 0.45})`;
+    ctx.fill();
+
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+}
+
+
+/* Training/Quality nav — checklist rows filling in like quality checks passing */
+function animTraining(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const TEAL = "#2dd4bf";
+
+  const rows = Array.from({ length: 5 }, (_, i) => ({
+    y:       8 + i * 12,
+    fill:    Math.random(),
+    target:  0.6 + Math.random() * 0.4,
+    speed:   0.008 + Math.random() * 0.006,
+    checked: Math.random() > 0.3,
+    phase:   Math.random() * Math.PI * 2,
+  }));
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    rows.forEach(r => {
+      r.fill  += (r.target - r.fill) * r.speed;
+      r.phase += 0.025;
+      if (Math.abs(r.fill - r.target) < 0.01) {
+        r.target  = 0.4 + Math.random() * 0.6;
+        r.checked = Math.random() > 0.25;
+      }
+
+      const barW  = (W - 22) * r.fill;
+      const alpha = 0.25 + r.fill * 0.45;
+      const pulse = 0.5 + 0.5 * Math.sin(r.phase);
+
+      // track
+      ctx.fillStyle = `rgba(45,212,191,0.07)`;
+      ctx.beginPath();
+      ctx.roundRect(18, r.y, W - 22, 7, 3);
+      ctx.fill();
+
+      // filled bar
+      ctx.fillStyle = `rgba(45,212,191,${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(18, r.y, barW, 7, 3);
+      ctx.fill();
+
+      // check dot on left
+      ctx.beginPath();
+      ctx.arc(9, r.y + 3.5, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = r.checked
+        ? `rgba(45,212,191,${0.6 + pulse * 0.4})`
+        : `rgba(45,212,191,0.12)`;
+      ctx.fill();
+
+      // checkmark inside dot
+      if (r.checked) {
+        ctx.strokeStyle = `rgba(5,20,20,0.9)`;
+        ctx.lineWidth   = 1.2;
+        ctx.lineCap     = "round";
+        ctx.beginPath();
+        ctx.moveTo(6.5, r.y + 3.5);
+        ctx.lineTo(8.5, r.y + 5.5);
+        ctx.lineTo(12,  r.y + 1.5);
+        ctx.stroke();
+      }
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* Inventory nav — stacked bar chart filling up like stock levels */
+function animInv(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const GREEN = "#3fd189";
+  const cols = 8;
+  const bars = Array.from({ length: cols }, (_, i) => ({
+    x: 6 + i * ((W - 12) / cols),
+    fill: 0.3 + Math.random() * 0.7,
+    target: 0.3 + Math.random() * 0.7,
+    speed: 0.008 + Math.random() * 0.006,
+  }));
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const bw = ((W - 12) / cols) - 4;
+
+    bars.forEach(b => {
+      /* drift toward new target */
+      b.fill += (b.target - b.fill) * b.speed;
+      if (Math.abs(b.fill - b.target) < 0.01) {
+        b.target = 0.2 + Math.random() * 0.75;
+      }
+
+      const bh = b.fill * (H - 8);
+      const alpha = 0.35 + b.fill * 0.55;
+
+      /* empty track */
+      ctx.fillStyle = `rgba(63,209,137,0.08)`;
+      ctx.beginPath();
+      ctx.roundRect(b.x, 4, bw, H - 8, 2);
+      ctx.fill();
+
+      /* filled portion */
+      ctx.fillStyle = `rgba(63,209,137,${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(b.x, H - 4 - bh, bw, bh, 2);
+      ctx.fill();
+
+      /* top cap glow */
+      ctx.fillStyle = GREEN;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.roundRect(b.x, H - 4 - bh, bw, 2, 1);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* Operations — LMS scanning beam animation */
+function animOps(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const GOLD = "#f5c842";
+
+  /* Horizontal scan lines */
+  const scanLines = Array.from({ length: 5 }, (_, i) => ({
+    y:     (i / 4) * H,
+    speed: 0.6 + i * 0.25,
+    x:     Math.random() * W,
+    len:   20 + Math.random() * 40,
+    alpha: 0.3 + Math.random() * 0.4,
+  }));
+
+  /* Small blip dots */
+  const blips = Array.from({ length: 8 }, () => ({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.04 + Math.random() * 0.03,
+  }));
+
+  /* Vertical sweep beam */
+  let beamX = 0;
+  const beamSpeed = 0.8;
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    /* Sweep beam */
+    beamX = (beamX + beamSpeed) % W;
+    ctx.fillStyle = `rgba(245,200,66,0.06)`;
+    ctx.fillRect(beamX - 12, 0, 24, H);
+    ctx.fillStyle = `rgba(245,200,66,0.25)`;
+    ctx.fillRect(beamX - 1, 0, 2, H);
+
+    /* Horizontal scan lines scrolling right */
+    scanLines.forEach(l => {
+      l.x = (l.x + l.speed) % (W + l.len);
+      ctx.beginPath();
+      ctx.moveTo(l.x - l.len, l.y);
+      ctx.lineTo(l.x, l.y);
+      ctx.strokeStyle = GOLD;
+      ctx.globalAlpha = l.alpha;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+
+    /* Blips */
+    blips.forEach(b => {
+      b.phase += b.speed;
+      const a = 0.2 + 0.8 * Math.abs(Math.sin(b.phase));
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = GOLD;
+      ctx.globalAlpha = a;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* Production — orbiting rings */
+function animProd(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+  const rings = [
+    { r: 26, speed: 0.014,  dots: 5, color: "#9b6bff", size: 3 },
+    { r: 16, speed: -0.022, dots: 3, color: "#c084fc", size: 2 },
+    { r:  8, speed: 0.038,  dots: 2, color: "#7a4fd4", size: 1.5 },
+  ];
+  let t = 0;
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    t++;
+    rings.forEach(ring => {
+      ctx.strokeStyle = ring.color + "22";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let i = 0; i < ring.dots; i++) {
+        const angle = t * ring.speed + (i / ring.dots) * Math.PI * 2;
+        ctx.fillStyle = ring.color;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(angle) * ring.r, cy + Math.sin(angle) * ring.r, ring.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+    const pulse = 0.5 + 0.5 * Math.sin(t * 0.07);
+    ctx.fillStyle = `rgba(155,107,255,${0.5 + pulse * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(155,107,255,${0.15 + pulse * 0.25})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4.5 + 5 + pulse * 4, 0, Math.PI * 2);
+    ctx.stroke();
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* System — network mesh with traveling packets */
+function animSys(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+  const GREEN = "#3fd189";
+  const nodes = [
+    { x: cx,      y: cy,      r: 5,   main: true  },
+    { x: cx - 44, y: cy - 18, r: 3.5, main: false },
+    { x: cx + 44, y: cy - 18, r: 3.5, main: false },
+    { x: cx - 44, y: cy + 18, r: 3.5, main: false },
+    { x: cx + 44, y: cy + 18, r: 3.5, main: false },
+    { x: cx,      y: cy - 32, r: 2.5, main: false },
+    { x: cx,      y: cy + 32, r: 2.5, main: false },
+  ];
+  const edges = [[0,1],[0,2],[0,3],[0,4],[1,5],[2,5],[3,6],[4,6]];
+  const packets = edges.map(e => ({
+    edge: e,
+    progress: Math.random(),
+    speed: 0.009 + Math.random() * 0.007,
+  }));
+  let t = 0;
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    t++;
+    edges.forEach(([a, b]) => {
+      ctx.strokeStyle = "rgba(63,209,137,0.18)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(nodes[a].x, nodes[a].y);
+      ctx.lineTo(nodes[b].x, nodes[b].y);
+      ctx.stroke();
+    });
+    packets.forEach(p => {
+      p.progress += p.speed;
+      if (p.progress > 1) p.progress = 0;
+      const [a, b] = p.edge;
+      ctx.fillStyle = GREEN;
+      ctx.beginPath();
+      ctx.arc(
+        nodes[a].x + (nodes[b].x - nodes[a].x) * p.progress,
+        nodes[a].y + (nodes[b].y - nodes[a].y) * p.progress,
+        2, 0, Math.PI * 2
+      );
+      ctx.fill();
+    });
+    nodes.forEach((n, i) => {
+      const pulse = i === 0 ? 0.5 + 0.5 * Math.sin(t * 0.065) : 0.75;
+      ctx.fillStyle = n.main ? `rgba(63,209,137,${pulse})` : "rgba(63,209,137,0.55)";
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fill();
+      if (n.main) {
+        ctx.strokeStyle = `rgba(63,209,137,${0.18 + pulse * 0.22})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 4 + pulse * 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* =====================================================
+   CARD BACKGROUND CANVAS ANIMATIONS
+===================================================== */
+function initCardCanvases() {
+  document.querySelectorAll(".card-bg-canvas").forEach(canvas => {
+    const anim  = canvas.dataset.anim;
+    const color = canvas.dataset.color || "#64a0dc";
+    if (anim === "pulse-dots")    cardAnimDots(canvas, color);
+    if (anim === "flow-lines")    cardAnimLines(canvas, color);
+    if (anim === "inventory-flow") cardAnimInventory(canvas, color);
+  });
+}
+
+/* Floating particle dots */
+function cardAnimDots(canvas, color) {
+  const card = canvas.parentElement;
+  function resize() {
+    canvas.width  = card.offsetWidth;
+    canvas.height = card.offsetHeight;
+  }
+  resize();
+  new ResizeObserver(resize).observe(card);
+
+  const ctx = canvas.getContext("2d");
+  const count = 18;
+  const dots = Array.from({ length: count }, () => ({
+    x:    Math.random(),
+    y:    Math.random(),
+    r:    1.2 + Math.random() * 2.2,
+    vx:   (Math.random() - 0.5) * 0.0006,
+    vy:   (Math.random() - 0.5) * 0.0006,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.012 + Math.random() * 0.01,
+  }));
+
+  function tick() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    dots.forEach(d => {
+      d.x += d.vx; d.y += d.vy; d.phase += d.speed;
+      if (d.x < 0) d.x = 1; if (d.x > 1) d.x = 0;
+      if (d.y < 0) d.y = 1; if (d.y > 1) d.y = 0;
+      const alpha = 0.3 + 0.7 * Math.abs(Math.sin(d.phase));
+      ctx.beginPath();
+      ctx.arc(d.x * W, d.y * H, d.r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+    /* connect nearby dots */
+    for (let i = 0; i < dots.length; i++) {
+      for (let j = i + 1; j < dots.length; j++) {
+        const dx = (dots[i].x - dots[j].x) * W;
+        const dy = (dots[i].y - dots[j].y) * H;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 90) {
+          ctx.beginPath();
+          ctx.moveTo(dots[i].x * W, dots[i].y * H);
+          ctx.lineTo(dots[j].x * W, dots[j].y * H);
+          ctx.strokeStyle = color;
+          ctx.globalAlpha = 0.12 * (1 - dist / 90);
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+/* Flowing diagonal lines */
+function cardAnimLines(canvas, color) {
+  const card = canvas.parentElement;
+  function resize() {
+    canvas.width  = card.offsetWidth;
+    canvas.height = card.offsetHeight;
+  }
+  resize();
+  new ResizeObserver(resize).observe(card);
+
+  const ctx = canvas.getContext("2d");
+  const lines = Array.from({ length: 6 }, (_, i) => ({
+    offset: (i / 6),
+    speed:  0.0004 + Math.random() * 0.0003,
+    width:  0.5 + Math.random() * 0.5,
+    alpha:  0.15 + Math.random() * 0.2,
+  }));
+
+  function tick() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    lines.forEach(l => {
+      l.offset = (l.offset + l.speed) % 1;
+      const x = l.offset * (W + H) - H;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + H, H);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = l.alpha;
+      ctx.lineWidth   = l.width;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+/* Inventory card — falling particles like stock dropping into bins */
+function cardAnimInventory(canvas, color) {
+  const card = canvas.parentElement;
+  function resize() {
+    canvas.width  = card.offsetWidth;
+    canvas.height = card.offsetHeight;
+  }
+  resize();
+  new ResizeObserver(resize).observe(card);
+
+  const ctx = canvas.getContext("2d");
+  const cols = 6;
+  const particles = Array.from({ length: 24 }, (_, i) => ({
+    col:   i % cols,
+    y:     Math.random(),
+    speed: 0.0008 + Math.random() * 0.001,
+    size:  2 + Math.random() * 3,
+    alpha: 0.15 + Math.random() * 0.3,
+  }));
+
+  function tick() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const colW = W / cols;
+
+    /* faint column guides */
+    for (let i = 1; i < cols; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * colW, 0);
+      ctx.lineTo(i * colW, H);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.04;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    particles.forEach(p => {
+      const px = (p.col + 0.5) * colW;
+      p.y += p.speed;
+      if (p.y > 1.05) { p.y = -0.05; p.alpha = 0.1 + Math.random() * 0.3; }
+      ctx.beginPath();
+      ctx.arc(px, p.y * H, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = p.alpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function countUp(id, target, duration, suffix) {
+  const el = document.getElementById(id);
+  if (!el || !target) return;
+  const start = performance.now();
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  function tick(now) {
+    const p = Math.min((now - start) / duration, 1);
+    const val = Math.round(easeOut(p) * target);
+    el.textContent = val.toLocaleString() + (suffix || "");
+    if (p < 1) {
+      requestAnimationFrame(tick);
+    } else if (id === "totalIncoming" || id === "scannerHealth") {
+      pulseTopKpi_(id);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+/* =====================================================
+   PAGE LOAD — FAST NON-BLOCKING VERSION
+   The page becomes usable first. KPI/API data fills in after.
+===================================================== */
+document.addEventListener("DOMContentLoaded", async () => {
+
+  if (!(await qaV6Ready)) return;
+  console.time("TOTAL_DASHBOARD_LOAD");
+
+  initClock();
+  initTabs();
+  initUserDisplay();
+  updateScannerFromStorage();
+
+  // Show the UI immediately. Do not make users wait on Apps Script.
+  unlockPage();
+
+  // Apply access rules from sessionStorage immediately.
+  // V6 visibility was applied after authoritative server bootstrap.
+
+  // Command Center V5: restore only the lightweight motion layers.
+  requestAnimationFrame(() => {
+    initNavAnimations();
+    initSparklines();
+    initCardCanvases();
+    animateScannerHealth("Online", "cb-m-val--green");
+    initCommandCenterBackgroundModes();
+  });
+
+  // Remove loader fast. KPI numbers can load in the background.
+  setTimeout(() => {
+    if (window.dismissLoader) window.dismissLoader();
+  }, 900);
+
+  // Data loads in the background and fills in when ready.
+  // Local index UI test intentionally avoids unrelated live production API calls.
+  console.info('[V6 STAGING] Server-verified PAGE_* flags. Homepage KPI calls remain disabled until an authorized server adapter is available.');
+  console.timeEnd('TOTAL_DASHBOARD_LOAD');
+
+});
+
+
+/* =====================================================
+   COMMAND CENTER V5 — ALTERNATING BACKGROUND MODES
+   Network → HUD → Ambient. Decorative only; no API impact.
+===================================================== */
+function initCommandCenterBackgroundModes() {
+  const body = document.body;
+  if (!body || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  const MODES = ["cc-bg-network", "cc-bg-hud", "cc-bg-ambient"];
+  let modeIndex = 0;
+  let timer = null;
+
+  function applyMode(index) {
+    body.classList.remove(...MODES);
+    body.classList.add(MODES[index]);
+  }
+
+  function activeTabId() {
+    return document.querySelector(".tab-content.active")?.id || "";
+  }
+
+  function rotateMode() {
+    // Facility WIP owns its visual environment inside the iframe.
+    if (activeTabId() === "facility") {
+      applyMode(0);
+      return;
+    }
+
+    modeIndex = (modeIndex + 1) % MODES.length;
+    applyMode(modeIndex);
+  }
+
+  applyMode(0);
+
+  timer = setInterval(rotateMode, 18000);
+
+  document.querySelectorAll(".nav-item[data-tab]").forEach(tab => {
+    tab.addEventListener("click", () => {
+      setTimeout(() => {
+        if (tab.dataset.tab === "facility") {
+          modeIndex = 0;
+          applyMode(0);
+        }
+      }, 0);
+    });
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (timer) clearInterval(timer);
+  }, { once: true });
+}
+
+/* Briefly pulse top KPI cards when their displayed value changes. */
+function pulseTopKpi_(elementId) {
+  const valueEl = document.getElementById(elementId);
+  const card = valueEl?.closest(".cb-metric");
+  if (!card) return;
+
+  card.classList.remove("kpi-refresh");
+  void card.offsetWidth;
+  card.classList.add("kpi-refresh");
+
+  setTimeout(() => card.classList.remove("kpi-refresh"), 1300);
+}
+
+/* =====================================================
+   LIVE CLOCK + DATE
+===================================================== */
+function initClock() {
+  function tick() {
+    const now = new Date();
+    const timeEl = document.getElementById("topbarTime");
+    const dateEl = document.getElementById("topbarDate");
+    if (timeEl) timeEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    if (dateEl) dateEl.textContent = now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+/* =====================================================
+   BRAND CANVAS — animated bar chart behind Zenni LMS
+===================================================== */
+function initBrandCanvas() {
+  const canvas = document.getElementById("cb-brand-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const bars = Array.from({ length: 18 }, (_, i) => ({
+    x: 4 + i * 12,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.025 + Math.random() * 0.02,
+    base: 8 + Math.random() * 10,
+  }));
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    bars.forEach(b => {
+      b.phase += b.speed;
+      const h = b.base + Math.abs(Math.sin(b.phase)) * (H * 0.55);
+      const alpha = 0.05 + 0.09 * Math.abs(Math.sin(b.phase));
+      ctx.fillStyle = `rgba(245,200,66,${alpha})`;
+      ctx.beginPath();
+      ctx.roundRect(b.x, H - h, 7, h, 2);
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* =====================================================
+   SPARKLINE ANIMATIONS — live flowing lines
+===================================================== */
+function initSparklines() {
+  setTimeout(() => {
+    liveSparkline("spark-incoming", "#f5c842", 60, 100, 1.2);
+    liveSparkline("spark-holds",    "#64a0dc", 0,  20,  0.8);
+    liveSparkline("spark-scanner",  "#3fd189", 88, 100, 0.5);
+  }, 120);
+}
+
+function liveSparkline(id, color, minVal, maxVal, speed) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+
+  const W = canvas.parentElement.offsetWidth || 200;
+  const H = 28;
+  canvas.width  = W;
+  canvas.height = H;
+  canvas.dataset.color = color; /* allow runtime recolor */
+
+  const ctx    = canvas.getContext("2d");
+  const points = 40;
+  const range  = maxVal - minVal || 1;
+  const pad    = 3;
+
+  let last = minVal + Math.random() * range;
+  const data = Array.from({ length: points }, () => {
+    last = Math.min(maxVal, Math.max(minVal, last + (Math.random() - 0.48) * range * 0.18));
+    return last;
+  });
+
+  let offset = 0;
+
+  function getY(v) {
+    return H - pad - ((v - minVal) / range) * (H - pad * 2);
+  }
+
+  function tick() {
+    const c = canvas.dataset.color || color; /* live color swap */
+
+    offset += speed;
+    if (offset >= W / (points - 1)) {
+      offset = 0;
+      last = Math.min(maxVal, Math.max(minVal,
+        last + (Math.random() - 0.48) * range * 0.22));
+      data.shift();
+      data.push(last);
+    }
+
+    ctx.clearRect(0, 0, W, H);
+    const step = W / (points - 1);
+
+    ctx.beginPath();
+    ctx.moveTo(-offset, getY(data[0]));
+    for (let i = 1; i < points; i++) ctx.lineTo(i * step - offset, getY(data[i]));
+    ctx.lineTo((points - 1) * step - offset, H);
+    ctx.lineTo(-offset, H);
+    ctx.closePath();
+    ctx.fillStyle = c + "18";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-offset, getY(data[0]));
+    for (let i = 1; i < points; i++) {
+      const x  = i * step - offset;
+      const xp = (i - 1) * step - offset;
+      const cp = xp + step * 0.5;
+      ctx.bezierCurveTo(cp, getY(data[i-1]), cp, getY(data[i]), x, getY(data[i]));
+    }
+    ctx.strokeStyle = c;
+    ctx.lineWidth   = 1.5;
+    ctx.lineJoin    = "round";
+    ctx.stroke();
+
+    const tipX = (points - 1) * step - offset;
+    const tipY = getY(data[points - 1]);
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.005);
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, 2 + pulse * 1.5, 0, Math.PI * 2);
+    ctx.fillStyle   = c;
+    ctx.globalAlpha = 0.4 + 0.6 * pulse;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    requestAnimationFrame(tick);
+  }
+
+  tick();
+}
+
+/* =====================================================
+   SCANNER HEALTH TYPE-ON ANIMATION
+===================================================== */
+function animateScannerHealth(text, colorClass) {
+  const el = document.getElementById("scannerHealth");
+  if (!el) return;
+  el.textContent = "";
+  el.className = "cb-m-val " + colorClass;
+  let i = 0;
+  const iv = setInterval(() => {
+    el.textContent = text.slice(0, ++i);
+    if (i >= text.length) clearInterval(iv);
+  }, 80);
+}
+
+/* =====================================================
+   USER DISPLAY
+===================================================== */
+function initUserDisplay() {
+  const username = (window.__ZENNI_V6_USER__?.username || "").trim();
+  const fullName = ((window.__ZENNI_V6_USER__?.firstName || "") + " " + (window.__ZENNI_V6_USER__?.lastName || "")).trim();
+  const role     = (window.__ZENNI_V6_USER__?.role || "").trim();
+  const subRole  = "";
+
+  const avatarEl = document.getElementById("userAvatar");
+  const nameEl   = document.getElementById("userName");
+  const roleEl   = document.querySelector(".user-role");
+
+  if (!username && !fullName) return;
+
+  // Prefer the employee's full name returned by login.
+  // Username remains the safe fallback for older sessions.
+  const displayName = fullName || username || "User";
+
+  // Subrole is more specific. Fall back to role, then preserve the
+  // existing Operator label if older sessions do not contain either.
+  const displayRole = subRole || role || "Operator";
+
+  // Professional authenticated badge: use first initial from full name,
+  // otherwise the first character of the username.
+  const avatarInitial =
+    displayName.charAt(0).toUpperCase() ||
+    username.charAt(0).toUpperCase() ||
+    "U";
+
+  if (avatarEl) {
+    avatarEl.textContent = avatarInitial;
+    avatarEl.setAttribute("aria-label", `${displayName} authenticated user`);
+    avatarEl.title = `${displayName} • ${displayRole}`;
+  }
+
+  if (nameEl) {
+    nameEl.textContent = displayName.toUpperCase();
+    nameEl.title = username && displayName !== username
+      ? `${displayName} (${username})`
+      : displayName;
+  }
+
+  if (roleEl) {
+    roleEl.textContent = displayRole.toUpperCase();
+    roleEl.title = displayRole;
+  }
+}
+
+/* =====================================================
+   TAB SYSTEM
+===================================================== */
+const TAB_ANIMS = {
+  operations: "anim-slide-up",
+  production: "anim-slide-left",
+  system:     "anim-scale-up",
+  inventory:  "anim-slide-up",
+};
+
+function animateTab(tabId) {
+  const section = document.getElementById(tabId);
+  if (!section) return;
+
+  const animClass = TAB_ANIMS[tabId] || "anim-slide-up";
+
+  /* Heading */
+  const head = section.querySelector(".module-head");
+  if (head) {
+    head.classList.remove("anim-head");
+    void head.offsetWidth;
+    head.classList.add("anim-head");
+  }
+
+  /* Cards — only animate visible ones, staggered */
+  const cards = [...section.querySelectorAll(".card")].filter(
+    c => c.style.display !== "none" && getComputedStyle(c).display !== "none"
+  );
+
+  cards.forEach((card, i) => {
+    /* strip old anim classes and force reflow */
+    card.classList.remove("anim-slide-up", "anim-slide-left", "anim-scale-up");
+    void card.offsetWidth;
+    card.style.animationDelay = (i * 0.10) + "s";
+    card.classList.add(animClass);
+  });
+
+  /* Tags — staggered pop */
+  section.querySelectorAll(".card-tags .tag").forEach((tag, i) => {
+    tag.classList.remove("tag-pop");
+    void tag.offsetWidth;
+    tag.style.animationDelay = (0.28 + i * 0.06) + "s";
+    tag.classList.add("tag-pop");
+  });
+
+  /* Metric values */
+  section.querySelectorAll(".metric-val").forEach((el, i) => {
+    el.classList.remove("metric-flash");
+    void el.offsetWidth;
+    el.style.animationDelay = (0.32 + i * 0.07) + "s";
+    el.classList.add("metric-flash");
+  });
+}
+
+function initTabs() {
+  const tabs     = document.querySelectorAll(".nav-item[data-tab]");
+  const contents = document.querySelectorAll(".tab-content");
+
+  /* Animate the default active tab on load */
+  const defaultActive = document.querySelector(".tab-content.active");
+  if (defaultActive) setTimeout(() => animateTab(defaultActive.id), 80);
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(t     => t.classList.remove("active"));
+      contents.forEach(c => c.classList.remove("active"));
+
+      tab.classList.add("active");
+      const target = document.getElementById(tab.dataset.tab);
+      if (!target) return;
+      target.classList.add("active");
+      animateTab(tab.dataset.tab);
+    });
+  });
+}
+
+/* =====================================================
+   FETCH DASHBOARD — FAIL-SAFE MAIN API VERSION
+   -----------------------------------------------------
+   The homepage must never wait on the Production Flow deployment.
+
+   The Production Flow endpoint is currently callable by Apps Script
+   server-to-server, but browser requests from GitHub receive HTTP 404.
+   Therefore this page loads only the main dashboard API.
+
+   Facility WIP behavior:
+   - Uses facilityWip from the main API when present.
+   - Saves the last valid value in localStorage.
+   - Uses the saved value if the main API does not include Facility WIP.
+   - Never replaces a good value with zero because an optional API failed.
+===================================================== */
+async function fetchDashboard() {
+  console.time("DASHBOARD_API_TOTAL");
+
+  const cacheBust = Date.now();
+  const mainUrl =
+    API_URL +
+    (API_URL.includes("?") ? "&" : "?") +
+    "t=" +
+    cacheBust;
+
+  try {
+    const data = await timedFetchJson(
+      mainUrl,
+      "MAIN_DASHBOARD_API",
+      15000
+    );
+
+    applyFacilityWipFallback_(data);
+
+    console.timeEnd("DASHBOARD_API_TOTAL");
+    return data || {};
+
+  } catch (err) {
+    console.error("Main Dashboard API failed", err);
+
+    const fallback = {};
+    applyFacilityWipFallback_(fallback);
+
+    console.timeEnd("DASHBOARD_API_TOTAL");
+    return fallback;
+  }
+}
+
+
+function applyFacilityWipFallback_(data) {
+  const liveValue = Number(data && data.facilityWip);
+
+  if (Number.isFinite(liveValue) && liveValue > 0) {
+    try {
+      localStorage.setItem(
+        FACILITY_WIP_STORAGE_KEY,
+        String(Math.round(liveValue))
+      );
+    } catch (storageError) {
+      console.warn(
+        "Unable to cache Facility WIP.",
+        storageError
+      );
+    }
+
+    data.facilityWip = Math.round(liveValue);
+    data.facilityWipSource = "MAIN_API";
+    return;
+  }
+
+  let cachedValue = 0;
+
+  try {
+    cachedValue = Number(
+      localStorage.getItem(
+        FACILITY_WIP_STORAGE_KEY
+      )
+    ) || 0;
+  } catch (storageError) {
+    console.warn(
+      "Unable to read cached Facility WIP.",
+      storageError
+    );
+  }
+
+  if (cachedValue > 0) {
+    data.facilityWip = Math.round(cachedValue);
+    data.facilityWipSource = "LAST_KNOWN_GOOD";
+  }
+}
+
+
+async function timedFetchJson(
+  url,
+  label,
+  timeoutMs = 15000
+) {
+  console.time(label);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    timeoutMs
+  );
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+      redirect: "follow"
+    });
+
+    const contentType = String(
+      res.headers.get("content-type") || ""
+    ).toLowerCase();
+
+    if (!res.ok) {
+      const bodyPreview = await res
+        .text()
+        .catch(() => "");
+
+      throw new Error(
+        label +
+        " failed with HTTP " +
+        res.status +
+        (bodyPreview
+          ? " | " +
+            bodyPreview
+              .replace(/\s+/g, " ")
+              .slice(0, 180)
+          : "")
+      );
+    }
+
+    if (!contentType.includes("application/json")) {
+      const bodyPreview = await res.text();
+
+      throw new Error(
+        label +
+        " returned non-JSON content: " +
+        bodyPreview
+          .replace(/\s+/g, " ")
+          .slice(0, 180)
+      );
+    }
+
+    return await res.json();
+
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      throw new Error(
+        label +
+        " timed out after " +
+        timeoutMs +
+        " ms"
+      );
+    }
+
+    throw err;
+
+  } finally {
+    clearTimeout(timeoutId);
+    console.timeEnd(label);
+  }
+}
+
+
+/* =====================================================
+   THRESHOLD COLOR HELPERS
+===================================================== */
+function setHoldsColor(active) {
+  const el = document.getElementById("active");
+  if (!el) return;
+
+  if (active >= 15) {
+    el.className = "cb-m-val cb-m-val--red";
+  } else if (active >= 7) {
+    el.className = "cb-m-val cb-m-val--orange";
+  } else {
+    el.className = "cb-m-val cb-m-val--steel";
+  }
+
+  const color = active >= 15 ? "#e03e3e" : active >= 7 ? "#f07030" : "#64a0dc";
+  updateSparklineColor("spark-holds", color);
+}
+
+function updateSparklineColor(id, color) {
+  const c = document.getElementById(id);
+  if (c) c.dataset.color = color;
+}
+
+function renderDashboard(data) {
+  const active    = Number(data.active ?? 0);
+  const completed = Number(data.completed ?? 0);
+
+  const total = Number(data.totalIncoming ?? data.incoming ?? 0);
+  const facilityWip = Number(data.facilityWip || 0);
+
+  let coverage = Number(data.coverage ?? 0);
+
+  if (coverage <= 1) coverage *= 100;
+
+  coverage = Math.max(0, Math.min(100, Math.round(coverage)));
+
+  if (completed > 0 && coverage === 0) {
+    coverage = Math.round((completed / (completed + active)) * 100);
+  }
+
+  // Command bar KPIs — animated count-up
+  if (total) {
+    countUp("totalIncoming", total, 1800, "");
+  } else {
+    setText("totalIncoming", "—");
+  }
+
+  if (facilityWip) {
+    countUp("facilityWipTop", facilityWip, 1400, "");
+  } else {
+    setText("facilityWipTop", "—");
+  }
+
+  // Investigation card metrics
+  setText("activeHolds", active);
+  setText("completed", completed);
+  setText("coverageDetail", active === 0 ? "Complete" : coverage + "%");
+}
+
+/* =====================================================
+   VISIBILITY RULES — reads from sessionStorage
+   set at login by login.js
+===================================================== */
+// PPC navigation permission helpers. These check UX visibility only; PPC Apps Script
+// must independently authorize record access using the Google Workspace identity.
+function ppcFlagEnabled_(value) {
+  return value === true || value === 1 ||
+    (typeof value === "string" && ["true", "1", "yes"].includes(value.trim().toLowerCase()));
+}
+function ppcSessionVisibility_() {
+  const read = key => { try { return JSON.parse(sessionStorage.getItem(key) || "null") || {}; } catch (_) { return {}; } };
+  const vis = read("lms_visibility");
+  const departments = { ...(vis.departments || {}), ...read("lms_departments") };
+  const features = { ...(vis.features || {}), ...read("lms_features") };
+  return { departments, features };
+}
+function ppcCanOpen_() {
+  if (sessionStorage.getItem("lms_logged_in") !== "true") return false;
+  const { departments, features } = ppcSessionVisibility_();
+  return ppcFlagEnabled_(departments.PPC_Document_Control) &&
+    ppcFlagEnabled_(features.PPC_Document_Control_ViewHub);
+}
+
+function applyVisibilityRules() {
+
+  // Try new separate keys first, fall back to lms_visibility for compatibility
+  let departments = JSON.parse(sessionStorage.getItem("lms_departments") || "null");
+  let features    = JSON.parse(sessionStorage.getItem("lms_features")    || "null");
+
+  if (!departments || !features) {
+    const visibility = JSON.parse(sessionStorage.getItem("lms_visibility") || "{}");
+    departments = visibility.departments || {};
+    features    = visibility.features    || {};
+  }
+
+  console.log("DEPARTMENTS count:", Object.keys(departments || {}).length);
+  console.log("FEATURES count:", Object.keys(features || {}).length);
+
+  // ── 1. Sidebar nav tabs — hide entire sections ──
+  const deptNavMap = {
+    "LMS_Command": "operations",
+    "Production":  "production",
+    "Productivity": "productivity",
+    "System":      "system",
+    "Inventory":   "inventory",
+    "Training":    "training"
+  };
+
+  let firstVisibleTab = null;
+
+  Object.entries(deptNavMap).forEach(([deptKey, tabId]) => {
+    const navBtn  = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+    const section = document.getElementById(tabId);
+    const hasAccess = departments[deptKey] === true ||
+      (deptKey === "Training" && ppcCanOpen_());
+
+    if (!hasAccess) {
+      if (navBtn)  navBtn.style.display = "none";
+      if (section) {
+        section.style.display = "none";
+        section.classList.remove("active");
+      }
+    } else {
+      if (navBtn)  navBtn.style.display = "";
+      if (section) section.style.display = "";
+      if (!firstVisibleTab) firstVisibleTab = tabId;
+    }
+  });
+
+  // ── 2. Feature cards — hide individual cards ──
+const featureCardMap = {
+  "LMS_Command_InvestigationHold": "#investigation-card",
+  "LMS_Command_LensIntake":        "#tools-card",
+  "LMS_Command_TrueCurve":         "#truecurve-card",
+
+  "Production_SurfaceWorkflow":    "#surfaceflow-card",
+  "Production_SurfaceFlow":        "#surfaceflow-card",
+  "Production_ARDashboard":        "#ar-card",
+  "Production_ARRunTracker":       "#arruntracker-card",
+  "Production_ProductionForecast": "#productionforecast-card",
+  "Production_FinishDash":          "#finishdash-card",
+   "Production_CoatingBreakage":    "#coating-card",
+  "Production_PowerAnalysis":      "#power-card",
+
+  "Productivity_ViewHub":              "#productivity-card",
+  "Productivity_AssociateScorecards":  "#productivity-card",
+
+  // Quality / Breakage is its own card.
+  // These keys match the LMS_Visibility sheet columns shown in Google Sheets.
+  "Productivity_QualityBreakage":      "#breakage-quality-card",
+  "BreakageHub_AssociateBreaka":       "#breakage-quality-card",
+  "BreakageHub_AssociateBreakage":     "#breakage-quality-card",
+  "BreakageHub_ReasonBreakdown":       "#breakage-quality-card",
+  "BreakageHub_AccessPointBreakdo":    "#breakage-quality-card",
+  "BreakageHub_AccessPointBreakdown":  "#breakage-quality-card",
+  "BreakageHub_AdminS":                "#breakage-quality-card",
+  "BreakageHub_AdminSetup":            "#breakage-quality-card",
+
+  "System_ScannerMap":             "#scanner-card",
+
+  "Inventory_IncomingJobs":        "#incoming-card",
+  "Inventory_PickingWIP":          "#pickwip-card",
+
+  "Training_TrainingPortal":       "#facility-breakage-card",
+  "PPC_Document_Control_ViewHub":   "#ppc-document-control-card"
+};
+
+  // Hide all feature cards first
+  Object.values(featureCardMap).forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => el.style.display = "none");
+  });
+
+  // Show only permitted cards
+  Object.entries(featureCardMap).forEach(([featureKey, sel]) => {
+    const allowed = featureKey === "PPC_Document_Control_ViewHub"
+      ? ppcCanOpen_()
+      : features[featureKey] === true;
+    if (allowed) {
+      document.querySelectorAll(sel).forEach(el => el.style.display = "flex");
+    }
+  });
+
+  // ── 3. Switch active tab to first accessible one ──
+  const allTabs     = document.querySelectorAll(".nav-item[data-tab]");
+  const allSections = document.querySelectorAll(".tab-content");
+
+  if (firstVisibleTab) {
+    allTabs.forEach(t     => t.classList.remove("active"));
+    allSections.forEach(s => s.classList.remove("active"));
+
+    const activeNav     = document.querySelector(`.nav-item[data-tab="${firstVisibleTab}"]`);
+    const activeSection = document.getElementById(firstVisibleTab);
+    if (activeNav)     activeNav.classList.add("active");
+    if (activeSection) activeSection.classList.add("active");
+
+    setTimeout(() => animateTab(firstVisibleTab), 80);
+  }
+}
+
+/* =====================================================
+   SCANNER STATUS (localStorage)
+===================================================== */
+function updateScannerFromStorage() {
+  let scanners = [];
+  try {
+    scanners = JSON.parse(localStorage.getItem(SCANNER_STORAGE_KEY)) || [];
+  } catch {}
+
+  const sub    = document.getElementById("scannerSub");
+  const detail = document.getElementById("scannerDetail");
+
+  if (!scanners.length) {
+    animateScannerHealth("Online", "cb-m-val--green");
+    if (sub)    sub.textContent = "All ports";
+    if (detail) detail.innerHTML = "";
+    updateSparklineColor("spark-scanner", "#3fd189");
+  } else if (scanners.length <= 2) {
+    animateScannerHealth("Attention", "cb-m-val--orange");
+    if (sub)    sub.textContent = `${scanners.length} flagged`;
+    if (detail) detail.innerHTML = `<strong>Flagged Scanners:</strong><ul>${scanners.map(s => `<li>${s}</li>`).join("")}</ul>`;
+    updateSparklineColor("spark-scanner", "#f07030");
+  } else {
+    animateScannerHealth("Critical", "cb-m-val--red");
+    if (sub)    sub.textContent = `${scanners.length} flagged`;
+    if (detail) detail.innerHTML = `<strong>Flagged Scanners:</strong><ul>${scanners.map(s => `<li>${s}</li>`).join("")}</ul>`;
+    updateSparklineColor("spark-scanner", "#e03e3e");
+  }
+}
+
+/* =====================================================
+   ERROR STATE
+===================================================== */
+function showErrorState() {
+  ["totalIncoming","active","activeHolds","completed","coverageDetail","scannerHealth"]
+    .forEach(id => setText(id, "ERR"));
+}
+
+/* =====================================================
+   UNLOCK PAGE
+===================================================== */
+function unlockPage() {
+  document.body.classList.remove("lms-hidden");
+}
+
+/* =====================================================
+   LOGOUT
+===================================================== */
+function logout() {
+  // Google Workspace session is managed by Google. Exit this LMS view only.
+  window.location.replace("https://th3dant3.github.io/Lab-Management-System/v6-test/login.html");
+}
+
+/* =====================================================
+   HELPERS
+===================================================== */
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+/* PPC Document Control — open the GitHub page in the same tab. */
+function openPpcDocumentControl() {
+  if (!window.__ZENNI_V6_USER__ || window.__ZENNI_V6_USER__.pages.PAGE_PPC_DOCUMENT_CONTROL!==true) {
+    alert("PPC Document Control is not enabled for this LMS session. Please sign out and sign back in if permissions were just updated.");
+    return;
+  }
+  // Same-tab navigation preserves this tab's LMS sessionStorage.
+  window.location.assign("PPC.html");
+}
+
+function openPage(page) {
+  // Navigation UX only. Destination API must independently check verified Google identity.
+  const allowed=window.__ZENNI_V6_USER__?.pages;
+  const targets={
+    'page3.html':'PAGE_INVESTIGATION_HOLD','in8-in9.html':'PAGE_LENS_INTAKE',
+    'true-curve.html':'PAGE_TRUE_CURVE'
+  };
+  const required=targets[page];
+  if(!allowed || (required && allowed[required]!==true)){
+    alert('This dashboard page is not enabled for your account.');return;
+  }
+  window.location.href=page;
+}
