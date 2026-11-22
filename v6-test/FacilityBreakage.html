@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Zenni Quality Dashboard | Facility Breakage</title>
+  <!-- Keep this file on GitHub. Apps Script loads FacilityBreakageApp.html instead. -->
+  <script src="authGuard.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #080b0f; color: #e8edf2; font-family: Arial, sans-serif; }
+    .shell { display: flex; flex-direction: column; width: 100%; min-height: 100vh; }
+    .frame { flex: 1; display: block; border: 0; width: 100%; min-height: 100vh; background: #080b0f; }
+    .fallback { position: absolute; bottom: 16px; left: 16px; padding: 10px 12px; background: #131a24; border: 1px solid #303947; border-radius: 8px; font-size: 12px; opacity: .92; }
+    .fallback a { color: #38bdf8; }
+    .fallback button { margin-left: 12px; color: #e8edf2; border: 1px solid #465568; background: #131a24; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <iframe class="frame" title="Zenni Quality Dashboard — Facility Breakage"
+      src="https://script.google.com/a/macros/zennioptical.com/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec?page=dashboard"
+      allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </main>
+  <div class="fallback" id="frameHelp">
+    If the dashboard is blank or Google asks you to sign in, <a href="https://script.google.com/a/macros/zennioptical.com/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec?page=dashboard" target="_blank" rel="noopener noreferrer">open the secure dashboard directly</a>.
+    <button type="button" onclick="document.getElementById('frameHelp').remove()" aria-label="Dismiss help">Dismiss</button>
+  </div>
+</body>
+</html>
