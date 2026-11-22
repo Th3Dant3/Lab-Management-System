@@ -4,43 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Zenni USA | LMS Dashboard — V6 Test</title>
+  <title>Zenni USA | LMS Dashboard</title>
   <style>
-    :root {color-scheme:dark}
-    *{box-sizing:border-box}
-    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#060e1b;color:#e8f4ff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
-    .frame{position:relative;width:100%;height:100dvh}
-    iframe{display:block;width:100%;height:100%;border:0;background:#060e1b}
-    .fallback{position:absolute;bottom:12px;right:12px;max-width:min(430px,calc(100vw - 24px));padding:9px 12px;border:1px solid #24405a;border-radius:10px;background:rgba(5,15,31,.93);color:#a8bacd;font-size:11px;line-height:1.5;z-index:10}
-    .fallback a{color:#78dff2;text-decoration:underline}
-    .fallback button{background:transparent;border:0;color:#bdd3e6;cursor:pointer;float:right;margin-left:12px;font-size:15px}
-    .noscript{padding:24px}
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #060e1b; }
+    iframe { display: block; width: 100%; height: 100dvh; border: 0; background: #060e1b; }
   </style>
 </head>
 <body>
-  <main class="frame">
-    <!-- SECURITY: The cross-origin frame is served by Zenni-restricted Apps Script.
-         This GitHub launcher contains no employee data or access tokens.
-         DO NOT replace LmsV6App.html with this file: Apps Script fetches that
-         separate source to render the authenticated page. -->
-    <iframe
-      id="secureLmsFrame"
-      title="Zenni USA — Secure LMS V6 Test"
-      src="https://script.google.com/a/macros/zennioptical.com/s/AKfycbzqOAt8pc3gHT3vcnk6G-P3HuxkTHiV4ZrB5u7Gmr9oLPoI-8S2aixMfBWEZa4fk00y/exec?page=lmsV6"
-      loading="eager"
-      referrerpolicy="strict-origin-when-cross-origin"
-      allow="fullscreen"
-    ></iframe>
-    <aside id="frameHelp" class="fallback" aria-label="Sign-in help">
-      <button id="dismissHelp" type="button" aria-label="Dismiss help">×</button>
-      If the dashboard is blank or Google asks you to sign in, <a id="directLink" href="https://script.google.com/a/macros/zennioptical.com/s/AKfycbzqOAt8pc3gHT3vcnk6G-P3HuxkTHiV4ZrB5u7Gmr9oLPoI-8S2aixMfBWEZa4fk00y/exec?page=lmsV6" target="_blank" rel="noopener noreferrer">open the secure page directly</a> with your Zenni account. Google may disallow iframe sign-in in some browsers.
-    </aside>
-    <noscript><div class="noscript">JavaScript is disabled. Use the secure Google Apps Script dashboard link.</div></noscript>
-  </main>
-  <script>
-    document.getElementById('dismissHelp').addEventListener('click',function(){
-      document.getElementById('frameHelp').hidden=true;
-    });
-  </script>
+  <!-- GitHub launcher. Authenticated LMS content is served inside the iframe by Google Apps Script.
+       Keep the separate LmsV6App.html file; it is the secure page source used by Apps Script. -->
+  <iframe
+    title="Zenni USA LMS Dashboard"
+    src="https://script.google.com/a/macros/zennioptical.com/s/AKfycbzqOAt8pc3gHT3vcnk6G-P3HuxkTHiV4ZrB5u7Gmr9oLPoI-8S2aixMfBWEZa4fk00y/exec?page=lmsV6"
+    loading="eager"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allow="fullscreen"
+  ></iframe>
 </body>
 </html>
