@@ -36,6 +36,7 @@ const qaV6Ready=new Promise(resolve=>{
      try {
        window.__ZENNI_V6_USER__=profile;
        qaApplyV6Visibility();
+       if(profile.canManageRequests===true)qaV6MountAdminAlerts();
        document.getElementById('v6-preflight')?.remove();
        resolve(true);
      } catch (err) {
@@ -115,4 +116,40 @@ function qaApplyV6Visibility(){
    if(denied){b.disabled=true;b.setAttribute('aria-disabled','true');}
   });
  });
+}
+
+
+// Admin-only, server-authenticated access request notifications.
+// Nothing here grants access or writes profile permissions.
+function qaV6MountAdminAlerts(){
+ if(!window.google?.script?.run || !window.__ZENNI_V6_USER__?.canManageRequests)return;
+ const host=document.createElement('div');host.id='qaV6Alerts';
+ host.style.cssText='position:fixed;z-index:2000;right:14px;top:76px;font:13px system-ui;color:#eaf5ff;max-width:min(380px,calc(100vw - 28px));';
+ const bell=document.createElement('button');bell.type='button';bell.textContent='🔔 Access requests';
+ bell.style.cssText='cursor:pointer;border:1px solid #406b83;border-radius:12px;background:#0d2138;color:#fff;padding:11px 15px;font-weight:700;';
+ const panel=document.createElement('div');panel.hidden=true;panel.style.cssText='max-height:60vh;overflow:auto;background:#0b182c;border:1px solid #38607e;border-radius:12px;margin-top:7px;padding:12px;box-shadow:0 18px 45px #0009;';
+ bell.addEventListener('click',()=>{panel.hidden=!panel.hidden;});
+ host.append(bell,panel);document.body.append(host);
+ function render(data){
+  const requests=Array.isArray(data?.requests)?data.requests:[];
+  const count=Number(data?.count||0);
+  bell.textContent='🔔 Access requests'+(count?' ('+count+')':'');
+  panel.replaceChildren();
+  const title=document.createElement('strong');title.textContent=count?'Pending registration / access requests':'No pending access requests';panel.append(title);
+  requests.forEach(r=>{
+   const row=document.createElement('div');row.style.cssText='border-top:1px solid #29435e;margin-top:9px;padding-top:9px;';
+   const who=document.createElement('div');who.style.fontWeight='700';who.textContent=r.email;
+   const info=document.createElement('div');info.textContent=r.reason+' · '+r.at+' · Attempts '+r.attempts;
+   info.style.cssText='color:#9cb7cf;font-size:11px;margin:5px 0;';
+   const review=document.createElement('button');review.textContent='Mark reviewed';
+   review.style.cssText='background:#2c5d6c;color:#fff;border:0;border-radius:6px;padding:7px 10px;cursor:pointer';
+   review.onclick=()=>{review.disabled=true;google.script.run.withSuccessHandler(poll).withFailureHandler(err=>{review.disabled=false;console.error(err);}).qaV6ResolveRequest(r.id);};
+   row.append(who,info,review);panel.append(row);
+  });
+ }
+ function poll(){
+  if(document.visibilityState==='hidden')return;
+  google.script.run.withSuccessHandler(render).withFailureHandler(err=>console.warn('[V6] Admin notification polling failed',err)).qaV6AdminNotifications();
+ }
+ poll();window.setInterval(poll,30000);
 }
