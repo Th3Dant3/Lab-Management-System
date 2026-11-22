@@ -171,18 +171,45 @@ function qaV6MountAdminAlerts(){
     const approve=button('Approve / select pages','#246b51',()=>{details.hidden=!details.hidden;});actions.prepend(approve);
     const details=document.createElement('div');details.hidden=true;
     details.style.cssText='background:#0d2538;border:1px solid #345570;border-radius:8px;padding:10px;margin-top:9px;';
-    const label=document.createElement('div');label.textContent='Select pages for new EMPLOYEE account:';label.style.cssText='font-size:12px;font-weight:600;margin-bottom:8px;';details.append(label);
+    const namePreview=document.createElement('div');
+    namePreview.style.cssText='font-size:12px;line-height:1.65;color:#c6e4f7;margin-bottom:10px;';
+    namePreview.textContent='Loading verified employee profile…';details.append(namePreview);
+    const roleLabel=document.createElement('label');roleLabel.textContent='Role';
+    roleLabel.style.cssText='display:block;font-size:12px;font-weight:700;margin-bottom:5px;';
+    const roleSelect=document.createElement('select');
+    roleSelect.style.cssText='width:100%;padding:9px;color:#eef8ff;background:#142a45;border:1px solid #51728d;border-radius:7px;margin-bottom:9px;';
+    roleSelect.disabled=true;roleLabel.append(roleSelect);details.append(roleLabel);
+    const roleNotice=document.createElement('p');
+    roleNotice.style.cssText='font-size:11px;color:#edca7d;margin:0 0 11px;line-height:1.5;';
+    roleNotice.textContent='Role defaults still apply to non-page permissions. Management roles may grant user administration access.';
+    details.append(roleNotice);
+    const label=document.createElement('div');label.textContent='Select permitted LMS pages:';
+    label.style.cssText='font-size:12px;font-weight:700;margin-bottom:8px;';details.append(label);
     const checks=[];
     pageOptions.forEach(([key,title])=>{
      const line=document.createElement('label');line.style.cssText='display:flex;align-items:center;gap:8px;margin:5px 0;cursor:pointer;';
      const input=document.createElement('input');input.type='checkbox';input.value=key;input.checked=false;
      const text=document.createElement('span');text.textContent=title;line.append(input,text);details.append(line);checks.push(input);
     });
+    let profileReady=false,profile=null;
+    google.script.run.withSuccessHandler(data=>{
+     profile=data;profileReady=true;
+     namePreview.replaceChildren();
+     [['Email',data.email],['Username',data.username],['First Name',data.firstName],['Last Name',data.lastName]].forEach(([key,val])=>{
+      const entry=document.createElement('div');entry.textContent=key+': '+val;namePreview.append(entry);
+     });
+     (data.roles||[]).forEach(role=>{const opt=document.createElement('option');opt.value=role;opt.textContent=role;roleSelect.append(opt);});
+     roleSelect.value='EMPLOYEE';roleSelect.disabled=false;
+    }).withFailureHandler(error=>{
+     namePreview.textContent='Profile unavailable: '+(error?.message||'Unknown error');
+    }).qaV65ApprovalPreview(r.id);
     const submit=button('Confirm approval','#246b51',()=>{
+     if(!profileReady || roleSelect.disabled){status.textContent='Wait for the verified profile to load.';return;}
      const selected=checks.filter(i=>i.checked).map(i=>i.value);
      if(!selected.length){status.textContent='Select at least one page to approve.';return;}
-     if(!confirm('Register '+r.email+' as EMPLOYEE with exactly '+selected.length+' selected page(s)?'))return;
-     invoke('qaV64ApproveRequest',[r.id,selected],[submit,approve,deny,review]);
+     const role=roleSelect.value;
+     if(!confirm('Register '+profile.email+' as '+role+'\nUsername: '+profile.username+'\nName: '+profile.firstName+' '+profile.lastName+'\nPages: '+selected.length+'\n\nNon-page role permissions will also apply. Confirm?'))return;
+     invoke('qaV65ApproveRequest',[r.id,role,selected],[submit,approve,deny,review]);
     });
     details.append(submit);row.append(details);
    }
