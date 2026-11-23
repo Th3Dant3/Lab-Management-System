@@ -685,6 +685,27 @@ const openers = new WeakSet();
 function wireOpeners() { $$('[data-open]').forEach(b => { if (openers.has(b)) return; openers.add(b); b.addEventListener('click', () => (b.dataset.open === 'request' ? WZ.request : WZ.test).open(b, b.dataset.ppc || null)); }); }
 const WZ = {};
 function ppcsForWizard() { const src = D.view === 'staff' ? D.register : D.mine.filter(m => m.tab === 'register' && m.number); return src.filter(r => r.status !== 'Published' && r.status !== 'Completed' && r.number && !isPending(r)).map(r => ({ n: r.number, dept: r.number.split('-')[1], title: r.title, wi: r.wi, status: r.status })); }
+/** Reference list for a NEW request: every PPC in the department, open or closed, from the register, Published and Blocked tabs,
+ * plus published records that never had a PPC number (picked by their WI). The server checks the choice again on submit. */
+function refsForWizard(dept) {
+  if (D.view !== 'staff' || !dept) return [];
+  const out = [], seen = new Set(), noNum = new Map();
+  const deptOf = r => (r.number && !isPending(r)) ? r.number.split('-')[1] : ((String(r.wi || '').match(/WI-([A-Z]{2,8})-/i) || [])[1] || '').toUpperCase();
+  const add = (r, src) => {
+    if (deptOf(r) !== dept) return;
+    const status = src === 'published' ? 'Published' : src === 'blocked' ? 'Blocked' : (r.status || 'No status');
+    const grp = src === 'blocked' ? 'blocked' : (status === 'Published' || status === 'Completed') ? 'closed' : 'open';
+    const date = r.published || r.routing || r.submitted || '';
+    if (r.number && !isPending(r)) { if (seen.has(r.number)) return; seen.add(r.number); out.push({ v: r.number, label: r.number, grp, status, title: r.title || '', wi: r.wi || '', date }); return; }
+    if (src !== 'published') return;                       // an open request without a number is not a reference
+    const w = ((String(r.wi || '').match(/WI-[A-Z]{2,8}-\d{1,6}/i) || [])[0] || '').toUpperCase(); if (!w) return;
+    const old = noNum.get(w);
+    if (!old || date > old.date) noNum.set(w, { v: 'WI:' + w, label: w, grp: 'closed', status: 'Published, no PPC number', title: r.title || '', wi: r.wi || w, date });
+  };
+  D.register.forEach(r => add(r, 'register')); (D.published || []).forEach(r => add(r, 'published')); (D.blocked || []).forEach(r => add(r, 'blocked'));
+  noNum.forEach(x => out.push(x));
+  return out.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.label.localeCompare(b.label));   // newest first
+}
 function wizard(ov, o) {
   const wz = $('.wz', ov); let step = 1, opener = null;
   const label = $('[data-label]', wz);
@@ -713,10 +734,16 @@ function initWizards() {
   const rq = $('#rqOverlay'), ts = $('#tsOverlay'), esc = null;
   const dept = $('#rqDept'), act = $('#rqAction'), ex = $('#rqExist'), wi = $('#rqWi'), meth = $('#rqMethod'), man = $('#rqManual'), prev = $('#rqPrev');
   const pad = n => ('000' + n).slice(-3), val = s => $(s).value;
-  function fillEx() { const d = dept.value, l = ppcsForWizard().filter(p => p.dept === d); ex.replaceChildren(h('option', { value: '', text: d ? (l.length ? 'Select an existing PPC' : 'No open PPC in this department') : 'Choose a department first' }), ...l.map(p => h('option', { value: p.n, text: p.n + ' (' + p.title + ')' }))); }
+  const refNow = () => act.value === 'REF' && ex.value ? refsForWizard(dept.value).find(x => x.v === ex.value) || null : null;
+  function fillEx() {
+    const d = dept.value, l = refsForWizard(d), cut = s => s.length > 60 ? s.slice(0, 60) + '...' : s;
+    const opt = p => h('option', { value: p.v, text: p.label + ' · ' + cut(p.title || 'no title') + ' · ' + p.status + (p.grp === 'closed' && p.date ? ' ' + fmtDate(p.date) : '') });
+    const grp = (k, t) => { const xs = l.filter(p => p.grp === k); return xs.length ? [h('optgroup', { label: t + ' (' + xs.length + ')' }, xs.map(opt))] : []; };
+    ex.replaceChildren(h('option', { value: '', text: !d ? 'Choose a department first' : (l.length ? 'Select the reference PPC' : 'No earlier PPC in this department') }), ...grp('closed', 'Published / Completed'), ...grp('open', 'Still open'), ...grp('blocked', 'Blocked'));
+  }
   function numText() {
     const d = dept.value, a = act.value; if (!d) return 'Choose a department';
-    if (a === 'EXISTING') return ex.value || 'Select an existing PPC';
+    if (a === 'REF' && !ex.value) return 'Select the reference PPC';
     if (meth.value === 'MANUAL') return man.value.trim().toUpperCase() || 'Enter a manual PPC number';
     const m = wi.value.match(/WI-([A-Za-z]{2,8})-(\d{1,6})/);
     if (!m) return 'Not issued yet. Document control adds the WI number first. The app never guesses one.';
@@ -724,20 +751,28 @@ function initWizards() {
     return D.year + '-' + d + '-' + pad(m[2]) + '-' + D.nextSequence + ' (preview only, the final number is issued on submit)';
   }
   function rqRefresh() {
-    const a = act.value; $('#rqExistWrap').hidden = a !== 'EXISTING'; $('#rqMethodWrap').hidden = a === 'EXISTING'; $('#rqManualWrap').hidden = a === 'EXISTING' || meth.value !== 'MANUAL';
-    if (a === 'EXISTING') { const p = ppcsForWizard().find(x => x.n === ex.value); wi.value = p ? p.wi : ''; wi.readOnly = true; wi.placeholder = 'Select an existing PPC to load its WI number(s)'; $('#rqWiHelp').textContent = 'WI numbers load automatically from the PPC selected above.'; }
-    else { wi.readOnly = false; wi.placeholder = 'Example: WI-SUR-246 (leave blank if the document is new)'; $('#rqWiHelp').textContent = 'Existing document: enter its WI number. New document: leave blank.'; }
-    const t = numText(); prev.textContent = t; $('#rqPpcPrint').value = t.split(' (')[0].split('. ')[0]; $('#rqWiPrint').value = wi.value;
+    const a = act.value, ref = refNow(); $('#rqExistWrap').hidden = a !== 'REF'; $('#rqManualWrap').hidden = meth.value !== 'MANUAL'; wi.readOnly = false;
+    if (a === 'REF') { wi.placeholder = 'Loaded from the reference PPC. You can add or change WI numbers.'; $('#rqWiHelp').textContent = 'The WI number(s) load from the reference PPC. This is still a NEW request: it gets its own new PPC number.'; }
+    else { wi.placeholder = 'Example: WI-SUR-246 (leave blank if the document is new)'; $('#rqWiHelp').textContent = 'Existing document: enter its WI number. New document: leave blank.'; }
+    const t = numText();
+    prev.textContent = t + (ref ? '. Reference: ' + ref.label + ' (' + ref.status + ')' + (ref.grp === 'open' ? '. Note: that PPC is still ' + ref.status + ', so this document would have two changes in progress at once.' : '') : '');
+    $('#rqPpcPrint').value = t.split(' (')[0].split('. ')[0]; $('#rqWiPrint').value = wi.value;
   }
-  dept.addEventListener('change', () => { fillEx(); rqRefresh(); }); [act, ex, meth].forEach(e => e.addEventListener('change', rqRefresh)); [wi, man].forEach(e => e.addEventListener('input', rqRefresh));
+  dept.addEventListener('change', () => { fillEx(); rqRefresh(); }); [act, meth].forEach(e => e.addEventListener('change', rqRefresh));
+  let rqPrefill = '';   // the title last copied from a reference; a title the person typed is never replaced
+  ex.addEventListener('change', () => {
+    const r = refNow(), title = $('#rqChTitle');
+    if (r) { wi.value = r.wi; if (!title.value.trim() || title.value === rqPrefill) { title.value = r.title; rqPrefill = r.title; } $('#rqType').value = 'Existing Process Revision'; }
+    rqRefresh();
+  }); [wi, man].forEach(e => e.addEventListener('input', rqRefresh));
   const rqStage = stageImages('Images (optional)');
   $('#rqForm').append(rqStage);
   WZ.request = wizard(rq, {
     l1: 'Next: Fill Request Form →', submit: 'Submit PPC Proposal',
-    reset() { dept.value = ''; act.value = 'NEW'; meth.value = 'AUTO'; man.value = ''; wi.value = ''; $('#rqForm').reset(); rqStage.clear(); $('#rqDone').hidden = true; $('#rqDate').value = new Date().toISOString().slice(0, 10); $('#rqInit').value = D.user.name; $('#rqEmail').value = D.user.email; $('.wz-nav [data-next]', rq).disabled = false; fillEx(); rqRefresh(); },
-    v1() { const e = []; if (!dept.value) e.push('Select a requesting department.'); if (act.value === 'EXISTING' && !ex.value) e.push('Choose the existing PPC.'); if (act.value === 'NEW' && meth.value === 'MANUAL' && !/^\d{4}-[A-Z]{2,8}-\d{3,6}-\d{1,6}$/.test(man.value.trim().toUpperCase())) e.push('Enter a manual number like 2026-SUR-246-014.'); if (/^The WI says/.test(numText())) e.push('The WI department does not match.'); return e; },
+    reset() { dept.value = ''; act.value = 'NEW'; meth.value = 'AUTO'; man.value = ''; wi.value = ''; rqPrefill = ''; $('#rqForm').reset(); rqStage.clear(); $('#rqDone').hidden = true; $('#rqDate').value = new Date().toISOString().slice(0, 10); $('#rqInit').value = D.user.name; $('#rqEmail').value = D.user.email; $('.wz-nav [data-next]', rq).disabled = false; fillEx(); rqRefresh(); },
+    v1() { const e = []; if (!dept.value) e.push('Select a requesting department.'); if (act.value === 'REF' && !ex.value) e.push('Choose the reference PPC.'); if (meth.value === 'MANUAL' && !/^\d{4}-[A-Z]{2,8}-\d{3,6}-\d{1,6}$/.test(man.value.trim().toUpperCase())) e.push('Enter a manual number like 2026-SUR-246-014.'); if (/^The WI says/.test(numText())) e.push('The WI department does not match.'); return e; },
     review() {
-      const f = [['Department', dept.value ? dept.options[dept.selectedIndex].text : 'Not selected'], ['WI number(s)', wi.value || 'None yet'], ['PPC mode', act.value === 'NEW' ? 'New PPC' : 'Existing PPC'], ['PPC number', numText()], ['Initiator', val('#rqInit') || 'Missing'], ['Change title', val('#rqChTitle') || 'Missing'], ['Target date', val('#rqDue') || 'Not provided'], ['Description', val('#rqDesc') || 'Missing'], ['Justification', val('#rqJust') || 'Missing'], ['Email for updates', val('#rqEmail') || 'Missing'], ['Images', rqStage.count() ? pl(rqStage.count(), 'image') + ', uploaded when you submit' : 'None']];
+      const f = [['Department', dept.value ? dept.options[dept.selectedIndex].text : 'Not selected'], ['WI number(s)', wi.value || 'None yet'], ['PPC mode', act.value === 'REF' ? 'New PPC, reference ' + ((refNow() || {}).label || 'not chosen') : 'New PPC'], ['PPC number', numText()], ['Initiator', val('#rqInit') || 'Missing'], ['Change title', val('#rqChTitle') || 'Missing'], ['Target date', val('#rqDue') || 'Not provided'], ['Description', val('#rqDesc') || 'Missing'], ['Justification', val('#rqJust') || 'Missing'], ['Email for updates', val('#rqEmail') || 'Missing'], ['Images', rqStage.count() ? pl(rqStage.count(), 'image') + ', uploaded when you submit' : 'None']];
       $('#rqRev').replaceChildren(...f.flatMap(r => [h('dt', { text: r[0] }), h('dd', { text: r[1] })]));
       const m = []; if (!val('#rqInit').trim()) m.push('Initiator'); if (!val('#rqChTitle').trim()) m.push('Change title'); if (!val('#rqDesc').trim()) m.push('Description'); if (!val('#rqJust').trim()) m.push('Justification'); if (!val('#rqEmail').trim()) m.push('Email');
       const mm = $('#rqMiss'); mm.textContent = m.length ? 'Please complete: ' + m.join(', ') + '.' : 'All core fields are entered. Check the details, then submit.'; mm.className = m.length ? 'wz-miss' : 'wz-ok'; $('#rqDone').hidden = true;
@@ -745,12 +780,13 @@ function initWizards() {
     async send() {
       const out = $('#rqDone'), nx = $('.wz-nav [data-next]', rq); out.hidden = false; out.textContent = 'Saving...'; nx.disabled = true;
       try {
-        const r = await api('submitRequest', { ppcAction: act.value, department: dept.value, existingPpc: ex.value, wiNumbers: wi.value.trim(), assignment: act.value === 'NEW' ? meth.value : 'AUTO', manualPpc: man.value.trim(), requestor: val('#rqInit').trim(), email: val('#rqEmail').trim(), title: val('#rqChTitle').trim(), description: val('#rqDesc'), justification: val('#rqJust'), formPriority: ($('input[name=prio]:checked', rq) || {}).value || 'Low', requestDate: val('#rqDate'), dueDate: val('#rqDue'), manager: val('#rqMgr'), poc: val('#rqPoc'), changeType: val('#rqType'), effort: val('#rqEffort'), impactQuality: val('#rqImpQ'), impactCost: val('#rqImpC'), impactSchedule: val('#rqImpS'), impactResources: val('#rqImpR'), impactOther: val('#rqImpO') });
-        out.textContent = 'Saved. PPC number: ' + r.id + '.';
+        const r = await api('submitRequest', { ppcAction: 'NEW', reference: act.value === 'REF' ? ex.value : '', department: dept.value, wiNumbers: wi.value.trim(), assignment: meth.value, manualPpc: man.value.trim(), requestor: val('#rqInit').trim(), email: val('#rqEmail').trim(), title: val('#rqChTitle').trim(), description: val('#rqDesc'), justification: val('#rqJust'), formPriority: ($('input[name=prio]:checked', rq) || {}).value || 'Low', requestDate: val('#rqDate'), dueDate: val('#rqDue'), manager: val('#rqMgr'), poc: val('#rqPoc'), changeType: val('#rqType'), effort: val('#rqEffort'), impactQuality: val('#rqImpQ'), impactCost: val('#rqImpC'), impactSchedule: val('#rqImpS'), impactResources: val('#rqImpR'), impactOther: val('#rqImpO') });
+        const refMsg = r.reference ? ' Reference ' + r.reference + ' recorded.' : (r.referenceWarning ? ' ' + r.referenceWarning : '');
+        out.textContent = 'Saved. PPC number: ' + r.id + '.' + refMsg;
         if (rqStage.count()) {
           out.textContent = 'Saved as ' + r.id + '. Uploading ' + pl(rqStage.count(), 'image') + '...';
           const up = await rqStage.upload(r.id);
-          out.textContent = 'Saved as ' + r.id + '. ' + (up.done ? pl(up.done, 'image') + ' attached.' : '') + (up.failed.length ? ' These did not upload: ' + up.failed.join('; ') + '. Add them again from Edit.' : '');
+          out.textContent = 'Saved as ' + r.id + '.' + refMsg + ' ' + (up.done ? pl(up.done, 'image') + ' attached.' : '') + (up.failed.length ? ' These did not upload: ' + up.failed.join('; ') + '. Add them again from Edit.' : '');
         }
         await refresh();
       } catch (e) { out.textContent = e.code === 'WRITES_OFF' ? 'Saving from this page is switched off for now. Nothing was saved.' : e.message; nx.disabled = false; }
