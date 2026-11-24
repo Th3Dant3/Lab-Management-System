@@ -96,12 +96,12 @@
 
   <div class="header-right">
 
-  <a class="back-btn" href="index.html">
+  <button class="back-btn" type="button" onclick="returnToMainDashboard()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
       <polyline points="15 18 9 12 15 6"/>
     </svg>
     Dashboard
-  </a>
+  </button>
 
         <!-- Mode indicator -->
       <div class="mode-badge" id="modeBadge">
@@ -669,6 +669,25 @@
   </main>
 
   <script src="FacilityBreakage.js?v=20261119-secure-v1"></script>
+  <script>
+    // Return to the GitHub-hosted LMS dashboard through its containing page.
+    // Never navigate to index.html relative to the Apps Script iframe URL.
+    function returnToMainDashboard() {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'ZENNI_QUALITY_RETURN_TO_DASHBOARD' }, '*');
+        if (window.top !== window.parent) window.top.postMessage({ type: 'ZENNI_QUALITY_RETURN_TO_DASHBOARD' }, '*');
+      } else {
+        const toast = document.getElementById('toast');
+        if (toast) {
+          toast.textContent = 'Open Quality Dashboard from the main LMS portal to use Dashboard navigation.';
+          toast.classList.add('show');
+          setTimeout(() => toast.classList.remove('show'), 5000);
+        } else {
+          alert('Open Quality Dashboard from the main LMS portal to return directly.');
+        }
+      }
+    }
+  </script>
   <!-- Summary Daily / Weekly visible to all authenticated dashboard users. -->
 </body>
 </html>

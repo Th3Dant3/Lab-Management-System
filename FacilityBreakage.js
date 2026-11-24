@@ -76,6 +76,15 @@ window.addEventListener('load', () => {
   );
 });
 
+/* V5: HTML-service may run in a nested Google sandbox iframe.
+   Send the verified result to the top-level GitHub shell as well as the
+   immediate parent; no authentication state is created by these messages. */
+function qualityNotifyShell(type) {
+  const message = { type };
+  try { if (window.parent && window.parent !== window) window.parent.postMessage(message, '*'); } catch (_) {}
+  try { if (window.top && window.top !== window && window.top !== window.parent) window.top.postMessage(message, '*'); } catch (_) {}
+}
+
 /* ── Secure Apps Script HTML-service transport ──────────────────────────
  * The page must be served by the domain-restricted Apps Script web app.
  * No external API URLs are requested by the browser.
@@ -4146,6 +4155,7 @@ const App = {
         renderNoData(d);
         document.getElementById('loadingOverlay').classList.add('hidden');
         App.showToast('No live data — try History mode to view past data', 'error');
+        qualityNotifyShell('ZENNI_QUALITY_DATA_EMPTY');
 
         const totalLoadMs = loadAudit.end({
           initial: isInitialLoad,
@@ -4199,6 +4209,7 @@ const App = {
 
       hideTransition();
       App.showToast('Live data loaded', 'success');
+      qualityNotifyShell('ZENNI_QUALITY_DATA_READY');
 
       const totalLoadMs = loadAudit.end({
         renderMs: Number(renderMs.toFixed(1)),
@@ -4216,6 +4227,7 @@ const App = {
       console.error(err);
       hideTransition();
       App.showToast('Error: ' + err.message, 'error');
+      qualityNotifyShell('ZENNI_QUALITY_DATA_ERROR');
       document.getElementById('loadingOverlay').classList.add('hidden');
     }
     btn.classList.remove('loading');

@@ -16,17 +16,97 @@
     .fallback { position: absolute; bottom: 16px; left: 16px; padding: 10px 12px; background: #131a24; border: 1px solid #303947; border-radius: 8px; font-size: 12px; opacity: .92; }
     .fallback a { color: #38bdf8; }
     .fallback button { margin-left: 12px; color: #e8edf2; border: 1px solid #465568; background: #131a24; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+
+    /* V6: cosmetic startup overlay only. NOT an authorization gate. */
+    .frame { position:absolute; inset:0; height:100vh; opacity:0; transition:opacity .35s ease; }
+    body.dashboard-visible .frame { opacity:1; }
+    .fallback { display:none; }
+    .startup { position:fixed; inset:0; z-index:80; display:grid; place-items:center; overflow:hidden;
+      background:radial-gradient(ellipse at 50% 47%,#0d2945 0%,#071324 44%,#040915 100%); color:#eaf5ff;
+      transition:opacity .45s ease,visibility .45s ease; }
+    .startup::before { content:'';position:absolute;inset:0;opacity:.23;pointer-events:none;
+      background:linear-gradient(#1488bd44 1px,transparent 1px),linear-gradient(90deg,#1488bd44 1px,transparent 1px);background-size:48px 48px; }
+    .startup::after { content:'';position:absolute;left:-30%;right:-30%;bottom:-36%;height:65%;border-radius:50%;
+      background:radial-gradient(ellipse at 25% 50%,#14b7f433,transparent 45%),radial-gradient(ellipse at 75% 50%,#9550ef35,transparent 44%);filter:blur(22px);pointer-events:none; }
+    body.dashboard-visible .startup { opacity:0;visibility:hidden;pointer-events:none; }
+    .startup-content { position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;padding:24px;max-width:95vw; }
+    .startup-logo { width:78px;height:78px;display:grid;place-items:center;border:2px solid #48caff;border-radius:20px;
+      box-shadow:0 0 36px #0ca7e54d;background:#0b233b;font-size:34px;font-weight:800;letter-spacing:1px; }
+    .startup-title { font-size:clamp(23px,3vw,38px);font-weight:800;letter-spacing:clamp(2px,.4vw,5px); }
+    .startup-subtitle { color:#9ecce9;font-size:11px;letter-spacing:6px; }
+    .startup-spinner { width:100px;height:100px;border-radius:50%;margin:12px 0 4px;
+      background:repeating-conic-gradient(#30d1ff 0deg 14deg,transparent 14deg 22deg);
+      mask:radial-gradient(farthest-side,transparent calc(100% - 12px),#000 calc(100% - 11px));
+      animation:startup-rotate 1.3s linear infinite;filter:drop-shadow(0 0 12px #16b9fb); }
+    .startup-status { color:#d0e7f8; font-size:14px; }
+    .startup-caption { color:#7fa6c4; font-size:11px; letter-spacing:1px; margin-top:14px; }
+    @keyframes startup-rotate { to { transform:rotate(360deg); } }
+    @media(prefers-reduced-motion:reduce){.startup-spinner{animation:none}.startup,.frame{transition:none}}
   </style>
 </head>
 <body>
+  <div class="startup" id="qualityStartup" role="status" aria-live="polite">
+    <div class="startup-content">
+      <div class="startup-logo">ZB</div>
+      <div class="startup-title">ZENNI QUALITY DASHBOARD</div>
+      <div class="startup-subtitle">FACILITY BREAKAGE</div>
+      <div class="startup-spinner" aria-hidden="true"></div>
+      <div class="startup-status">Opening your dashboard…</div>
+      <div class="startup-caption">ZENNI USA OPTICAL</div>
+    </div>
+  </div>
   <main class="shell">
-    <iframe class="frame" title="Zenni Quality Dashboard — Facility Breakage"
+    <iframe id="qualityFrame" class="frame" title="Zenni Quality Dashboard — Facility Breakage"
       src="https://script.google.com/a/macros/zennioptical.com/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec?page=dashboard"
       allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe>
   </main>
-  <div class="fallback" id="frameHelp">
-    If the dashboard is blank or Google asks you to sign in, <a href="https://script.google.com/a/macros/zennioptical.com/s/AKfycbylW0fs7zWLncknhz7peJcCm9eyWCXTGCLtk-xtMIzjarot5PcCpmCP4Gy85WqT3f17/exec?page=dashboard" target="_blank" rel="noopener noreferrer">open the secure dashboard directly</a>.
-    <button type="button" onclick="document.getElementById('frameHelp').remove()" aria-label="Dismiss help">Dismiss</button>
-  </div>
+  <script>
+    // Display only: do not infer permissions from iframe events or bypass backend access.
+    // Ensure a minimal branded transition, then always reveal the embedded Google page.
+    // A Google access/login error must remain visible rather than hidden by this overlay.
+    (function () {
+      const started = Date.now();
+      const minimumMs = 1800;
+      const maximumMs = 4200;
+      let revealed = false;
+      const frame = document.getElementById('qualityFrame');
+      function reveal() {
+        if (revealed) return;
+        revealed = true;
+        document.body.classList.add('dashboard-visible');
+      }
+      frame.addEventListener('load', function () {
+        const remaining = Math.max(0, minimumMs - (Date.now() - started));
+        setTimeout(reveal, remaining);
+      });
+      // Fail open VISUALLY so an unreported iframe load cannot cause a permanent hold.
+      setTimeout(reveal, maximumMs);
+    })();
+
+    // Accept navigation only from this page's embedded Quality Dashboard.
+    window.addEventListener('message', function (event) {
+      const frame = document.querySelector('iframe.frame');
+      if (!frame || event.source !== frame.contentWindow) return;
+      if (!event.data || event.data.type !== 'ZENNI_QUALITY_RETURN_TO_DASHBOARD') return;
+      const loggedIn = sessionStorage.getItem('lms_logged_in') === 'true';
+      const username = sessionStorage.getItem('lms_user') || sessionStorage.getItem('lms_username');
+      const visibility = sessionStorage.getItem('lms_visibility');
+      if (!loggedIn || !username || !visibility) {
+        const warning = document.getElementById('returnWarning');
+        if (warning) {
+          warning.hidden = false;
+          warning.textContent = 'The LMS browser session is missing on this tab. Return to the original LMS tab or sign in again. No session data was erased.';
+        }
+        console.warn('[LMS Quality Return] Cannot navigate: the current tab has no LMS session.', {
+          loggedIn, usernamePresent: !!username, visibilityPresent: !!visibility
+        });
+        return;
+      }
+      // Same-origin navigation in the same tab retains sessionStorage.
+      window.location.assign(new URL('index.html', window.location.href).href);
+    });
+  </script>
+  <div id="returnWarning" hidden role="alert" style="position:fixed;top:12px;right:12px;z-index:10000;background:#341c20;color:white;border:1px solid #f04f5a;border-radius:8px;padding:14px;max-width:430px;font:13px Arial,sans-serif"></div>
+
 </body>
 </html>

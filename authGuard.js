@@ -29,7 +29,8 @@
     const currentPage =
       (location.pathname.split("/").pop() || "index.html") + location.search;
 
-    sessionStorage.clear();
+    // Do not destroy the existing session or dashboard state on a failed check.
+    // The login page will establish fresh values after successful authentication.
     sessionStorage.setItem("lms_redirect_after_login", currentPage);
 
     window.location.replace("login.html");
